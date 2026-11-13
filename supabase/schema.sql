@@ -25,7 +25,7 @@ create policy "Criar sala anon/auth"
 drop policy if exists "Atualizar sala ativa" on public.dino_rooms;
 create policy "Atualizar sala ativa"
   on public.dino_rooms for update
-  using (updated_at > now() - interval '30 minutes')
+  using (updated_at > now() - interval '6 hours')
   with check (player_count between 0 and 8);
 
 drop policy if exists "Remover sala inativa" on public.dino_rooms;
