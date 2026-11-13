@@ -1,0 +1,22 @@
+{
+  "name": "dino-dash-3d",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DINO DASH 3D - Releitura voxel procedural em Three.js do clássico Chrome Dino",
+  "scripts": {
+    "dev": "vite --host",
+    "host": "node server/lan-host.js",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
+    "qrcode": "^1.5.4",
+    "three": "^0.170.0",
+    "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
