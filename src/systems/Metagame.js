@@ -4,27 +4,27 @@
 import { Save } from './Save.js';
 
 export const TALENT_DEFS = [
-  { id: 'speed', name: 'Pés Ligeiros', icon: '⚡', maxLevel: 5, costBase: 18, desc: '+5% velocidade & distância inicial por nível' },
-  { id: 'magnet', name: 'Campo Magnético', icon: '🧲', maxLevel: 5, costBase: 16, desc: '+15% duração e alcance de ímã por nível' },
-  { id: 'vitality', name: 'Casco Ancestral', icon: '❤️', maxLevel: 3, costBase: 30, desc: '+1 coração máximo permanente a cada 2 níveis' },
-  { id: 'alchemy', name: 'Reator Elemental', icon: '⚗️', maxLevel: 5, costBase: 22, desc: '+20% dano/área de reações elementais por nível' },
-  { id: 'greed', name: 'Caçador de Fósseis', icon: '🥚', maxLevel: 5, costBase: 20, desc: '+15% chance de ovos extras & tesouros por nível' }
+  { id: 'speed', name: 'Pés Ligeiros', icon: '⚡', maxLevel: 5, costBase: 55, desc: '+5% velocidade & distância inicial por nível' },
+  { id: 'magnet', name: 'Campo Magnético', icon: '🧲', maxLevel: 5, costBase: 50, desc: '+15% duração e alcance de ímã por nível' },
+  { id: 'vitality', name: 'Casco Ancestral', icon: '❤️', maxLevel: 3, costBase: 85, desc: '+1 coração máximo permanente a cada 2 níveis' },
+  { id: 'alchemy', name: 'Reator Elemental', icon: '⚗️', maxLevel: 5, costBase: 60, desc: '+20% dano/área de reações elementais por nível' },
+  { id: 'greed', name: 'Caçador de Fósseis', icon: '🥚', maxLevel: 5, costBase: 65, desc: '+10% chance de ovos extras & tesouros por nível' }
 ];
 
 export const CAMPAIGN_NODES = [
-  { id: 'desert_start', title: 'Vale Dourado', biome: 'desert', targetScore: 350, x: 14, y: 50, next: ['oasis_route', 'canyon_route'], reward: 15 },
-  { id: 'oasis_route', title: 'Rota do Oásis', biome: 'river', targetScore: 650, x: 38, y: 28, next: ['ice_peaks', 'temple_secret'], reward: 22 },
-  { id: 'canyon_route', title: 'Caldeira Vulcânica', biome: 'volcano', targetScore: 700, x: 38, y: 74, next: ['magma_boss', 'ice_peaks'], reward: 25 },
-  { id: 'ice_peaks', title: 'Picos Glaciais', biome: 'ice', targetScore: 1000, x: 64, y: 36, next: ['final_sanctuary'], reward: 30 },
-  { id: 'temple_secret', title: 'Templo Submerso', biome: 'ocean_abyss', targetScore: 1050, x: 64, y: 14, next: ['final_sanctuary'], reward: 35 },
-  { id: 'magma_boss', title: 'Cidadela do Alfa', biome: 'cyber_city', targetScore: 1150, x: 64, y: 76, next: ['final_sanctuary'], reward: 40 },
-  { id: 'final_sanctuary', title: 'Santuário Estelar', biome: 'alien_planet', targetScore: 1500, x: 88, y: 48, next: [], reward: 80 }
+  { id: 'desert_start', title: 'Vale Dourado', biome: 'desert', targetScore: 400, x: 14, y: 50, next: ['oasis_route', 'canyon_route'], reward: 12 },
+  { id: 'oasis_route', title: 'Rota do Oásis', biome: 'river', targetScore: 700, x: 38, y: 28, next: ['ice_peaks', 'temple_secret'], reward: 16 },
+  { id: 'canyon_route', title: 'Caldeira Vulcânica', biome: 'volcano', targetScore: 750, x: 38, y: 74, next: ['magma_boss', 'ice_peaks'], reward: 18 },
+  { id: 'ice_peaks', title: 'Picos Glaciais', biome: 'ice', targetScore: 1050, x: 64, y: 36, next: ['final_sanctuary'], reward: 22 },
+  { id: 'temple_secret', title: 'Templo Submerso', biome: 'ocean_abyss', targetScore: 1100, x: 64, y: 14, next: ['final_sanctuary'], reward: 26 },
+  { id: 'magma_boss', title: 'Cidadela do Alfa', biome: 'cyber_city', targetScore: 1250, x: 64, y: 76, next: ['final_sanctuary'], reward: 30 },
+  { id: 'final_sanctuary', title: 'Santuário Estelar', biome: 'alien_planet', targetScore: 1600, x: 88, y: 48, next: [], reward: 55 }
 ];
 
 export const WEEKLY_CHALLENGES = [
-  { id: 'wk_no_damage', title: 'Intocável da Semana', desc: 'Alcance 800 pts esta semana em uma corrida.', goal: 800, reward: 65 },
-  { id: 'wk_collectors', title: 'Grande Colecionador', desc: 'Colete 60 ovos acumulados na semana.', goal: 60, reward: 55 },
-  { id: 'wk_elements', title: 'Alquimista Jurássico', desc: 'Percorra 1800m acumulados na semana.', goal: 1800, reward: 60 }
+  { id: 'wk_no_damage', title: 'Intocável da Semana', desc: 'Alcance 1200 pts esta semana em uma corrida.', goal: 1200, reward: 40 },
+  { id: 'wk_collectors', title: 'Grande Colecionador', desc: 'Colete 90 ovos acumulados na semana.', goal: 90, reward: 35 },
+  { id: 'wk_elements', title: 'Alquimista Jurássico', desc: 'Percorra 2500m acumulados na semana.', goal: 2500, reward: 40 }
 ];
 
 export class Metagame {
@@ -32,20 +32,24 @@ export class Metagame {
     return 1 + (Save.data.prestige?.level || 0) * 0.25;
   }
 
+  static getRebirthReqScore() {
+    return 1500 * ((Save.data.prestige?.level || 0) + 1);
+  }
+
   static canRebirth() {
-    return (Save.data.highScore || 0) >= 1200 || Object.keys(Save.data.dinoLevels || {}).length >= 2;
+    return (Save.data.highScore || 0) >= this.getRebirthReqScore();
   }
 
   static doRebirth() {
     if (!this.canRebirth()) {
-      return { ok: false, reason: 'Alcance 1200+ pts em uma corrida para fazer Prestígio (Rebirth).' };
+      return { ok: false, reason: `Alcance ${this.getRebirthReqScore()}+ pts de Recorde (HI) para o próximo Prestígio.` };
     }
     const p = Save.data.prestige || { level: 0, bonusMult: 1.0 };
     p.level += 1;
     p.bonusMult = Number((1 + p.level * 0.25).toFixed(2));
     Save.data.prestige = p;
     Save.data.dinoLevels = {};
-    Save.data.eggs = 30 + p.level * 15;
+    Save.data.eggs = 25 + Math.min(35, p.level * 10);
     if (!Save.data.unlockedTitles.includes(`Prestígio ${p.level}★`)) {
       Save.data.unlockedTitles.push(`Prestígio ${p.level}★`);
     }

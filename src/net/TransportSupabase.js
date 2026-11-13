@@ -57,12 +57,14 @@ export class TransportSupabase {
       hostPeerId: opts.isCreate ? peerId : null,
       isPublic: opts.isPublic !== false,
       mode: opts.mode || 'lan_party',
+      mpMode: opts.mpMode || (opts.elimination ? 'elimination' : 'race'),
       status: 'lobby',
       seed: opts.seed || `SB-${code}-${Math.floor(Math.random() * 9999)}`,
       elimination: !!opts.elimination,
       partyMode: opts.partyMode !== false,
       teacherMode: !!opts.teacherMode,
       tvScale: !!opts.tvScale,
+      activeMatch: null,
       peers: []
     };
 
@@ -74,7 +76,11 @@ export class TransportSupabase {
     });
     this.channel = channel;
 
+    let presenceSyncedOnce = false;
+    let onAnyRemotePeer = null;
+
     channel.on('presence', { event: 'sync' }, () => {
+      presenceSyncedOnce = true;
       const state = channel.presenceState();
       const palette = ['#58d63a', '#38bdf8', '#ff9a24', '#f43f5e', '#a855f7', '#ffd447', '#14b8a6', '#ec4899'];
       const entries = [];
@@ -85,6 +91,7 @@ export class TransportSupabase {
         if (!info) continue;
         entries.push({
           peerId: key,
+          isHost: !!info.isHost,
           name: info.name || `Dino ${idx + 1}`,
           dinoId: info.dinoId || 'trex',
           color: info.color || palette[idx % palette.length],
@@ -96,31 +103,49 @@ export class TransportSupabase {
         });
         idx++;
       }
-      entries.sort((a, b) => a.joinedAt - b.joinedAt);
+      entries.sort((a, b) => (a.isHost === b.isHost ? a.joinedAt - b.joinedAt : (a.isHost ? -1 : 1)));
       entries.forEach((p, i) => { p.slot = i; });
       this.room.peers = entries.slice(0, 8);
 
-      // Migração de host caso o host anterior saia da sala
+      // Identifica host real por isHost antes de fallback/migração
+      const explicitHost = this.room.peers.find((p) => p.isHost);
       const prevHost = this.room.hostPeerId;
       const hostAlive = prevHost && this.room.peers.some((p) => p.peerId === prevHost);
-      if (!hostAlive && this.room.peers.length > 0) {
-        const nextHost = this.room.peers.find((p) => p.role === 'screen') || this.room.peers[0];
-        this.room.hostPeerId = nextHost.peerId;
-        if (prevHost && prevHost !== nextHost.peerId) {
-          this._emit('message', {
-            type: 'host_migrated',
-            hostPeerId: nextHost.peerId,
-            hostName: nextHost.name
-          });
+
+      if (explicitHost) {
+        this.room.hostPeerId = explicitHost.peerId;
+      } else if (!hostAlive && this.room.peers.length > 0 && (opts.isCreate || this.room.peers.length > 1 || presenceSyncedOnce)) {
+        // Só assume host se o anterior realmente caiu (ou houver mais peers) — nunca quando guest chega em sala vazia
+        const nonSelf = this.room.peers.find((p) => p.peerId !== this.selfPeerId && p.role === 'screen')
+          || this.room.peers.find((p) => p.peerId !== this.selfPeerId)
+          || (opts.isCreate ? this.room.peers[0] : null);
+        if (nonSelf) {
+          this.room.hostPeerId = nonSelf.peerId;
+          if (prevHost && prevHost !== nonSelf.peerId) {
+            this._emit('message', {
+              type: 'host_migrated',
+              hostPeerId: nonSelf.peerId,
+              hostName: nonSelf.name
+            });
+          }
         }
       }
 
+      if (this.room.peers.some((p) => p.peerId !== this.selfPeerId)) {
+        onAnyRemotePeer?.();
+      }
+
+      if (this.room.hostPeerId === this.selfPeerId) {
+        this._broadcastRoomPatch();
+        this._syncRoomDb(true).catch(() => {});
+      }
+
       this._emit('message', { type: 'room_state', room: this.room });
-      this._syncRoomDb(true).catch(() => {});
     });
 
     channel.on('broadcast', { event: 'msg' }, ({ payload }) => {
       if (!payload) return;
+      onAnyRemotePeer?.();
       if (payload.type === 'ping') {
         this.send({ type: 'pong', ts: payload.ts, targetPeer: payload.peerId });
         return;
@@ -130,19 +155,49 @@ export class TransportSupabase {
         this._emit('pong', this.pingMs);
         return;
       }
+      if (payload.type === 'request_room_sync') {
+        if (this.room.hostPeerId === this.selfPeerId) {
+          this._broadcastRoomPatch();
+          if (this.room.status === 'playing' && this.room.activeMatch) {
+            this.channel?.send({
+              type: 'broadcast',
+              event: 'msg',
+              payload: { ...this.room.activeMatch, peerId: this.selfPeerId }
+            }).catch(() => {});
+          }
+        }
+        return;
+      }
+      if (payload.type === 'player_meta_hint' && payload.peerId) {
+        const peer = this.room.peers.find((p) => p.peerId === payload.peerId);
+        if (peer && payload.meta) {
+          Object.assign(peer, payload.meta);
+          this._emit('message', { type: 'room_state', room: this.room });
+        }
+        return;
+      }
       if (payload.type === 'update_room') {
         Object.assign(this.room, payload.patch || {});
         this._emit('message', { type: 'room_state', room: this.room });
         return;
       }
+      if (payload.type === 'start_match') {
+        this.room.status = 'playing';
+        this.room.activeMatch = payload;
+      } else if (payload.type === 'end_match') {
+        this.room.status = 'lobby';
+        this.room.activeMatch = null;
+      }
       this._emit('message', payload);
     });
 
     return new Promise((resolve) => {
+      let settled = false;
       channel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
+        if (status === 'SUBSCRIBED' && !settled) {
           this.connected = true;
           this.myMeta = {
+            isHost: !!opts.isCreate,
             name: String(opts.name || 'Jogador').slice(0, 18),
             dinoId: opts.dinoId || 'trex',
             color: opts.color || '#58d63a',
@@ -153,15 +208,66 @@ export class TransportSupabase {
           };
           await channel.track(this.myMeta);
           this._startPingLoop();
+
+          if (!opts.isCreate) {
+            // Verifica se a sala existe (outro peer em Presence ou registro ativo no dino_rooms)
+            this.send({ type: 'request_room_sync' });
+            let foundRemote = this.room.peers.some((p) => p.peerId !== peerId);
+            if (!foundRemote) {
+              const cutoff = new Date(Date.now() - 360 * 60 * 1000).toISOString();
+              const [{ data: dbRow }] = await Promise.all([
+                this.client.from('dino_rooms').select('code, status, mode_id').eq('code', code).gte('updated_at', cutoff).maybeSingle(),
+                new Promise((r) => {
+                  let done = false;
+                  const finish = () => { if (!done) { done = true; r(); } };
+                  onAnyRemotePeer = finish;
+                  setTimeout(finish, 1100);
+                })
+              ]);
+              foundRemote = this.room.peers.some((p) => p.peerId !== peerId) || !!dbRow;
+            }
+            if (!foundRemote) {
+              settled = true;
+              this.disconnect();
+              resolve({ ok: false, message: `Sala "${code}" não encontrada ou já encerrada (confirme se o Host criou no modo Online).` });
+              return;
+            }
+            this.send({ type: 'request_room_sync' });
+          }
+
+          settled = true;
           this._emit('connected', true);
           this._emit('message', { type: 'joined', code, peerId, room: this.room });
           resolve({ ok: true, code, peerId });
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        } else if ((status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') && !settled) {
+          settled = true;
           this.connected = false;
           resolve({ ok: false, message: `Falha ao conectar canal Supabase (${status}).` });
         }
       });
     });
+  }
+
+  _broadcastRoomPatch() {
+    if (!this.channel || !this.connected || !this.room) return;
+    this.channel.send({
+      type: 'broadcast',
+      event: 'msg',
+      payload: {
+        type: 'update_room',
+        patch: {
+          hostPeerId: this.room.hostPeerId,
+          status: this.room.status,
+          seed: this.room.seed,
+          mpMode: this.room.mpMode || (this.room.elimination ? 'elimination' : 'race'),
+          elimination: this.room.elimination,
+          partyMode: this.room.partyMode,
+          teacherMode: this.room.teacherMode,
+          tvScale: this.room.tvScale,
+          activeMatch: this.room.activeMatch || null
+        }
+      }
+    }).catch(() => {});
   }
 
   _randomCode() {
@@ -185,9 +291,26 @@ export class TransportSupabase {
         name: payload.name ?? this.myMeta.name,
         dinoId: payload.dinoId ?? this.myMeta.dinoId,
         color: payload.color ?? this.myMeta.color,
+        role: payload.role ?? this.myMeta.role,
         ready: payload.ready ?? this.myMeta.ready,
         pingMs: this.pingMs
       });
+      const localPeer = this.room?.peers?.find((p) => p.peerId === this.selfPeerId);
+      if (localPeer) {
+        Object.assign(localPeer, {
+          name: this.myMeta.name,
+          dinoId: this.myMeta.dinoId,
+          color: this.myMeta.color,
+          role: this.myMeta.role,
+          ready: this.myMeta.ready
+        });
+        this._emit('message', { type: 'room_state', room: this.room });
+      }
+      this.channel.send({
+        type: 'broadcast',
+        event: 'msg',
+        payload: { type: 'player_meta_hint', peerId: this.selfPeerId, meta: { ...this.myMeta } }
+      }).catch(() => {});
       this.channel.track(this.myMeta).catch(() => {});
       return true;
     }
@@ -195,6 +318,9 @@ export class TransportSupabase {
       const { type, ...patch } = payload;
       Object.assign(this.room, patch);
       this.channel.send({ type: 'broadcast', event: 'msg', payload: { type: 'update_room', patch } }).catch(() => {});
+      if (this.room.hostPeerId === this.selfPeerId) {
+        this._syncRoomDb(true).catch(() => {});
+      }
       return true;
     }
     this.channel.send({

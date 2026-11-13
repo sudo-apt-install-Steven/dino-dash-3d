@@ -54,12 +54,14 @@ function serializeRoom(room) {
     hostPeerId: room.hostPeerId,
     isPublic: room.isPublic,
     mode: room.mode,
+    mpMode: room.mpMode || (room.elimination ? 'elimination' : 'race'),
     status: room.status,
     seed: room.seed,
     elimination: room.elimination,
     partyMode: room.partyMode,
     teacherMode: room.teacherMode,
     tvScale: room.tvScale,
+    activeMatch: room.activeMatch || null,
     peers: Array.from(room.peers.values()).map((p) => ({
       peerId: p.peerId,
       name: p.name,
@@ -231,14 +233,16 @@ wss.on('connection', (ws) => {
         ? msg.code
         : randomRoomCode();
       const peerId = msg.peerId || `p_${Math.random().toString(36).slice(2, 8)}`;
+      const mpMode = msg.mpMode || (msg.elimination ? 'elimination' : 'race');
       const room = {
         code,
         hostPeerId: peerId,
         isPublic: msg.isPublic !== false,
         mode: msg.mode || 'lan_party',
+        mpMode,
         status: 'lobby',
         seed: msg.seed || `LAN-${code}-${Math.floor(Math.random() * 9999)}`,
-        elimination: !!msg.elimination,
+        elimination: mpMode === 'elimination' || !!msg.elimination,
         partyMode: msg.partyMode !== false,
         teacherMode: !!msg.teacherMode,
         tvScale: !!msg.tvScale,
@@ -303,6 +307,9 @@ wss.on('connection', (ws) => {
       ws._peerId = peerId;
       send(ws, { type: 'joined', code, peerId, room: serializeRoom(room) });
       broadcast(room, { type: 'room_state', room: serializeRoom(room) });
+      if (room.status === 'playing' && room.activeMatch) {
+        send(ws, room.activeMatch);
+      }
       return;
     }
 
@@ -327,6 +334,7 @@ wss.on('connection', (ws) => {
           if (msg.teacherMode !== undefined) room.teacherMode = !!msg.teacherMode;
           if (msg.tvScale !== undefined) room.tvScale = !!msg.tvScale;
           if (msg.isPublic !== undefined) room.isPublic = !!msg.isPublic;
+          if (msg.activeMatch !== undefined) room.activeMatch = msg.activeMatch;
           broadcast(room, { type: 'room_state', room: serializeRoom(room) });
         }
         break;
@@ -335,8 +343,15 @@ wss.on('connection', (ws) => {
           if (msg.name) peer.name = String(msg.name).slice(0, 18);
           if (msg.dinoId) peer.dinoId = msg.dinoId;
           if (msg.color) peer.color = msg.color;
+          if (msg.role) peer.role = msg.role;
           if (msg.ready !== undefined) peer.ready = !!msg.ready;
           broadcast(room, { type: 'room_state', room: serializeRoom(room) });
+        }
+        break;
+      case 'request_room_sync':
+        send(ws, { type: 'room_state', room: serializeRoom(room) });
+        if (room.status === 'playing' && room.activeMatch) {
+          send(ws, room.activeMatch);
         }
         break;
       case 'chat':
@@ -348,9 +363,23 @@ wss.on('connection', (ws) => {
       case 'bet':
         broadcast(room, { ...msg, peerId: ws._peerId }, ws._peerId);
         break;
-      case 'state_snapshot':
       case 'start_match':
+        if (ws._peerId === room.hostPeerId) {
+          room.status = 'playing';
+          room.activeMatch = msg;
+          broadcast(room, msg, ws._peerId);
+          broadcast(room, { type: 'room_state', room: serializeRoom(room) });
+        }
+        break;
       case 'end_match':
+        if (ws._peerId === room.hostPeerId) {
+          room.status = 'lobby';
+          room.activeMatch = null;
+          broadcast(room, msg, ws._peerId);
+          broadcast(room, { type: 'room_state', room: serializeRoom(room) });
+        }
+        break;
+      case 'state_snapshot':
       case 'trivia_prompt':
       case 'party_prompt':
       case 'card_offer':

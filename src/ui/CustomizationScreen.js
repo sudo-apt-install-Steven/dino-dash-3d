@@ -6,7 +6,7 @@ import {
   TRAILS_SHOP,
   randomizePreset
 } from '../dinos/DinoCustomization.js';
-import { ProgressionManager } from '../systems/Progression.js';
+import { ProgressionManager, MYSTERY_EGG_COST } from '../systems/Progression.js';
 import { DinoPreview3D } from './SelectionScreen.js';
 
 export class CustomizationScreen {
@@ -20,6 +20,7 @@ export class CustomizationScreen {
       const cfg = Save.data.customization[playerSlot];
       const preset = cfg.presets[cfg.activePreset];
       const dinoId = Save.data.selectedDino || 'trex';
+      const eggStatus = ProgressionManager.getMysteryEggStatus();
 
       container.innerHTML = `
         <div class="overlay-center">
@@ -104,12 +105,16 @@ export class CustomizationScreen {
                   </div>
                 ` : `
                   <div class="item-card rarity-lendária" style="margin-bottom:10px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
                       <div>
                         <strong>🥚 Ovo Misterioso</strong>
-                        <p style="font-size:0.8rem; color:#d8c2a6;">Desbloqueie um acessório ou rastro aleatório!</p>
+                        <p style="font-size:0.8rem; color:#d8c2a6;">
+                          ${eggStatus.collectionComplete
+                            ? `Coleção 100% completa! Abrir devolve ${eggStatus.dupRefund} 🥚 + ${eggStatus.dupXp} XP no Passe.`
+                            : `Sorteia 1 acessório ou rastro faltante (restam ${eggStatus.totalRemaining} na coleção)!`}
+                        </p>
                       </div>
-                      <button class="chunky-btn" id="buy-mystery">Abrir (25 🥚)</button>
+                      <button class="chunky-btn" id="buy-mystery">Abrir (${MYSTERY_EGG_COST} 🥚)</button>
                     </div>
                   </div>
                   <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));">

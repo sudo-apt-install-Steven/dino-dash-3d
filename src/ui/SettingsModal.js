@@ -88,6 +88,10 @@ export class SettingsModal {
               <input type="checkbox" id="set-teacher" ${Save.data.teacherMode ? 'checked' : ''} />
             </div>
             <div class="field-row">
+              <span>🪧 Dicas Visuais sobre Obstáculos</span>
+              <input type="checkbox" id="set-hints" ${s.obstacleHints !== false ? 'checked' : ''} />
+            </div>
+            <div class="field-row">
               <span>Narrador Divertido (PT-BR)</span>
               <input type="checkbox" id="set-narrator" ${s.narrator ? 'checked' : ''} />
             </div>
@@ -176,6 +180,7 @@ export class SettingsModal {
       s.audio.music = Number(container.querySelector('#set-music').value) / 100;
       s.audio.sfx = Number(container.querySelector('#set-sfx').value) / 100;
       s.audio.muted = container.querySelector('#set-muted').checked;
+      s.obstacleHints = container.querySelector('#set-hints').checked;
       s.narrator = container.querySelector('#set-narrator').checked;
 
       const lowSpecChecked = container.querySelector('#set-lowspec').checked;

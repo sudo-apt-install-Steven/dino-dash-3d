@@ -242,7 +242,7 @@ export class WorldEvents {
       this.comet.group.position.y -= dt * 1.4;
       if (!this.comet.dropped && this.comet.timer < 3.0) {
         this.comet.dropped = true;
-        ctx.spawner?.spawnEggRain(10);
+        ctx.spawner?.spawnEggRain(6);
         ctx.addScore?.(180);
       }
       if (this.comet.timer <= 0) {
@@ -260,10 +260,10 @@ export class WorldEvents {
           if (p.dead) continue;
           if (Math.abs(p.x - this.bonusPortal.group.position.x) < 1.35 && Math.abs(p.z - this.bonusPortal.group.position.z) < 1.4) {
             this.bonusPortal.entered = true;
-            this.bonusDimensionTimer = 7.5;
-            ctx.spawner?.spawnEggRain(24);
+            this.bonusDimensionTimer = 6.5;
+            ctx.spawner?.spawnEggRain(10);
             ctx.sfx?.evolution();
-            ctx.showFloatText?.(p, '🌀 DIMENSÃO DOS OVOS! 7.5s BÔNUS!', '#c084fc');
+            ctx.showFloatText?.(p, '🌀 DIMENSÃO DOS OVOS! 6.5s BÔNUS!', '#c084fc');
             break;
           }
         }
@@ -286,10 +286,10 @@ export class WorldEvents {
           if (p.dead) continue;
           if (Math.abs(p.x - this.pteroNest.group.position.x) < 1.6 && Math.abs(p.z - this.pteroNest.group.position.z) < 1.8) {
             this.pteroNest.rescued = true;
-            Save.addEggs(15);
+            Save.addEggs(8);
             ctx.addScore?.(300);
             ctx.sfx?.victory();
-            ctx.showFloatText?.(p, '🪺 FILHOTES PROTEGIDOS! +15 OVOS!', '#ffd447');
+            ctx.showFloatText?.(p, '🪺 FILHOTES PROTEGIDOS! +8 OVOS!', '#ffd447');
             break;
           }
         }
@@ -355,10 +355,10 @@ export class WorldEvents {
               this.ruinsPlates[this.ruinsStep].mat.emissiveIntensity = 1.1;
             }
             if (this.ruinsStep >= this.ruinsPlates.length) {
-              Save.addEggs(12);
+              Save.addEggs(8);
               ctx.addScore?.(250);
               ctx.sfx?.victory();
-              ctx.showFloatText?.(p, '🏛️ ENIGMA RESOLVIDO! +12 OVOS!', '#ffd447');
+              ctx.showFloatText?.(p, '🏛️ ENIGMA RESOLVIDO! +8 OVOS!', '#ffd447');
             }
             break;
           }
@@ -370,7 +370,7 @@ export class WorldEvents {
       }
     }
 
-    // 128. Nevoeiro tóxico
+    // 128. Nevoeiro tóxico (desacelera recargas se estiver sem máscara)
     if (this.toxicFogTimer > 0) {
       this.toxicFogTimer -= dt;
       if (ctx.scene.fog) {
@@ -378,8 +378,9 @@ export class WorldEvents {
         ctx.scene.fog.density = 0.036;
       }
       for (const p of players) {
-        if (!p.dead && p.backpack?.hasGasMask) continue;
-        p.energy = Math.max(0, (p.energy ?? 100) - dt * 6);
+        if (p.dead || p.backpack?.hasGasMask) continue;
+        p.abilityCooldown = Math.min(p.abilityMaxCooldown || 12, (p.abilityCooldown || 0) + dt * 0.45);
+        p.attackCooldown = Math.min(2.0, (p.attackCooldown || 0) + dt * 0.35);
       }
     }
 
@@ -405,9 +406,9 @@ export class WorldEvents {
             if (d.hp <= 0) {
               this.scene.remove(d.model.root);
               this.npcDuel = null;
-              Save.addEggs(15);
+              Save.addEggs(10);
               ctx.addScore?.(400);
-              ctx.showFloatText?.(p, '⚔️ DUELO VENCIDO! +400 PTS!', '#ffd447');
+              ctx.showFloatText?.(p, '⚔️ DUELO VENCIDO! +10 OVOS & +400 PTS!', '#ffd447');
               break;
             }
           } else {

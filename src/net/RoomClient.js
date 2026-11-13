@@ -84,6 +84,22 @@ export class RoomClient {
       this._emit('room_state', this.room);
       return;
     }
+    if (msg.type === 'start_match') {
+      if (this.room) {
+        this.room.status = 'playing';
+        this.room.activeMatch = msg;
+      }
+      this._emit('start_match', msg);
+      return;
+    }
+    if (msg.type === 'end_match') {
+      if (this.room) {
+        this.room.status = 'lobby';
+        this.room.activeMatch = null;
+      }
+      this._emit('end_match', msg);
+      return;
+    }
     if (msg.type === 'chat' || msg.type === 'emote') {
       const peer = this.room?.peers?.find((p) => p.peerId === msg.peerId);
       const label = peer?.name || msg.name || 'Dino';
@@ -212,7 +228,8 @@ export class RoomClient {
       ability: !!stateObj.ability,
       item: !!stateObj.item,
       bullet: !!stateObj.bullet,
-      attack: !!stateObj.attack
+      attack: !!stateObj.attack,
+      fury: !!stateObj.fury
     };
     const prev = this.lastSentInputs;
     if (prev && Object.keys(compact).every((k) => compact[k] === prev[k])) {
@@ -220,6 +237,10 @@ export class RoomClient {
     }
     this.lastSentInputs = compact;
     this.activeTransport.send({ type: 'input', inputs: compact });
+  }
+
+  requestRoomSync() {
+    this.activeTransport.send({ type: 'request_room_sync' });
   }
 
   sendPlayerMeta(meta) {
@@ -255,6 +276,11 @@ export class RoomClient {
   }
 
   broadcastHostStart(payload = {}) {
+    if (this.room) {
+      this.room.status = 'playing';
+      this.room.activeMatch = payload;
+    }
+    this.updateRoomSettings({ status: 'playing', activeMatch: payload });
     this.activeTransport.send({ type: 'start_match', ...payload });
   }
 
@@ -267,6 +293,11 @@ export class RoomClient {
   }
 
   broadcastHostEnd(summary) {
+    if (this.room) {
+      this.room.status = 'lobby';
+      this.room.activeMatch = null;
+    }
+    this.updateRoomSettings({ status: 'lobby', activeMatch: null });
     this.activeTransport.send({ type: 'end_match', summary });
   }
 

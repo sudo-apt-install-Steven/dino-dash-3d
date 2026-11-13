@@ -34,6 +34,10 @@ export class Menus {
 
           <button class="chunky-btn" id="menu-play" style="font-size:1.25rem; padding:14px;">▶ JOGAR AGORA</button>
           <button class="chunky-btn orange" id="menu-mp-fast" style="font-size:1rem; padding:10px;">🌐 MULTIPLAYER LAN / ONLINE (QR CELULAR)</button>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <button class="chunky-btn" data-nav="tutorial" style="background:linear-gradient(180deg,#0ea5e9,#0284c7); border-color:#7dd3fc;">🎓 MODO TUTORIAL</button>
+            <button class="chunky-btn secondary" data-nav="guide">📖 GUIA & OBSTÁCULOS</button>
+          </div>
 
           <div class="menu-nav-grid">
             <button class="chunky-btn orange" data-nav="modes">🎮 Modos</button>
@@ -258,9 +262,9 @@ export class Menus {
           <div class="item-card">
             <div style="display:flex; justify-content:space-between;">
               <strong>🎟️ Passe de Temporada Local — Nível ${pass.level}/50</strong>
-              <span style="color:#ffd447;">XP ${pass.xp}/120</span>
+              <span style="color:#ffd447;">XP ${pass.xp}/160</span>
             </div>
-            <div class="meter-bar" style="height:12px;"><div class="meter-fill" style="width:${Math.min(100, (pass.xp / 120) * 100)}%; background:#58d63a;"></div></div>
+            <div class="meter-bar" style="height:12px;"><div class="meter-fill" style="width:${Math.min(100, (pass.xp / 160) * 100)}%; background:#58d63a;"></div></div>
           </div>
           <h3>Missões Diárias</h3>
           <div class="cards-grid">

@@ -8,9 +8,8 @@ const DEFAULT_SAVE = {
   eggs: 0,
   selectedDino: 'trex',
   unlockedDinos: [
-    'trex', 'raptor', 'triceratops', 'stegosaurus', 'ankylosaurus',
-    'spinosaurus', 'brachiosaurus', 'dilophosaurus', 'parasaurolophus',
-    'compsognathus', 'carnotaurus', 'pachycephalosaurus', 'therizinosaurus'
+    'trex', 'raptor', 'triceratops', 'stegosaurus',
+    'ankylosaurus', 'spinosaurus', 'brachiosaurus', 'dilophosaurus'
   ],
   dinoLevels: {},
   customization: {
@@ -47,6 +46,8 @@ const DEFAULT_SAVE = {
   rivalry: { p1Wins: 0, p2Wins: 0 },
   ghostRuns: {},
   tutorialDone: false,
+  tutorialRewardClaimed: false,
+  minigamesDaily: { date: '', eggsEarned: 0 },
   prestige: { level: 0, bonusMult: 1.0 },
   talents: { speed: 0, magnet: 0, vitality: 0, alchemy: 0, greed: 0 },
   campaign: { completedNodes: [], currentNode: 'desert_start' },
@@ -74,6 +75,7 @@ const DEFAULT_SAVE = {
     lang: 'pt',
     styleFilter: 'default',
     narrator: false,
+    obstacleHints: true,
     audio: { music: 0.45, sfx: 0.75, muted: false },
     accessibility: {
       oneHand: false,
@@ -118,20 +120,27 @@ class SaveSystem {
   }
 
   load() {
+    let loaded = null;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        return mergeDefaults(parsed, DEFAULT_SAVE);
+        loaded = mergeDefaults(parsed, DEFAULT_SAVE);
       }
     } catch {
       this.storageAvailable = false;
     }
-    if (this.memoryFallback) {
+    if (!loaded) {
+      if (this.memoryFallback) return this.memoryFallback;
+      this.memoryFallback = deepClone(DEFAULT_SAVE);
       return this.memoryFallback;
     }
-    this.memoryFallback = deepClone(DEFAULT_SAVE);
-    return this.memoryFallback;
+    // Garante que novos iniciais gratuitos sejam liberados em saves antigos
+    const freeStarters = DEFAULT_SAVE.unlockedDinos;
+    for (const id of freeStarters) {
+      if (!loaded.unlockedDinos.includes(id)) loaded.unlockedDinos.push(id);
+    }
+    return loaded;
   }
 
   save() {

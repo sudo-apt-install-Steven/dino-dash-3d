@@ -11,10 +11,10 @@ export class CardModal {
     this.cards = [];
   }
 
-  open(scoreMilestone, allowCurses = false) {
-    this.rerollLeft = 1;
+  open(scoreMilestone, allowCurses = false, customCards = null) {
+    this.rerollLeft = customCards ? 0 : 1;
     this.allowCurses = allowCurses;
-    this.cards = drawThreeCards(allowCurses);
+    this.cards = Array.isArray(customCards) && customCards.length > 0 ? customCards : drawThreeCards(allowCurses);
     this._render(scoreMilestone);
   }
 

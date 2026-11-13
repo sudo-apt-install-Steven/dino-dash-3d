@@ -13,11 +13,15 @@ export const ACHIEVEMENTS_CATALOG = [
 ];
 
 const DAILY_MISSION_TEMPLATES = [
-  { id: 'm_eggs', text: 'Colete 20 ovos em corridas', goal: 20, reward: 15, stat: 'eggs' },
-  { id: 'm_score', text: 'Alcance 600 pontos em uma corrida', goal: 600, reward: 20, stat: 'bestRun' },
-  { id: 'm_jumps', text: 'Dê 30 pulos na pista', goal: 30, reward: 12, stat: 'jumps' },
-  { id: 'm_stomp', text: 'Pisotear 4 inimigos pequenos', goal: 4, reward: 18, stat: 'stomps' }
+  { id: 'm_eggs', text: 'Colete 35 ovos em corridas', goal: 35, reward: 18, stat: 'eggs' },
+  { id: 'm_score', text: 'Alcance 1000 pontos em uma corrida', goal: 1000, reward: 22, stat: 'bestRun' },
+  { id: 'm_jumps', text: 'Dê 50 pulos na pista', goal: 50, reward: 15, stat: 'jumps' },
+  { id: 'm_stomp', text: 'Derrote 6 inimigos (pisão ou Q)', goal: 6, reward: 20, stat: 'stomps' }
 ];
+
+export const MYSTERY_EGG_COST = 80;
+export const MYSTERY_EGG_DUP_REFUND = 35;
+export const MYSTERY_EGG_DUP_XP = 80;
 
 export class ProgressionManager {
   static ensureDailyMissions() {
@@ -52,12 +56,12 @@ export class ProgressionManager {
     }
 
     // Passe de temporada (50 níveis)
-    const xpGain = Math.max(10, Math.floor(score * 0.15) + eggs * 2);
+    const xpGain = Math.max(8, Math.floor(score * 0.1) + eggs);
     Save.data.seasonPass.xp += xpGain;
-    while (Save.data.seasonPass.xp >= 120 && Save.data.seasonPass.level < 50) {
-      Save.data.seasonPass.xp -= 120;
+    while (Save.data.seasonPass.xp >= 160 && Save.data.seasonPass.level < 50) {
+      Save.data.seasonPass.xp -= 160;
       Save.data.seasonPass.level += 1;
-      Save.addEggs(8);
+      Save.addEggs(10);
     }
 
     // Conquistas automáticas
@@ -76,10 +80,14 @@ export class ProgressionManager {
     return unlocked;
   }
 
+  static getSkillUpgradeCost(curLevel) {
+    return 25 * curLevel + curLevel * curLevel * 8;
+  }
+
   static upgradeDinoSkill(dinoId) {
     const cur = Save.data.dinoLevels[dinoId] || 1;
     if (cur >= 10) return { ok: false, reason: 'Nível máximo atingido!' };
-    const cost = cur * 10;
+    const cost = this.getSkillUpgradeCost(cur);
     if ((Save.data.eggs || 0) < cost) return { ok: false, reason: `Precisa de ${cost} ovos.` };
     Save.addEggs(-cost);
     Save.data.dinoLevels[dinoId] = cur + 1;
@@ -87,30 +95,57 @@ export class ProgressionManager {
     return { ok: true, level: cur + 1 };
   }
 
+  static getMysteryEggStatus() {
+    const unlockedAcc = Save.data.unlockedAccessories || [];
+    const unlockedTrails = Save.data.unlockedTrails || [];
+    const remainingAcc = ACCESSORIES_SHOP.filter((a) => !unlockedAcc.includes(a.id)).length;
+    const remainingTrails = TRAILS_SHOP.filter((t) => !unlockedTrails.includes(t.id)).length;
+    const totalRemaining = remainingAcc + remainingTrails;
+    return {
+      cost: MYSTERY_EGG_COST,
+      dupRefund: MYSTERY_EGG_DUP_REFUND,
+      dupXp: MYSTERY_EGG_DUP_XP,
+      remainingAcc,
+      remainingTrails,
+      totalRemaining,
+      collectionComplete: totalRemaining === 0
+    };
+  }
+
   static openMysteryEgg() {
-    const cost = 25;
+    const cost = MYSTERY_EGG_COST;
     if ((Save.data.eggs || 0) < cost) return { ok: false, reason: `Precisa de ${cost} ovos.` };
     Save.addEggs(-cost);
 
-    // Tenta desbloquear acessório ou rastro ainda não obtido; senão devolve prêmio em ovos!
-    const lockedAcc = ACCESSORIES_SHOP.filter((a) => !Save.data.unlockedAccessories.includes(a.id));
-    if (lockedAcc.length > 0) {
-      const pick = lockedAcc[Math.floor(Math.random() * lockedAcc.length)];
-      Save.data.unlockedAccessories.push(pick.id);
+    // Pool combinado de acessórios e rastros ainda não desbloqueados
+    const lockedAcc = ACCESSORIES_SHOP.filter((a) => !Save.data.unlockedAccessories.includes(a.id)).map((item) => ({ kind: 'acc', item }));
+    const lockedTrails = TRAILS_SHOP.filter((t) => !Save.data.unlockedTrails.includes(t.id)).map((item) => ({ kind: 'trail', item }));
+    const pool = [...lockedAcc, ...lockedTrails];
+
+    if (pool.length > 0) {
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      if (pick.kind === 'acc') {
+        Save.data.unlockedAccessories.push(pick.item.id);
+      } else {
+        Save.data.unlockedTrails.push(pick.item.id);
+      }
       Save.save();
-      return { ok: true, rewardName: `${pick.name} (${pick.rarity})`, item: pick };
+      return { ok: true, rewardName: `${pick.item.name} (${pick.item.rarity})`, item: pick.item };
     }
 
-    const lockedTrails = TRAILS_SHOP.filter((t) => !Save.data.unlockedTrails.includes(t.id));
-    if (lockedTrails.length > 0) {
-      const pick = lockedTrails[Math.floor(Math.random() * lockedTrails.length)];
-      Save.data.unlockedTrails.push(pick.id);
-      Save.save();
-      return { ok: true, rewardName: `${pick.name} (${pick.rarity})`, item: pick };
+    // Coleção 100% completa: devolve menos do que custou + XP no Passe (sem farm infinito!)
+    Save.addEggs(MYSTERY_EGG_DUP_REFUND);
+    Save.data.seasonPass.xp = (Save.data.seasonPass.xp || 0) + MYSTERY_EGG_DUP_XP;
+    while (Save.data.seasonPass.xp >= 160 && Save.data.seasonPass.level < 50) {
+      Save.data.seasonPass.xp -= 160;
+      Save.data.seasonPass.level += 1;
+      Save.addEggs(10);
     }
-
-    const bonus = 40;
-    Save.addEggs(bonus);
-    return { ok: true, rewardName: `+${bonus} Ovos Dourados (Bônus)!` };
+    Save.save();
+    return {
+      ok: true,
+      completedFallback: true,
+      rewardName: `Coleção Completa: reembolso de ${MYSTERY_EGG_DUP_REFUND} 🥚 + ${MYSTERY_EGG_DUP_XP} XP`
+    };
   }
 }

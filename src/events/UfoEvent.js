@@ -141,10 +141,10 @@ export class UfoEvent {
 
     if (success) {
       ctx.addScore?.(350);
-      Save.addEggs(12);
+      Save.addEggs(8);
       Save.unlockAchievement('ufo_escape');
       ctx.sfx?.victory();
-      ctx.showFloatText?.(players[0], 'ESCAPOU DO OVNI! +12 OVOS', '#22d3ee');
+      ctx.showFloatText?.(players[0], 'ESCAPOU DO OVNI! +8 OVOS', '#22d3ee');
     } else {
       if (players[0]) {
         players[0].y = 0;

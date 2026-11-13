@@ -92,9 +92,12 @@ export class DinoFactory {
     const matTooth = createMat('#f7f4e8', { roughness: 0.35 });
 
     // Proporções por espécie (suporta híbridos cabeça/corpo/cauda!)
-    const isQuadruped = ['triceratops', 'stegosaurus', 'ankylosaurus', 'brachiosaurus'].includes(bodyId);
+    const isQuadruped = ['triceratops', 'styracosaurus', 'stegosaurus', 'ankylosaurus', 'brachiosaurus'].includes(bodyId);
     const bodyScale = bodyId === 'compsognathus' ? 0.62
+      : bodyId === 'oviraptor' ? 0.8
+      : bodyId === 'quetzalcoatlus' ? 0.92
       : bodyId === 'brachiosaurus' ? 1.24
+      : bodyId === 'giganotosaurus' ? 1.14
       : bodyId === 'raptor' || bodyId === 'dilophosaurus' ? 0.88
       : bodyId === 'ankylosaurus' ? 1.05
       : 1.0;
@@ -152,6 +155,13 @@ export class DinoFactory {
         addVoxel(torso, 0.18, 0.14, 0.18, torsoW * 0.56, 0.12, i * 0.38, matSpikes);
         addVoxel(torso, 0.18, 0.14, 0.18, -torsoW * 0.56, 0.12, i * 0.38, matSpikes);
       }
+    } else if (bodyId === 'giganotosaurus') {
+      // Fileira dupla de cristas dorsais pesadas
+      for (let i = 0; i < 4; i++) {
+        const zOff = -0.4 + i * 0.28;
+        addVoxel(torso, 0.1, 0.24, 0.18, -0.14, torsoH * 0.58, zOff, matSpikes);
+        addVoxel(torso, 0.1, 0.24, 0.18, 0.14, torsoH * 0.58, zOff, matSpikes);
+      }
     } else {
       // Fileira padrão de espinhos dorsais estilizados
       for (let i = 0; i < 3; i++) {
@@ -172,9 +182,11 @@ export class DinoFactory {
     headGroup.position.set(0, neckLen * 0.88, -0.14);
     neckPivot.add(headGroup);
 
-    const headW = headId === 'triceratops' ? 0.72 : (headId === 'pachycephalosaurus' ? 0.64 : 0.66);
-    const headH = 0.52;
-    const headD = headId === 'spinosaurus' ? 0.94 : 0.78;
+    const headW = headId === 'triceratops' || headId === 'styracosaurus' ? 0.72
+      : (headId === 'pachycephalosaurus' ? 0.64 : (headId === 'quetzalcoatlus' ? 0.46 : 0.66));
+    const headH = headId === 'giganotosaurus' ? 0.58 : (headId === 'quetzalcoatlus' ? 0.4 : 0.52);
+    const headD = headId === 'spinosaurus' || headId === 'baryonyx' ? 0.96
+      : (headId === 'quetzalcoatlus' ? 1.08 : 0.78);
     addVoxel(headGroup, headW, headH, headD, 0, 0.16, -0.18, matPrimary);
     // Focinho
     addVoxel(headGroup, headW * 0.84, headH * 0.64, headD * 0.46, 0, 0.1, -headD * 0.58, matPrimary);
@@ -224,6 +236,21 @@ export class DinoFactory {
       addVoxel(headGroup, 0.11, 0.28, 0.12, 0.26, 0.48, -0.16, matSpikes);
     } else if (headId === 'pachycephalosaurus') {
       addVoxel(headGroup, 0.56, 0.3, 0.56, 0, 0.5, -0.2, matSpikes);
+    } else if (headId === 'allosaurus' || headId === 'giganotosaurus') {
+      addVoxel(headGroup, 0.1, 0.18, 0.28, -0.24, 0.44, -0.32, matSpikes);
+      addVoxel(headGroup, 0.1, 0.18, 0.28, 0.24, 0.44, -0.32, matSpikes);
+    } else if (headId === 'styracosaurus') {
+      addVoxel(headGroup, 1.12, 0.92, 0.18, 0, 0.46, 0.18, matPrimaryDark);
+      for (let i = -2; i <= 2; i++) {
+        addVoxel(headGroup, 0.09, 0.32, 0.1, i * 0.22, 0.94 - Math.abs(i) * 0.08, 0.18, matTooth);
+      }
+      addVoxel(headGroup, 0.12, 0.46, 0.14, 0, 0.46, -0.78, matTooth);
+    } else if (headId === 'oviraptor') {
+      addVoxel(headGroup, 0.16, 0.34, 0.44, 0, 0.5, -0.28, matSpikes);
+    } else if (headId === 'quetzalcoatlus') {
+      addVoxel(headGroup, 0.12, 0.22, 0.85, 0, 0.36, 0.22, matSpikes);
+    } else if (headId === 'baryonyx') {
+      addVoxel(headGroup, 0.14, 0.12, 0.4, 0, 0.44, -0.05, matSpikes);
     }
 
     // Cauda segmentada (4 segmentos articulados)
@@ -241,6 +268,10 @@ export class DinoFactory {
         addVoxel(segPivot, 0.48, 0.1, 0.08, 0, 0.12, 0.24, matSpikes);
       } else if (tailId === 'spinosaurus' && s >= 1) {
         addVoxel(segPivot, 0.08, 0.36, 0.28, 0, 0.24, 0.18, matSpikes);
+      } else if (tailId === 'oviraptor' && s === 3) {
+        // Leque de penas na ponta da cauda
+        addVoxel(segPivot, 0.56, 0.08, 0.42, 0, 0.08, 0.32, matSpikes);
+        addVoxel(segPivot, 0.4, 0.12, 0.3, 0, 0.14, 0.34, matSecondary);
       }
       tailSegments.push(segPivot);
       tailParent = segPivot;
@@ -285,12 +316,27 @@ export class DinoFactory {
         const shoulder = new THREE.Group();
         shoulder.position.set(sideX, -0.1, -torsoD * 0.32);
         torso.add(shoulder);
-        const armLen = bodyId === 'therizinosaurus' ? 0.46 : 0.28;
+        const dir = sideX < 0 ? -1 : 1;
+        if (bodyId === 'quetzalcoatlus') {
+          // Asas enormes de pterossauro
+          addVoxel(shoulder, 0.88, 0.1, 0.38, dir * 0.48, 0.06, 0.06, matPrimaryDark);
+          addVoxel(shoulder, 0.72, 0.06, 0.44, dir * 0.96, 0.02, 0.14, matSpikes);
+          addVoxel(shoulder, 0.12, 0.08, 0.18, dir * 0.14, -0.1, -0.18, matTooth);
+          return { hip: shoulder };
+        }
+        const armLen = bodyId === 'therizinosaurus' ? 0.46 : bodyId === 'baryonyx' ? 0.38 : 0.28;
         addVoxel(shoulder, 0.14, armLen, 0.16, 0, -armLen * 0.4, -0.06, matPrimaryDark);
         if (bodyId === 'therizinosaurus') {
           // Garras gigantes icônicas
           addVoxel(shoulder, 0.05, 0.08, 0.46, -0.04, -armLen * 0.85, -0.28, matTooth);
           addVoxel(shoulder, 0.05, 0.08, 0.46, 0.04, -armLen * 0.85, -0.28, matTooth);
+        } else if (bodyId === 'baryonyx') {
+          // Garra curva espessa de pescador
+          addVoxel(shoulder, 0.12, 0.12, 0.32, 0, -armLen * 0.88, -0.22, matTooth);
+        } else if (bodyId === 'oviraptor') {
+          // Penas laterais nos braços
+          addVoxel(shoulder, 0.08, 0.24, 0.36, dir * 0.06, -armLen * 0.45, 0.08, matSpikes);
+          addVoxel(shoulder, 0.1, 0.08, 0.18, 0, -armLen * 0.85, -0.1, matTooth);
         } else {
           addVoxel(shoulder, 0.12, 0.08, 0.18, 0, -armLen * 0.85, -0.12, matTooth);
         }
@@ -389,6 +435,26 @@ export class DinoFactory {
         addVoxel(torso, 0.82, 0.1, 0.38, -0.78, torsoH * 0.42, 0.02, matGold);
         addVoxel(torso, 0.82, 0.1, 0.38, 0.78, torsoH * 0.42, 0.02, matGold);
         break;
+      case 'vr_visor': {
+        const matCyan = createMat('#00f5d4', { emissive: '#00bfa5', emissiveIntensity: 0.75 });
+        addVoxel(headGroup, 0.78, 0.18, 0.26, 0, 0.24, -0.26, matDark);
+        addVoxel(headGroup, 0.72, 0.1, 0.14, 0, 0.24, -0.34, matCyan);
+        break;
+      }
+      case 'spikes': {
+        const matIron = createMat('#cbd5e1', { metalness: 0.7, roughness: 0.25 });
+        addVoxel(torso, 0.16, 0.34, 0.22, 0, torsoH * 0.68, -0.2, matIron);
+        addVoxel(torso, 0.14, 0.38, 0.22, 0, torsoH * 0.7, 0.12, matIron);
+        addVoxel(torso, 0.12, 0.28, 0.2, 0, torsoH * 0.64, 0.4, matIron);
+        break;
+      }
+      case 'aura_fire': {
+        const matFire = createMat('#fb923c', { emissive: '#f97316', emissiveIntensity: 0.9, roughness: 0.2 });
+        addVoxel(torso, 0.22, 0.26, 0.22, -0.58, torsoH * 0.38, 0.15, matFire);
+        addVoxel(torso, 0.22, 0.26, 0.22, 0.58, torsoH * 0.38, 0.15, matFire);
+        addVoxel(headGroup, 0.2, 0.22, 0.2, 0, 0.56, -0.18, matFire);
+        break;
+      }
       default:
         break;
     }

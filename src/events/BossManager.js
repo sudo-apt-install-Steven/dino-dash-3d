@@ -251,7 +251,9 @@ export class BossManager {
       this.weakOrb.rotation.x += dt * 2.2;
       for (const p of players) {
         if (p.dead) continue;
-        if (Math.abs(p.x - this.weakOrb.position.x) < 1.2 && Math.abs(p.z - this.weakOrb.position.z) < 1.2) {
+        const reachX = p.attackTimer > 0 ? 1.45 : 1.2;
+        const reachZ = p.attackTimer > 0 ? 1.85 : 1.2;
+        if (Math.abs(p.x - this.weakOrb.position.x) < reachX && Math.abs(p.z - this.weakOrb.position.z) < reachZ) {
           this._hitBossWeakPoint(p, players, ctx);
           break;
         }
@@ -288,7 +290,7 @@ export class BossManager {
       b.teamComboIds.clear();
     }
 
-    const dmg = player.abilityDuration > 0 ? 2 : 1;
+    const dmg = (player.abilityDuration > 0 || player.attackTimer > 0) ? 2 : 1;
     b.currentHp = Math.max(0, b.currentHp - dmg);
     b.stepIndex++;
 
@@ -317,7 +319,7 @@ export class BossManager {
       this.clear();
       ctx.onBossHudUpdate?.(null);
       ctx.addScore?.(750);
-      Save.addEggs(25);
+      Save.addEggs(18);
       if (!Save.data.dinoHouse.trophies.includes(defeated.id)) {
         Save.data.dinoHouse.trophies.push(defeated.id);
       }
@@ -327,7 +329,7 @@ export class BossManager {
       Save.save();
       ctx.sfx?.victory();
       ctx.onBossDefeated?.(defeated);
-      ctx.showFloatText?.(player, `🏆 ${defeated.name} DERROTADO! +25 OVOS & TROFÉU!`, '#58d63a');
+      ctx.showFloatText?.(player, `🏆 ${defeated.name} DERROTADO! +18 OVOS & TROFÉU!`, '#58d63a');
     } else {
       this._spawnNextWeakOrb();
     }

@@ -35,7 +35,7 @@ export const BIOMES = [
     id: 'volcano',
     tier: 'essential',
     name: 'Vulcão em Erupção',
-    ruleDesc: 'Poças de lava e calor intenso que drenam energia.',
+    ruleDesc: 'Poças de lava e calor intenso; pule as poças ou use escudo!',
     bossId: 'alpha_trex',
     heatDrain: true,
     theme: {

@@ -27,12 +27,14 @@ export class HUD {
           <div class="hud-pill" id="hud-speed">Vel: <strong>1.0x</strong></div>
           <div class="hud-pill" id="hud-eggs">🥚 <strong>0</strong></div>
           <div class="hud-pill hidden" id="hud-combo" style="color:#ffd447;">Combo: <strong>x1</strong></div>
+          <div class="hud-pill hidden" id="hud-mp-rank" style="color:#fde047; border-color:#ffd447;">🏆 #1</div>
           <div class="hud-pill hidden" id="hud-element" style="color:#38bdf8;">✨ Nenhum</div>
           <div class="hud-pill hidden" id="hud-wanted" style="color:#ff4757;">🚨 ★</div>
         </div>
 
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
           <div style="display:flex; gap:8px; align-items:center;">
+            <button class="chunky-btn secondary" id="btn-guide" style="padding:5px 10px; font-size:0.75rem;" title="Guia de Obstáculos & Controles">📖 Guia</button>
             <button class="chunky-btn secondary" id="btn-clip-rec" style="padding:5px 10px; font-size:0.75rem;" title="Gravar clipe (.webm)">🎥 Clipe</button>
             <button class="chunky-btn secondary" id="btn-debug" style="padding:5px 10px; font-size:0.75rem;" title="Painel de Depuração (F9)">🛠️ F9</button>
             <button class="chunky-btn secondary" id="btn-photo-mode" style="padding:5px 10px; font-size:0.75rem;">📷</button>
@@ -65,6 +67,16 @@ export class HUD {
       </div>
 
       <div class="banner-toast hidden" id="hud-banner"></div>
+      <div class="chunky-panel hidden" id="hud-tutorial-box" style="position:fixed; top:76px; left:50%; transform:translateX(-50%); z-index:26; padding:10px 16px; width:min(540px, 92vw); pointer-events:auto; border-color:#38bdf8;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;">
+          <strong id="tut-step-title" style="color:#ffd447; font-size:0.95rem;">🎓 Tutorial</strong>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span id="tut-step-progress" class="hud-pill" style="font-size:0.75rem; padding:2px 8px;">1/6</span>
+            <button class="chunky-btn secondary" id="tut-skip" style="padding:3px 9px; font-size:0.72rem;">Sair</button>
+          </div>
+        </div>
+        <div id="tut-step-desc" style="font-size:0.86rem; color:#fef3c7;">Siga as instruções na pista!</div>
+      </div>
       <div class="float-callouts" id="hud-floats"></div>
       <div class="narrator-sub hidden" id="hud-narrator"></div>
 
@@ -88,12 +100,9 @@ export class HUD {
             <span>⏱️ Bullet-Time (Shift)</span>
             <div class="meter-bar"><div class="meter-fill" id="bar-bullet" style="width:100%; background:#a855f7;"></div></div>
           </div>
-          <div class="meter-pill">
-            <span>🍖 Energia</span>
-            <div class="meter-bar"><div class="meter-fill" id="bar-energy" style="width:100%; background:#22c55e;"></div></div>
-          </div>
-          <div class="meter-pill" id="btn-attack-melee" style="cursor:pointer; pointer-events:auto;" title="Ataque / Mordida / Quebrar (Q)">
-            ⚔️ Ataque <strong>(Q)</strong>
+          <div class="meter-pill" id="btn-attack-melee" style="cursor:pointer; pointer-events:auto;" title="Ataque / Mordida / Cortar (Q)">
+            <span>⚔️ Ataque (Q)</span>
+            <div class="meter-bar"><div class="meter-fill" id="bar-attack" style="width:100%; background:#f97316;"></div></div>
           </div>
           <div class="meter-pill" id="hud-backpack" style="cursor:pointer; pointer-events:auto;">
             🎒 Mochila (E): <strong id="lbl-backpack">Vazia</strong>
@@ -129,12 +138,24 @@ export class HUD {
         </div>
       </div>
 
+      <!-- Confirmação de Reinício (R) -->
+      <div class="overlay-center hidden" id="restart-confirm-overlay">
+        <div class="chunky-panel gameover-card" style="max-width:410px; text-align:center;">
+          <h2>🔄 Reiniciar Corrida?</h2>
+          <p style="font-size:0.9rem; color:#d8c2a6;">Você perderá o progresso desta corrida atual. Deseja realmente reiniciar?</p>
+          <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
+            <button class="chunky-btn orange" id="btn-confirm-restart">Sim, Reiniciar (Enter)</button>
+            <button class="chunky-btn secondary" id="btn-cancel-restart">Continuar Jogando (Esc)</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Merchant Overlay -->
       <div class="overlay-center hidden" id="merchant-overlay">
         <div class="chunky-panel gameover-card">
           <h2>🛒 Mercador de Ovos</h2>
           <p style="font-size:0.9rem; color:#d8c2a6;">Troque ovos por reforços rápidos durante a corrida!</p>
-          <button class="chunky-btn" id="merch-heal">Comprar +1 Vida / Escudo (8 🥚)</button>
+          <button class="chunky-btn" id="merch-heal">Comprar +1 Vida / Escudo (20 🥚)</button>
           <button class="chunky-btn orange" id="merch-skip">Seguir Corrida</button>
         </div>
       </div>
@@ -183,14 +204,20 @@ export class HUD {
     this.speedEl = q('#hud-speed strong');
     this.eggsEl = q('#hud-eggs strong');
     this.comboEl = q('#hud-combo');
+    this.mpRankEl = q('#hud-mp-rank');
     this.elementEl = q('#hud-element');
     this.wantedEl = q('#hud-wanted');
     this.hpText = q('#hud-hp-text');
     this.barFury = q('#bar-fury');
     this.barAbility = q('#bar-ability');
     this.barBullet = q('#bar-bullet');
-    this.barEnergy = q('#bar-energy');
+    this.barAttack = q('#bar-attack');
     this.clipBtn = q('#btn-clip-rec');
+    this.guideBtn = q('#btn-guide');
+    this.tutBox = q('#hud-tutorial-box');
+    this.tutTitle = q('#tut-step-title');
+    this.tutProgress = q('#tut-step-progress');
+    this.tutDesc = q('#tut-step-desc');
     this.lblBackpack = q('#lbl-backpack');
     this.mapBiomeName = q('#map-biome-name');
     this.mapFill = q('#map-fill');
@@ -212,7 +239,9 @@ export class HUD {
     this.hudBottom = q('#hud-bottom-bar');
 
     this.pauseOverlay = q('#pause-overlay');
+    this.restartConfirmOverlay = q('#restart-confirm-overlay');
     this.merchantOverlay = q('#merchant-overlay');
+    this.merchHealBtn = q('#merch-heal');
     this.photoOverlay = q('#photo-overlay');
     this.gameOverOverlay = q('#gameover-overlay');
     this.modalLayer = q('#modal-layer');
@@ -224,10 +253,14 @@ export class HUD {
     this.root.querySelector('#btn-go-menu').addEventListener('click', () => this.callbacks.onGoMenu?.());
     this.root.querySelector('#btn-pause').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-resume').addEventListener('click', () => this.callbacks.onTogglePause?.());
-    this.root.querySelector('#btn-pause-restart').addEventListener('click', () => this.callbacks.onRestart?.());
+    this.root.querySelector('#btn-pause-restart').addEventListener('click', () => this.callbacks.onRequestRestart?.());
+    this.root.querySelector('#btn-confirm-restart').addEventListener('click', () => this.callbacks.onConfirmRestart?.());
+    this.root.querySelector('#btn-cancel-restart').addEventListener('click', () => this.callbacks.onCancelRestart?.());
     this.root.querySelector('#btn-pause-menu').addEventListener('click', () => this.callbacks.onGoMenu?.());
     this.root.querySelector('#btn-photo-mode').addEventListener('click', () => this.callbacks.onTogglePhoto?.());
     this.root.querySelector('#btn-debug').addEventListener('click', () => this.callbacks.onOpenDebug?.());
+    this.root.querySelector('#btn-guide').addEventListener('click', () => this.callbacks.onOpenGuide?.());
+    this.root.querySelector('#tut-skip').addEventListener('click', () => this.callbacks.onSkipTutorial?.());
     this.root.querySelector('#btn-clip-rec').addEventListener('click', () => this.callbacks.onRecordClip?.());
     this.root.querySelector('#btn-attack-melee').addEventListener('click', () => this.callbacks.onBasicAttack?.());
     this.root.querySelector('#photo-exit').addEventListener('click', () => this.callbacks.onTogglePhoto?.());
@@ -254,17 +287,50 @@ export class HUD {
   resetAllOverlays() {
     this.hideGameOver();
     this.showPause(false);
+    this.showRestartConfirm(false);
     this.hideMerchant();
     this.showPhotoMode(false);
     this.setBossHud(null);
     this.setUfoHud(false, 0, 0);
     this.setChaserHud(false, 0);
     this.setSharedRolesHint('');
+    this.setTutorialHud(null);
+    this.setMpRankHud('');
     this.dmgVignette.classList.add('hidden');
     this.bannerEl.classList.add('hidden');
     this.narratorEl.classList.add('hidden');
     this.elementEl?.classList.add('hidden');
     this.wantedEl?.classList.add('hidden');
+  }
+
+  setTutorialHud(info) {
+    if (!this.tutBox) return;
+    const active = !!info?.active;
+    this.tutBox.classList.toggle('hidden', !active);
+    if (active) {
+      this.tutTitle.textContent = info.title || '🎓 Tutorial';
+      this.tutProgress.textContent = info.progressText || `${info.step || 1}/${info.total || 6}`;
+      this.tutDesc.textContent = info.desc || '';
+    }
+  }
+
+  setMpRankHud(text, color = '#fde047') {
+    if (!this.mpRankEl) return;
+    this.mpRankEl.classList.toggle('hidden', !text);
+    if (text) {
+      this.mpRankEl.textContent = text;
+      this.mpRankEl.style.color = color;
+    }
+  }
+
+  showRestartConfirm(show) {
+    this.restartConfirmOverlay?.classList.toggle('hidden', !show);
+  }
+
+  setMerchantCost(cost) {
+    if (this.merchHealBtn) {
+      this.merchHealBtn.textContent = `Comprar +1 Vida / Escudo (${cost} 🥚)`;
+    }
   }
 
   setClipRecording(active) {
@@ -289,10 +355,12 @@ export class HUD {
       : 100;
     this.barAbility.style.width = `${cdPct}%`;
     this.barBullet.style.width = `${Math.min(100, player.bulletEnergy ?? 100)}%`;
-    if (this.barEnergy) {
-      const en = Math.max(0, Math.min(100, player.energy ?? 100));
-      this.barEnergy.style.width = `${en}%`;
-      this.barEnergy.style.background = en < 25 ? '#ff4757' : '#22c55e';
+    if (this.barAttack) {
+      const atkMax = player.attackMaxCooldown || 1.25;
+      const atkCd = Math.max(0, player.attackCooldown || 0);
+      const atkPct = Math.max(0, Math.min(100, 100 * (1 - atkCd / atkMax)));
+      this.barAttack.style.width = `${atkPct}%`;
+      this.barAttack.style.background = atkCd <= 0.02 ? '#fb923c' : '#64748b';
     }
     if (this.elementEl) {
       const elemNames = { fire: '🔥 Fogo', ice: '❄️ Gelo', lightning: '⚡ Raio', poison: '☠️ Veneno' };

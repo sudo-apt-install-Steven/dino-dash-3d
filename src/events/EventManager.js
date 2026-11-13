@@ -167,12 +167,12 @@ export class EventManager {
         this.world.spawnRuinsPuzzle();
         break;
       case 'toxic_fog':
-        ctx.showBanner?.('☠️ NEVOEIRO TÓXICO! Máscara ou frutas protegem energia!', '#84cc16');
+        ctx.showBanner?.('☠️ NEVOEIRO TÓXICO! Sem máscara, recarga fica lenta!', '#84cc16');
         this.world.triggerToxicFog(10);
         break;
       case 'fruit_rain':
-        ctx.showBanner?.('🍉 CHUVA DE FRUTAS! Recupere energia e vida!', '#4ade80');
-        ctx.spawnFruitRain?.(12);
+        ctx.showBanner?.('🍉 CHUVA DE FRUTAS! +Fúria e chance de cura!', '#4ade80');
+        ctx.spawnFruitRain?.(10);
         break;
       case 'npc_duel':
         ctx.showBanner?.('⚔️ DUELO COM DINO RIVAL! Ataque (Q) ou pule nele!', '#ec4899');

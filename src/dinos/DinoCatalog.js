@@ -1,15 +1,15 @@
-// Catálogo completo dos 13 dinossauros + 1 secreto com atributos, classes, habilidades e curiosidades reais.
+// Catálogo completo de 20 dinossauros (19 + 1 secreto) com atributos balanceados, classes, habilidades e custos.
 
 export const DINO_CLASSES = {
   carnivore: {
     id: 'carnivore',
     name: { pt: 'Carnívoro', en: 'Carnivore' },
-    passive: { pt: '+25% pontos por pisotear e combos mais rápidos', en: '+25% stomp score & faster combo charge' }
+    passive: { pt: '+25% pontos ao pisotear/atacar (Q) e combos mais rápidos', en: '+25% stomp/attack score & faster combo charge' }
   },
   herbivore: {
     id: 'herbivore',
     name: { pt: 'Herbívoro', en: 'Herbivore' },
-    passive: { pt: '+1 Escudo inicial e ovos curam energia extra', en: '+1 starting shield & eggs restore extra energy' }
+    passive: { pt: '+1 Escudo inicial e frutas concedem +18 Fúria + chance de escudo', en: '+1 starting shield & fruits grant extra fury' }
   },
   aquatic: {
     id: 'aquatic',
@@ -19,7 +19,7 @@ export const DINO_CLASSES = {
   mystic: {
     id: 'mystic',
     name: { pt: 'Místico', en: 'Mystic' },
-    passive: { pt: 'Atrai ovos próximos e gera aura espectral', en: 'Attracts nearby eggs & emits spectral aura' }
+    passive: { pt: 'Atrai ovos próximos e emite aura espectral', en: 'Attracts nearby eggs & emits spectral aura' }
   }
 };
 
@@ -28,8 +28,9 @@ export const DINO_CATALOG = [
     id: 'trex',
     name: 'T-Rex',
     dinoClass: 'carnivore',
-    stats: { speed: 7, jump: 7, hp: 3, defense: 6, energy: 7 },
-    ability: { name: 'Rugido', desc: 'Afasta e atordoa obstáculos pequenos e aves à frente.', cooldown: 9, duration: 1.5 },
+    unlockCost: 0,
+    stats: { speed: 7, jump: 7, hp: 3, defense: 6, attack: 9 },
+    ability: { name: 'Rugido', desc: 'Afasta e destrói obstáculos pequenos e aves à frente.', cooldown: 9.5, duration: 1.5 },
     colors: { primary: '#3fa34d', secondary: '#c7e89b', eye: '#ffd54f', spots: '#1e5b2b', spikes: '#e87a24' },
     roarPitch: 95,
     fact: {
@@ -41,8 +42,9 @@ export const DINO_CATALOG = [
     id: 'raptor',
     name: 'Velociraptor',
     dinoClass: 'carnivore',
-    stats: { speed: 10, jump: 8, hp: 2, defense: 3, energy: 8 },
-    ability: { name: 'Investida Relâmpago', desc: 'Avanço invencível em alta velocidade que destrói obstáculos.', cooldown: 7, duration: 1.4 },
+    unlockCost: 0,
+    stats: { speed: 10, jump: 8, hp: 2, defense: 4, attack: 8 },
+    ability: { name: 'Investida Relâmpago', desc: 'Avanço invencível em alta velocidade que destrói obstáculos.', cooldown: 8.0, duration: 1.3 },
     colors: { primary: '#d96b27', secondary: '#ffe0a3', eye: '#fff176', spots: '#6e2307', spikes: '#ffb703' },
     roarPitch: 290,
     fact: {
@@ -54,8 +56,9 @@ export const DINO_CATALOG = [
     id: 'triceratops',
     name: 'Triceratops',
     dinoClass: 'herbivore',
-    stats: { speed: 6, jump: 5, hp: 4, defense: 9, energy: 6 },
-    ability: { name: 'Carga de Chifres', desc: 'Destrói obstáculos à frente com os 3 chifres por 3s.', cooldown: 10, duration: 3.0 },
+    unlockCost: 0,
+    stats: { speed: 6, jump: 5, hp: 4, defense: 9, attack: 7 },
+    ability: { name: 'Carga de Chifres', desc: 'Destrói obstáculos à frente com os 3 chifres por 2.8s.', cooldown: 10.5, duration: 2.8 },
     colors: { primary: '#3b82c4', secondary: '#b9e3ff', eye: '#ffd54f', spots: '#18426e', spikes: '#f5efe0' },
     roarPitch: 110,
     fact: {
@@ -67,8 +70,9 @@ export const DINO_CATALOG = [
     id: 'stegosaurus',
     name: 'Stegosaurus',
     dinoClass: 'herbivore',
-    stats: { speed: 6, jump: 6, hp: 4, defense: 9, energy: 7 },
-    ability: { name: 'Cauda de Espinhos', desc: 'Dispara uma explosão de espinhos ao redor.', cooldown: 8, duration: 1.2 },
+    unlockCost: 0,
+    stats: { speed: 6, jump: 6, hp: 4, defense: 8, attack: 7 },
+    ability: { name: 'Cauda de Espinhos', desc: 'Dispara uma explosão radial de espinhos ao redor.', cooldown: 8.5, duration: 1.2 },
     colors: { primary: '#569c3c', secondary: '#e4f1a8', eye: '#ffeb3b', spots: '#2c591d', spikes: '#e0533c' },
     roarPitch: 135,
     fact: {
@@ -80,8 +84,9 @@ export const DINO_CATALOG = [
     id: 'ankylosaurus',
     name: 'Ankylosaurus',
     dinoClass: 'herbivore',
-    stats: { speed: 5, jump: 4, hp: 5, defense: 10, energy: 6 },
-    ability: { name: 'Casco de Aço', desc: 'Fica imune a todo dano por 4s com leve redução de velocidade.', cooldown: 11, duration: 4.0 },
+    unlockCost: 0,
+    stats: { speed: 5, jump: 5, hp: 5, defense: 10, attack: 6 },
+    ability: { name: 'Casco de Aço', desc: 'Fica imune a todo dano por 3.5s com proteção reforçada.', cooldown: 11.5, duration: 3.5 },
     colors: { primary: '#7c6f64', secondary: '#d5c4a1', eye: '#ff9800', spots: '#3c3836', spikes: '#b8bb26' },
     roarPitch: 82,
     fact: {
@@ -93,8 +98,9 @@ export const DINO_CATALOG = [
     id: 'spinosaurus',
     name: 'Spinosaurus',
     dinoClass: 'aquatic',
-    stats: { speed: 8, jump: 7, hp: 3, defense: 7, energy: 8 },
-    ability: { name: 'Mergulho', desc: 'Mergulha e atravessa obstáculos por baixo com impulso.', cooldown: 8, duration: 2.2 },
+    unlockCost: 0,
+    stats: { speed: 8, jump: 7, hp: 3, defense: 7, attack: 8 },
+    ability: { name: 'Mergulho', desc: 'Mergulha invulnerável por baixo de obstáculos por 2s.', cooldown: 8.5, duration: 2.0 },
     colors: { primary: '#1f8a8c', secondary: '#9ce6e0', eye: '#ffca3a', spots: '#0d464a', spikes: '#ff6b35' },
     roarPitch: 105,
     fact: {
@@ -106,8 +112,9 @@ export const DINO_CATALOG = [
     id: 'brachiosaurus',
     name: 'Brachiosaurus',
     dinoClass: 'herbivore',
-    stats: { speed: 6, jump: 9, hp: 4, defense: 8, energy: 7 },
-    ability: { name: 'Pisão Sísmico', desc: 'Onda de choque destrói inimigos e obstáculos na tela.', cooldown: 11, duration: 1.5 },
+    unlockCost: 0,
+    stats: { speed: 6, jump: 9, hp: 4, defense: 8, attack: 7 },
+    ability: { name: 'Pisão Sísmico', desc: 'Onda de choque destrói inimigos e obstáculos na tela.', cooldown: 11.5, duration: 1.4 },
     colors: { primary: '#49a078', secondary: '#c9f0d8', eye: '#ffd166', spots: '#216869', spikes: '#9cc5a1' },
     roarPitch: 70,
     fact: {
@@ -119,8 +126,9 @@ export const DINO_CATALOG = [
     id: 'dilophosaurus',
     name: 'Dilophosaurus',
     dinoClass: 'carnivore',
-    stats: { speed: 9, jump: 8, hp: 2, defense: 5, energy: 9 },
-    ability: { name: 'Cuspe de Veneno', desc: 'Lança projétil ácido que dissolve obstáculos à frente.', cooldown: 6.5, duration: 2.0 },
+    unlockCost: 0,
+    stats: { speed: 9, jump: 8, hp: 2, defense: 5, attack: 8 },
+    ability: { name: 'Cuspe de Veneno', desc: 'Lança 3 projéteis ácidos que dissolvem obstáculos à frente.', cooldown: 7.0, duration: 1.8 },
     colors: { primary: '#5e60ce', secondary: '#b8c0ff', eye: '#80ffdb', spots: '#240046', spikes: '#ff4d6d' },
     roarPitch: 340,
     fact: {
@@ -132,8 +140,9 @@ export const DINO_CATALOG = [
     id: 'parasaurolophus',
     name: 'Parasaurolophus',
     dinoClass: 'herbivore',
-    stats: { speed: 7, jump: 7, hp: 3, defense: 6, energy: 10 },
-    ability: { name: 'Trombeta Sônica', desc: 'Atrai todos os ovos próximos e cura aliado no Coop.', cooldown: 8.5, duration: 3.5 },
+    unlockCost: 60,
+    stats: { speed: 7, jump: 7, hp: 3, defense: 6, attack: 6 },
+    ability: { name: 'Trombeta Sônica', desc: 'Atrai ovos próximos e cura aliado no Coop.', cooldown: 9.0, duration: 3.2 },
     colors: { primary: '#e07a5f', secondary: '#f4f1de', eye: '#f2cc8f', spots: '#7a2e1d', spikes: '#3d405b' },
     roarPitch: 195,
     fact: {
@@ -145,8 +154,9 @@ export const DINO_CATALOG = [
     id: 'compsognathus',
     name: 'Compsognathus',
     dinoClass: 'carnivore',
-    stats: { speed: 9, jump: 9, hp: 2, defense: 2, energy: 10 },
-    ability: { name: 'Salto Duplo + Furtividade', desc: 'Salto duplo e fase fantasma curta para desviar de perigos.', cooldown: 6, duration: 2.2 },
+    unlockCost: 75,
+    stats: { speed: 9, jump: 9, hp: 2, defense: 3, attack: 9 },
+    ability: { name: 'Salto Duplo + Furtividade', desc: 'Salto duplo e fase fantasma curta para desviar de perigos.', cooldown: 6.5, duration: 2.0 },
     colors: { primary: '#70e000', secondary: '#e8fccf', eye: '#ffffff', spots: '#007200', spikes: '#ffaa00' },
     roarPitch: 420,
     fact: {
@@ -155,11 +165,40 @@ export const DINO_CATALOG = [
     }
   },
   {
+    id: 'allosaurus',
+    name: 'Allosaurus',
+    dinoClass: 'carnivore',
+    unlockCost: 95,
+    stats: { speed: 8, jump: 7, hp: 3, defense: 6, attack: 10 },
+    ability: { name: 'Frenesi Caçador', desc: 'Recarga do Ataque (Q) pela metade por 4s e golpe mais forte.', cooldown: 8.5, duration: 4.0 },
+    colors: { primary: '#2b9348', secondary: '#d8f3dc', eye: '#ff9f1c', spots: '#1b4332', spikes: '#ef233c' },
+    roarPitch: 118,
+    fact: {
+      pt: 'Principal predador do Jurássico Superior, caçava em grupo usando cristas acima dos olhos.',
+      en: 'Apex Late Jurassic hunter sporting distinctive brow crests over its eyes.'
+    }
+  },
+  {
+    id: 'baryonyx',
+    name: 'Baryonyx',
+    dinoClass: 'aquatic',
+    unlockCost: 115,
+    stats: { speed: 8, jump: 7, hp: 3, defense: 7, attack: 8 },
+    ability: { name: 'Corte Aquático', desc: 'Rajada d’água destrói obstáculos e concede +1 Escudo se estiver na água.', cooldown: 9.0, duration: 2.0 },
+    colors: { primary: '#0077b6', secondary: '#caf0f8', eye: '#ffd166', spots: '#03045e', spikes: '#48cae4' },
+    roarPitch: 140,
+    fact: {
+      pt: 'Seu nome significa "Garra Pesada", com focinho alongado parecido com o de um crocodilo.',
+      en: 'Named "Heavy Claw", it featured a long crocodilian snout built for catching fish.'
+    }
+  },
+  {
     id: 'carnotaurus',
     name: 'Carnotaurus',
     dinoClass: 'carnivore',
-    stats: { speed: 9, jump: 7, hp: 3, defense: 6, energy: 7 },
-    ability: { name: 'Investida Brutal', desc: 'Avança quebrando obstáculos e empurra rivais no PvP.', cooldown: 8, duration: 2.0 },
+    unlockCost: 130,
+    stats: { speed: 9, jump: 7, hp: 3, defense: 6, attack: 9 },
+    ability: { name: 'Investida Brutal', desc: 'Avança quebrando obstáculos e empurra rivais no PvP/Multiplayer.', cooldown: 8.5, duration: 2.0 },
     colors: { primary: '#b51724', secondary: '#f5b7b1', eye: '#ffdd00', spots: '#4a060b', spikes: '#212529' },
     roarPitch: 120,
     fact: {
@@ -171,8 +210,9 @@ export const DINO_CATALOG = [
     id: 'pachycephalosaurus',
     name: 'Pachycephalosaurus',
     dinoClass: 'herbivore',
-    stats: { speed: 7, jump: 7, hp: 4, defense: 8, energy: 7 },
-    ability: { name: 'Marretada', desc: 'Cabeçada demolidora que quebra pedras sólidas e atordoa rivais.', cooldown: 7.5, duration: 2.2 },
+    unlockCost: 145,
+    stats: { speed: 7, jump: 7, hp: 4, defense: 8, attack: 8 },
+    ability: { name: 'Marretada', desc: 'Cabeçada demolidora que quebra pedras e atordoa rivais.', cooldown: 8.0, duration: 2.0 },
     colors: { primary: '#b5651d', secondary: '#f3d5b5', eye: '#ffd166', spots: '#582f0e', spikes: '#ffe8d6' },
     roarPitch: 155,
     fact: {
@@ -181,11 +221,40 @@ export const DINO_CATALOG = [
     }
   },
   {
+    id: 'styracosaurus',
+    name: 'Styracosaurus',
+    dinoClass: 'herbivore',
+    unlockCost: 165,
+    stats: { speed: 6, jump: 6, hp: 4, defense: 9, attack: 8 },
+    ability: { name: 'Coroa de Espinhos', desc: 'Ganha +1 Escudo temporário e lança espinhos frontais.', cooldown: 10.0, duration: 2.2 },
+    colors: { primary: '#bc4749', secondary: '#f2e8cf', eye: '#ffca3a', spots: '#6a040f', spikes: '#f8edeb' },
+    roarPitch: 108,
+    fact: {
+      pt: 'Sua gola tinha 6 longos chifres em leque e um grande chifre nasal intimidador.',
+      en: 'Its neck frill featured six long radiating horns and a massive nasal spike.'
+    }
+  },
+  {
+    id: 'oviraptor',
+    name: 'Oviraptor',
+    dinoClass: 'carnivore',
+    unlockCost: 180,
+    stats: { speed: 9, jump: 8, hp: 2, defense: 4, attack: 9 },
+    ability: { name: 'Instinto Coletor', desc: 'Imã amplo temporário + combo acelerado ao quebrar com Q.', cooldown: 10.0, duration: 3.0 },
+    colors: { primary: '#f72585', secondary: '#ffe5ec', eye: '#4cc9f0', spots: '#7209b7', spikes: '#ffd166' },
+    roarPitch: 360,
+    fact: {
+      pt: 'Na verdade era um pai cuidadoso que chocava seus ovos em ninhos circulares como aves.',
+      en: 'Far from an egg thief, fossils proved it brooded nests carefully like modern birds.'
+    }
+  },
+  {
     id: 'therizinosaurus',
     name: 'Therizinosaurus',
     dinoClass: 'herbivore',
-    stats: { speed: 7, jump: 7, hp: 3, defense: 7, energy: 8 },
-    ability: { name: 'Corte Duplo', desc: 'Destrói obstáculos em arco e rebate projéteis inimigos.', cooldown: 7.5, duration: 1.6 },
+    unlockCost: 195,
+    stats: { speed: 7, jump: 7, hp: 3, defense: 7, attack: 10 },
+    ability: { name: 'Corte Duplo', desc: 'Destrói obstáculos em arco duplo e rebate projéteis inimigos.', cooldown: 8.0, duration: 1.6 },
     colors: { primary: '#6c5ce7', secondary: '#dcd6f7', eye: '#00cec9', spots: '#2d256e', spikes: '#fdcb6e' },
     roarPitch: 210,
     fact: {
@@ -194,17 +263,46 @@ export const DINO_CATALOG = [
     }
   },
   {
+    id: 'quetzalcoatlus',
+    name: 'Quetzalcoatlus',
+    dinoClass: 'mystic',
+    unlockCost: 220,
+    stats: { speed: 9, jump: 10, hp: 2, defense: 4, attack: 7 },
+    ability: { name: 'Voo Rasante', desc: 'Plana acima dos perigos terrestres com controle aéreo por 2.6s.', cooldown: 9.5, duration: 2.6 },
+    colors: { primary: '#f4a261', secondary: '#fefae0', eye: '#2a9d8f', spots: '#e76f51', spikes: '#264653' },
+    roarPitch: 285,
+    fact: {
+      pt: 'Com envergadura de até 10 metros, foi um dos maiores seres voadores da história da Terra.',
+      en: 'With a 10-meter wingspan, it ranks among the largest flying creatures ever discovered.'
+    }
+  },
+  {
+    id: 'giganotosaurus',
+    name: 'Giganotosaurus',
+    dinoClass: 'carnivore',
+    unlockCost: 260,
+    stats: { speed: 7, jump: 6, hp: 4, defense: 8, attack: 10 },
+    ability: { name: 'Terremoto Apex', desc: 'Onda de choque massiva limpa a pista à frente e atordoa rivais.', cooldown: 11.0, duration: 1.8 },
+    colors: { primary: '#4a4e69', secondary: '#e9ecef', eye: '#ff4d6d', spots: '#22223b', spikes: '#ff9f1c' },
+    roarPitch: 75,
+    fact: {
+      pt: 'Descoberto na Argentina, rivalizava com o T-Rex em tamanho e caçava enormes saurópodes.',
+      en: 'Discovered in Patagonia, this giant predator hunted colossal sauropod dinosaurs.'
+    }
+  },
+  {
     id: 'ghostgold',
     name: 'Dino Dourado/Fantasma',
     secret: true,
+    unlockCost: 0,
     dinoClass: 'mystic',
-    stats: { speed: 10, jump: 10, hp: 4, defense: 9, energy: 10 },
-    ability: { name: 'Transcendência Espectral', desc: 'Fica intangível, dobra pontos e atrai uma chuva de ovos.', cooldown: 8, duration: 3.5 },
+    stats: { speed: 10, jump: 10, hp: 4, defense: 9, attack: 10 },
+    ability: { name: 'Transcendência Espectral', desc: 'Fica intangível, dobra pontos e invoca chuva moderada de ovos.', cooldown: 9.5, duration: 3.2 },
     colors: { primary: '#ffd447', secondary: '#fff8d6', eye: '#48f5ff', spots: '#ff9f1c', spikes: '#ffffff' },
     roarPitch: 260,
     fact: {
       pt: 'Lenda secreta de Dino Dash 3D: combina a energia fóssil com o brilho estelar.',
-      en: 'Secret legend of Dino Dash 3D: fuses ancient fossil energy with stardust.'
+      en: 'Secret legend of Dino Dash 3D: fuses ancient fossil power with stardust.'
     }
   }
 ];

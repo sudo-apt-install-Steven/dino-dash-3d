@@ -11,6 +11,7 @@ export class MultiplayerLobby {
     let nickname = Save.data.network?.nickname || `Host_${Math.floor(10 + Math.random() * 89)}`;
     let joinCode = '';
     let isPublic = true;
+    let mpMode = 'race'; // 'race' | 'duel' | 'elimination'
     let elimination = false;
     let partyMode = true;
     let tvScale = !!Save.data.network?.tvScale;
@@ -19,8 +20,12 @@ export class MultiplayerLobby {
     let publicRooms = [];
     let connTest = null;
     let statusMsg = '';
+    let initialRefreshed = false;
 
-    const onRoom = () => render();
+    const onRoom = () => {
+      if (net.isConnected && statusMsg.startsWith('⏳')) statusMsg = '';
+      render();
+    };
     const onChat = () => render();
     const onErr = (msg) => { statusMsg = `⚠️ ${msg.message || 'Erro'}`; render(); };
     net.on('room_state', onRoom);
@@ -75,8 +80,12 @@ export class MultiplayerLobby {
                   <label style="display:flex; gap:8px; align-items:center; font-size:0.84rem;">
                     <input type="checkbox" id="mp-pub" ${isPublic ? 'checked' : ''} /> Sala Pública (visível na lista)
                   </label>
-                  <label style="display:flex; gap:8px; align-items:center; font-size:0.84rem;">
-                    <input type="checkbox" id="mp-elim" ${elimination ? 'checked' : ''} /> Modo Eliminação 30s (último sai!)
+                  <label style="font-size:0.84rem;">Modo Competitivo:
+                    <select class="select-input" id="mp-mode" style="width:100%; margin-top:4px;">
+                      <option value="race" ${mpMode === 'race' ? 'selected' : ''}>🏁 Corrida Competitiva (Overtake +30 & Pódio)</option>
+                      <option value="duel" ${mpMode === 'duel' ? 'selected' : ''}>⚔️ Duelo PvP (Ataque [Q] empurra & rouba combo!)</option>
+                      <option value="elimination" ${mpMode === 'elimination' ? 'selected' : ''}>⏳ Eliminação 30s (Último colocado sai!)</option>
+                    </select>
                   </label>
                   <label style="display:flex; gap:8px; align-items:center; font-size:0.84rem;">
                     <input type="checkbox" id="mp-tv" ${tvScale ? 'checked' : ''} /> Modo "TV de Sala" (texto grande)
@@ -89,6 +98,9 @@ export class MultiplayerLobby {
 
                 <div class="item-card">
                   <strong style="color:#ffd447;">🔑 Entrar em Sala por Código</strong>
+                  <label style="font-size:0.84rem;">Seu Apelido:
+                    <input class="text-input" id="mp-join-nick" value="${nickname}" maxlength="18" style="width:100%;" />
+                  </label>
                   <div style="display:flex; gap:8px;">
                     <input class="text-input" id="mp-code" value="${joinCode}" maxlength="4" placeholder="ABCD" style="flex:1; text-transform:uppercase; font-size:1.1rem; letter-spacing:3px; text-align:center;" />
                     <button class="chunky-btn orange" id="mp-join">Entrar</button>
@@ -119,9 +131,20 @@ export class MultiplayerLobby {
                 </div>
 
                 <div style="display:flex; flex-direction:column; gap:10px;">
+                  ${(() => {
+                    const selfPeer = room.peers.find((p) => p.peerId === net.peerId);
+                    const selfReady = !!selfPeer?.ready;
+                    const hostPeer = room.peers.find((p) => p.peerId === room.hostPeerId) || room.peers[0];
+                    const readyCount = room.peers.filter((p) => p.ready).length;
+                    const trLabel = net.transportType === 'supabase' ? '☁️ Online Global' : '📡 LAN Wi-Fi';
+                    const roomMpMode = room.mpMode || (room.elimination ? 'elimination' : 'race');
+                    const modeLabel = roomMpMode === 'duel'
+                      ? '⚔️ Duelo PvP (Ataque Q)'
+                      : (roomMpMode === 'elimination' ? '⏳ Eliminação 30s' : '🏁 Corrida Competitiva');
+                    return `
                   <div class="item-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-                      <strong>🦖 Jogadores na Sala (${room.peers.length}/8) • Ping: ${net.pingMs || 2}ms</strong>
+                      <strong>🦖 Jogadores (${room.peers.length}/8 · ${readyCount} prontos) • ${trLabel} • ${net.pingMs || 2}ms</strong>
                       ${net.isHost ? `
                         <div style="display:flex; gap:6px; align-items:center;">
                           <span style="font-size:0.78rem;">Bots p/ testar: ${botCount}</span>
@@ -129,14 +152,27 @@ export class MultiplayerLobby {
                         </div>
                       ` : ''}
                     </div>
+                    <div style="margin-top:6px; padding:5px 10px; border-radius:8px; background:rgba(15,23,42,0.45); border:1px solid #f59e0b; font-size:0.78rem; color:#fde047; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                      <span>Modo: <strong>${modeLabel}</strong></span>
+                      <span>🏆 Pódio (2+ jogadores): 1º +12 🥚 • 2º +6 🥚 • 3º +3 🥚</span>
+                    </div>
                     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(175px, 1fr)); gap:6px; margin-top:6px;">
                       ${room.peers.map((p) => `
                         <div style="padding:6px 8px; border-radius:10px; background:rgba(0,0,0,0.35); border:1px solid ${p.color || '#ffd447'}; font-size:0.82rem;">
-                          <div style="font-weight:800;">${p.peerId === room.hostPeerId ? '👑 ' : ''}${p.name}</div>
+                          <div style="font-weight:800;">${p.peerId === room.hostPeerId ? '👑 ' : ''}${p.name}${p.peerId === net.peerId ? ' (Você)' : ''}</div>
                           <div style="font-size:0.74rem; color:#d8c2a6;">${getDinoSpec(p.dinoId).name} • ${p.ready ? '✅ Pronto' : '⏳ Aguardando'}</div>
                         </div>
                       `).join('')}
                     </div>
+                    ${!net.isHost ? `
+                      <div style="margin-top:8px; padding:7px 10px; border-radius:8px; background:rgba(255,212,71,0.1); border:1px solid ${selfReady ? '#58d63a' : '#ffd447'}; font-size:0.8rem; color:${selfReady ? '#90ee90' : '#ffe6a7'};">
+                        ${room.status === 'playing'
+                          ? `🔥 A corrida já começou! Clique em <strong>ENTRAR NA CORRIDA AGORA!</strong> abaixo.`
+                          : (selfReady
+                              ? `✅ Você está <strong>PRONTO</strong>! Aguardando <strong>👑 ${hostPeer?.name || 'o Dono da Sala'}</strong> clicar em <em>INICIAR CORRIDA MULTIPLAYER</em> (iniciará automaticamente aqui na sua tela).`
+                              : `👉 Clique em <strong>👍 MARCAR PRONTO</strong> abaixo para sinalizar a <strong>👑 ${hostPeer?.name || 'o Dono da Sala'}</strong>. Quando ele iniciar, a corrida abrirá automaticamente!`)}
+                      </div>
+                    ` : ''}
                   </div>
 
                   <div class="item-card" style="gap:6px;">
@@ -155,9 +191,16 @@ export class MultiplayerLobby {
                   <div style="display:flex; gap:8px; flex-wrap:wrap;">
                     ${net.isHost
                       ? `<button class="chunky-btn" id="mp-start" style="flex:1; font-size:1.1rem;">🚀 INICIAR CORRIDA MULTIPLAYER (${room.peers.length + botCount} DINOS)</button>`
-                      : `<button class="chunky-btn" id="mp-ready-self" style="flex:1;">✅ ALTERNAR PRONTO</button>`}
+                      : `
+                        <button class="chunky-btn ${selfReady ? 'orange' : ''}" id="mp-ready-self" style="flex:1; font-size:0.98rem;">
+                          ${selfReady ? '✅ ESTOU PRONTO! (Clique p/ cancelar)' : '👍 MARCAR PRONTO'}
+                        </button>
+                        ${room.status === 'playing' && room.activeMatch ? `<button class="chunky-btn" id="mp-join-live" style="flex:1;">🎮 ENTRAR NA CORRIDA AGORA!</button>` : ''}
+                      `}
                     <button class="chunky-btn secondary" id="mp-leave">Sair da Sala</button>
                   </div>
+                    `;
+                  })()}
                 </div>
               </div>
             `}
@@ -176,7 +219,7 @@ export class MultiplayerLobby {
 
       if (!connected) {
         container.querySelectorAll('[data-tr]').forEach((b) => {
-          b.onclick = () => { transport = b.getAttribute('data-tr'); connTest = null; statusMsg = ''; render(); };
+          b.onclick = () => { transport = b.getAttribute('data-tr'); connTest = null; statusMsg = ''; refreshRooms(); };
         });
         container.querySelector('#mp-test-conn').onclick = async () => {
           statusMsg = '⏳ Testando conexão...';
@@ -189,7 +232,8 @@ export class MultiplayerLobby {
         container.querySelector('#mp-create').onclick = async () => {
           nickname = container.querySelector('#mp-nick').value.trim() || 'Host';
           isPublic = container.querySelector('#mp-pub').checked;
-          elimination = container.querySelector('#mp-elim').checked;
+          mpMode = container.querySelector('#mp-mode')?.value || 'race';
+          elimination = mpMode === 'elimination';
           tvScale = container.querySelector('#mp-tv').checked;
           teacherMode = container.querySelector('#mp-teacher').checked;
           Save.data.network.nickname = nickname;
@@ -204,6 +248,7 @@ export class MultiplayerLobby {
             name: nickname,
             dinoId: Save.data.selectedDino || 'trex',
             isPublic,
+            mpMode,
             elimination,
             partyMode,
             tvScale,
@@ -215,21 +260,32 @@ export class MultiplayerLobby {
         };
         container.querySelector('#mp-join').onclick = async () => {
           joinCode = container.querySelector('#mp-code').value.toUpperCase().trim();
-          nickname = container.querySelector('#mp-nick')?.value?.trim() || nickname;
+          nickname = container.querySelector('#mp-join-nick')?.value?.trim() || container.querySelector('#mp-nick')?.value?.trim() || nickname;
+          Save.data.network.nickname = nickname;
+          Save.save();
+          statusMsg = '⏳ Entrando na sala...';
+          render();
           const res = await net.joinRoom(joinCode, {
             transport,
             name: nickname,
             dinoId: Save.data.selectedDino || 'trex',
             role: 'screen'
           });
-          statusMsg = res.ok ? '' : res.message;
+          if (!res.ok) statusMsg = `⚠️ ${res.message}`;
+          else if (statusMsg.startsWith('⏳') && net.isConnected) statusMsg = '';
           render();
         };
         container.querySelectorAll('[data-join-code]').forEach((b) => {
           b.onclick = async () => {
             const c = b.getAttribute('data-join-code');
+            nickname = container.querySelector('#mp-join-nick')?.value?.trim() || nickname;
+            Save.data.network.nickname = nickname;
+            Save.save();
+            statusMsg = '⏳ Conectando à sala...';
+            render();
             const res = await net.joinRoom(c, { transport, name: nickname, dinoId: Save.data.selectedDino || 'trex', role: 'screen' });
-            statusMsg = res.ok ? '' : res.message;
+            if (!res.ok) statusMsg = `⚠️ ${res.message}`;
+            else if (statusMsg.startsWith('⏳') && net.isConnected) statusMsg = '';
             render();
           };
         });
@@ -255,7 +311,16 @@ export class MultiplayerLobby {
         });
         container.querySelector('#mp-ready-self')?.addEventListener('click', () => {
           const self = room.peers.find((p) => p.peerId === net.peerId);
-          net.sendPlayerMeta({ ready: !(self?.ready) });
+          const nextReady = !(self?.ready);
+          if (self) self.ready = nextReady;
+          net.sendPlayerMeta({ ready: nextReady });
+          render();
+        });
+        container.querySelector('#mp-join-live')?.addEventListener('click', () => {
+          if (room.activeMatch) {
+            cleanupListeners();
+            callbacks.onGuestStartMatch?.(room.activeMatch);
+          }
         });
         container.querySelector('#mp-leave').onclick = () => {
           net.leaveRoom();
@@ -275,6 +340,10 @@ export class MultiplayerLobby {
     };
 
     render();
+    if (!net.isConnected && !initialRefreshed) {
+      initialRefreshed = true;
+      refreshRooms().catch(() => {});
+    }
     return cleanupListeners;
   }
 }

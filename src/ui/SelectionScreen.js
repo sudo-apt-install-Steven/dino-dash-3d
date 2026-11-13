@@ -135,42 +135,57 @@ export class DinoPreview3D {
 export class SelectionScreen {
   static renderInto(container, { onClose, onSelect, onTestTrack, onPlayRoar }) {
     let currentId = Save.data.selectedDino || 'trex';
+    let classFilter = 'all';
     let preview = null;
-    let secretNotice = '';
+    let noticeMsg = '';
 
     const render = () => {
       const spec = getDinoSpec(currentId);
       const cls = DINO_CLASSES[spec.dinoClass] || DINO_CLASSES.carnivore;
       const level = Save.data.dinoLevels[currentId] || 1;
-      const upgradeCost = level * 10;
-      const availableDinos = DINO_CATALOG.filter(
+      const upgradeCost = ProgressionManager.getSkillUpgradeCost(level);
+      const allNonSecret = DINO_CATALOG.filter(
         (d) => !d.secret || Save.data.unlockedDinos.includes(d.id)
       );
+      const filteredDinos = classFilter === 'all'
+        ? allNonSecret
+        : allNonSecret.filter((d) => d.dinoClass === classFilter);
       const hasSecret = Save.data.unlockedDinos.includes('ghostgold');
-      const isEquipped = currentId === Save.data.selectedDino;
+      const isUnlocked = Save.data.unlockedDinos.includes(currentId) || (spec.unlockCost || 0) === 0;
+      const isEquipped = isUnlocked && currentId === Save.data.selectedDino;
+      const unlockedCount = DINO_CATALOG.filter((d) => Save.data.unlockedDinos.includes(d.id)).length;
 
       container.innerHTML = `
         <div class="overlay-center">
           <div class="chunky-panel modal-card">
             <div class="modal-header">
-              <h2>🦖 Seleção de Dinossauros (${availableDinos.length}/14)</h2>
+              <h2>🦖 Dinossauros (${unlockedCount}/${DINO_CATALOG.length})</h2>
               <div style="display:flex; gap:8px; align-items:center;">
                 <span class="hud-pill">🥚 Ovos: <strong>${Save.data.eggs}</strong></span>
                 <button class="chunky-btn secondary" id="sel-close">Voltar</button>
               </div>
             </div>
 
-            ${secretNotice ? `<div class="hud-pill" style="color:#ffd447; text-align:center;">${secretNotice}</div>` : ''}
+            ${noticeMsg ? `<div class="hud-pill" style="color:#ffd447; text-align:center;">${noticeMsg}</div>` : ''}
+
+            <div class="tabs-row" style="margin-bottom:6px;">
+              <button class="tab-btn ${classFilter === 'all' ? 'active' : ''}" data-cfilter="all">Todos (${allNonSecret.length})</button>
+              ${Object.entries(DINO_CLASSES).map(([k, info]) => `
+                <button class="tab-btn ${classFilter === k ? 'active' : ''}" data-cfilter="${k}">${info.name.pt}</button>
+              `).join('')}
+            </div>
 
             <div class="preview-split">
               <div>
                 <div class="preview-canvas-box" id="sel-preview-box"></div>
                 <p style="font-size:0.75rem; color:#d8c2a6; text-align:center; margin-top:6px;">
-                  Arraste para girar o modelo 3D
+                  Arraste para girar o modelo 3D • ${isUnlocked ? '✔ Desbloqueado' : `🔒 Custo: ${spec.unlockCost} 🥚`}
                 </p>
                 <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-                  <button class="chunky-btn" id="sel-confirm" style="flex:1;">${isEquipped ? '✔ Equipado' : 'Equipar'}</button>
-                  <button class="chunky-btn orange" id="sel-test">Testar</button>
+                  <button class="chunky-btn ${isUnlocked ? '' : 'orange'}" id="sel-confirm" style="flex:1;">
+                    ${isUnlocked ? (isEquipped ? '✔ Equipado' : 'Equipar') : `🔓 Desbloquear (${spec.unlockCost} 🥚)`}
+                  </button>
+                  <button class="chunky-btn secondary" id="sel-test">Testar</button>
                   <button class="chunky-btn secondary" id="sel-roar">🔊 Rugido</button>
                 </div>
               </div>
@@ -186,8 +201,8 @@ export class SelectionScreen {
                   <span style="font-size:0.84rem; color:#e5d3bc;">${spec.ability.desc}</span>
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
                     <span style="font-size:0.78rem; color:#ffd447;">Árvore de Habilidade Nv.${level} (+${(level - 1) * 8}% poder)</span>
-                    <button class="tab-btn" id="sel-upgrade" ${level >= 10 ? 'disabled' : ''}>
-                      ${level >= 10 ? 'MÁXIMO' : `Evoluir (${upgradeCost} 🥚)`}
+                    <button class="tab-btn" id="sel-upgrade" ${(!isUnlocked || level >= 10) ? 'disabled' : ''}>
+                      ${!isUnlocked ? 'Desbloqueie antes' : (level >= 10 ? 'MÁXIMO' : `Evoluir (${upgradeCost} 🥚)`)}
                     </button>
                   </div>
                 </div>
@@ -197,7 +212,7 @@ export class SelectionScreen {
                   ['Pulo', spec.stats.jump],
                   ['Vida', spec.stats.hp * 2],
                   ['Defesa', spec.stats.defense],
-                  ['Energia', spec.stats.energy]
+                  ['Ataque (Q)', spec.stats.attack || 6]
                 ].map(([label, v]) => `
                   <div class="attr-row">
                     <span>${label}</span>
@@ -212,12 +227,15 @@ export class SelectionScreen {
               </div>
             </div>
 
-            <div class="tabs-row" style="margin-top:4px;">
-              ${availableDinos.map((d) => `
-                <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${d.id}">
-                  ${d.id === Save.data.selectedDino ? '★ ' : ''}${d.name}
-                </button>
-              `).join('')}
+            <div class="tabs-row" style="margin-top:4px; max-height:110px; overflow-y:auto;">
+              ${filteredDinos.map((d) => {
+                const owned = Save.data.unlockedDinos.includes(d.id) || (d.unlockCost || 0) === 0;
+                return `
+                  <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${d.id}">
+                    ${d.id === Save.data.selectedDino ? '★ ' : (!owned ? '🔒 ' : '')}${d.name}
+                  </button>
+                `;
+              }).join('')}
               ${!hasSecret ? `<button class="tab-btn" id="sel-secret-locked" style="opacity:0.75;">🔒 ??? (Secreto)</button>` : ''}
             </div>
           </div>
@@ -229,9 +247,16 @@ export class SelectionScreen {
       const custom = Save.data.customization.p1.presets[Save.data.customization.p1.activePreset];
       preview = new DinoPreview3D(previewBox, currentId, custom);
 
+      container.querySelectorAll('[data-cfilter]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          classFilter = btn.getAttribute('data-cfilter');
+          render();
+        });
+      });
+
       container.querySelectorAll('[data-dino-id]').forEach((btn) => {
         btn.addEventListener('click', () => {
-          secretNotice = '';
+          noticeMsg = '';
           currentId = btn.getAttribute('data-dino-id');
           if (onPlayRoar) onPlayRoar(currentId);
           render();
@@ -239,7 +264,7 @@ export class SelectionScreen {
       });
 
       container.querySelector('#sel-secret-locked')?.addEventListener('click', () => {
-        secretNotice = '👻 Dino Dourado/Fantasma Secreto: alcance conquistas difíceis ou digite ↑↑↓↓←→←→BA no menu!';
+        noticeMsg = '👻 Dino Dourado/Fantasma Secreto: alcance conquistas difíceis ou digite ↑↑↓↓←→←→BA no menu!';
         render();
       });
 
@@ -249,10 +274,26 @@ export class SelectionScreen {
 
       container.querySelector('#sel-upgrade')?.addEventListener('click', () => {
         const res = ProgressionManager.upgradeDinoSkill(currentId);
-        if (res.ok) render();
+        if (res.ok) {
+          noticeMsg = `✨ ${spec.name} evoluiu para Nível ${res.level}!`;
+        } else {
+          noticeMsg = res.reason;
+        }
+        render();
       });
 
       container.querySelector('#sel-confirm').addEventListener('click', () => {
+        if (!isUnlocked) {
+          const cost = spec.unlockCost || 0;
+          if ((Save.data.eggs || 0) < cost) {
+            noticeMsg = `Você precisa de ${cost} 🥚 para desbloquear ${spec.name} (ou clique Testar)!`;
+            render();
+            return;
+          }
+          Save.addEggs(-cost);
+          if (!Save.data.unlockedDinos.includes(currentId)) Save.data.unlockedDinos.push(currentId);
+          noticeMsg = `🎉 ${spec.name} desbloqueado e equipado!`;
+        }
         Save.data.selectedDino = currentId;
         if (!Save.data.albumDiscovered.includes(currentId)) {
           Save.data.albumDiscovered.push(currentId);
@@ -264,8 +305,11 @@ export class SelectionScreen {
       });
 
       container.querySelector('#sel-test').addEventListener('click', () => {
-        Save.data.selectedDino = currentId;
-        Save.save();
+        // Permite testar qualquer espécie gratuitamente na pista sem alterar compra permanente se trancado
+        if (isUnlocked) {
+          Save.data.selectedDino = currentId;
+          Save.save();
+        }
         preview?.destroy();
         if (onTestTrack) onTestTrack(currentId);
       });

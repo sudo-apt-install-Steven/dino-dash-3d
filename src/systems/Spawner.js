@@ -43,9 +43,72 @@ export class Spawner {
     this.elapsed = 0;
     this.biomeId = 'desert';
     this.densityMult = 1.0;
+    this.tutorialMode = false;
+    this.showObstacleHints = true;
+    this._hintMaterials = new Map();
+    this._hintSprites = [];
 
     this._initMaterials();
     this._initPools();
+  }
+
+  _getHintMaterial(label, accentColor = '#ffd447') {
+    const key = `${label}|${accentColor}`;
+    if (this._hintMaterials.has(key)) return this._hintMaterials.get(key);
+    const canvas = document.createElement('canvas');
+    canvas.width = 360;
+    canvas.height = 68;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
+      ctx.strokeStyle = accentColor;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(6, 6, 348, 56, 26);
+      else ctx.rect(6, 6, 348, 56);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.font = '900 22px system-ui, -apple-system, Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, 180, 35, 326);
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.SpriteMaterial({
+      map: tex,
+      transparent: true,
+      depthTest: true,
+      depthWrite: false
+    });
+    this._hintMaterials.set(key, mat);
+    return mat;
+  }
+
+  _attachHint(group, badgeY, label, accentColor, scaleX = 2.45) {
+    const sprite = new THREE.Sprite(this._getHintMaterial(label, accentColor));
+    sprite.position.set(0, badgeY, 0);
+    sprite.scale.set(scaleX, 0.48, 1);
+    sprite.renderOrder = 6;
+    sprite.visible = this.showObstacleHints;
+    group.add(sprite);
+    this._hintSprites.push(sprite);
+    return sprite;
+  }
+
+  _setHint(item, label, accentColor) {
+    if (!item?.hintSprite) return;
+    item.hintSprite.material = this._getHintMaterial(label, accentColor);
+    item.hintSprite.visible = this.showObstacleHints;
+  }
+
+  setObstacleHints(enabled) {
+    this.showObstacleHints = !!enabled;
+    for (let i = 0; i < this._hintSprites.length; i++) {
+      this._hintSprites[i].visible = this.showObstacleHints;
+    }
   }
 
   _initMaterials() {
@@ -106,10 +169,14 @@ export class Spawner {
     };
   }
 
-  _reg(kind, group, props) {
+  _reg(kind, group, props, hintCfg = null) {
     group.visible = false;
     this.group.add(group);
-    return { kind, pool: null, group, hit: false, nearMissed: false, stomped: false, ...props };
+    let hintSprite = null;
+    if (hintCfg) {
+      hintSprite = this._attachHint(group, hintCfg.y, hintCfg.label, hintCfg.color, hintCfg.scaleX || 2.45);
+    }
+    return { kind, pool: null, group, hintSprite, hit: false, nearMissed: false, stomped: false, ...props };
   }
 
   _makeCactusSmall() {
@@ -118,7 +185,7 @@ export class Spawner {
     makeBox(g, 0.24, 0.46, 0.24, -0.38, 0.65, 0, this.cactusDarkMat);
     makeBox(g, 0.24, 0.42, 0.24, 0.38, 0.55, 0, this.cactusDarkMat);
     makeBox(g, 0.28, 0.18, 0.28, 0, 1.24, 0, this.flowerMat);
-    return this._reg('cactus_small', g, { halfW: 0.42, minY: 0, maxY: 1.2, halfD: 0.36, color: '#2f9e36' });
+    return this._reg('cactus_small', g, { halfW: 0.42, minY: 0, maxY: 1.2, halfD: 0.36, color: '#2f9e36' }, { y: 1.75, label: '⬆ PULAR / [Q] 💥', color: '#4ade80' });
   }
 
   _makeCactusTall() {
@@ -127,7 +194,7 @@ export class Spawner {
     makeBox(g, 0.28, 0.65, 0.28, -0.44, 1.05, 0, this.cactusDarkMat);
     makeBox(g, 0.28, 0.55, 0.28, 0.44, 0.9, 0, this.cactusDarkMat);
     makeBox(g, 0.34, 0.22, 0.34, 0, 1.85, 0, this.flowerMat);
-    return this._reg('cactus_tall', g, { halfW: 0.48, minY: 0, maxY: 1.75, halfD: 0.38, color: '#2f9e36' });
+    return this._reg('cactus_tall', g, { halfW: 0.48, minY: 0, maxY: 1.75, halfD: 0.38, color: '#2f9e36' }, { y: 2.35, label: '⬆ PULO ALTO / ⬅➡', color: '#22c55e' });
   }
 
   _makeCactusCluster() {
@@ -136,7 +203,7 @@ export class Spawner {
     makeBox(g, 0.52, 1.62, 0.52, 0, 0.81, 0.12, this.cactusDarkMat);
     makeBox(g, 0.42, 1.18, 0.42, 0.5, 0.59, -0.08, this.cactusMat);
     makeBox(g, 0.26, 0.18, 0.26, 0, 1.7, 0.12, this.flowerMat);
-    return this._reg('cactus_cluster', g, { halfW: 0.78, minY: 0, maxY: 1.62, halfD: 0.42, color: '#1f7024' });
+    return this._reg('cactus_cluster', g, { halfW: 0.78, minY: 0, maxY: 1.62, halfD: 0.42, color: '#1f7024' }, { y: 2.2, label: '⬅➡ MUDE DE FAIXA', color: '#ef4444' });
   }
 
   _makeBird() {
@@ -156,7 +223,7 @@ export class Spawner {
       wingL, wingR, flapPhase: 0, baseY: 1.6,
       halfW: 0.65, minY: 1.28, maxY: 1.98, halfD: 0.45,
       extraSpeed: 4.5, stompable: true, color: '#a86438'
-    });
+    }, { y: 0.85, label: '⬇ ABAIXAR (S) / ⬆ PISAR', color: '#38bdf8' });
   }
 
   _makeScorpion() {
@@ -169,7 +236,7 @@ export class Spawner {
     return this._reg('scorpion', g, {
       walkPhase: 0, halfW: 0.55, minY: 0, maxY: 0.78, halfD: 0.5,
       extraSpeed: 2.0, stompable: true, color: '#8b1e3f'
-    });
+    }, { y: 1.4, label: '⬆ PISAR / [Q] 💥', color: '#f43f5e' });
   }
 
   _makeLog() {
@@ -178,7 +245,7 @@ export class Spawner {
     return this._reg('rolling_log', g, {
       body, halfW: 0.96, minY: 0, maxY: 0.74, halfD: 0.38,
       extraSpeed: 5.5, color: '#7f4f24'
-    });
+    }, { y: 1.35, label: '⬆ PULAR / [Q] 💥', color: '#fb923c' });
   }
 
   _makeTallRock() {
@@ -188,7 +255,7 @@ export class Spawner {
     return this._reg('tall_rock', g, {
       halfW: 0.66, minY: 0, maxY: 2.15, halfD: 0.6,
       wallJumpable: true, color: '#6c757d'
-    });
+    }, { y: 2.65, label: '⬆ WALL JUMP (2x ⬆)', color: '#cbd5e1' });
   }
 
   _makeRamp() {
@@ -198,7 +265,7 @@ export class Spawner {
     makeBox(g, 1.75, 0.76, 1.1, 0, 0.38, -0.7, this.rampMat);
     return this._reg('ramp', g, {
       halfW: 0.88, minY: 0, maxY: 0.76, halfD: 1.35, color: '#e09f3e'
-    });
+    }, { y: 1.5, label: '🚀 RAMPA: SUBA P/ VOAR!', color: '#fbbf24' });
   }
 
   _makeEgg() {
@@ -217,16 +284,18 @@ export class Spawner {
     return this._reg('powerup', g, {
       cube, mat, powerId: 'shield', isBackpack: false,
       halfW: 0.45, minY: 0.2, maxY: 1.25, halfD: 0.45, color: '#38bdf8'
-    });
+    }, { y: 1.65, label: '📦 POWER-UP / ITEM', color: '#38bdf8' });
   }
 
   _makeHazard(kind, mat, w, h, d) {
     const g = new THREE.Group();
     makeBox(g, w, h, d, 0, h * 0.5, 0, mat);
+    const label = kind === 'lava_pool' ? '🔥 LAVA! PULE OU DESVIE' : '❄️ GELO FRÁGIL! PULE';
+    const clr = kind === 'lava_pool' ? '#ff5e00' : '#38bdf8';
     return this._reg(kind, g, {
       halfW: w * 0.46, minY: 0, maxY: 0.4, halfD: d * 0.46,
-      isFloorHazard: true, color: kind === 'lava_pool' ? '#ff5e00' : '#90e0ef'
-    });
+      isFloorHazard: true, color: clr
+    }, { y: 1.1, label, color: clr });
   }
 
   _makeAlienTrap() {
@@ -236,7 +305,7 @@ export class Spawner {
     makeBox(g, 0.5, 0.18, 0.5, 0, 1.1, 0, this.beakMat);
     return this._reg('alien_trap', g, {
       halfW: 0.45, minY: 0, maxY: 1.15, halfD: 0.45, color: '#b5179e'
-    });
+    }, { y: 1.7, label: '👽 ARMADILHA! PULE/DESVIE', color: '#e879f9' });
   }
 
   _makeCampfire() {
@@ -245,7 +314,7 @@ export class Spawner {
     makeBox(g, 0.5, 0.75, 0.5, 0, 0.5, 0, this.fireMat);
     return this._reg('campfire', g, {
       halfW: 0.75, minY: 0, maxY: 1.1, halfD: 0.75, color: '#ff7b00'
-    });
+    }, { y: 1.5, label: '🔥 FOGUEIRA: +1 VIDA & FÚRIA', color: '#fb923c' });
   }
 
   _makeShortcut() {
@@ -255,7 +324,7 @@ export class Spawner {
     makeBox(g, 2.05, 0.25, 0.3, 0, 2.1, 0, this.portalMat);
     return this._reg('shortcut', g, {
       halfW: 0.9, minY: 0, maxY: 2.2, halfD: 0.4, color: '#00f5d4'
-    });
+    }, { y: 2.7, label: '🌀 PORTAL ATALHO! ENTRE', color: '#00f5d4' });
   }
 
   _makeFruit() {
@@ -263,7 +332,7 @@ export class Spawner {
     const mat = new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#dc2626', emissiveIntensity: 0.25 });
     const fruit = makeBox(g, 0.5, 0.5, 0.5, 0, 0.55, 0, mat);
     makeBox(g, 0.14, 0.2, 0.14, 0, 0.88, 0, this.cactusMat);
-    return this._reg('fruit', g, { fruit, mat, halfW: 0.42, minY: 0.1, maxY: 1.0, halfD: 0.42, color: '#4ade80' });
+    return this._reg('fruit', g, { fruit, mat, halfW: 0.42, minY: 0.1, maxY: 1.0, halfD: 0.42, color: '#4ade80' }, { y: 1.35, label: '🍉 FRUTA: +FÚRIA / CURA', color: '#4ade80' });
   }
 
   _makeElementalEgg() {
@@ -271,7 +340,7 @@ export class Spawner {
     const mat = new THREE.MeshStandardMaterial({ color: '#ff5e1a', emissive: '#ff5e1a', emissiveIntensity: 0.7 });
     const core = makeBox(g, 0.55, 0.72, 0.55, 0, 0.55, 0, mat);
     makeBox(g, 0.36, 0.14, 0.36, 0, 0.96, 0, mat);
-    return this._reg('elemental_egg', g, { core, mat, element: 'fire', halfW: 0.48, minY: 0.1, maxY: 1.1, halfD: 0.48, color: '#ff5e1a' });
+    return this._reg('elemental_egg', g, { core, mat, element: 'fire', halfW: 0.48, minY: 0.1, maxY: 1.1, halfD: 0.48, color: '#ff5e1a' }, { y: 1.5, label: '🔥 OVO FOGO: ALQUIMIA', color: '#ff5e1a' });
   }
 
   _makeTreasure() {
@@ -279,7 +348,7 @@ export class Spawner {
     const wood = new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.7 });
     makeBox(g, 0.95, 0.55, 0.65, 0, 0.28, 0, wood);
     makeBox(g, 0.98, 0.16, 0.68, 0, 0.56, 0, this.goldEggMat);
-    return this._reg('treasure', g, { halfW: 0.55, minY: 0, maxY: 0.75, halfD: 0.42, color: '#ffd447' });
+    return this._reg('treasure', g, { halfW: 0.55, minY: 0, maxY: 0.75, halfD: 0.42, color: '#ffd447' }, { y: 1.3, label: '💎 BAÚ: PULE EM CIMA!', color: '#ffd447' });
   }
 
   _makeGrapple() {
@@ -287,20 +356,20 @@ export class Spawner {
     const ropeMat = new THREE.MeshStandardMaterial({ color: '#65a30d', emissive: '#84cc16', emissiveIntensity: 0.5 });
     makeBox(g, 0.16, 2.8, 0.16, 0, 3.3, 0, ropeMat);
     makeBox(g, 0.85, 0.32, 0.32, 0, 1.9, 0, this.goldEggMat);
-    return this._reg('grapple_point', g, { halfW: 0.9, minY: 0.7, maxY: 3.8, halfD: 0.65, color: '#84cc16' });
+    return this._reg('grapple_point', g, { halfW: 0.9, minY: 0.7, maxY: 3.8, halfD: 0.65, color: '#84cc16' }, { y: 3.1, label: '🪢 CIPÓ: PASSE P/ BALANÇAR!', color: '#84cc16' });
   }
 
   _makeCactusShooter() {
     const g = new THREE.Group();
     makeBox(g, 0.64, 1.48, 0.64, 0, 0.74, 0, this.cactusDarkMat);
     makeBox(g, 0.35, 0.35, 0.45, 0, 1.0, 0.35, this.flowerMat);
-    return this._reg('cactus_shooter', g, { shot: false, halfW: 0.48, minY: 0, maxY: 1.5, halfD: 0.42, breakable: true, color: '#ec4899' });
+    return this._reg('cactus_shooter', g, { shot: false, halfW: 0.48, minY: 0, maxY: 1.5, halfD: 0.42, breakable: true, color: '#ec4899' }, { y: 2.05, label: '🎯 ATIRADOR! DESVIE OU [Q]', color: '#ec4899' });
   }
 
   _makeSpineShot() {
     const g = new THREE.Group();
     makeBox(g, 0.2, 0.2, 0.85, 0, 0.75, 0, this.flowerMat);
-    return this._reg('cactus_spine', g, { extraSpeed: 11, halfW: 0.25, minY: 0.45, maxY: 1.1, halfD: 0.45, color: '#ff6ca8' });
+    return this._reg('cactus_spine', g, { extraSpeed: 11, halfW: 0.25, minY: 0.45, maxY: 1.1, halfD: 0.45, color: '#ff6ca8' }, { y: 1.3, label: '⚡ ESPINHO! [Q] CORTA', color: '#fb7185' });
   }
 
   _makeGravityZone() {
@@ -309,7 +378,7 @@ export class Spawner {
     makeBox(g, 0.25, 2.6, 0.25, -1.0, 1.3, 0, gMat);
     makeBox(g, 0.25, 2.6, 0.25, 1.0, 1.3, 0, gMat);
     makeBox(g, 2.2, 0.25, 0.25, 0, 2.6, 0, gMat);
-    return this._reg('gravity_zone', g, { gravMode: 'low', halfW: 1.1, minY: 0, maxY: 2.6, halfD: 0.4, color: '#818cf8' });
+    return this._reg('gravity_zone', g, { gravMode: 'low', halfW: 1.1, minY: 0, maxY: 2.6, halfD: 0.4, color: '#818cf8' }, { y: 3.05, label: '🪐 PORTAL: GRAVIDADE BAIXA', color: '#818cf8' });
   }
 
   _makeMinecartZone() {
@@ -317,13 +386,13 @@ export class Spawner {
     const railMat = new THREE.MeshStandardMaterial({ color: '#94a3b8', metalness: 0.7 });
     makeBox(g, 1.25, 0.55, 1.5, 0, 0.35, 0, railMat);
     makeBox(g, 1.4, 0.12, 4.5, 0, 0.06, 0, this.logMat);
-    return this._reg('minecart_zone', g, { halfW: 0.75, minY: 0, maxY: 1.0, halfD: 0.9, color: '#94a3b8' });
+    return this._reg('minecart_zone', g, { halfW: 0.75, minY: 0, maxY: 1.0, halfD: 0.9, color: '#94a3b8' }, { y: 1.45, label: '🛒 TRILHO MINA: SUBA/BÔNUS!', color: '#cbd5e1' });
   }
 
   _makeRiverLog() {
     const g = new THREE.Group();
     makeBox(g, 1.35, 0.36, 2.6, 0, 0.18, 0, this.logMat);
-    return this._reg('river_log', g, { halfW: 0.75, minY: 0, maxY: 0.6, halfD: 1.3, color: '#92400e' });
+    return this._reg('river_log', g, { halfW: 0.75, minY: 0, maxY: 0.6, halfD: 1.3, color: '#92400e' }, { y: 1.15, label: '🪵 TRONCO: SUBA P/ SURFAR!', color: '#f59e0b' });
   }
 
   _makeBifurcation() {
@@ -332,7 +401,7 @@ export class Spawner {
     const riskMat = new THREE.MeshBasicMaterial({ color: '#f59e0b', transparent: true, opacity: 0.72 });
     makeBox(g, 1.9, 2.4, 0.35, LANE_X[0], 1.2, 0, safeMat);
     makeBox(g, 1.9, 2.4, 0.35, LANE_X[2], 1.2, 0, riskMat);
-    return this._reg('bifurcation', g, { halfW: 3.4, minY: 0, maxY: 2.4, halfD: 0.4, color: '#ffd447' });
+    return this._reg('bifurcation', g, { halfW: 3.4, minY: 0, maxY: 2.4, halfD: 0.4, color: '#ffd447' }, { y: 2.95, label: '⬅️ SEGURO   |   ⚡ +PONTOS ➡️', color: '#ffd447', scaleX: 4.1 });
   }
 
   setSeed(seed) {
@@ -361,13 +430,42 @@ export class Spawner {
     if (!pool) return null;
     const item = pool.acquire();
     item.pool = pool;
-    item.breakable = kind === 'cactus_small' || kind === 'scorpion' || kind === 'rolling_log' || kind === 'cactus_shooter';
+    item.breakable = kind === 'cactus_small' || kind === 'scorpion' || kind === 'rolling_log' || kind === 'cactus_shooter' || kind === 'cactus_spine';
     item.group.position.set(x, y, z);
     item.group.visible = true;
+    if (item.hintSprite) item.hintSprite.visible = this.showObstacleHints;
     return item;
   }
 
-  spawnEggArc(laneIdx, count = 4, isGold = false, startZ = -125) {
+  spawnTutorialObject(kind, laneIdx = 1, opts = {}) {
+    const x = kind === 'bifurcation' ? 0 : LANE_X[Math.max(0, Math.min(2, laneIdx))];
+    const z = opts.z ?? -58;
+    const y = opts.y ?? (kind === 'bird' ? (opts.highBird ? 1.62 : 0.72) : 0);
+    const item = this._acquire(kind, x, y, z);
+    if (!item) return null;
+    if (kind === 'bird') {
+      const isHigh = !!opts.highBird;
+      item.baseY = isHigh ? 1.62 : 0.72;
+      item.minY = isHigh ? 1.28 : 0.38;
+      item.maxY = isHigh ? 1.98 : 1.08;
+      this._setHint(item, isHigh ? '⬇ ABAIXAR (S) / ⬆ PISAR' : '⬆ PULAR OU PISAR!', isHigh ? '#38bdf8' : '#fbbf24');
+    } else if (kind === 'elemental_egg') {
+      const elems = [
+        { id: 'fire', color: '#ff5e1a', label: '🔥 OVO FOGO: ALQUIMIA' },
+        { id: 'ice', color: '#38bdf8', label: '❄️ OVO GELO: ALQUIMIA' },
+        { id: 'lightning', color: '#facc15', label: '⚡ OVO RAIO: ALQUIMIA' }
+      ];
+      const pick = elems.find((e) => e.id === opts.element) || elems[0];
+      item.element = pick.id;
+      item.color = pick.color;
+      item.mat.color.set(pick.color);
+      item.mat.emissive.set(pick.color);
+      this._setHint(item, pick.label, pick.color);
+    }
+    return item;
+  }
+
+  spawnEggArc(laneIdx, count = 3, isGold = false, startZ = -125) {
     const x = LANE_X[laneIdx];
     for (let i = 0; i < count; i++) {
       const egg = this._acquire('egg', x, Math.sin((i / Math.max(1, count - 1)) * Math.PI) * 1.1, startZ - i * 2.2);
@@ -377,12 +475,12 @@ export class Spawner {
     }
   }
 
-  spawnEggRain(count = 16) {
+  spawnEggRain(count = 8) {
     for (let i = 0; i < count; i++) {
       const laneIdx = Math.floor(this.rng() * 3);
       const egg = this._acquire('egg', LANE_X[laneIdx], 0.2 + this.rng() * 1.5, -55 - i * 3.4);
       if (egg) {
-        egg.isGold = this.rng() < 0.35;
+        egg.isGold = this.rng() < 0.18;
         egg.core.material = egg.isGold ? this.goldEggMat : this.eggMat;
       }
     }
@@ -410,13 +508,13 @@ export class Spawner {
     const x = LANE_X[laneIdx];
     const r = this.rng();
 
-    // Ovos & Power-ups aparecem regularmente em faixas livres
-    if (this.rng() < 0.36) {
+    // Ovos & Power-ups aparecem em ritmo balanceado em faixas livres
+    if (this.rng() < 0.24) {
       const eggLane = (laneIdx + 1) % 3;
-      this.spawnEggArc(eggLane, 3 + Math.floor(this.rng() * 3), this.rng() < 0.14, spawnZ - 2);
+      this.spawnEggArc(eggLane, 2 + Math.floor(this.rng() * 3), this.rng() < 0.08, spawnZ - 2);
     }
 
-    // Frutas (fome/energia), Ovos Elementais, Tesouros e Zonas Interativas (Ideias 107–120)
+    // Frutas, Ovos Elementais, Tesouros e Zonas Interativas
     const bonusRoll = this.rng();
     const bonusLane = (laneIdx + 1) % 3;
     if (bonusRoll < 0.14) {
@@ -425,16 +523,17 @@ export class Spawner {
       const ee = this._acquire('elemental_egg', LANE_X[bonusLane], 0.1, spawnZ - 5);
       if (ee) {
         const elems = [
-          { id: 'fire', color: '#ff5e1a' },
-          { id: 'ice', color: '#38bdf8' },
-          { id: 'lightning', color: '#facc15' },
-          { id: 'poison', color: '#a3e635' }
+          { id: 'fire', color: '#ff5e1a', label: '🔥 OVO FOGO: ALQUIMIA' },
+          { id: 'ice', color: '#38bdf8', label: '❄️ OVO GELO: ALQUIMIA' },
+          { id: 'lightning', color: '#facc15', label: '⚡ OVO RAIO: ALQUIMIA' },
+          { id: 'poison', color: '#a3e635', label: '☠️ OVO VENENO: ALQUIMIA' }
         ];
         const pick = elems[Math.floor(this.rng() * elems.length)];
         ee.element = pick.id;
         ee.color = pick.color;
         ee.mat.color.set(pick.color);
         ee.mat.emissive.set(pick.color);
+        this._setHint(ee, pick.label, pick.color);
       }
     } else if (bonusRoll < 0.25 && score > 120) {
       this._acquire('treasure', LANE_X[bonusLane], 0, spawnZ - 5);
@@ -442,7 +541,10 @@ export class Spawner {
       this._acquire('grapple_point', x, 0, spawnZ - 3);
     } else if (bonusRoll < 0.315 && score > 180) {
       const gz = this._acquire('gravity_zone', LANE_X[bonusLane], 0, spawnZ - 6);
-      if (gz) gz.gravMode = this.rng() < 0.5 ? 'low' : 'heavy';
+      if (gz) {
+        gz.gravMode = this.rng() < 0.5 ? 'low' : 'heavy';
+        this._setHint(gz, gz.gravMode === 'low' ? '🪐 PORTAL: GRAVIDADE BAIXA' : '🪨 PORTAL: GRAVIDADE PESADA', gz.gravMode === 'low' ? '#818cf8' : '#a78bfa');
+      }
     } else if (bonusRoll < 0.34 && score > 220) {
       this._acquire('minecart_zone', LANE_X[bonusLane], 0, spawnZ - 5);
     } else if (bonusRoll < 0.365 && score > 150) {
@@ -461,11 +563,13 @@ export class Spawner {
           p.powerId = BACKPACK_ITEM_KEYS[Math.floor(this.rng() * BACKPACK_ITEM_KEYS.length)];
           p.mat.color.set('#f59e0b');
           p.mat.emissive.set('#f59e0b');
+          this._setHint(p, '🎒 ITEM MOCHILA (USE [E])', '#f59e0b');
         } else {
           p.powerId = TRACK_POWERUP_KEYS[Math.floor(this.rng() * TRACK_POWERUP_KEYS.length)];
           const info = TRACK_POWERUPS[p.powerId];
           p.mat.color.set(info.color);
           p.mat.emissive.set(info.color);
+          this._setHint(p, `⚡ ${info.name.toUpperCase()}`, info.color);
         }
       }
     }
@@ -493,6 +597,7 @@ export class Spawner {
         bird.maxY = isHigh ? 1.98 : 1.08;
         bird.flapPhase = this.rng() * Math.PI * 2;
         bird.group.position.y = bird.baseY;
+        this._setHint(bird, isHigh ? '⬇ ABAIXAR (S) / ⬆ PISAR' : '⬆ PULAR OU PISAR!', isHigh ? '#38bdf8' : '#fbbf24');
       }
       return;
     }
@@ -539,12 +644,14 @@ export class Spawner {
 
   update(dt, speed, score, players = []) {
     this.elapsed += dt;
-    this.spawnTimer -= dt;
-    if (this.spawnTimer <= 0) {
-      this._spawnOne(speed, score);
-      const minGap = Math.max(0.42, (1.06 - (speed - 18) * 0.02) / this.densityMult);
-      const maxGap = minGap + 0.52 / this.densityMult;
-      this.spawnTimer = minGap + this.rng() * (maxGap - minGap);
+    if (!this.tutorialMode) {
+      this.spawnTimer -= dt;
+      if (this.spawnTimer <= 0) {
+        this._spawnOne(speed, score);
+        const minGap = Math.max(0.42, (1.06 - (speed - 18) * 0.02) / this.densityMult);
+        const maxGap = minGap + 0.52 / this.densityMult;
+        this.spawnTimer = minGap + this.rng() * (maxGap - minGap);
+      }
     }
 
     for (const key of Object.keys(this.pools)) {
@@ -603,6 +710,7 @@ export class Spawner {
   reset() {
     this.spawnTimer = 0.85;
     this.elapsed = 0;
+    this.tutorialMode = false;
     for (const key of Object.keys(this.pools)) {
       this.pools[key].releaseAll();
     }

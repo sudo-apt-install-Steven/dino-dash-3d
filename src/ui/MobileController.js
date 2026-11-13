@@ -19,16 +19,20 @@ export class MobileController {
     this.onExit = options.onExit || (() => {});
     this.deferredInstall = options.deferredInstall || null;
 
+    const connectedPeer = roomClient.isConnected
+      ? roomClient.room?.peers?.find((p) => p.peerId === roomClient.peerId)
+      : null;
+
     this.state = {
-      nickname: Save.data.network?.nickname || `Dino${Math.floor(10 + Math.random() * 89)}`,
-      roomCode: options.initialRoom || Save.data.network?.lastRoom || '',
-      transport: options.initialTransport || 'lan',
-      dinoId: Save.data.selectedDino || 'trex',
-      color: '#58d63a',
-      ready: false,
+      nickname: connectedPeer?.name || Save.data.network?.nickname || `Dino${Math.floor(10 + Math.random() * 89)}`,
+      roomCode: options.initialRoom || roomClient.room?.code || Save.data.network?.lastRoom || '',
+      transport: options.initialTransport || (roomClient.isConnected ? roomClient.transportType : (roomClient.supabase?.isConfigured?.() ? 'supabase' : 'lan')),
+      dinoId: connectedPeer?.dinoId || Save.data.selectedDino || 'trex',
+      color: connectedPeer?.color || '#58d63a',
+      ready: !!connectedPeer?.ready,
       leftHanded: false,
       useJoystick: false,
-      inMatch: false,
+      inMatch: roomClient.isConnected && roomClient.room?.status === 'playing',
       dead: false,
       cardOffer: null,
       triviaPrompt: null,
@@ -65,10 +69,19 @@ export class MobileController {
 
   _bindNetworkEvents() {
     this._onRoom = () => {
+      const wasInMatch = this.state.inMatch;
+      const selfPeer = this.net.room?.peers?.find((p) => p.peerId === this.net.peerId);
+      if (selfPeer && typeof selfPeer.ready === 'boolean') {
+        this.state.ready = selfPeer.ready;
+      }
       if (this.net.room?.status === 'playing' && !this.state.inMatch) {
         this.state.inMatch = true;
+        this.render();
+        return;
       }
-      this.render();
+      if (!wasInMatch) {
+        this.render();
+      }
     };
     this._onJoined = () => {
       this.state.errorMsg = '';
@@ -130,10 +143,10 @@ export class MobileController {
     const snap = this.state.selfSnap;
     if (!snap) return;
     const hpEl = this.rootEl.querySelector('#ctrl-hp');
-    const enEl = this.rootEl.querySelector('#ctrl-energy');
+    const atkEl = this.rootEl.querySelector('#ctrl-atk');
     const cdEl = this.rootEl.querySelector('#ctrl-cd');
     if (hpEl) hpEl.textContent = `❤️ ${snap.lives}/${snap.maxLives} • 🛡️ ${snap.shields || 0}`;
-    if (enEl) enEl.style.width = `${Math.max(0, Math.min(100, snap.energy ?? 100))}%`;
+    if (atkEl) atkEl.textContent = snap.attackCd > 0 ? `⚔️ ${snap.attackCd.toFixed(1)}s` : '⚔️ Q Pronto!';
     if (cdEl) cdEl.textContent = snap.abilityCd > 0 ? `⏳ ${snap.abilityCd.toFixed(1)}s` : '⚡ Pronta!';
   }
 
@@ -271,7 +284,7 @@ export class MobileController {
     }
 
     // Partida Ativa -> Trivia, Escolha de Cartas no celular, Espectador ou Controle Jurássico!
-    const snap = this.state.selfSnap || { lives: 3, maxLives: 3, shields: 0, energy: 100, abilityCd: 0, backpack: [] };
+    const snap = this.state.selfSnap || { lives: 3, maxLives: 3, shields: 0, attackCd: 0, abilityCd: 0, backpack: [] };
     this.rootEl.innerHTML = `
       <div class="ctrl-screen">
         <div class="ctrl-topbar">
@@ -281,9 +294,7 @@ export class MobileController {
             <span id="ctrl-hp" style="font-size:0.85rem; color:#ffd447;">❤️ ${snap.lives}/${snap.maxLives} • 🛡️ ${snap.shields || 0}</span>
           </div>
           <div style="display:flex; gap:6px; align-items:center;">
-            <div style="width:68px; height:8px; background:#1e120a; border-radius:4px; overflow:hidden; border:1px solid #8a562d;">
-              <div id="ctrl-energy" style="width:${snap.energy ?? 100}%; height:100%; background:#4ade80;"></div>
-            </div>
+            <span class="ctrl-latency" id="ctrl-atk">⚔️ Pronto</span>
             <span class="ctrl-latency" id="ctrl-cd">⚡ Pronta</span>
             <span class="ctrl-latency" id="ctrl-ping">📶 ${this.net.pingMs || 2} ms</span>
             <button class="ctrl-slot-btn" id="ctrl-swap">🖐️ ${this.state.leftHanded ? 'Canhoto' : 'Destro'}</button>

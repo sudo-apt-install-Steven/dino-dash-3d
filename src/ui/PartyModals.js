@@ -12,26 +12,33 @@ export class PartyModals {
   static renderPodiumModal(container, summary, actions = {}) {
     const standings = summary?.standings || [];
     const mvp = standings[0];
+    const modeName = summary?.mpMode === 'duel'
+      ? '⚔️ Duelo PvP'
+      : (summary?.mpMode === 'elimination' ? '⏳ Eliminação 30s' : '🏁 Corrida Competitiva');
     container.innerHTML = `
       <div class="overlay-center">
         <div class="chunky-panel modal-card" style="max-width:680px; text-align:center;">
-          <h2 style="color:#ffd447; font-size:1.75rem;">🏆 PÓDIO MULTIPLAYER & MVP</h2>
+          <h2 style="color:#ffd447; font-size:1.75rem;">🏆 PÓDIO MULTIPLAYER (${modeName})</h2>
           ${mvp ? `<div class="item-card" style="border-color:#ffd447; margin:10px 0;">
             <strong style="font-size:1.15rem; color:#58d63a;">🥇 CAMPEÃO & MVP: ${mvp.name} (${Math.floor(mvp.score)} pts)</strong>
-            <div style="font-size:0.84rem; color:#ffe6a7;">🎁 Skin Comemorativa LAN/Online desbloqueada: Coroa de Campeão!</div>
+            <div style="font-size:0.84rem; color:#ffe6a7;">
+              ${summary?.rewardEggs > 0 ? `🥚 Prêmio ganho nesta corrida: <strong>+${summary.rewardEggs} Ovos</strong>` : '👑 Coroa de Campeão conquistada! (Prêmios de ovos exigem 2+ humanos na sala)'}
+            </div>
           </div>` : ''}
           <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
             ${standings.map((p, i) => `
-              <div style="display:flex; justify-content:space-between; padding:8px 12px; border-radius:10px; background:rgba(0,0,0,0.35); border-left:4px solid ${p.color || '#ffd447'};">
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:10px; background:rgba(0,0,0,0.35); border-left:4px solid ${p.color || '#ffd447'};">
                 <span><strong>#${i + 1} ${p.name}</strong> ${i === 0 ? '👑 MVP' : ''}</span>
-                <span>${Math.floor(p.score)} pts • 📶 ${p.pingMs || 2}ms</span>
+                <span>${Math.floor(p.score)} pts${p.pvpHits ? ` • ⚔️ ${p.pvpHits}` : ''} • 📶 ${p.pingMs || 2}ms</span>
               </div>
             `).join('')}
           </div>
           <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
             <button class="chunky-btn orange" id="pod-replay">🎬 Replay Melhores Jogadas</button>
             <button class="chunky-btn" id="pod-again">🔁 Próxima Rodada</button>
-            <button class="chunky-btn secondary" id="pod-trivia">⚡ Pergunta-Relâmpago</button>
+            <button class="chunky-btn secondary" id="pod-trivia" ${summary?._triviaDone ? 'disabled' : ''}>
+              ${summary?._triviaDone ? '✔ Trivia Respondida' : '⚡ Pergunta-Relâmpago (+6 🥚)'}
+            </button>
             <button class="chunky-btn secondary" id="pod-menu">🏠 Menu</button>
           </div>
         </div>
@@ -39,7 +46,11 @@ export class PartyModals {
     `;
     container.querySelector('#pod-replay').onclick = actions.onReplay;
     container.querySelector('#pod-again').onclick = actions.onAgain;
-    container.querySelector('#pod-trivia').onclick = () => this.renderTriviaModal(container, () => this.renderPodiumModal(container, summary, actions));
+    container.querySelector('#pod-trivia').onclick = () => {
+      if (summary?._triviaDone) return;
+      if (summary) summary._triviaDone = true;
+      this.renderTriviaModal(container, () => this.renderPodiumModal(container, summary, actions));
+    };
     container.querySelector('#pod-menu').onclick = actions.onMenu;
   }
 
@@ -65,10 +76,10 @@ export class PartyModals {
         answered = true;
         const pick = Number(b.getAttribute('data-trv'));
         const ok = pick === q.correct;
-        if (ok) Save.addEggs(15);
+        if (ok) Save.addEggs(6);
         const res = container.querySelector('#trv-res');
         res.style.color = ok ? '#58d63a' : '#ff4757';
-        res.textContent = ok ? '✅ Correto! +15 Ovos Bônus!' : `❌ Resposta certa: ${q.options[q.correct]}`;
+        res.textContent = ok ? '✅ Correto! +6 Ovos Bônus!' : `❌ Resposta certa: ${q.options[q.correct]}`;
       };
     });
     container.querySelector('#trv-close').onclick = onDone;

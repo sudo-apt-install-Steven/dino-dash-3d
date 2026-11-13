@@ -99,6 +99,11 @@ export class Game {
     this.activeCampaignNode = null;
     this.activeCustomTrack = null;
     this.multiplayerSession = null;
+    this.merchantUses = 0;
+    this.pendingRestart = false;
+    this.restartPrevState = 'playing';
+    this.tutorialState = null;
+    this.seenHints = new Set();
 
     this.net = new RoomClient();
     this.perf = new PerfMonitor();
@@ -148,14 +153,20 @@ export class Game {
       if (!Save.data.unlockedDinos.includes('ghostgold')) {
         Save.data.unlockedDinos.push('ghostgold');
       }
-      Save.addEggs(50);
-      Save.unlockAchievement('konami_secret');
-      this.sfx.evolution();
-      this.ui.hud.showBanner('✨ CÓDIGO KONAMI! Dino Dourado/Fantasma Secreto + 50 Ovos!', '#ffd447', 4.5);
+      if (!Save.data.achievements.includes('konami_secret')) {
+        Save.addEggs(25);
+        Save.unlockAchievement('konami_secret');
+        this.sfx.evolution();
+        this.ui.hud.showBanner('✨ CÓDIGO KONAMI! Dino Secreto + 25 Ovos (resgate único)!', '#ffd447', 4.5);
+      } else {
+        Save.save();
+        this.sfx.click();
+        this.ui.hud.showBanner('✨ Código Konami já resgatado anteriormente!', '#ffd447', 2.6);
+      }
     };
 
     this._onVisibility = () => {
-      if (document.hidden && this.state === 'playing') {
+      if (document.hidden && this.state === 'playing' && !this.multiplayerSession?.active) {
         this.togglePause(true);
       }
     };
@@ -171,6 +182,7 @@ export class Game {
     this.cameraRig.baseFov = s.fov || 58;
     this.camera.far = Save.data.lowSpecMode ? 145 : 260;
     this.camera.updateProjectionMatrix();
+    this.spawner.setObstacleHints(s.obstacleHints !== false);
     this.audio.applyVolumes();
     if (this.multiplayerSession?.active) {
       this.tvHud.setVisible(true, !!Save.data.network?.tvScale);
@@ -217,6 +229,56 @@ export class Game {
       if (this.state === 'playing' && !msg.isEmote) {
         this.ui.hud.showSubtitle(`${msg.name}: ${msg.text}`);
       }
+    });
+
+    this.net.on('start_match', (msg) => {
+      if (this.net.isHost || this.ui.controllerInstance) return;
+      this.ui._clearModal();
+      this.startMultiplayerGuestMatch(msg);
+    });
+
+    this.net.on('state_snapshot', (msg) => {
+      if (!this.multiplayerSession?.active || this.multiplayerSession.isHost || !msg?.snapshot) return;
+      this._applyGuestSnapshot(msg.snapshot);
+    });
+
+    this.net.on('card_offer', (msg) => {
+      if (!this.multiplayerSession?.active || this.multiplayerSession.isHost || this.ui.controllerInstance) return;
+      if (msg.targetPeerId === this.net.peerId && Array.isArray(msg.choices)) {
+        const milestone = Math.floor(this.score || 500);
+        this.ui.cardModal.open(milestone, false, msg.choices);
+      }
+    });
+
+    this.net.on('end_match', (msg) => {
+      if (!this.multiplayerSession?.active || this.multiplayerSession.isHost || this.ui.controllerInstance) return;
+      this.state = 'gameover';
+      this.pendingRestart = false;
+      this.ui.hud.showRestartConfirm(false);
+      this.music.setPlaying(false);
+      this.tvHud.setVisible(false);
+      this.ui.cardModal.close();
+      const rawSummary = msg?.summary || { title: 'FIM DE PARTIDA', standings: [] };
+      const myEntry = (rawSummary.standings || []).find((s) => s.peerId === this.net.peerId);
+      const guestReward = rawSummary.eligible ? (myEntry?.eggReward || 0) : 0;
+      if (guestReward > 0) {
+        Save.addEggs(guestReward);
+      }
+      const winner = rawSummary.standings?.[0];
+      if (winner && winner.peerId === this.net.peerId) {
+        Save.data.stats.victoriesLan = (Save.data.stats.victoriesLan || 0) + 1;
+        if (!Save.data.partySkins.includes('lan_crown')) {
+          Save.data.partySkins.push('lan_crown');
+        }
+        Save.save();
+      }
+      const summary = { ...rawSummary, rewardEggs: guestReward };
+      this.lastPodiumSummary = summary;
+      this.ui.showPodium(summary, {
+        onReplay: () => this.ui.hud.showBanner('🎬 Replay disponível apenas na tela do Host.', '#ffd447', 2.4),
+        onAgain: () => this.ui.hud.showBanner('⏳ Aguardando o Dono da Sala iniciar a próxima rodada...', '#38bdf8', 2.6),
+        onMenu: () => this.openMainMenu()
+      });
     });
   }
 
@@ -297,24 +359,62 @@ export class Game {
   }
 
   _performMeleeAttack(p) {
-    if (p.attackTimer > 0) return;
-    p.attackTimer = 0.36;
+    if (p.attackTimer > 0 || (p.attackCooldown || 0) > 0) return;
+    p.attackTimer = 0.24;
+    p.attackCooldown = p.attackMaxCooldown || 1.25;
     p.animator.triggerRoar(0.25);
     this.sfx.melee();
-    this.particles.emitDust(p.x, 0.8, p.z - 0.9, 5, '#ffd447', 2.4);
+    this.particles.emitDust(p.x, 0.8, p.z - 0.9, 6, '#ffd447', 2.4);
 
+    let brokeAny = false;
     for (const obs of this.spawner.getActiveObstacles()) {
       if (obs.hit || !obs.breakable) continue;
       const dx = Math.abs(obs.group.position.x - p.x);
       const dz = obs.group.position.z - p.z;
-      if (dx < 1.35 && dz > -4.6 && dz < 1.3) {
+      if (dx < 1.35 && dz > -4.8 && dz < 1.3) {
         obs.hit = true;
         obs.pool?.release(obs);
         this.particles.emitExplosion(obs.group.position.x, 0.8, obs.group.position.z, obs.color, 12, true);
         this._spawnImpactDebris(obs.group.position.x, obs.group.position.z, obs.color);
-        p.wantedStars = Math.min(5, (p.wantedStars || 0) + 0.35);
-        this.addScore(80 * this.combo, p);
-        this.ui.hud.showFloatText('💥 QUEBROU! +80', '#ffd447');
+        p.wantedStars = Math.min(5, (p.wantedStars || 0) + 0.3);
+        this.addScore(35 * this.combo, p);
+        this.ui.hud.showFloatText('💥 QUEBROU! +35', '#ffd447');
+        brokeAny = true;
+      }
+    }
+
+    if (brokeAny && this.tutorialState?.active && this.tutorialState.step === 3) {
+      this._advanceTutorialStep();
+    }
+
+    const isDuel = (this.multiplayerSession?.active && this.multiplayerSession.mpMode === 'duel')
+      || this.modeId === 'pvp'
+      || this.modeId === 'capture_egg';
+    if (isDuel) {
+      for (const other of this.players) {
+        if (other === p || other.dead || (other.pvpHitInvuln || 0) > 0) continue;
+        if (Math.abs(other.x - p.x) < 1.7 && Math.abs(other.z - p.z) < 3.6 && Math.abs(other.y - p.y) < 1.55) {
+          other.pvpHitInvuln = 2.0;
+          if (other.lane === p.lane) {
+            other.lane = p.lane === 0 ? 1 : (p.lane === 2 ? 1 : (other.x >= p.x ? 2 : 0));
+          }
+          other.armorSlowTimer = Math.max(other.armorSlowTimer || 0, 1.0);
+          p.pvpHits = (p.pvpHits || 0) + 1;
+          const steal = Math.min(other.score || 0, 25);
+          other.score = Math.max(0, (other.score || 0) - steal);
+          p.score = (p.score || 0) + 25;
+          if (this.modeId === 'pvp') {
+            this._damagePlayer(other, 'pvp');
+          } else if (this.modeId === 'capture_egg' && other.holdingGoldenEgg) {
+            other.holdingGoldenEgg = false;
+            p.holdingGoldenEgg = true;
+            this.sfx.collectEgg(true);
+            this.ui.hud.showFloatText('🥚 OVO ROUBADO NO ATAQUE!', '#ffd447');
+          }
+          this.particles.emitExplosion(other.x, other.y + 0.9, other.z, '#ff9a24', 12, true);
+          this.sfx.stomp();
+          this.ui.hud.showFloatText(`⚔️ ${p.name} EMPURROU ${other.name}! +25`, '#ff9a24');
+        }
       }
     }
   }
@@ -439,10 +539,14 @@ export class Game {
         abilityMaxCooldown: spec.ability.cooldown,
         abilityDuration: 0,
         bulletEnergy: 100,
-        energy: 100,
         element: null,
         wantedStars: 0,
         attackTimer: 0,
+        attackCooldown: 0,
+        attackMaxCooldown: Math.max(0.95, Math.min(1.6, 1.65 - (spec.stats?.attack ?? 6) * 0.065)),
+        pvpHitInvuln: 0,
+        pvpHits: 0,
+        rank: i + 1,
         gasMaskTimer: 0,
         grappleTimer: 0,
         minecartTimer: 0,
@@ -476,6 +580,8 @@ export class Game {
     this.state = 'menu';
     this.photoMode = false;
     this.spectatorMode = false;
+    this.pendingRestart = false;
+    this.tutorialState = null;
     this.multiplayerSession = null;
     this.tvHud.setVisible(false);
     this.cameraRig.setFocusPlayer(null);
@@ -523,15 +629,22 @@ export class Game {
       roster.push({ key: 'p1', dinoId: Save.data.selectedDino || 'trex', name: 'Host', peerId: this.net.peerId, color: null, isBot: false });
     }
 
+    const matchSeed = this.customSeed || `MP-${room?.code || 'DINO'}-${Math.floor(Math.random() * 9999)}`;
+    const mpMode = room?.mpMode || (room?.elimination ? 'elimination' : 'race');
+    const isElim = mpMode === 'elimination' || !!room?.elimination;
     this.multiplayerSession = {
       active: true,
       isHost: this.net.isHost,
       room,
       roster,
       botCount,
-      elimination: !!room?.elimination,
-      elimTimer: room?.elimination ? 30 : null,
+      seed: matchSeed,
+      mpMode,
+      elimination: isElim,
+      elimTimer: isElim ? 30 : null,
       partyMode: room?.partyMode !== false,
+      prevLeaderPeerId: null,
+      suddenDeath: false,
       netSnapAccum: 0,
       bets: new Map(),
       nextCardScoreByPeer: new Map()
@@ -540,24 +653,230 @@ export class Game {
     this.modeId = 'solo';
     this.net.broadcastHostStart({
       roomCode: room?.code,
-      elim: this.multiplayerSession.elimination,
+      roster,
+      botCount,
+      seed: matchSeed,
+      mpMode,
+      elim: isElim,
       partyMode: this.multiplayerSession.partyMode,
       biomeId: this.startBiomeId
     });
-    this.startRun(false, { keepMultiplayerSession: true, roster });
+    this.startRun(false, { keepMultiplayerSession: true, roster, seed: matchSeed, biomeId: this.startBiomeId });
     this.tvHud.setVisible(this.players.length > 1, !!Save.data.network?.tvScale);
-    this.ui.hud.showBanner(`🌐 CORRIDA MULTIPLAYER INICIADA (${this.players.length} DINOS)!`, '#58d63a', 3.4);
+    const modeLabel = mpMode === 'duel' ? '⚔️ DUELO PvP' : (isElim ? '⏳ ELIMINAÇÃO 30s' : '🏁 CORRIDA');
+    this.ui.hud.showBanner(`🌐 ${modeLabel} INICIADA (${this.players.length} DINOS)!`, '#58d63a', 3.4);
+  }
+
+  startMultiplayerGuestMatch(payload = {}) {
+    const room = this.net.room || {};
+    const peers = Array.isArray(room.peers) ? room.peers : [];
+    const roster = Array.isArray(payload.roster) && payload.roster.length > 0
+      ? payload.roster
+      : peers.map((pr, idx) => ({
+          key: `p${idx + 1}`,
+          dinoId: pr.dinoId || 'trex',
+          name: pr.name || `Dino ${idx + 1}`,
+          peerId: pr.peerId,
+          color: pr.color || null,
+          isBot: false
+        }));
+
+    if (roster.length === 0) {
+      roster.push({
+        key: 'p1',
+        dinoId: Save.data.selectedDino || 'trex',
+        name: Save.data.network?.nickname || 'Jogador',
+        peerId: this.net.peerId,
+        color: null,
+        isBot: false
+      });
+    }
+
+    const mpMode = payload.mpMode || room.mpMode || (payload.elim ? 'elimination' : 'race');
+    const isElim = mpMode === 'elimination' || !!payload.elim;
+    this.multiplayerSession = {
+      active: true,
+      isHost: false,
+      room,
+      roster,
+      botCount: payload.botCount || 0,
+      seed: payload.seed || room.seed || `MP-${room.code || 'GUEST'}`,
+      mpMode,
+      elimination: isElim,
+      elimTimer: isElim ? 30 : null,
+      partyMode: payload.partyMode !== false,
+      suddenDeath: false,
+      myPeerId: this.net.peerId,
+      netSnapAccum: 0,
+      bets: new Map(),
+      nextCardScoreByPeer: new Map()
+    };
+
+    this.modeId = 'solo';
+    this.startRun(false, {
+      keepMultiplayerSession: true,
+      roster,
+      seed: this.multiplayerSession.seed,
+      biomeId: payload.biomeId || this.startBiomeId
+    });
+    const myDino = this.players.find((p) => p.peerId === this.net.peerId) || this.players[0];
+    if (myDino?.peerId) {
+      this.cameraRig.setFocusPlayer(myDino.peerId);
+    }
+    this.tvHud.setVisible(this.players.length > 1, !!Save.data.network?.tvScale);
+    this.ui.hud.showBanner(`🌐 CORRENDO NA SALA ${room.code || ''} COMO ${myDino?.name || 'CONVIDADO'}!`, '#38bdf8', 3.4);
   }
 
   startTestTrack(dinoId) {
     Save.data.selectedDino = dinoId;
     Save.save();
     this.startRun(true);
-    this.ui.hud.showBanner('🧪 MINI PISTA DE TESTE — Pule, abaixe e teste sua habilidade! (R para sair/reiniciar)', '#58d63a', 4);
+    this.ui.hud.showBanner('🧪 MINI PISTA DE TESTE — Pule, abaixe, ataque (Q) e teste sua habilidade! (R para reiniciar)', '#58d63a', 4);
+  }
+
+  startTutorial() {
+    this.modeId = 'solo';
+    this.startRun(true, { tutorial: true, biomeId: 'desert' });
+    this.tutorialState = {
+      active: true,
+      step: 0,
+      total: 6,
+      progress: 0,
+      spawnCd: 0.45,
+      elemCount: 0,
+      doneTimer: 0
+    };
+    this._syncTutorialHud();
+    this.ui.hud.showBanner('🎓 TUTORIAL JOGÁVEL — Siga as instruções no topo! (+20 🥚 na 1ª conclusão)', '#38bdf8', 4.0);
+  }
+
+  skipTutorial() {
+    this.tutorialState = null;
+    this.spawner.tutorialMode = false;
+    this.ui.hud.setTutorialHud(null);
+    this.openMainMenu();
+  }
+
+  _syncTutorialHud() {
+    const ts = this.tutorialState;
+    if (!ts || !ts.active) {
+      this.ui.hud.setTutorialHud(null);
+      return;
+    }
+    const defs = [
+      { title: '1/6 • Trocar de Faixa', desc: 'Use [A] / [D] ou [←] / [→] para desviar lateralmente (0/2 trocas).' },
+      { title: '2/6 • Pular Obstáculos', desc: 'Aperte [W] / [↑] para pular sobre os cactos à frente (0/2 pulos).' },
+      { title: '3/6 • Abaixar / Deslizar', desc: 'Segure [S] / [↓] para passar por baixo do Pterodáctilo alto!' },
+      { title: '4/6 • Ataque Básico [Q]', desc: 'Chegue perto do obstáculo verde e aperte [Q] para quebrá-lo!' },
+      { title: '5/6 • Habilidade Especial [Espaço]', desc: 'Aperte [Espaço] para ativar o poder exclusivo do seu dino!' },
+      { title: '6/6 • Alquimia Elemental', desc: 'Colete os Ovos Elementais (Fogo + Gelo = Explosão de Vapor)!' }
+    ];
+    const d = defs[ts.step] || defs[5];
+    let desc = d.desc;
+    if (ts.step === 0) desc = `Use [A] / [D] ou [←] / [→] para trocar de faixa (${ts.progress}/2 trocas).`;
+    if (ts.step === 1) desc = `Pule os cactos com [W] / [↑] (segure para pulo alto) (${ts.progress}/2 pulos).`;
+    this.ui.hud.setTutorialHud({
+      active: true,
+      step: ts.step + 1,
+      total: ts.total,
+      progressText: `${ts.step + 1}/${ts.total}`,
+      title: `🎓 ${d.title}`,
+      desc
+    });
+  }
+
+  _advanceTutorialStep() {
+    const ts = this.tutorialState;
+    if (!ts || !ts.active) return;
+    ts.step++;
+    ts.progress = 0;
+    ts.spawnCd = 0.55;
+    this.sfx.powerup();
+    if (ts.step >= ts.total) {
+      ts.active = false;
+      ts.doneTimer = 1.4;
+      this.spawner.tutorialMode = false;
+      const firstTime = !Save.data.tutorialRewardClaimed;
+      if (firstTime) {
+        Save.data.tutorialRewardClaimed = true;
+        Save.addEggs(20);
+        Save.save();
+      }
+      this.sfx.victory();
+      this.ui.hud.setTutorialHud(null);
+      this.ui.hud.showBanner(
+        firstTime ? '🎓 TUTORIAL COMPLETO! +20 Ovos de Recompensa!' : '🎓 TUTORIAL COMPLETO! Você dominou todas as mecânicas!',
+        '#58d63a',
+        4.0
+      );
+      return;
+    }
+    this.ui.hud.showFloatText('✅ ETAPA CONCLUÍDA!', '#58d63a');
+    this._syncTutorialHud();
+  }
+
+  _updateTutorial(dt) {
+    const ts = this.tutorialState;
+    if (!ts) return;
+    if (!ts.active) {
+      if (ts.doneTimer > 0) {
+        ts.doneTimer -= dt;
+        if (ts.doneTimer <= 0) {
+          this.tutorialState = null;
+          this._finishRun('🎓 TUTORIAL CONCLUÍDO!');
+        }
+      }
+      return;
+    }
+
+    const p0 = this.players[0];
+    if (!p0) return;
+
+    ts.spawnCd -= dt;
+    if (ts.spawnCd <= 0) {
+      const hasHazardAhead = this.spawner.getActiveObstacles().some((o) => !o.hit && o.group.position.z < 1);
+      if (ts.step === 1 && !hasHazardAhead) {
+        this.spawner.spawnTutorialObject('cactus_small', p0.lane, { z: -48 });
+        ts.spawnCd = 1.6;
+      } else if (ts.step === 2 && !hasHazardAhead) {
+        this.spawner.spawnTutorialObject('bird', p0.lane, { highBird: true, z: -50 });
+        ts.spawnCd = 1.8;
+      } else if (ts.step === 3 && !hasHazardAhead) {
+        this.spawner.spawnTutorialObject('cactus_spine', p0.lane, { z: -46 });
+        ts.spawnCd = 1.6;
+      } else if (ts.step === 4) {
+        p0.abilityCooldown = 0;
+        ts.spawnCd = 1.0;
+      } else if (ts.step === 5 && !hasHazardAhead) {
+        const nextElem = ts.elemCount === 0 ? 'fire' : 'ice';
+        this.spawner.spawnTutorialObject('elemental_egg', p0.lane, { element: nextElem, z: -42 });
+        ts.spawnCd = 1.8;
+      } else {
+        ts.spawnCd = 0.5;
+      }
+    }
+
+    if (ts.step === 2) {
+      const birdClose = this.spawner.getActiveObstacles().some(
+        (o) => o.kind === 'bird' && !o.hit && o.group.position.z > -16 && o.group.position.z < 3
+      );
+      if (birdClose && (p0.ducking || p0.sliding)) {
+        ts.progress += dt;
+        if (ts.progress >= 0.25) {
+          this._advanceTutorialStep();
+        }
+      }
+    }
   }
 
   startRun(isTestTrack = false, opts = {}) {
     this.isTestTrack = isTestTrack;
+    this.pendingRestart = false;
+    this.merchantUses = 0;
+    this.seenHints = new Set();
+    if (!opts.tutorial) {
+      this.tutorialState = null;
+    }
     if (!opts.keepMultiplayerSession) {
       this.multiplayerSession = null;
       this.tvHud.setVisible(false);
@@ -570,6 +889,7 @@ export class Game {
 
     this.rebuildPlayers(opts.roster || this.multiplayerSession?.roster || null);
     this.spawner.reset();
+    this.spawner.tutorialMode = !!opts.tutorial;
     this.events.reset();
     this.abilities.clear();
     this.particles.clear();
@@ -609,14 +929,14 @@ export class Game {
     this.wantedSpawnTimer = 6;
     this.hiScore = Save.getHighScore();
 
-    // Seed determinística para Desafio Diário ou Seed compartilhável
-    const seed = this.activeCustomTrack?.seed || (this.modeId === 'daily_challenge' ? getTodaySeed() : this.customSeed);
+    // Seed determinística para Desafio Diário, Multiplayer ou Seed compartilhável
+    const seed = opts.seed || this.activeCustomTrack?.seed || (this.modeId === 'daily_challenge' ? getTodaySeed() : this.customSeed);
     this.spawner.setSeed(seed);
     this.spawner.setDensity(diff.density * (this.activeCustomTrack?.obstacleRate || 1.0));
     this.events.configure(diff.eventFreq, diff.enabledEvents);
 
     // Bioma inicial (Modo História começa no capítulo 1)
-    const startId = this.modeId === 'story' ? STORY_CHAPTERS[0].biome : this.startBiomeId;
+    const startId = opts.biomeId || (this.modeId === 'story' ? STORY_CHAPTERS[0].biome : this.startBiomeId);
     this.currentBiome = getBiomeById(startId);
     this.world.applyTheme(this.currentBiome.theme);
     this.spawner.setBiome(this.currentBiome.id);
@@ -712,8 +1032,53 @@ export class Game {
     this.music.setPlaying(true);
   }
 
+  requestRestart() {
+    if (this.pendingRestart) return;
+    if (this.state === 'gameover' || this.state === 'replay') {
+      this.restartRun();
+      return;
+    }
+    if (this.state !== 'playing' && this.state !== 'paused') return;
+    this.pendingRestart = true;
+    this.restartPrevState = this.state;
+    this.state = 'paused';
+    this.music.setPlaying(false);
+    this.ui.hud.showPause(false);
+    this.ui.hud.showRestartConfirm(true);
+  }
+
+  confirmRestart() {
+    this.pendingRestart = false;
+    this.ui.hud.showRestartConfirm(false);
+    this.restartRun();
+  }
+
+  cancelRestart() {
+    if (!this.pendingRestart) return;
+    this.pendingRestart = false;
+    this.ui.hud.showRestartConfirm(false);
+    if (this.restartPrevState === 'paused') {
+      this.state = 'paused';
+      this.ui.hud.showPause(true);
+    } else {
+      this.state = 'playing';
+      this.lastTime = performance.now();
+      this.music.setPlaying(true);
+    }
+  }
+
   restartRun() {
+    this.pendingRestart = false;
+    this.ui.hud.showRestartConfirm(false);
+    if (this.tutorialState) {
+      this.startTutorial();
+      return;
+    }
     if (this.multiplayerSession?.active) {
+      if (!this.multiplayerSession.isHost) {
+        this.ui.hud.showBanner('⏳ Aguardando o Dono da Sala iniciar uma nova corrida!', '#38bdf8', 2.4);
+        return;
+      }
       this.startMultiplayerMatch(this.multiplayerSession.room, this.multiplayerSession.botCount);
       return;
     }
@@ -748,12 +1113,20 @@ export class Game {
     p.backpack.useNext(p, this._eventContext());
   }
 
+  _getMerchantCost() {
+    if (this.merchantUses <= 0) return 20;
+    if (this.merchantUses === 1) return 30;
+    return 45;
+  }
+
   buyFromMerchant() {
-    if (Save.data.eggs < 8) {
-      this.ui.hud.showFloatText('Ovos insuficientes!', '#ff4757');
+    const cost = this._getMerchantCost();
+    if (Save.data.eggs < cost) {
+      this.ui.hud.showFloatText(`Precisa de ${cost} ovos!`, '#ff4757');
       return;
     }
-    Save.addEggs(-8);
+    Save.addEggs(-cost);
+    this.merchantUses++;
     const p = this.players[0];
     if (p) {
       p.hp = Math.min(p.maxHp, p.hp + 1);
@@ -765,6 +1138,13 @@ export class Game {
   }
 
   applyPickedCard(card) {
+    if (this.multiplayerSession?.active && !this.multiplayerSession.isHost) {
+      this.net.sendCardPick(card);
+      this.sfx.card(card.rarity === 'lendária');
+      this.ui.hud.showFloatText(`CARTA ENVIADA: ${card.name}!`, '#ffd447');
+      this.state = 'playing';
+      return;
+    }
     for (const p of this.players) {
       if (!p.dead) card.apply(p, this);
     }
@@ -811,7 +1191,10 @@ export class Game {
       showBanner: (t, c, d) => this.ui.hud.showBanner(t, c, d),
       showFloatText: (p, t, c) => this.ui.hud.showFloatText(t, c),
       damagePlayer: (p, cause = 'event') => this._damagePlayer(p, cause),
-      onMerchantEncounter: () => this.ui.hud.showMerchant(),
+      onMerchantEncounter: () => {
+        this.ui.hud.setMerchantCost(this._getMerchantCost());
+        this.ui.hud.showMerchant();
+      },
       onBossHudUpdate: (b) => this.ui.hud.setBossHud(b),
       onUfoHudUpdate: (a, t, pr) => this.ui.hud.setUfoHud(a, t, pr),
       onChaserHudUpdate: (a, d) => this.ui.hud.setChaserHud(a, d),
@@ -868,6 +1251,10 @@ export class Game {
   }
 
   _damagePlayer(p, cause = 'obstacle') {
+    if (this.tutorialState?.active) {
+      this.ui.hud.showFloatText('💡 Veja a instrução no topo para desviar ou quebrar!', '#ffd447');
+      return;
+    }
     if (!p || p.dead || this.godMode || this.modeId === 'zen' || this.isTestTrack) return;
     if (p.invulnTimer > 0 || p.furyTimer > 0 || p.ramTimer > 0 || p.diveTimer > 0 || p.rocketTimer > 0) return;
 
@@ -1036,40 +1423,58 @@ export class Game {
     }
 
     if (this.net?.supabase?.isConfigured?.() && finalScore > 100 && !this.isTestTrack) {
-      this.net.supabase.submitScore({
-        name: Save.data.network?.nickname || 'Dino',
+      this.net.supabase.submitGlobalScore({
+        playerName: Save.data.network?.nickname || 'Dino',
         dinoId: this.players[0]?.id || 'trex',
+        modeId: this.modeId,
         score: finalScore,
-        mode: this.modeId,
-        biome: this.currentBiome?.id || 'desert'
+        distance: this.distance,
+        eggs: this.runEggs
       }).catch(() => {});
     }
 
     if (this.multiplayerSession?.active) {
-      const standings = [...this.players]
-        .sort((a, b) => (b.score || 0) - (a.score || 0))
-        .map((p) => ({
-          peerId: p.peerId,
-          name: p.name,
-          score: p.score || finalScore,
-          color: p.peerColor,
-          pingMs: this.net.pingMs || 2
-        }));
+      const sorted = [...this.players].sort((a, b) => (b.score || 0) - (a.score || 0));
+      const humanCount = this.players.filter((p) => !p.isBot).length;
+      const eligible = humanCount >= 2 && this.runTime >= 20 && finalScore >= 120;
+      const tierRewards = [12, 6, 3];
+      const standings = sorted.map((p, idx) => ({
+        peerId: p.peerId,
+        name: p.name,
+        score: p.score || finalScore,
+        pvpHits: p.pvpHits || 0,
+        color: p.peerColor,
+        eggReward: eligible ? (tierRewards[idx] || 0) : 0,
+        pingMs: this.net.pingMs || 2
+      }));
       const winner = standings[0];
-      if (winner && winner.peerId === this.net.peerId) {
+      if (winner && winner.peerId === this.net.peerId && humanCount >= 2) {
         Save.data.stats.victoriesLan = (Save.data.stats.victoriesLan || 0) + 1;
         if (!Save.data.partySkins.includes('lan_crown')) {
           Save.data.partySkins.push('lan_crown');
         }
         Save.save();
       }
-      // Recompensa de apostas no lobby
-      for (const bet of this.multiplayerSession.bets.values()) {
-        if (winner && bet.targetPeerId === winner.peerId) {
-          Save.addEggs(bet.amount * 2);
+      const hostEntry = standings.find((s) => s.peerId === this.net.peerId);
+      const rewardEggs = eligible ? (hostEntry?.eggReward || 0) : 0;
+      if (rewardEggs > 0) {
+        Save.addEggs(rewardEggs);
+      }
+      // Recompensa de apostas no lobby (apenas quando elegível contra humanos)
+      if (eligible) {
+        for (const bet of this.multiplayerSession.bets.values()) {
+          if (winner && bet.targetPeerId === winner.peerId) {
+            Save.addEggs(Math.min(20, bet.amount * 2));
+          }
         }
       }
-      const summary = { title: displayTitle, standings };
+      const summary = {
+        title: displayTitle,
+        mpMode: this.multiplayerSession.mpMode || 'race',
+        eligible,
+        rewardEggs,
+        standings
+      };
       this.lastPodiumSummary = summary;
       this.net.broadcastHostEnd(summary);
       this.tvHud.setVisible(false);
@@ -1134,6 +1539,11 @@ export class Game {
     let duckHeld = false;
     let abilityJust = false;
     let attackJust = false;
+    let furyJust = false;
+    let itemJust = false;
+
+    const isRemotePeer = !!(this.multiplayerSession?.active && p.peerId && p.peerId !== this.net.peerId);
+    const isLocalMain = !this.multiplayerSession?.active ? (p.index === 0) : (this.multiplayerSession.isHost && p.peerId === this.net.peerId);
 
     if (p.isBot) {
       p.botThinkTimer -= dt;
@@ -1163,15 +1573,30 @@ export class Game {
       duckHeld = this.input.isActionDown(actKey, 'duck', true);
       abilityJust = this.input.wasActionJustPressed(actKey, 'ability', false);
       attackJust = this.input.wasActionJustPressed(actKey, 'attack', false);
+      furyJust = this.input.wasKeyJustPressed('KeyF');
+      itemJust = this.input.wasKeyJustPressed('KeyE');
+    } else if (isRemotePeer) {
+      leftJust = !!this.input.virtualJustPressed[p.key]?.has('left');
+      rightJust = !!this.input.virtualJustPressed[p.key]?.has('right');
+      jumpJust = !!this.input.virtualJustPressed[p.key]?.has('jump');
+      jumpHeld = !!this.input.virtualState[p.key]?.jump;
+      duckHeld = !!this.input.virtualState[p.key]?.duck;
+      abilityJust = !!this.input.virtualJustPressed[p.key]?.has('ability');
+      attackJust = !!this.input.virtualJustPressed[p.key]?.has('attack');
+      furyJust = !!this.input.virtualJustPressed[p.key]?.has('fury');
+      itemJust = !!this.input.virtualJustPressed[p.key]?.has('item');
     } else {
-      const allowClassic = this.players.length === 1;
-      leftJust = this.input.wasActionJustPressed(p.key, 'left', allowClassic);
-      rightJust = this.input.wasActionJustPressed(p.key, 'right', allowClassic);
-      jumpJust = this.input.wasActionJustPressed(p.key, 'jump', allowClassic);
-      jumpHeld = this.input.isActionDown(p.key, 'jump', allowClassic);
-      duckHeld = this.input.isActionDown(p.key, 'duck', allowClassic);
-      abilityJust = this.input.wasActionJustPressed(p.key, 'ability', false);
-      attackJust = this.input.wasActionJustPressed(p.key, 'attack', false);
+      const allowClassic = isLocalMain || this.players.length === 1;
+      const inKey = isLocalMain ? 'p1' : p.key;
+      leftJust = this.input.wasActionJustPressed(inKey, 'left', allowClassic);
+      rightJust = this.input.wasActionJustPressed(inKey, 'right', allowClassic);
+      jumpJust = this.input.wasActionJustPressed(inKey, 'jump', allowClassic);
+      jumpHeld = this.input.isActionDown(inKey, 'jump', allowClassic);
+      duckHeld = this.input.isActionDown(inKey, 'duck', allowClassic);
+      abilityJust = this.input.wasActionJustPressed(inKey, 'ability', false);
+      attackJust = this.input.wasActionJustPressed(inKey, 'attack', false);
+      furyJust = isLocalMain && this.input.wasKeyJustPressed('KeyF');
+      itemJust = isLocalMain ? this.input.wasKeyJustPressed('KeyE') : this.input.wasActionJustPressed(inKey, 'item', false);
     }
 
     // Regra do Modo Caos ou Modo Espelhado: controles invertidos!
@@ -1186,11 +1611,21 @@ export class Game {
       p.lane--;
       this.sfx.dash();
       this.particles.emitDust(p.x, 0.2, p.z, 3, '#ffd447', 1.4);
+      if (this.tutorialState?.active && this.tutorialState.step === 0 && p.index === 0) {
+        this.tutorialState.progress++;
+        this._syncTutorialHud();
+        if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+      }
     }
     if (rightJust && p.lane < 2) {
       p.lane++;
       this.sfx.dash();
       this.particles.emitDust(p.x, 0.2, p.z, 3, '#ffd447', 1.4);
+      if (this.tutorialState?.active && this.tutorialState.step === 0 && p.index === 0) {
+        this.tutorialState.progress++;
+        this._syncTutorialHud();
+        if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+      }
     }
 
     const laneSpeed = 16 * (p.laneSpeedMult || 1);
@@ -1213,6 +1648,11 @@ export class Game {
         this.runJumps++;
         this.sfx.jump(false);
         this.particles.emitDust(p.x, 0.12, p.z + 0.2, 6, '#f2c57c', 2.2);
+        if (this.tutorialState?.active && this.tutorialState.step === 1 && p.index === 0) {
+          this.tutorialState.progress++;
+          this._syncTutorialHud();
+          if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+        }
       } else if (p.extraJumps > 0) {
         p.extraJumps--;
         p.vy = 13.0 * jumpMult;
@@ -1258,7 +1698,12 @@ export class Game {
         // Escapando do feixe do OVNI!
       } else {
         const activated = this.abilities.activate(p, this._eventContext());
-        if (activated) Metagame.recordSkill(p.id);
+        if (activated) {
+          Metagame.recordSkill(p.id);
+          if (this.tutorialState?.active && this.tutorialState.step === 4 && p.index === 0) {
+            this._advanceTutorialStep();
+          }
+        }
         if (activated && this.modeId === 'coop' && this.players.length === 2) {
           const other = this.players.find((o) => o !== p);
           if (other && other.abilityDuration > 0) {
@@ -1273,18 +1718,16 @@ export class Game {
     }
 
     // Fúria (F)
-    if (p.index === 0 && this.input.wasKeyJustPressed('KeyF') && p.fury >= 100 && p.furyTimer <= 0) {
+    if (furyJust && p.fury >= 100 && p.furyTimer <= 0) {
       p.fury = 0;
       p.furyTimer = 6.0;
       this.sfx.fury();
       this.narrator.say('fury');
-      this.ui.hud.showBanner('🔥 MODO FÚRIA ATIVADO!', '#ff5e1a', 2.5);
+      this.ui.hud.showBanner(`🔥 ${p.name}: MODO FÚRIA ATIVADO!`, '#ff5e1a', 2.5);
     }
 
     // Mochila (E ou botão do controle remoto)
-    if (p.index === 0 && this.input.wasKeyJustPressed('KeyE')) {
-      this.usePlayerItem(0);
-    } else if (p.index > 0 && this.input.wasActionJustPressed(p.key, 'item', false)) {
+    if (itemJust) {
       this.usePlayerItem(p.index);
     }
 
@@ -1342,11 +1785,6 @@ export class Game {
       }
     }
 
-    // Energia / Fome (#116): drena devagar na corrida (recupera com frutas ou modo zen/teste)
-    if (this.modeId !== 'zen' && !this.isTestTrack) {
-      p.energy = Math.max(10, (p.energy ?? 100) - dt * 1.1);
-    }
-
     // Acrobacia no ar após rampa
     if (p.flipTimer > 0) {
       p.flipTimer -= dt;
@@ -1355,7 +1793,7 @@ export class Game {
       p.model.rig.rotation.x = 0;
     }
 
-    // Temporizadores de buffs
+    // Temporizadores de buffs e recargas
     if (p.invulnTimer > 0) p.invulnTimer = Math.max(0, p.invulnTimer - dt);
     if (p.abilityCooldown > 0) p.abilityCooldown = Math.max(0, p.abilityCooldown - dt);
     if (p.abilityDuration > 0) p.abilityDuration = Math.max(0, p.abilityDuration - dt);
@@ -1365,6 +1803,8 @@ export class Game {
     if (p.magnetTimer > 0) p.magnetTimer = Math.max(0, p.magnetTimer - dt);
     if (p.minecartTimer > 0) p.minecartTimer = Math.max(0, p.minecartTimer - dt);
     if (p.attackTimer > 0) p.attackTimer = Math.max(0, p.attackTimer - dt);
+    if (p.attackCooldown > 0) p.attackCooldown = Math.max(0, p.attackCooldown - dt);
+    if (p.pvpHitInvuln > 0) p.pvpHitInvuln = Math.max(0, p.pvpHitInvuln - dt);
     if (p.gasMaskTimer > 0) p.gasMaskTimer = Math.max(0, p.gasMaskTimer - dt);
     p.backpack.hasGasMask = p.gasMaskTimer > 0;
     if (p.diveTimer > 0) p.diveTimer = Math.max(0, p.diveTimer - dt);
@@ -1407,9 +1847,145 @@ export class Game {
     });
   }
 
+  _applyGuestSnapshot(snap) {
+    if (!snap || !this.multiplayerSession) return;
+    if (typeof snap.score === 'number') this.score = snap.score;
+    if (typeof snap.distance === 'number') this.distance = snap.distance;
+    if (typeof snap.speed === 'number') this.speed = snap.speed;
+    if (snap.elimTimer !== undefined) this.multiplayerSession.elimTimer = snap.elimTimer;
+    if (snap.suddenDeath !== undefined) this.multiplayerSession.suddenDeath = !!snap.suddenDeath;
+    if (snap.mpMode) this.multiplayerSession.mpMode = snap.mpMode;
+
+    if (snap.biome && snap.biome !== this.currentBiome.id) {
+      const targetBiome = getBiomeById(snap.biome);
+      if (targetBiome) {
+        this.currentBiome = targetBiome;
+        this.world.applyTheme(targetBiome.theme);
+        this.spawner.setBiome(targetBiome.id);
+        this.ui.hud.showBanner(`🌀 PORTAL! Entrando em: ${targetBiome.name}`, '#00f5d4', 3.0);
+      }
+    }
+
+    if (Array.isArray(snap.players)) {
+      for (let i = 0; i < snap.players.length; i++) {
+        const sp = snap.players[i];
+        const target = this.players.find((p) => p.peerId && p.peerId === sp.peerId) || this.players[i];
+        if (!target) continue;
+        target.hp = sp.lives ?? target.hp;
+        target.maxHp = sp.maxLives ?? target.maxHp;
+        target.shields = sp.shields ?? target.shields;
+        target.fury = sp.fury ?? target.fury;
+        target.furyTimer = sp.furyTimer ?? target.furyTimer;
+        target.abilityCooldown = sp.abilityCd ?? target.abilityCooldown;
+        target.attackCooldown = sp.attackCd ?? target.attackCooldown;
+        target.attackMaxCooldown = sp.attackMaxCd ?? target.attackMaxCooldown;
+        target.rank = sp.rank ?? target.rank;
+        target.pvpHits = sp.pvpHits ?? target.pvpHits;
+        target.dead = !!sp.dead;
+        target.score = sp.score ?? target.score;
+        target.giantScale = sp.giantScale ?? target.giantScale;
+        if (Array.isArray(sp.backpack)) {
+          target.backpack.slots = [...sp.backpack];
+        }
+        target._netTarget = {
+          x: typeof sp.x === 'number' ? sp.x : target.x,
+          y: typeof sp.y === 'number' ? sp.y : target.y,
+          vy: sp.vy || 0,
+          lane: sp.lane ?? target.lane,
+          ducking: !!sp.ducking,
+          sliding: !!sp.sliding
+        };
+      }
+    }
+  }
+
+  _updateMultiplayerGuest(dt) {
+    this.runTime += dt;
+    this.net.sendInputState({
+      left: this.input.isActionDown('p1', 'left', true) || this.input.wasActionJustPressed('p1', 'left', true),
+      right: this.input.isActionDown('p1', 'right', true) || this.input.wasActionJustPressed('p1', 'right', true),
+      jump: this.input.isActionDown('p1', 'jump', true) || this.input.wasActionJustPressed('p1', 'jump', true),
+      duck: this.input.isActionDown('p1', 'duck', true),
+      ability: this.input.isActionDown('p1', 'ability', false) || this.input.wasActionJustPressed('p1', 'ability', false),
+      attack: this.input.isActionDown('p1', 'attack', false) || this.input.wasActionJustPressed('p1', 'attack', false),
+      bullet: this.input.isActionDown('p1', 'bullet', false),
+      item: this.input.isKeyDown('KeyE') || this.input.wasKeyJustPressed('KeyE') || this.input.wasActionJustPressed('p1', 'item', false),
+      fury: this.input.isKeyDown('KeyF') || this.input.wasKeyJustPressed('KeyF')
+    });
+
+    for (const p of this.players) {
+      const nt = p._netTarget;
+      if (nt) {
+        p.x += (nt.x - p.x) * Math.min(1, dt * 18);
+        p.y += (nt.y - p.y) * Math.min(1, dt * 18);
+        p.vy = nt.vy;
+        p.lane = nt.lane;
+        p.ducking = nt.ducking;
+        p.sliding = nt.sliding;
+        p.grounded = p.y <= 0.08;
+      }
+      p.model.root.position.set(p.x, p.y, p.z);
+      p.animator.update(dt, {
+        speed: this.speed,
+        grounded: p.grounded,
+        vy: p.vy,
+        ducking: p.ducking,
+        sliding: p.sliding,
+        swimming: this.currentBiome.waterTrack,
+        dead: p.dead,
+        giantScale: p.giantScale,
+        laneLean: 0
+      });
+    }
+
+    this.world.update(dt, this.speed);
+    this.dayNight.update(dt, this.currentBiome.theme);
+    this.weather.update(dt, true);
+    this.spawner.update(dt, this.speed, this.score, this.players);
+    this.particles.update(dt, this.speed);
+    this.narrator.update(dt);
+
+    const myDino = this.players.find((p) => p.peerId === this.net.peerId) || this.players[0];
+    if (myDino) {
+      this.ui.hud.updatePlayStatus(
+        myDino,
+        Save.data.eggs,
+        this.currentBiome.name,
+        Math.ceil((this.score + 1) / 1000) * 1000,
+        this.combo,
+        this.score
+      );
+      const modeTag = this.multiplayerSession.mpMode === 'duel'
+        ? 'DUELO PvP'
+        : (this.multiplayerSession.elimination ? 'ELIMINAÇÃO' : 'CORRIDA');
+      const sdTag = this.multiplayerSession.suddenDeath ? ' • 🔥 MORTE SÚBITA!' : '';
+      this.ui.hud.setMpRankHud(
+        `🏁 #${myDino.rank || 1}/${this.players.length} • ${Math.floor(myDino.score || 0)} pts (${modeTag})${sdTag}`,
+        myDino.rank === 1 ? '#fde047' : '#93c5fd'
+      );
+    }
+    this.ui.hud.updateScore(Math.max(this.hiScore, this.score), this.score, this.speed / Math.max(1, this.baseSpeed));
+    this.music.update(dt, this.speed, myDino && myDino.hp <= 1 ? 1 : 0);
+    const camPlayers = myDino && !myDino.dead ? [myDino] : this.players.filter((x) => !x.dead);
+    this.cameraRig.update(
+      dt,
+      camPlayers.length > 0 ? camPlayers : this.players,
+      this.speed,
+      Save.data.settings.accessibility.reduceShake,
+      this.photoMode,
+      this.spectatorMode
+    );
+    this.tvHud.updatePlayers(this.players, this.multiplayerSession.elimTimer, this.spectatorMode);
+  }
+
   _updatePlaying(dt) {
     const perfMsg = this.perf.recordFrame(dt, this);
     if (perfMsg) this.ui.hud.showBanner(perfMsg, '#38bdf8', 3.4);
+
+    if (this.multiplayerSession?.active && !this.multiplayerSession.isHost) {
+      this._updateMultiplayerGuest(dt);
+      return;
+    }
 
     // Bullet-Time (ShiftLeft)
     const bulletHeld = this.input.isActionDown('p1', 'bullet', false);
@@ -1447,9 +2023,21 @@ export class Game {
     let speedMult = adaptiveMult;
     if (p0?.turboTimer > 0 || p0?.rocketTimer > 0 || p0?.minecartTimer > 0) speedMult *= 1.42;
     if (p0?.sliding) speedMult *= 1.15;
-    if ((p0?.energy ?? 100) < 20) speedMult *= 0.9;
     if (this.activeChaosRule?.id === 'turbo_frenzy') speedMult *= 1.38;
     if (this.currentBiome.speedMod) speedMult *= this.currentBiome.speedMod;
+
+    // Morte Súbita Competitiva (>= 60s em Multiplayer)
+    if (this.multiplayerSession?.active) {
+      if (this.runTime >= 60 && !this.multiplayerSession.suddenDeath) {
+        this.multiplayerSession.suddenDeath = true;
+        this.sfx.roar('trex');
+        this.ui.hud.showBanner('🔥 MORTE SÚBITA (60s+)! Velocidade +35% e Obstáculos Intensos!', '#ff4757', 4.0);
+      }
+      if (this.multiplayerSession.suddenDeath) {
+        speedMult *= 1.35;
+        this.spawner.setDensity(baseDiff.density * 1.35);
+      }
+    }
 
     this.speed = Math.min(this.maxSpeed, this.baseSpeed + this.score * this.speedAccel) * speedMult;
     this.distance += this.speed * worldDt;
@@ -1459,6 +2047,27 @@ export class Game {
       if (!p.dead) {
         p.score = (p.score || 0) + this.speed * worldDt * 0.55 * (p.scoreCardMult || 1) * (p.scoreMultBonus || 1);
       }
+    }
+
+    if (this.multiplayerSession?.active && this.players.length > 1) {
+      const ranked = [...this.players].sort((a, b) => {
+        if (a.dead !== b.dead) return a.dead ? 1 : -1;
+        return (b.score || 0) - (a.score || 0);
+      });
+      ranked.forEach((pl, idx) => { pl.rank = idx + 1; });
+      const top = ranked.find((pl) => !pl.dead);
+      if (top) {
+        const prev = this.multiplayerSession.prevLeaderPeerId;
+        if (this.runTime > 3 && prev && prev !== top.peerId) {
+          top.score = (top.score || 0) + 30;
+          this.ui.hud.showFloatText(`⚡ ULTRAPASSAGEM! ${top.name} #1 (+30)`, '#fde047');
+        }
+        this.multiplayerSession.prevLeaderPeerId = top.peerId;
+      }
+    }
+
+    if (this.tutorialState) {
+      this._updateTutorial(dt);
     }
 
     // Cadeia de ovos e combo decaindo suavemente
@@ -1851,20 +2460,27 @@ export class Game {
         if (obs.kind === 'shortcut') {
           obs.hit = true;
           obs.pool?.release(obs);
-          p.invulnTimer = Math.max(p.invulnTimer, 3.0);
-          this.spawnEggRain(14);
-          this.ui.hud.showBanner('🕳️ ATALHO SECRETO! Chuva de Ovos!', '#00f5d4', 3);
+          p.invulnTimer = Math.max(p.invulnTimer, 2.5);
+          this.spawnEggRain(5);
+          this.ui.hud.showBanner('🕳️ ATALHO SECRETO! Escudo temporário + Ovos!', '#00f5d4', 3);
           continue;
         }
 
         if (obs.kind === 'fruit') {
           obs.hit = true;
           obs.pool?.release(obs);
-          p.energy = Math.min(100, (p.energy ?? 100) + 28);
-          p.hp = Math.min(p.maxHp, p.hp + (Math.random() < 0.25 ? 1 : 0));
+          p.fury = Math.min(100, (p.fury || 0) + 18 * (p.furyChargeMult || 1));
+          let bonusMsg = '🍉 FÚRIA +18%!';
+          if (p.hp < p.maxHp && Math.random() < 0.35) {
+            p.hp++;
+            bonusMsg = '🍉 +1 VIDA & FÚRIA!';
+          } else if (Math.random() < 0.25) {
+            p.shields = Math.min(4, p.shields + 1);
+            bonusMsg = '🍉 +ESCUDO & FÚRIA!';
+          }
           this.sfx.egg(6);
           this.addScore(45 * this.combo, p);
-          this.ui.hud.showFloatText('🍉 ENERGIA +28!', '#4ade80');
+          this.ui.hud.showFloatText(bonusMsg, '#4ade80');
           continue;
         }
 
@@ -1878,12 +2494,12 @@ export class Game {
         if (obs.kind === 'treasure') {
           obs.hit = true;
           obs.pool?.release(obs);
-          const gold = 15 + Math.floor((Save.data.talents?.greed || 0) * 3);
+          const gold = 7 + Math.floor((Save.data.talents?.greed || 0) * 1.5);
           Save.addEggs(gold);
           this.runEggs += gold;
           this.sfx.victory();
-          this.addScore(220 * this.combo, p);
-          this.ui.hud.showBanner(`💎 BAÚ DO TESOURO! +${gold} Ovos Dourados!`, '#ffd447', 3.0);
+          this.addScore(180 * this.combo, p);
+          this.ui.hud.showBanner(`💎 BAÚ DO TESOURO! +${gold} Ovos!`, '#ffd447', 2.8);
           continue;
         }
 
@@ -1893,6 +2509,7 @@ export class Game {
           p.invulnTimer = Math.max(p.invulnTimer, 1.0);
           this.sfx.grapple();
           this.addScore(90 * this.combo, p);
+          this._hintOnce('grapple_point', '🪢 Cipó suspenso sobrevoa buracos e obstáculos!', '#84cc16');
           this.ui.hud.showFloatText('🪝 GANCHO!', '#84cc16');
           continue;
         }
@@ -1902,6 +2519,7 @@ export class Game {
           p.gravityZoneMode = obs.gravMode || 'low';
           p.gravityZoneTimer = 5.5;
           this.sfx.powerup();
+          this._hintOnce('gravity_zone', '🪐 Zona Gravitacional altera a altura do pulo por 5.5s!', '#818cf8');
           this.ui.hud.showFloatText(p.gravityZoneMode === 'low' ? '🪐 GRAVIDADE BAIXA!' : '⬇️ GRAVIDADE PESADA!', '#818cf8');
           continue;
         }
@@ -1912,6 +2530,7 @@ export class Game {
           p.invulnTimer = Math.max(p.invulnTimer, 4.0);
           this.sfx.evolution();
           this.addScore(110 * this.combo, p);
+          this._hintOnce('minecart_zone', '🚋 Carrinho de Mina dá Turbo e invencibilidade por 4s!', '#cbd5e1');
           this.ui.hud.showFloatText('🚋 CARRINHO DE MINA! TURBO!', '#cbd5e1');
           continue;
         }
@@ -1921,14 +2540,16 @@ export class Game {
           p.riverLogTimer = 1.6;
           this.sfx.jump(true);
           this.addScore(80 * this.combo, p);
+          this._hintOnce('river_log', '🪵 Tronco no Rio evita correnteza e dá impulso!', '#fbbf24');
           this.ui.hud.showFloatText('🪵 SURF NO RIO!', '#fbbf24');
           continue;
         }
 
         if (obs.kind === 'bifurcation') {
           obs.hit = true;
+          this._hintOnce('bifurcation', '🔀 Esquerda dá Escudo seguro • Direita dá Ovos & Pontos!', '#ffd447');
           if (p.lane === 2) {
-            this.spawnEggRain(10);
+            this.spawnEggRain(4);
             this.addScore(150, p);
             this.ui.hud.showFloatText('⚡ ROTA ARRISCADA! +OVOS!', '#f59e0b');
           } else {
@@ -1955,6 +2576,9 @@ export class Game {
           this.sfx.stomp();
           p.wantedStars = Math.min(5, (p.wantedStars || 0) + 0.25);
           this.addScore(65 * this.combo, p);
+          if (p.attackTimer > 0 && this.tutorialState?.active && this.tutorialState.step === 3) {
+            this._advanceTutorialStep();
+          }
           continue;
         }
 
@@ -1983,7 +2607,9 @@ export class Game {
     }
 
     // Atualiza HUD & Música & Câmera & Multiplayer Snapshot (~18 Hz)
-    const lead = this.players.find((x) => !x.dead) || p0;
+    const lead = (this.multiplayerSession?.active
+      ? this.players.find((x) => x.peerId === this.net.peerId)
+      : null) || this.players.find((x) => !x.dead) || p0;
     if (lead) {
       this.ui.hud.updatePlayStatus(
         lead,
@@ -1993,9 +2619,19 @@ export class Game {
         this.combo,
         this.score
       );
+      if (this.multiplayerSession?.active) {
+        const modeTag = this.multiplayerSession.mpMode === 'duel'
+          ? 'DUELO PvP'
+          : (this.multiplayerSession.elimination ? 'ELIMINAÇÃO' : 'CORRIDA');
+        const sdTag = this.multiplayerSession.suddenDeath ? ' • 🔥 MORTE SÚBITA!' : '';
+        this.ui.hud.setMpRankHud(
+          `🏁 #${lead.rank || 1}/${this.players.length} • ${Math.floor(lead.score || 0)} pts (${modeTag})${sdTag}`,
+          lead.rank === 1 ? '#fde047' : '#93c5fd'
+        );
+      }
     }
     this.ui.hud.updateScore(Math.max(this.hiScore, this.score), this.score, this.speed / this.baseSpeed);
-    const dangerLevel = (this.events.bosses.activeBoss || this.events.ufo.active || (p0 && p0.hp <= 1)) ? 1 : 0;
+    const dangerLevel = (this.events.bosses.activeBoss || this.events.ufo.active || (lead && lead.hp <= 1)) ? 1 : 0;
     this.music.update(dt, this.speed, dangerLevel);
     this.narrator.update(dt);
     const camPlayers = this.players.filter((x) => !x.dead);
@@ -2015,14 +2651,31 @@ export class Game {
         this.multiplayerSession.netSnapAccum = 0;
         this.net.broadcastHostSnapshot({
           score: Math.floor(this.score),
+          distance: Math.floor(this.distance),
+          speed: Math.round(this.speed * 10) / 10,
           biome: this.currentBiome.id,
+          mpMode: this.multiplayerSession.mpMode,
+          suddenDeath: !!this.multiplayerSession.suddenDeath,
+          elimTimer: this.multiplayerSession.elimTimer,
           players: this.players.map((pl) => ({
             peerId: pl.peerId,
             name: pl.name,
+            lane: pl.lane,
+            x: Math.round(pl.x * 100) / 100,
+            y: Math.round(pl.y * 100) / 100,
+            vy: Math.round(pl.vy * 100) / 100,
+            ducking: !!pl.ducking,
+            sliding: !!pl.sliding,
+            fury: Math.round(pl.fury || 0),
+            furyTimer: Math.round((pl.furyTimer || 0) * 10) / 10,
+            giantScale: pl.giantScale || 1,
             lives: pl.hp,
             maxLives: pl.maxHp,
             shields: pl.shields,
-            energy: Math.round(pl.energy ?? 100),
+            attackCd: Math.round((pl.attackCooldown || 0) * 100) / 100,
+            attackMaxCd: pl.attackMaxCooldown || 1.25,
+            rank: pl.rank || 1,
+            pvpHits: pl.pvpHits || 0,
             abilityCd: pl.abilityCooldown,
             dead: pl.dead,
             backpack: pl.backpack.slots,
@@ -2033,9 +2686,18 @@ export class Game {
     }
   }
 
+  _hintOnce(key, msg, color = '#38bdf8') {
+    if (this.seenHints.has(key)) return;
+    this.seenHints.add(key);
+    this.ui.hud.showBanner(msg, color, 2.8);
+  }
+
   _applyElementalEgg(p, element) {
     const prev = p.element;
     const alchRadius = 24 * (1 + (Save.data.talents?.alchemy || 0) * 0.2);
+    if (this.tutorialState?.active && this.tutorialState.step === 5 && p.index === 0) {
+      this.tutorialState.elemCount = (this.tutorialState.elemCount || 0) + 1;
+    }
 
     if ((prev === 'fire' && element === 'ice') || (prev === 'ice' && element === 'fire')) {
       p.element = null;
@@ -2043,6 +2705,7 @@ export class Game {
       this._clearNearbyObstacles(p.x, p.z, alchRadius * 1.4, false);
       this.addScore(180 * this.combo, p);
       this.ui.hud.showBanner('💨 REAÇÃO DE VAPOR! Fogo + Gelo limpou a pista!', '#e2e8f0', 2.8);
+      if (this.tutorialState?.active && this.tutorialState.step === 5) this._advanceTutorialStep();
       return;
     }
 
@@ -2053,6 +2716,7 @@ export class Game {
       this._clearNearbyObstacles(p.x, p.z, alchRadius * 1.5, false);
       this.addScore(200 * this.combo, p);
       this.ui.hud.showBanner('💥 NOVA TÓXICA! Fúria + Explosão!', '#a3e635', 2.8);
+      if (this.tutorialState?.active && this.tutorialState.step === 5) this._advanceTutorialStep();
       return;
     }
 
@@ -2062,6 +2726,7 @@ export class Game {
       this._clearNearbyObstacles(p.x, p.z, alchRadius * 1.35, false);
       this.addScore(160 * this.combo, p);
       this.ui.hud.showBanner('⚡ CHOQUE HIDRELÉTRICO! Rio eletrificado!', '#facc15', 2.8);
+      if (this.tutorialState?.active && this.tutorialState.step === 5) this._advanceTutorialStep();
       return;
     }
 
@@ -2070,6 +2735,9 @@ export class Game {
     this.addScore(65 * this.combo, p);
     const icons = { fire: '🔥', ice: '❄️', lightning: '⚡', poison: '☠️' };
     this.ui.hud.showFloatText(`${icons[element] || '✨'} ELEMENTO ${element.toUpperCase()}!`, '#38bdf8');
+    if (this.tutorialState?.active && this.tutorialState.step === 5 && (this.tutorialState.elemCount || 0) >= 2) {
+      this._advanceTutorialStep();
+    }
   }
 
   _collectEgg(p, isGold) {
@@ -2111,6 +2779,15 @@ export class Game {
       return;
     }
 
+    if (this.pendingRestart) {
+      if (this.input.wasKeyJustPressed('Enter') || this.input.wasKeyJustPressed('NumpadEnter')) {
+        this.confirmRestart();
+      } else if (this.input.wasKeyJustPressed('Escape') || this.input.wasKeyJustPressed('KeyR')) {
+        this.cancelRestart();
+      }
+      return;
+    }
+
     if (this.input.wasKeyJustPressed('F9')) {
       this.ui.openSection('debug');
       return;
@@ -2132,7 +2809,9 @@ export class Game {
       }
     }
     if (this.input.wasKeyJustPressed('KeyR')) {
-      if (this.state === 'playing' || this.state === 'gameover' || this.state === 'paused' || this.state === 'replay') {
+      if (this.state === 'playing' || this.state === 'paused') {
+        this.requestRestart();
+      } else if (this.state === 'gameover' || this.state === 'replay') {
         this.restartRun();
       }
     }

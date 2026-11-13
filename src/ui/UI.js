@@ -12,6 +12,7 @@ import { MobileController } from './MobileController.js';
 import { MetagameModal } from './MetagameModal.js';
 import { DebugModal } from './DebugModal.js';
 import { PartyModals } from './PartyModals.js';
+import { GuideModal } from './GuideModal.js';
 import { PerfMonitor } from '../systems/PerfMonitor.js';
 import { getModeDef } from '../game/Modes.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
@@ -24,6 +25,11 @@ export class UIManager {
     this.controllerInstance = null;
     this.hud = new HUD(rootEl, {
       onRestart: () => this.game.restartRun(),
+      onRequestRestart: () => this.game.requestRestart(),
+      onConfirmRestart: () => this.game.confirmRestart(),
+      onCancelRestart: () => this.game.cancelRestart(),
+      onSkipTutorial: () => this.game.skipTutorial(),
+      onOpenGuide: () => this.openSection('guide'),
       onReplay: () => this.game.startReplayPlayback(),
       onGoMenu: () => this.game.openMainMenu(),
       onTogglePause: () => this.game.togglePause(),
@@ -208,14 +214,23 @@ export class UIManager {
       case 'multiplayer':
         this.activeCleanup = MultiplayerLobby.renderInto(this.hud.modalLayer, this.game.net, {
           onClose: back,
-          onOpenController: (initialRoom, initialTransport) => this.openController({
-            initialRoom,
-            initialTransport,
-            deferredInstall: window.__DINO_DEFERRED_INSTALL__
-          }),
+          onOpenController: (initialRoom, initialTransport) => {
+            if (this.game.net.isConnected) {
+              this.game.net.sendPlayerMeta({ role: 'controller' });
+            }
+            this.openController({
+              initialRoom,
+              initialTransport,
+              deferredInstall: window.__DINO_DEFERRED_INSTALL__
+            });
+          },
           onStartMatch: ({ room, botCount }) => {
             this._clearModal();
             this.game.startMultiplayerMatch(room, botCount);
+          },
+          onGuestStartMatch: (payload) => {
+            this._clearModal();
+            this.game.startMultiplayerGuestMatch(payload);
           }
         });
         break;
@@ -241,6 +256,29 @@ export class UIManager {
         });
         break;
       }
+      case 'guide': {
+        const wasPlaying = this.game.state === 'playing';
+        if (wasPlaying) this.game.state = 'paused';
+        GuideModal.renderInto(this.hud.modalLayer, {
+          onClose: () => {
+            this._clearModal();
+            if (wasPlaying) {
+              this.game.state = 'playing';
+            } else {
+              back();
+            }
+          },
+          onStartTutorial: () => {
+            this._clearModal();
+            this.game.startTutorial();
+          }
+        });
+        break;
+      }
+      case 'tutorial':
+        this._clearModal();
+        this.game.startTutorial();
+        break;
       case 'settings':
         SettingsModal.renderInto(this.hud.modalLayer, {
           onClose: back,

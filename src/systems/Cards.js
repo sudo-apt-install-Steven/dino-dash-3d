@@ -83,10 +83,10 @@ export const CARD_POOL = [
     id: 'egg_rain',
     name: 'Chuva de Ovos',
     rarity: 'lendária',
-    desc: 'Chove 25 ovos na pista e dobra bônus de cadeia.',
+    desc: 'Chove 14 ovos na pista e dá +50% em ovos coletados.',
     apply: (p, ctx) => {
-      p.eggValueMult = (p.eggValueMult || 1) * 2;
-      ctx?.spawnEggRain?.(25);
+      p.eggValueMult = (p.eggValueMult || 1) * 1.5;
+      ctx?.spawnEggRain?.(14);
     }
   },
   {

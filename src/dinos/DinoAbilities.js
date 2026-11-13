@@ -115,10 +115,50 @@ export class DinoAbilities {
         gameCtx.clearNearbyObstacles?.(player.x, player.z, 18, false);
         gameCtx.showFloatText?.(player, 'CORTE DUPLO!', '#a29bfe');
         break;
+      case 'allosaurus':
+        player.turboTimer = Math.max(player.turboTimer, player.abilityDuration);
+        player.scoreMultBonus = Math.max(player.scoreMultBonus || 1, 1.6);
+        this._spawnProjectile(player.x - 0.7, 1.1, player.z - 0.8, -2, -46, this.spikeMat);
+        this._spawnProjectile(player.x + 0.7, 1.1, player.z - 0.8, 2, -46, this.spikeMat);
+        gameCtx.showFloatText?.(player, 'CAÇADA FRENÉTICA!', '#f43f5e');
+        break;
+      case 'baryonyx':
+        player.diveTimer = player.abilityDuration;
+        player.invulnTimer = Math.max(player.invulnTimer, player.abilityDuration);
+        this._spawnWave(player.x, player.z, '#0ea5e9', 14);
+        gameCtx.showFloatText?.(player, 'BOTE AQUÁTICO!', '#38bdf8');
+        break;
+      case 'styracosaurus':
+        player.ramTimer = player.abilityDuration;
+        player.shield = Math.max(player.shield, 1);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 12, false);
+        gameCtx.showFloatText?.(player, 'FALANGE DE CHIFRES!', '#f97316');
+        break;
+      case 'oviraptor':
+        player.magnetTimer = Math.max(player.magnetTimer, player.abilityDuration + 2.0);
+        player.turboTimer = Math.max(player.turboTimer, 2.2);
+        gameCtx.showFloatText?.(player, 'FARDO DE OVOS!', '#fb923c');
+        break;
+      case 'quetzalcoatlus':
+        player.y = Math.max(player.y, 1.5);
+        player.vy = 11.8;
+        player.extraJumps = Math.max(player.extraJumps, 2);
+        player.invulnTimer = Math.max(player.invulnTimer, 2.4);
+        this._spawnWave(player.x, player.z, '#60a5fa', 12);
+        gameCtx.showFloatText?.(player, 'CORRENTE TÉRMICA!', '#60a5fa');
+        break;
+      case 'giganotosaurus':
+        this._spawnWave(player.x, player.z, '#be123c', 26);
+        gameCtx.cameraRig?.triggerShake(0.65, 0.35);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 38, false);
+        gameCtx.pushPvPRival?.(player);
+        player.furyTimer = Math.max(player.furyTimer, 2.5);
+        gameCtx.showFloatText?.(player, 'RUGIDO COLOSSAL!', '#fb7185');
+        break;
       case 'ghostgold':
         player.invulnTimer = Math.max(player.invulnTimer, player.abilityDuration);
-        player.scoreMultBonus = 2.0;
-        gameCtx.spawnEggRain?.(12);
+        player.scoreMultBonus = 1.8;
+        gameCtx.spawnEggRain?.(5);
         gameCtx.showFloatText?.(player, 'TRANSCENDÊNCIA!', '#ffd447');
         break;
       default:
