@@ -1,6 +1,17 @@
-// Sistema de cartas por marco de score (500, 1500, 3000, 5000...), raridades, reroll e sinergias.
+// Sistema de cartas por marco progressivo de score (1000, 2500, 4800, 8000...), raridades, reroll e sinergias.
 
-export const CARD_MILESTONES = [500, 1500, 3000, 5000, 7500, 10500, 14000, 18000, 23000];
+export const CARD_MILESTONES = [1000, 2500, 4800, 8000, 12200, 17600, 24400, 32800, 43000];
+
+export function getCardMilestone(index = 0) {
+  const idx = Math.max(0, Math.floor(index));
+  if (idx < CARD_MILESTONES.length) return CARD_MILESTONES[idx];
+  let last = CARD_MILESTONES[CARD_MILESTONES.length - 1];
+  const extraSteps = idx - CARD_MILESTONES.length + 1;
+  for (let s = 1; s <= extraSteps; s++) {
+    last += 10200 + s * 2200;
+  }
+  return last;
+}
 
 export const CARD_POOL = [
   {

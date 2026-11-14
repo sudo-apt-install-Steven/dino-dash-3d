@@ -82,7 +82,7 @@ export class Spawner {
     this.scene.add(this.group);
 
     this.rng = Math.random;
-    this.spawnTimer = 1.1;
+    this.spawnTimer = 1.45;
     this.difficultyId = 'normal';
     this.elapsed = 0;
     this.biomeId = 'desert';
@@ -90,7 +90,10 @@ export class Spawner {
     this.tutorialMode = false;
     this.showObstacleHints = true;
     this.oasisReliefTimer = 0;
-    this.chunkCooldown = 14;
+    this.chunkCooldown = 26;
+    this.powerupCooldown = 5;
+    this.featureCooldown = 4;
+    this.collectibleCooldown = 2.5;
     this._hintMaterials = new Map();
     this._hintSprites = [];
 
@@ -133,10 +136,10 @@ export class Spawner {
     return mat;
   }
 
-  _attachHint(group, badgeY, label, accentColor, scaleX = 2.45) {
+  _attachHint(group, badgeY, label, accentColor, scaleX = 1.85) {
     const sprite = new THREE.Sprite(this._getHintMaterial(label, accentColor));
     sprite.position.set(0, badgeY, 0);
-    sprite.scale.set(scaleX, 0.48, 1);
+    sprite.scale.set(scaleX, 0.36, 1);
     sprite.renderOrder = 6;
     sprite.visible = this.showObstacleHints;
     group.add(sprite);
@@ -696,7 +699,7 @@ export class Spawner {
     item.group.position.set(x, y, z);
     item.group.visible = true;
     const seen = Save.data.seenElements || [];
-    const alwaysHelpful = ['bifurcation', 'shortcut', 'speed_pad', 'trampoline'].includes(kind);
+    const alwaysHelpful = kind === 'bifurcation' || kind === 'shortcut';
     if (item.hintSprite) {
       item.hintSprite.visible = this.showObstacleHints && (this.tutorialMode || alwaysHelpful || !seen.includes(kind));
     }
@@ -825,70 +828,26 @@ export class Spawner {
     const x = LANE_X[laneIdx];
     const r = this.rng();
 
-    // Ovos & Power-ups aparecem em ritmo balanceado em faixas livres
-    if (this.rng() < 0.32) {
-      const eggLane = (laneIdx + 1) % 3;
-      this.spawnEggArc(eggLane, 2 + Math.floor(this.rng() * 3), null, spawnZ - 2);
-    }
+    // Ondas organizadas em ritmo limpo (sem empilhar ovos, zonas e 2 obstáculos no mesmo trecho)
+    const waveRoll = this.rng();
+    const otherLane = (laneIdx + 1) % 3;
 
-    // Frutas, Ovos Elementais, Tesouros e Zonas Interativas
-    const bonusRoll = this.rng();
-    const bonusLane = (laneIdx + 1) % 3;
-    if (bonusRoll < 0.14) {
-      this._acquire('fruit', LANE_X[bonusLane], 0.1, spawnZ - 5);
-    } else if (bonusRoll < 0.21 && score > 60) {
-      const ee = this._acquire('elemental_egg', LANE_X[bonusLane], 0.1, spawnZ - 5);
-      if (ee) {
-        const elems = [
-          { id: 'fire', color: '#ff5e1a', label: '🔥 OVO FOGO' },
-          { id: 'ice', color: '#38bdf8', label: '❄️ OVO GELO' },
-          { id: 'lightning', color: '#facc15', label: '⚡ OVO RAIO' },
-          { id: 'poison', color: '#a3e635', label: '☠️ OVO VENENO' }
-        ];
-        const pick = elems[Math.floor(this.rng() * elems.length)];
-        ee.element = pick.id;
-        ee.color = pick.color;
-        ee.mat.color.set(pick.color);
-        ee.mat.emissive.set(pick.color);
-        this._setElementalVisual(ee, pick.id);
-        this._setHint(ee, pick.label, pick.color);
+    // 1. Onda de recompensa leve (apenas arco de ovos limpo, sem obstáculos juntos na maioria das vezes)
+    if (waveRoll < 0.16) {
+      this.spawnEggArc(laneIdx, 2 + Math.floor(this.rng() * 2), null, spawnZ - 1);
+      if (score > 160 && this.rng() < 0.45) {
+        this._acquire('cactus_small', LANE_X[otherLane], 0, spawnZ - 3);
       }
-    } else if (bonusRoll < 0.25 && score > 120) {
-      this._acquire('treasure', LANE_X[bonusLane], 0, spawnZ - 5);
-    } else if (bonusRoll < 0.285 && score > 140) {
-      this._acquire('grapple_point', x, 0, spawnZ - 3);
-    } else if (bonusRoll < 0.315 && score > 180) {
-      const gz = this._acquire('gravity_zone', LANE_X[bonusLane], 0, spawnZ - 6);
-      if (gz) {
-        gz.gravMode = this.rng() < 0.5 ? 'low' : 'heavy';
-        this._setHint(gz, gz.gravMode === 'low' ? '🪐 GRAVIDADE BAIXA' : '🪨 GRAVIDADE PESADA', gz.gravMode === 'low' ? '#818cf8' : '#a78bfa');
-      }
-    } else if (bonusRoll < 0.34 && score > 220) {
-      this._acquire('minecart_zone', LANE_X[bonusLane], 0, spawnZ - 5);
-    } else if (bonusRoll < 0.365 && score > 150) {
-      this._acquire('river_log', LANE_X[2], 0, spawnZ - 5);
-    } else if (bonusRoll < 0.385 && score > 260) {
-      this._acquire('bifurcation', 0, 0, spawnZ - 8);
-    } else if (bonusRoll < 0.425 && score > 40) {
-      this._acquire('speed_pad', LANE_X[bonusLane], 0, spawnZ - 4);
-    } else if (bonusRoll < 0.455 && score > 75) {
-      this._acquire('trampoline', LANE_X[bonusLane], 0, spawnZ - 4);
-    }
-
-    if (this.biomeId === 'dark_swamp' && r < 0.22) {
-      this._acquire(this.rng() < 0.62 ? 'mud_pool' : 'toxic_pool', x, 0, spawnZ);
-      return;
-    }
-    if (this.biomeId === 'jurassic_forest' && r < 0.16) {
-      this._acquire('mud_pool', x, 0, spawnZ);
       return;
     }
 
-    if (this.rng() < 0.085 && score > 30) {
+    // 2. Onda de Power-Up ou Mochila (cooldown mínimo para não poluir a pista)
+    if (waveRoll < 0.25 && score > 60 && this.powerupCooldown <= 0) {
+      this.powerupCooldown = 11 + this.rng() * 6;
       const pLane = (laneIdx + 2) % 3;
-      const p = this._acquire('powerup', LANE_X[pLane], 0, spawnZ - 4);
+      const p = this._acquire('powerup', LANE_X[pLane], 0, spawnZ - 2);
       if (p) {
-        const isBackpack = this.rng() < 0.3;
+        const isBackpack = this.rng() < 0.28;
         p.isBackpack = isBackpack;
         if (isBackpack) {
           p.powerId = BACKPACK_ITEM_KEYS[Math.floor(this.rng() * BACKPACK_ITEM_KEYS.length)];
@@ -904,31 +863,104 @@ export class Spawner {
         }
         this._setPowerupVisual(p);
       }
+      return;
+    }
+
+    // 3. Onda de coletável especial (Fruta, Ovo Elemental ou Tesouro espaçados)
+    if (waveRoll < 0.34 && score > 75 && this.collectibleCooldown <= 0) {
+      this.collectibleCooldown = 6.5 + this.rng() * 4.0;
+      const bonusRoll = this.rng();
+      if (bonusRoll < 0.46) {
+        this._acquire('fruit', LANE_X[otherLane], 0.1, spawnZ - 3);
+      } else if (bonusRoll < 0.8 && score > 110) {
+        const ee = this._acquire('elemental_egg', LANE_X[otherLane], 0.1, spawnZ - 3);
+        if (ee) {
+          const elems = [
+            { id: 'fire', color: '#ff5e1a', label: '🔥 OVO FOGO' },
+            { id: 'ice', color: '#38bdf8', label: '❄️ OVO GELO' },
+            { id: 'lightning', color: '#facc15', label: '⚡ OVO RAIO' },
+            { id: 'poison', color: '#a3e635', label: '☠️ OVO VENENO' }
+          ];
+          const pick = elems[Math.floor(this.rng() * elems.length)];
+          ee.element = pick.id;
+          ee.color = pick.color;
+          ee.mat.color.set(pick.color);
+          ee.mat.emissive.set(pick.color);
+          this._setElementalVisual(ee, pick.id);
+          this._setHint(ee, pick.label, pick.color);
+        }
+      } else if (score > 160) {
+        this._acquire('treasure', LANE_X[otherLane], 0, spawnZ - 3);
+      }
+      if (score > 200 && this.rng() < 0.5) {
+        this._acquire('cactus_small', x, 0, spawnZ);
+      }
+      return;
+    }
+
+    // 4. Onda de zona interativa / mecanismo de pista (espaçados para manter clareza visual)
+    if (waveRoll < 0.44 && score > 90 && this.featureCooldown <= 0) {
+      this.featureCooldown = 6.5 + this.rng() * 4.5;
+      const featRoll = this.rng();
+      if (featRoll < 0.24) {
+        this._acquire('speed_pad', x, 0, spawnZ);
+      } else if (featRoll < 0.46) {
+        this._acquire('trampoline', x, 0, spawnZ);
+      } else if (featRoll < 0.6 && score > 180) {
+        this._acquire('grapple_point', x, 0, spawnZ);
+      } else if (featRoll < 0.74 && score > 240) {
+        const gz = this._acquire('gravity_zone', LANE_X[otherLane], 0, spawnZ);
+        if (gz) {
+          gz.gravMode = this.rng() < 0.5 ? 'low' : 'heavy';
+          this._setHint(gz, gz.gravMode === 'low' ? '🪐 GRAVIDADE BAIXA' : '🪨 GRAVIDADE PESADA', gz.gravMode === 'low' ? '#818cf8' : '#a78bfa');
+        }
+      } else if (featRoll < 0.86 && score > 280) {
+        this._acquire('minecart_zone', x, 0, spawnZ);
+      } else if (score > 220 && featRoll < 0.94) {
+        this._acquire('river_log', LANE_X[2], 0, spawnZ);
+      } else if (score > 340) {
+        this._acquire('bifurcation', 0, 0, spawnZ - 4);
+      }
+      return;
+    }
+
+    // Pequeno bônus eventual de 2 ovos em faixa separada em ondas de obstáculo
+    if (this.rng() < 0.14) {
+      this.spawnEggArc(otherLane, 2, null, spawnZ - 2);
+    }
+
+    if (this.biomeId === 'dark_swamp' && r < 0.2) {
+      this._acquire(this.rng() < 0.62 ? 'mud_pool' : 'toxic_pool', x, 0, spawnZ);
+      return;
+    }
+    if (this.biomeId === 'jurassic_forest' && r < 0.14) {
+      this._acquire('mud_pool', x, 0, spawnZ);
+      return;
     }
 
     // Obstáculos específicos do bioma + clássicos
-    if (this.biomeId === 'volcano' && r < 0.28) {
+    if (this.biomeId === 'volcano' && r < 0.25) {
       this._acquire(this.rng() < 0.55 ? 'lava_pool' : 'geyser_vent', x, 0, spawnZ);
       return;
     }
-    if (this.biomeId === 'ice_age' && r < 0.28) {
+    if (this.biomeId === 'ice_age' && r < 0.25) {
       this._acquire(this.rng() < 0.65 ? 'thin_ice' : 'falling_stalactite', x, 0, spawnZ);
       return;
     }
-    if ((this.biomeId === 'crystal_cavern' || this.biomeId === 'snowy_mountain') && r < 0.28) {
+    if ((this.biomeId === 'crystal_cavern' || this.biomeId === 'snowy_mountain') && r < 0.25) {
       this._acquire(this.rng() < 0.62 ? 'falling_stalactite' : 'amber_crystal', x, 0, spawnZ);
       return;
     }
-    if ((this.biomeId === 'fossil_graveyard' || this.biomeId === 'ruined_city') && r < 0.28) {
+    if ((this.biomeId === 'fossil_graveyard' || this.biomeId === 'ruined_city') && r < 0.25) {
       this._acquire(this.rng() < 0.52 ? 'tar_pit' : (this.rng() < 0.5 ? 'amber_crystal' : 'spike_barricade'), x, 0, spawnZ);
       return;
     }
-    if ((this.biomeId === 'alien_planet' || this.biomeId === 'alien_factory' || this.biomeId === 'storm_desert') && r < 0.3) {
+    if ((this.biomeId === 'alien_planet' || this.biomeId === 'alien_factory' || this.biomeId === 'storm_desert') && r < 0.26) {
       this._acquire(this.rng() < 0.55 ? 'alien_trap' : 'electric_pylon', x, 0, spawnZ);
       return;
     }
 
-    if (score > 25 && r < 0.22) {
+    if (score > 35 && r < 0.22) {
       const bird = this._acquire('bird', x, 1.62, spawnZ);
       if (bird) {
         const isHigh = this.rng() < 0.56;
@@ -942,32 +974,32 @@ export class Spawner {
       return;
     }
 
-    if (score > 45 && r < 0.34) {
+    if (score > 75 && r < 0.33) {
       this._acquire(this.rng() < 0.72 ? 'scorpion' : 'spike_barricade', x, 0, spawnZ);
       return;
     }
 
-    if (score > 55 && r < 0.4) {
+    if (score > 95 && r < 0.39) {
       this._acquire(this.rng() < 0.55 ? 'amber_crystal' : 'tar_pit', x, 0, spawnZ);
       return;
     }
 
-    if (score > 80 && r < 0.45 && r >= 0.4) {
+    if (score > 130 && r < 0.44 && r >= 0.39) {
       this._acquire(this.rng() < 0.65 ? 'cactus_shooter' : 'electric_pylon', x, 0, spawnZ);
       return;
     }
 
-    if (score > 70 && r < 0.52) {
+    if (score > 110 && r < 0.51) {
       this._acquire(this.rng() < 0.68 ? 'rolling_log' : 'geyser_vent', x, 0, spawnZ);
       return;
     }
 
-    if (score > 90 && r < 0.58) {
+    if (score > 135 && r < 0.56) {
       this._acquire('ramp', x, 0, spawnZ);
       return;
     }
 
-    if (score > 110 && r < 0.65) {
+    if (score > 170 && r < 0.62) {
       this._acquire(this.rng() < 0.68 ? 'tall_rock' : 'falling_stalactite', x, 0, spawnZ);
       return;
     }
@@ -980,10 +1012,9 @@ export class Spawner {
       this._acquire('cactus_cluster', x, 0, spawnZ);
     }
 
-    if (score > 90 && !(this.difficultyId === 'easy' && score < 400) && this.rng() < 0.42) {
-      const otherLanes = [0, 1, 2].filter((idx) => idx !== laneIdx);
-      const secondLane = otherLanes[Math.floor(this.rng() * otherLanes.length)];
-      this._acquire('cactus_small', LANE_X[secondLane], 0, spawnZ - 1.5);
+    if (score > 260 && !(this.difficultyId === 'easy' && score < 700) && this.rng() < 0.22) {
+      const thirdLane = [0, 1, 2].find((idx) => idx !== laneIdx && idx !== otherLane) ?? otherLane;
+      this._acquire('cactus_small', LANE_X[thirdLane], 0, spawnZ - 2.6);
     }
   }
 
@@ -992,25 +1023,28 @@ export class Spawner {
     if (this.oasisReliefTimer > 0) {
       this.oasisReliefTimer = Math.max(0, this.oasisReliefTimer - dt);
     }
+    if (this.powerupCooldown > 0) this.powerupCooldown = Math.max(0, this.powerupCooldown - dt);
+    if (this.featureCooldown > 0) this.featureCooldown = Math.max(0, this.featureCooldown - dt);
+    if (this.collectibleCooldown > 0) this.collectibleCooldown = Math.max(0, this.collectibleCooldown - dt);
     if (!this.tutorialMode) {
       this.chunkCooldown -= dt;
-      if (score > 90 && this.chunkCooldown <= 0) {
+      if (score > 200 && this.chunkCooldown <= 0) {
         const chunkKinds = ['oasis_zone', 'fragile_bridge', 'rescue_cross'];
         const ck = chunkKinds[Math.floor(this.rng() * chunkKinds.length)];
         this._acquire(ck, 0, 0, -96);
-        this.spawnTimer = Math.max(this.spawnTimer, 1.45);
-        this.chunkCooldown = 18 + this.rng() * 8;
+        this.spawnTimer = Math.max(this.spawnTimer, 1.9);
+        this.chunkCooldown = 28 + this.rng() * 14;
       }
 
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
         this._spawnOne(speed, score);
-        const easyRelief = (this.difficultyId === 'easy' && score < 500) ? 1.38 : 1.0;
+        const easyRelief = (this.difficultyId === 'easy' && score < 600) ? 1.35 : 1.0;
         const oasisSlow = this.oasisReliefTimer > 0 ? 1.65 : 1.0;
-        const minReactionTime = Math.max(0.54, 15.5 / Math.max(16, speed));
-        const rawMinGap = ((1.08 - Math.max(0, speed - 18) * 0.015) / this.densityMult) * easyRelief * oasisSlow;
+        const minReactionTime = Math.max(0.84, 21.5 / Math.max(16, speed));
+        const rawMinGap = ((1.36 - Math.max(0, speed - 18) * 0.014) / this.densityMult) * easyRelief * oasisSlow;
         const minGap = Math.max(minReactionTime, rawMinGap);
-        const maxGap = (minGap + (0.52 / this.densityMult) * easyRelief * oasisSlow);
+        const maxGap = (minGap + (0.64 / this.densityMult) * easyRelief * oasisSlow);
         this.spawnTimer = minGap + this.rng() * (maxGap - minGap);
       }
     }
@@ -1081,10 +1115,13 @@ export class Spawner {
   }
 
   reset() {
-    this.spawnTimer = 0.85;
+    this.spawnTimer = 1.45;
     this.elapsed = 0;
     this.oasisReliefTimer = 0;
-    this.chunkCooldown = 14;
+    this.chunkCooldown = 26;
+    this.powerupCooldown = 5;
+    this.featureCooldown = 4;
+    this.collectibleCooldown = 2.5;
     this.tutorialMode = false;
     for (const key of Object.keys(this.pools)) {
       this.pools[key].releaseAll();

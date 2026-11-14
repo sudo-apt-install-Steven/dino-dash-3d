@@ -478,7 +478,7 @@
   box-shadow: 0 0 0 2px rgba(255, 212, 71, 0.45);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 960px), (hover: none) and (pointer: coarse) {
   .overlay-center {
     padding: 8px;
   }
@@ -486,9 +486,11 @@
     width: min(96vw, calc(100vw - 12px)) !important;
     max-width: calc(100vw - 12px) !important;
     padding: 12px;
-    max-height: 94vh;
+    max-height: 92dvh;
     gap: 10px;
     overflow-x: hidden !important;
+    touch-action: pan-y;
+    overscroll-behavior: contain;
   }
   .modal-header {
     flex-wrap: wrap;
@@ -501,7 +503,11 @@
     justify-content: flex-end;
   }
   .modal-header h2 {
-    font-size: 1.15rem;
+    font-size: 1.12rem;
+  }
+  .cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(152px, 1fr)) !important;
+    gap: 8px;
   }
   .preview-split {
     grid-template-columns: 1fr;
@@ -520,12 +526,12 @@
   }
   .dino-modal .preview-canvas-box,
   .modal-card:has(.dino-selector-row) .preview-canvas-box {
-    height: 185px;
+    height: 175px;
   }
   .dino-selector-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    min-height: 120px;
-    max-height: 168px;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    min-height: 110px;
+    max-height: 162px;
   }
 }
 
@@ -596,46 +602,64 @@
   display: none;
 }
 
-/* Botões virtuais Touch para celular */
+/* Botões virtuais Touch para celular (Swipe padrão: apenas ações ⚔️/⚡ na direita) */
 .touch-controls {
   position: fixed;
-  inset: auto 0 18px 0;
+  inset: auto 0 12px 0;
   display: none;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: flex-end;
-  padding: 0 16px;
+  padding: 0 12px;
   pointer-events: none;
   z-index: 24;
 }
 
-@media (hover: none) and (pointer: coarse), (max-width: 760px) {
+.touch-controls.touch-mode-buttons {
+  justify-content: space-between;
+}
+
+@media (hover: none) and (pointer: coarse), (max-width: 960px) {
   .touch-controls.active-play {
+    display: flex;
+  }
+  .touch-controls .touch-dpad-only {
+    display: none;
+  }
+  .touch-controls.touch-mode-buttons .touch-dpad-only {
     display: flex;
   }
 }
 
 .touch-cluster {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .touch-btn {
   pointer-events: auto;
-  width: 58px;
-  height: 58px;
+  width: 52px;
+  height: 52px;
   border-radius: 16px;
-  border: 3px solid var(--panel-border);
-  background: rgba(36, 20, 11, 0.78);
+  border: 2.5px solid var(--panel-border);
+  background: rgba(24, 14, 8, 0.62);
+  backdrop-filter: blur(4px);
   color: #fff8e7;
   font-weight: 900;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   touch-action: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   transition: transform 0.06s ease, background 0.08s ease;
 }
 
+.touch-btn.touch-btn-action {
+  border-radius: 50%;
+  border-color: rgba(255, 212, 71, 0.55);
+  background: rgba(28, 16, 9, 0.58);
+}
+
 .touch-btn:active {
-  transform: scale(0.92);
-  background: rgba(255, 154, 36, 0.35);
+  transform: scale(0.91);
+  background: rgba(255, 154, 36, 0.42);
   border-color: #ffd447;
 }
 
@@ -690,14 +714,9 @@
   cursor: pointer;
 }
 
-/* Suporte completo Mobile / Touch & Retrato */
-@media (max-width: 900px), (hover: none) and (pointer: coarse) {
-  #hud-controls-hint {
-    display: none !important;
-  }
-}
-
-@media (max-width: 760px) {
+/* Suporte completo Mobile / Touch (Retrato, Paisagem e Telas Pequenas — zero fallback PC) */
+@media (max-width: 960px), (hover: none) and (pointer: coarse) {
+  #hud-controls-hint,
   .kb-only {
     display: none !important;
   }
@@ -711,91 +730,91 @@
     touch-action: pan-y;
     overscroll-behavior: contain;
   }
-  .modal-card {
-    max-height: 92dvh;
-    touch-action: pan-y;
-    overscroll-behavior: contain;
-  }
   .gameover-card {
     max-height: 92dvh;
     overflow-y: auto;
     padding: 14px;
     width: min(440px, 94vw);
     touch-action: pan-y;
+    overscroll-behavior: contain;
   }
 
+  /* HUD Superior Mobile enxuta e transparente sobre a pista */
   .hud-top {
-    padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px 4px;
+    padding: calc(env(safe-area-inset-top, 0px) + 6px) 10px 4px;
     gap: 6px;
     width: 100%;
     max-width: 100vw;
   }
+  .hud-top .dino-logo,
+  #hud-camera,
+  #hud-speed,
+  #btn-clip-rec,
+  #btn-photo-mode {
+    display: none !important;
+  }
   .hud-top .hud-pills {
-    gap: 4px;
-    max-width: 40vw;
+    gap: 5px;
+    max-width: 46vw;
     min-width: 0;
   }
-  .hud-top .dino-logo {
-    font-size: 0.86rem !important;
-    line-height: 1.05;
-  }
   .hud-top .hud-pill {
-    font-size: 0.65rem;
-    padding: 3px 6px;
-    border-radius: 8px;
+    font-size: 0.7rem;
+    padding: 4px 8px;
+    border-radius: 999px;
     border-width: 1.5px;
+    background: rgba(20, 12, 7, 0.56);
+    box-shadow: none;
   }
   .hud-top-right {
     flex: 0 1 auto;
     min-width: 0;
-    max-width: 55vw;
+    max-width: 54vw;
     gap: 4px !important;
   }
   .hud-top-actions {
-    gap: 4px !important;
-    flex-wrap: wrap;
+    gap: 5px !important;
+    flex-wrap: nowrap;
     justify-content: flex-end;
     max-width: 100%;
   }
   .hud-top .chunky-btn {
-    padding: 4px 7px !important;
-    font-size: 0.72rem !important;
-    border-width: 2px;
-    box-shadow: 0 2px 0 rgba(36, 17, 7, 0.75);
+    padding: 5px 8px !important;
+    font-size: 0.76rem !important;
+    border-width: 1.5px;
+    border-radius: 10px;
+    box-shadow: 0 2px 0 rgba(36, 17, 7, 0.72);
   }
   .hud-top .btn-label {
     display: none;
   }
-  #btn-clip-rec {
-    display: none !important;
-  }
   .hud-score-box {
-    font-size: 0.66rem;
-    padding: 4px 6px;
-    border-radius: 9px;
-    border-width: 2px;
-    letter-spacing: 0.01em;
-    max-width: 100%;
+    font-size: 0.72rem;
+    padding: 4px 8px;
+    border-radius: 10px;
+    border-width: 1.5px;
+    letter-spacing: 0.02em;
+    background: rgba(20, 12, 7, 0.62);
+    box-shadow: none;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
   .treasure-map {
     width: 100%;
-    max-width: 100%;
-    padding: 3px 7px;
+    max-width: 190px;
+    padding: 2px 7px;
     gap: 5px;
-    font-size: 0.64rem;
-    border-width: 1.5px;
+    font-size: 0.6rem;
+    border-width: 1px;
+    background: rgba(20, 12, 7, 0.52);
   }
   .treasure-track {
     width: auto;
     flex: 1;
-    min-width: 26px;
-    height: 6px;
+    min-width: 28px;
+    height: 5px;
   }
   #map-biome-name {
-    max-width: 68px;
+    max-width: 66px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -805,50 +824,57 @@
   }
 
   .boss-bar-wrap {
-    top: calc(env(safe-area-inset-top, 0px) + 94px) !important;
-    width: min(350px, calc(100vw - 16px));
+    top: calc(env(safe-area-inset-top, 0px) + 66px) !important;
+    width: min(330px, calc(100vw - 20px));
   }
   .banner-toast {
-    top: calc(env(safe-area-inset-top, 0px) + 134px);
-    max-width: calc(100vw - 20px);
-    font-size: 0.74rem;
-    padding: 5px 10px;
+    top: calc(env(safe-area-inset-top, 0px) + 74px);
+    max-width: calc(100vw - 24px);
+    font-size: 0.76rem;
+    padding: 5px 12px;
   }
   #hud-predator-intro {
-    top: calc(env(safe-area-inset-top, 0px) + 96px) !important;
+    top: calc(env(safe-area-inset-top, 0px) + 66px) !important;
     left: 50% !important;
     transform: translateX(-50%);
-    width: min(350px, calc(100vw - 18px)) !important;
+    width: min(350px, calc(100vw - 20px)) !important;
     padding: 7px 10px !important;
   }
   .float-callouts {
-    top: 30%;
+    top: 26%;
+  }
+  .float-msg {
+    font-size: 1.2rem;
   }
   #hud-chaser {
     position: fixed;
-    top: calc(env(safe-area-inset-top, 0px) + 98px);
+    top: calc(env(safe-area-inset-top, 0px) + 66px);
     left: 50%;
     transform: translateX(-50%);
     width: max-content;
     max-width: calc(100vw - 20px);
-    font-size: 0.69rem;
-    padding: 4px 10px;
+    font-size: 0.68rem;
+    padding: 3px 10px;
     z-index: 15;
   }
 
+  /* HUD Inferior compacta no canto esquerdo (deixa o centro e pista 100% livres para swipe) */
   .hud-bottom-bar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 116px);
-    left: 8px;
-    right: 8px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    left: calc(env(safe-area-inset-left, 0px) + 10px);
+    right: auto;
+    width: auto;
+    max-width: min(255px, 60vw);
     padding: 0;
     gap: 4px;
+    align-items: flex-start;
   }
   .hud-meters {
-    width: 100%;
+    width: auto;
     max-width: 100%;
     gap: 4px;
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
   }
   .hud-group-title {
     display: none;
@@ -858,37 +884,41 @@
     gap: 4px;
     border-radius: 10px;
     border-width: 1.5px;
-    width: 100%;
-    background: rgba(20, 11, 6, 0.64);
+    width: auto;
+    background: rgba(16, 10, 6, 0.56);
+    backdrop-filter: blur(4px);
   }
   #hud-group-vital {
-    justify-content: center;
+    border-radius: 999px;
+    padding: 2px 8px;
   }
   #hud-group-vital .meter-pill {
     min-width: 0;
     flex: 0 1 auto;
-    padding: 2px 8px;
-    font-size: 0.72rem;
-    border-width: 1.5px;
+    padding: 1px 4px;
+    font-size: 0.7rem;
+    border: none;
+    background: transparent;
   }
   #hud-group-combat {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(36px, 44px));
     gap: 4px;
   }
   #hud-group-combat .meter-pill {
     min-width: 0;
     padding: 3px 4px;
-    font-size: 0.68rem;
+    font-size: 0.66rem;
     text-align: center;
-    border-width: 1.5px;
+    border-width: 1px;
     border-radius: 8px;
     white-space: nowrap;
     overflow: hidden;
+    background: rgba(16, 10, 6, 0.5);
   }
   #hud-group-combat .meter-bar {
     margin-top: 2px;
-    height: 5px;
+    height: 4px;
   }
   #hud-backpack {
     display: flex;
@@ -900,6 +930,15 @@
     display: none;
   }
 
+  /* Quando o jogador ativa Setas Direcionais nas Configurações, eleva barras para não sobrepor */
+  #ui-root:has(#touch-controls.touch-mode-buttons) .hud-bottom-bar {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
+    left: 8px;
+    right: 8px;
+    max-width: none;
+    align-items: center;
+  }
+
   .touch-controls {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
     left: 0;
@@ -909,18 +948,122 @@
   .touch-cluster-left {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
+    gap: 6px;
   }
   .touch-cluster-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .touch-controls.touch-mode-buttons .touch-cluster-right {
     display: grid;
-    grid-template-columns: repeat(2, 48px);
+    grid-template-columns: repeat(2, 46px);
     gap: 6px;
   }
   .touch-btn {
-    width: 48px;
-    height: 48px;
-    font-size: 1.1rem;
-    border-radius: 14px;
-    border-width: 2.5px;
+    width: 50px;
+    height: 50px;
+    font-size: 1.15rem;
+    border-radius: 50%;
+    border-width: 2px;
+  }
+  .touch-controls.touch-mode-buttons .touch-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+  }
+}
+
+@media (max-width: 640px) and (orientation: portrait) {
+  .main-menu-wrap {
+    justify-content: center;
+    align-items: flex-end;
+    padding: 10px 10px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  }
+  .main-menu-panel {
+    width: min(390px, 95vw) !important;
+    max-height: 70dvh;
+    padding: 12px 14px !important;
+    gap: 8px !important;
+  }
+  .main-menu-panel #main-dino-logo {
+    font-size: 1.72rem !important;
+  }
+  .main-menu-panel #menu-play {
+    font-size: 1.12rem !important;
+    padding: 11px !important;
+  }
+}
+
+@media (max-height: 540px) and (max-width: 960px), (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 560px) {
+  .main-menu-wrap {
+    justify-content: flex-start;
+    align-items: center;
+    padding: 8px 14px;
+  }
+  .main-menu-panel {
+    width: min(375px, 52vw) !important;
+    max-height: 92dvh;
+    padding: 9px 11px !important;
+    gap: 5px !important;
+    scrollbar-width: thin;
+  }
+  .main-menu-panel .hud-pill {
+    font-size: 0.72rem;
+    padding: 3px 7px;
+  }
+  .main-menu-panel .item-card {
+    padding: 6px 9px !important;
+    font-size: 0.75rem !important;
+    gap: 3px !important;
+  }
+  .main-menu-panel #main-dino-logo {
+    font-size: 1.42rem !important;
+  }
+  .main-menu-panel #menu-play {
+    font-size: 0.98rem !important;
+    padding: 8px !important;
+  }
+  .main-menu-panel .chunky-btn {
+    padding: 7px 9px !important;
+    font-size: 0.82rem !important;
+  }
+  .treasure-map {
+    max-width: 245px;
+  }
+  #map-biome-name {
+    max-width: 98px;
+  }
+  .modal-card {
+    width: min(94vw, 760px) !important;
+    max-width: 94vw !important;
+    max-height: 92dvh;
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .preview-split {
+    grid-template-columns: 205px 1fr !important;
+    gap: 10px;
+  }
+  .preview-canvas-box,
+  .dino-modal .preview-canvas-box,
+  .modal-card:has(.dino-selector-row) .preview-canvas-box {
+    height: 136px !important;
+  }
+  .dino-selector-row {
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+    min-height: 82px;
+    max-height: 112px;
+  }
+  .hud-top {
+    padding: 4px 10px;
+  }
+  .hud-bottom-bar {
+    bottom: 6px;
+    left: 10px;
+  }
+  .touch-controls {
+    bottom: 6px;
+    padding: 0 10px;
   }
 }

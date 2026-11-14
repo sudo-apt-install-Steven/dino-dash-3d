@@ -15,7 +15,7 @@ export class PredatorSystem {
     this.distance = 6.2;
     this.returningPredator = null;
     this.encounteredInRun = new Set();
-    this.nextAutoScore = 420;
+    this.nextAutoScore = 680;
     this._stepAudioTimer = 0;
     this._roarTriggered = false;
   }
@@ -188,7 +188,7 @@ export class PredatorSystem {
     if (this.state === 'intro') return;
 
     if (this.state === 'idle' && score >= this.nextAutoScore && !ctx.bossActive && !ctx.ufoActive) {
-      this.nextAutoScore += 750;
+      this.nextAutoScore += 1400;
       this.startEncounter(ctx.currentBiome?.id || 'desert', ctx);
       return;
     }
@@ -261,7 +261,7 @@ export class PredatorSystem {
     this.chaseTimer = 0;
     this.distance = 6.2;
     this.returningPredator = null;
-    this.nextAutoScore = 420;
+    this.nextAutoScore = 680;
     this._roarTriggered = false;
     this.clearActiveModel();
     this.encounteredInRun.clear();

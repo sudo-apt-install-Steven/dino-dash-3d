@@ -150,6 +150,13 @@ export class SettingsModal {
           </div>
 
           <div id="stab-controls" class="hidden">
+            <div class="field-row" style="margin-bottom:8px;">
+              <span>📱 Controles no Celular</span>
+              <select id="set-touchmode">
+                <option value="swipe" ${s.touchMode !== 'buttons' ? 'selected' : ''}>Arrastar o Dedo na Tela (Padrão)</option>
+                <option value="buttons" ${s.touchMode === 'buttons' ? 'selected' : ''}>Botões Direcionais (◀ ▶ ▲ ▼)</option>
+              </select>
+            </div>
             <p style="font-size: 0.85rem; color: #d8c2a6; margin-bottom: 8px;">Clique num botão para remapear a tecla desejada.</p>
             <div class="cards-grid" style="grid-template-columns: repeat(2, 1fr);">
               <div class="item-card">
@@ -240,6 +247,7 @@ export class SettingsModal {
       s.audio.muted = container.querySelector('#set-muted').checked;
       s.obstacleHints = container.querySelector('#set-hints').checked;
       s.narrator = container.querySelector('#set-narrator').checked;
+      s.touchMode = container.querySelector('#set-touchmode')?.value || 'swipe';
       s.introMode = container.querySelector('#set-intromode')?.value || 'first_time';
       s.disableIntro = s.introMode === 'off';
       Save.data.introModeCustom = true;

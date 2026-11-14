@@ -114,7 +114,7 @@ export class HUD {
               <span>⚔️ <span class="btn-label">Ataque</span> <span class="kb-only">(Q)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-attack" style="width:100%; background:#f97316;"></div></div>
             </div>
-            <div class="meter-pill" data-tip="Estamina Física (Shift=Lento / W no ar=Pulo 2x): recarrega no chão e com itens!">
+            <div class="meter-pill" data-tip="Estamina Física (Shift=Foco / Pulo no ar=55 / Ataque Q=16): recarrega só no chão e com itens!">
               <span>🏃 <span class="btn-label">Estamina</span> <span class="kb-only">(Shift/2x⬆)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-bullet" style="width:100%; background:#34d399;"></div></div>
             </div>
@@ -129,17 +129,17 @@ export class HUD {
         </div>
       </div>
 
-      <!-- Botões virtuais touch para dispositivos móveis -->
+      <!-- Controles touch para celular (Swipe livre por padrão + botões ⚔️/⚡; setas opcionais em Config) -->
       <div class="touch-controls" id="touch-controls">
-        <div class="touch-cluster touch-cluster-left">
+        <div class="touch-cluster touch-cluster-left touch-dpad-only">
           <button class="touch-btn" data-tact="left" aria-label="Faixa Esquerda">◀</button>
           <button class="touch-btn" data-tact="right" aria-label="Faixa Direita">▶</button>
         </div>
         <div class="touch-cluster touch-cluster-right">
-          <button class="touch-btn" data-tact="duck" aria-label="Abaixar">▼</button>
-          <button class="touch-btn" data-tact="attack" aria-label="Ataque">⚔️</button>
-          <button class="touch-btn" data-tact="ability" aria-label="Habilidade">⚡</button>
-          <button class="touch-btn" data-tact="jump" aria-label="Pular">▲</button>
+          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar">▼</button>
+          <button class="touch-btn touch-btn-action" data-tact="attack" aria-label="Ataque">⚔️</button>
+          <button class="touch-btn touch-btn-action" data-tact="ability" aria-label="Habilidade">⚡</button>
+          <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular">▲</button>
         </div>
       </div>
 
@@ -148,6 +148,7 @@ export class HUD {
         <div class="chunky-panel gameover-card">
           <h2>⏸ PAUSADO</h2>
           <button class="chunky-btn" id="btn-resume">Continuar</button>
+          <button class="chunky-btn secondary" id="btn-pause-cam">📷 Trocar Câmera (C)</button>
           <button class="chunky-btn orange" id="btn-pause-restart">Reiniciar (R)</button>
           <button class="chunky-btn secondary" id="btn-pause-menu">Menu Principal</button>
         </div>
@@ -322,6 +323,7 @@ export class HUD {
     this.root.querySelector('#btn-go-menu').addEventListener('click', () => this.callbacks.onGoMenu?.());
     this.root.querySelector('#btn-pause').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-resume').addEventListener('click', () => this.callbacks.onTogglePause?.());
+    this.root.querySelector('#btn-pause-cam')?.addEventListener('click', () => this.callbacks.onCycleCamera?.());
     this.root.querySelector('#btn-pause-restart').addEventListener('click', () => this.callbacks.onRequestRestart?.());
     this.root.querySelector('#btn-confirm-restart').addEventListener('click', () => this.callbacks.onConfirmRestart?.());
     this.root.querySelector('#btn-cancel-restart').addEventListener('click', () => this.callbacks.onCancelRestart?.());
@@ -385,10 +387,16 @@ export class HUD {
     });
   }
 
+  applyTouchMode(mode = 'swipe') {
+    if (!this.touchControls) return;
+    this.touchControls.classList.toggle('touch-mode-buttons', mode === 'buttons');
+  }
+
   setPlayingUI(isPlaying) {
     this.hudTop.classList.toggle('hidden', !isPlaying);
     this.hudBottom.classList.toggle('hidden', !isPlaying);
     this.touchControls.classList.toggle('active-play', isPlaying);
+    this.applyTouchMode(Save.data.settings?.touchMode || 'swipe');
   }
 
   resetAllOverlays() {
@@ -507,7 +515,7 @@ export class HUD {
     this.barAbility.style.width = `${Math.min(cdPct, chargePct)}%`;
     const staminaVal = Math.max(0, Math.min(100, player.stamina ?? 100));
     this.barBullet.style.width = `${staminaVal}%`;
-    this.barBullet.style.background = staminaVal < 35 ? '#f59e0b' : '#34d399';
+    this.barBullet.style.background = staminaVal < 30 ? '#ef4444' : (staminaVal < 55 ? '#f59e0b' : '#34d399');
     if (this.barAttack) {
       const atkMax = player.attackMaxCooldown || 1.25;
       const atkCd = Math.max(0, player.attackCooldown || 0);

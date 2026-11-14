@@ -70,6 +70,7 @@ export class UIManager {
       app.classList.add(`cb-${s.accessibility.colorblind}`);
     }
     this.hud.setDebugButtonVisible(!!Save.data.devMode);
+    this.hud.applyTouchMode(s.touchMode || 'swipe');
   }
 
   _clearModal() {

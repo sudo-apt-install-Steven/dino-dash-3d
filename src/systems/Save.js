@@ -96,6 +96,7 @@ const DEFAULT_SAVE = {
     styleFilter: 'default',
     narrator: false,
     obstacleHints: true,
+    touchMode: 'swipe',
     audio: { music: 0.45, sfx: 0.75, muted: false },
     accessibility: {
       oneHand: false,

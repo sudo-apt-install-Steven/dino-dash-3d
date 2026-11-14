@@ -19,7 +19,7 @@ import { Spawner } from '../systems/Spawner.js';
 import { PhysicsCollision } from '../systems/PhysicsCollision.js';
 import { Backpack } from '../systems/Items.js';
 import { StatusSystem } from '../systems/StatusSystem.js';
-import { CARD_MILESTONES, CARD_POOL, drawThreeCards } from '../systems/Cards.js';
+import { CARD_MILESTONES, CARD_POOL, drawThreeCards, getCardMilestone } from '../systems/Cards.js';
 import { ProgressionManager } from '../systems/Progression.js';
 import { ReplayRecorder, getTodaySeed } from '../systems/Replay.js';
 import { PerfMonitor } from '../systems/PerfMonitor.js';
@@ -147,15 +147,21 @@ export class Game {
     // Desbloqueio WebAudio + Gestos Touch (Swipe) + Toque OVNI / Pular Intro + Konami
     this._unlockAudio = () => this.audio.ensureContext();
     this._canvasSwipe = null;
+    this._swipeSurface = document.getElementById('app') || this.canvas;
+    const isInteractiveTarget = (t) => {
+      if (!t || !t.closest) return false;
+      return !!t.closest('button, a, input, select, textarea, [data-tact], #btn-fury-melee, #btn-attack-melee, #hud-backpack, #hud-camera, .chunky-panel, .modal-card, .overlay-center');
+    };
     this._onCanvasPointer = (e) => {
       if (this.state !== 'playing') return;
       if (this.events.predators?.state === 'intro') {
-        if ((this.events.predators.introElapsed || 0) > 0.35) {
+        if (!isInteractiveTarget(e.target) && (this.events.predators.introElapsed || 0) > 0.35) {
           this.events.predators.skipIntro(this._eventContext());
           this._skipIntroGuardFrames = 3;
         }
         return;
       }
+      if (isInteractiveTarget(e.target)) return;
       if (this.events.ufo.active) {
         this.events.ufo.mashBreak();
       }
@@ -164,43 +170,50 @@ export class Game {
           id: e.pointerId,
           startX: e.clientX,
           startY: e.clientY,
-          handled: false,
-          action: null
+          lastAxis: null,
+          lastTriggerAt: 0
         };
       }
     };
     this._onCanvasPointerMove = (e) => {
       const sw = this._canvasSwipe;
-      if (!sw || sw.id !== e.pointerId || sw.handled || this.state !== 'playing') return;
+      if (!sw || sw.id !== e.pointerId || this.state !== 'playing') return;
       if (this.events.predators?.state === 'intro') return;
+      if (e.pointerType === 'touch' && e.cancelable) e.preventDefault();
       const dx = e.clientX - sw.startX;
       const dy = e.clientY - sw.startY;
-      if (Math.hypot(dx, dy) < 22) return;
-      sw.handled = true;
-      if (Math.abs(dx) > Math.abs(dy)) {
-        sw.action = dx < 0 ? 'left' : 'right';
-        this.input.triggerVirtualPulse('p1', sw.action, 70);
+      const dist = Math.hypot(dx, dy);
+      if (dist < 20) return;
+
+      const axis = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
+      const now = performance.now();
+      const minChainWait = axis === sw.lastAxis ? 145 : 75;
+      if (sw.lastTriggerAt && (now - sw.lastTriggerAt) < minChainWait) return;
+
+      sw.startX = e.clientX;
+      sw.startY = e.clientY;
+      sw.lastAxis = axis;
+      sw.lastTriggerAt = now;
+
+      if (axis === 'h') {
+        this.input.triggerVirtualPulse('p1', dx < 0 ? 'left' : 'right', 75);
       } else if (dy < 0) {
-        sw.action = 'jump';
-        this.input.triggerVirtualPulse('p1', 'jump', 380);
+        this.input.triggerVirtualPulse('p1', 'jump', 210);
       } else {
-        sw.action = 'duck';
         this.input.triggerVirtualPulse('p1', 'duck', 520);
       }
     };
     this._onCanvasPointerEnd = (e) => {
       const sw = this._canvasSwipe;
       if (!sw || sw.id !== e.pointerId) return;
-      if (sw.action === 'jump') {
-        this.input.setVirtualAction('p1', 'jump', false);
-      }
+      this.input.setVirtualAction('p1', 'jump', false);
       this._canvasSwipe = null;
     };
     window.addEventListener('pointerdown', this._unlockAudio, { passive: true });
-    this.canvas.addEventListener('pointerdown', this._onCanvasPointer);
-    this.canvas.addEventListener('pointermove', this._onCanvasPointerMove);
-    this.canvas.addEventListener('pointerup', this._onCanvasPointerEnd);
-    this.canvas.addEventListener('pointercancel', this._onCanvasPointerEnd);
+    this._swipeSurface.addEventListener('pointerdown', this._onCanvasPointer);
+    this._swipeSurface.addEventListener('pointermove', this._onCanvasPointerMove, { passive: false });
+    window.addEventListener('pointerup', this._onCanvasPointerEnd);
+    window.addEventListener('pointercancel', this._onCanvasPointerEnd);
     window.addEventListener('keydown', this._unlockAudio);
 
     this.input.onKonami = () => {
@@ -451,6 +464,16 @@ export class Game {
 
   _performMeleeAttack(p) {
     if (p.attackTimer > 0 || (p.attackCooldown || 0) > 0) return;
+    if (!this.isTestTrack && (p.stamina ?? 100) < 16) {
+      if (!p._lowStamToastCooldown) {
+        p._lowStamToastCooldown = 0.8;
+        this.ui.hud.showFloatText('💨 Sem estamina para atacar (16)!', '#fbbf24');
+      }
+      return;
+    }
+    if (!this.isTestTrack) {
+      p.stamina = Math.max(0, (p.stamina ?? 100) - 16);
+    }
     p.attackTimer = 0.24;
     p.attackCooldown = p.attackMaxCooldown || 1.25;
     p.animator.triggerRoar(0.25);
@@ -665,6 +688,7 @@ export class Game {
         slideTimer: 0,
         jumpHoldTimer: 0,
         extraJumps: dinoId === 'compsognathus' ? 1 : 0,
+        airJumpsUsed: 0,
         isPerfectMode: isPerfect,
         hp: playerMaxHp,
         maxHp: playerMaxHp,
@@ -1177,14 +1201,24 @@ export class Game {
       this.ui.hud.showBanner(`🤖 ${pers.name}: "${pers.quote}"`, '#ff4757', 3.5);
     }
 
-    // Tutorial curto na 1ª partida
+    // Tutorial curto na 1ª partida (e dica de arrastar o dedo no celular)
+    const isCoarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
     if (!Save.data.tutorialDone) {
       Save.data.tutorialDone = true;
       Save.save();
       this._pendingStartBanners.push({
-        text: 'Dica: Use W/↑ para pular, S/↓ para abaixar/deslizar e A/D para trocar de faixa!',
+        text: isCoarse
+          ? '👆 Arraste o dedo na tela: ⬅ ➡ faixas • ⬆ pular • ⬇ deslizar!'
+          : 'Dica: Use W/↑ para pular, S/↓ para abaixar/deslizar e A/D para trocar de faixa!',
         color: '#58d63a',
         dur: 4.5
+      });
+    } else if (isCoarse && !this._mobileSwipeTipShown && !this.isTestTrack) {
+      this._mobileSwipeTipShown = true;
+      this._pendingStartBanners.push({
+        text: '👆 Arraste em qualquer lugar: ⬅ ➡ mover • ⬆ pular • ⬇ deslizar',
+        color: '#38bdf8',
+        dur: 2.8
       });
     }
 
@@ -1964,17 +1998,19 @@ export class Game {
     p.x += (targetX - p.x) * Math.min(1, dt * laneSpeed);
     const laneLean = (p.x - prevX) / Math.max(dt, 0.001) * 0.055;
 
-    // Pulo + Salto Duplo (Compsognathus) + Pulo Carregado
+    // Pulo + Salto Duplo Limitado + Pulo Carregado
     const jumpMult = (p.jumpMult || 1) * (p.spec.stats.jump >= 9 ? 1.1 : 1.0);
+    const maxAirJumps = p.id === 'compsognathus' ? 2 : 1;
     if (jumpJust) {
       if (this.events.ufo.active && this.events.ufo.mashBreak()) {
         // Quebrou o feixe do OVNI!
       } else if (p.grounded) {
-        p.vy = 13.8 * jumpMult;
+        p.vy = 13.6 * jumpMult;
         p.grounded = false;
         p.ducking = false;
         p.sliding = false;
-        p.jumpHoldTimer = 0.18;
+        p.jumpHoldTimer = 0.14;
+        p.airJumpsUsed = 0;
         p._lastJumpAt = this.runTime;
         this.runJumps++;
         this.sfx.jump(false);
@@ -1983,7 +2019,6 @@ export class Game {
           p._moveCombo = Math.min(8, (p._moveCombo || 0) + 1);
           p._moveComboCd = 1.6;
           this.addScore(35 * p._moveCombo, p);
-          p.stamina = Math.min(100, (p.stamina ?? 100) + 6);
           this.ui.hud.showFloatText(`🏃 ESQUIVA ÁGIL! +${35 * p._moveCombo}`, '#5eead4');
         }
         if (this.tutorialState?.active && this.tutorialState.step === 1 && p.index === 0) {
@@ -1991,43 +2026,57 @@ export class Game {
           this._syncTutorialHud();
           if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
         }
-      } else if (p.extraJumps > 0) {
-        p.extraJumps--;
-        p.vy = 13.0 * jumpMult;
-        this.sfx.jump(true);
-        this.particles.emitDust(p.x, p.y, p.z, 8, '#90e0ef', 2.4);
-      } else if ((p.stamina ?? 100) >= 35) {
-        p.stamina = Math.max(0, (p.stamina ?? 100) - 35);
-        p.vy = 12.6 * jumpMult;
-        this.sfx.jump(true);
-        this.particles.emitDust(p.x, p.y, p.z, 8, '#34d399', 2.4);
+      } else if ((p.airJumpsUsed || 0) < maxAirJumps) {
+        if (p.extraJumps > 0) {
+          p.extraJumps--;
+          p.airJumpsUsed = (p.airJumpsUsed || 0) + 1;
+          p.vy = 11.4 * jumpMult;
+          p.jumpHoldTimer = 0;
+          this.sfx.jump(true);
+          this.particles.emitDust(p.x, p.y, p.z, 8, '#90e0ef', 2.4);
+        } else if (this.isTestTrack || (p.stamina ?? 100) >= 55) {
+          if (!this.isTestTrack) {
+            p.stamina = Math.max(0, (p.stamina ?? 100) - 55);
+          }
+          p.airJumpsUsed = (p.airJumpsUsed || 0) + 1;
+          p.vy = 10.8 * jumpMult;
+          p.jumpHoldTimer = 0;
+          this.sfx.jump(true);
+          this.particles.emitDust(p.x, p.y, p.z, 8, '#34d399', 2.4);
+        } else if (!p._lowStamToastCooldown) {
+          p._lowStamToastCooldown = 0.8;
+          this.ui.hud.showFloatText('💨 Estamina baixa (precisa 55)!', '#fbbf24');
+        }
       } else if (!p._lowStamToastCooldown) {
         p._lowStamToastCooldown = 0.8;
-        this.ui.hud.showFloatText('💨 Estamina baixa (toque o chão!)', '#fbbf24');
+        this.ui.hud.showFloatText('⬇️ Toque o chão antes de outro pulo!', '#94a3b8');
       }
     }
 
     // Pulo carregado enquanto segura a tecla nos primeiros instantes da subida
     if (jumpHeld && p.jumpHoldTimer > 0 && p.vy > 0) {
       p.jumpHoldTimer -= dt;
-      p.vy += 17 * dt;
+      p.vy += 14 * dt;
     }
 
-    // Abaixar / Deslizar (abaixar em movimento no chão dá deslizada com impulso)
+    // Abaixar / Deslizar (abaixar no chão dá deslizada com impulso gastando pouca estamina)
     if (duckHeld) {
       if (!p.grounded) {
         if (p.vy > -18 && (this.runTime - (p._lastJumpAt ?? -99)) <= 0.85 && (p._moveComboCd || 0) <= 0) {
           p._moveCombo = Math.min(8, (p._moveCombo || 0) + 1);
           p._moveComboCd = 1.6;
           this.addScore(45 * p._moveCombo, p);
-          p.stamina = Math.min(100, (p.stamina ?? 100) + 8);
           this.ui.hud.showFloatText(`⚡ MERGULHO PERFEITO! +${45 * p._moveCombo}`, '#38bdf8');
         }
         p.vy = Math.min(p.vy, -20);
         p.ducking = true;
       } else if (!p.sliding && !p.ducking) {
-        p.sliding = true;
-        p.slideTimer = 0.55;
+        const hasSlideStam = this.isTestTrack || (p.stamina ?? 100) >= 10;
+        if (hasSlideStam && !this.isTestTrack) {
+          p.stamina = Math.max(0, (p.stamina ?? 100) - 10);
+        }
+        p.sliding = hasSlideStam;
+        p.slideTimer = hasSlideStam ? 0.5 : 0;
         this.sfx.slide();
       }
       p.ducking = true;
@@ -2123,9 +2172,10 @@ export class Game {
       p.vy = 0;
     } else if (!p.grounded) {
       p.vy -= 34.0 * gravMult * dt;
-      // Planar no ar (#108): segurar Pulo ao descer reduz queda
-      if (jumpHeld && p.vy < -2.2) {
-        p.vy = Math.max(p.vy, -4.4);
+      // Amortecimento curto de queda consome estamina rapidamente (impede voar)
+      if (jumpHeld && p.vy < -3.0 && (p.stamina ?? 0) > 4) {
+        p.stamina = Math.max(0, (p.stamina ?? 0) - 45 * dt);
+        p.vy = Math.max(p.vy, -9.2);
       }
       p.y += p.vy * dt;
       if (p.y <= 0) {
@@ -2133,6 +2183,7 @@ export class Game {
         p.vy = 0;
         p.grounded = true;
         p.extraJumps = p.id === 'compsognathus' ? 1 : 0;
+        p.airJumpsUsed = 0;
         p.resonanceWindow = 0.45;
         p.animator.triggerLandSquash();
         this.sfx.land();
@@ -2164,7 +2215,7 @@ export class Game {
       ? 100
       : Math.min(100, (p.abilityCharge ?? 100) + dt * 11);
     const inOasis = !!this.currentOasis;
-    const stamRegen = inOasis ? 58 : (p.grounded ? 28 : 8);
+    const stamRegen = inOasis ? 30 : (p.grounded ? 11 : 0);
     p.stamina = Math.min(100, (p.stamina ?? 100) + stamRegen * dt);
     if (p.resonanceWindow > 0) p.resonanceWindow = Math.max(0, p.resonanceWindow - dt);
     if (p.ramTimer > 0) p.ramTimer = Math.max(0, p.ramTimer - dt);
@@ -2461,7 +2512,7 @@ export class Game {
     let timeScale = 1.0;
     if (bulletHeld && p0 && (p0.stamina ?? 0) > 2) {
       timeScale = 0.42;
-      p0.stamina = Math.max(0, (p0.stamina ?? 0) - dt * 32);
+      p0.stamina = Math.max(0, (p0.stamina ?? 0) - dt * 50);
     }
     if (this.slowMoTimer > 0) {
       this.slowMoTimer -= dt;
@@ -2596,14 +2647,14 @@ export class Game {
       }
     }
 
-    // Marcos de Cartas (500, 1500, 3000...) e Evolução Visual
+    // Marcos progressivos de Cartas (1000, 2500, 4800, 8000...) e Evolução Visual
+    const nextCardTarget = getCardMilestone(this.nextCardIdx);
     if (
       !this.isTestTrack &&
       this.events.predators?.state !== 'intro' &&
-      this.nextCardIdx < CARD_MILESTONES.length &&
-      this.score >= CARD_MILESTONES[this.nextCardIdx]
+      this.score >= nextCardTarget
     ) {
-      const milestone = CARD_MILESTONES[this.nextCardIdx];
+      const milestone = nextCardTarget;
       this.nextCardIdx++;
       if (this.nextCardIdx % 2 === 0 && this.evolutionTier < 2) {
         this.evolutionTier++;
@@ -2674,9 +2725,9 @@ export class Game {
       }
     }
 
-    // Fogueira checkpoint e Atalho secreto eventuais
-    if (Math.random() < worldDt * 0.025 && this.score > 220) this.spawner.spawnCampfire();
-    if (Math.random() < worldDt * 0.02 && this.score > 300) this.spawner.spawnShortcutPortal();
+    // Fogueira checkpoint e Atalho secreto eventuais (bem espaçados)
+    if (Math.random() < worldDt * 0.008 && this.score > 360) this.spawner.spawnCampfire();
+    if (Math.random() < worldDt * 0.007 && this.score > 460) this.spawner.spawnShortcutPortal();
 
     // Regras especiais de modos
     if (this.modeId === 'shared_controls') {
@@ -2952,7 +3003,7 @@ export class Game {
           obs.hit = true;
           p.turboTimer = Math.max(p.turboTimer || 0, 2.6);
           p.invulnTimer = Math.max(p.invulnTimer || 0, 1.4);
-          p.stamina = Math.min(100, (p.stamina ?? 100) + 35);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 18);
           this.sfx.dash();
           this.addScore(60 * this.combo, p);
           this.particles.emitExplosion(obs.group.position.x, 0.3, obs.group.position.z, '#facc15', 10, false);
@@ -3017,7 +3068,7 @@ export class Game {
             delete p.statuses.mud;
             delete p.statuses.poison;
           }
-          p.stamina = Math.min(100, (p.stamina ?? 100) + 40);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 25);
           this.currentOasis = 3.2;
           this.spawner.oasisReliefTimer = 4.0;
           this.addScore(80 * this.combo, p);
@@ -3041,7 +3092,7 @@ export class Game {
             this.sfx.slide();
             this.ui.hud.showFloatText('🪵 TÁBUA RACHADA! (-0.4s)', '#fb923c');
           } else {
-            p.stamina = Math.min(100, (p.stamina ?? 100) + 20);
+            p.stamina = Math.min(100, (p.stamina ?? 100) + 10);
             const bonus = 85 * this.combo;
             this.addScore(bonus, p);
             this.sfx.powerup();
@@ -3070,7 +3121,7 @@ export class Game {
           } else {
             this.ui.hud.showFloatText('🚨 RESGATE +ESTAMINA!', '#38bdf8');
           }
-          p.stamina = Math.min(100, (p.stamina ?? 100) + 35);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 16);
           this.sfx.powerup();
           this.addScore(75 * this.combo, p);
           continue;
@@ -3107,7 +3158,7 @@ export class Game {
           obs.hit = true;
           obs.pool?.release(obs);
           p.fury = Math.min(100, (p.fury || 0) + 18 * (p.furyChargeMult || 1));
-          p.stamina = Math.min(100, (p.stamina ?? 100) + 30);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 16);
           p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + 14);
           let bonusMsg = '🍉 +ESTAMINA & FÚRIA!';
           if (p.hp < p.maxHp && Math.random() < 0.35) {
@@ -3222,7 +3273,7 @@ export class Game {
           this.sfx.stomp();
           p.wantedStars = Math.min(5, (p.wantedStars || 0) + 0.25);
           p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + 15);
-          p.stamina = Math.min(100, (p.stamina ?? 100) + 10);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 5);
           this.addScore(65 * this.combo, p);
           if (p.attackTimer > 0 && this.tutorialState?.active && this.tutorialState.step === 3) {
             this._advanceTutorialStep();
@@ -3240,7 +3291,7 @@ export class Game {
           this.maxCombo = Math.max(this.maxCombo, this.combo);
           this.comboDecayTimer = 4.5;
           p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + 16);
-          p.stamina = Math.min(100, (p.stamina ?? 100) + 12);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 6);
           const stompBonus = p.spec.dinoClass === 'carnivore' ? 75 : 55;
           this.addScore(stompBonus * this.combo, p);
           this.sfx.stomp();
@@ -3425,7 +3476,7 @@ export class Game {
     Save.addEggs(val);
     this.addScore((15 + this.eggChain * 5 + baseTier * 2) * this.combo, p);
     p.fury = Math.min(100, p.fury + (isMystery ? 24 : (baseTier >= 25 ? 20 : (baseTier >= 5 ? 12 : 6))) * (p.furyChargeMult || 1));
-    p.stamina = Math.min(100, (p.stamina ?? 100) + (isMystery ? 40 : (baseTier >= 25 ? 45 : (baseTier >= 5 ? 22 : 10))));
+    p.stamina = Math.min(100, (p.stamina ?? 100) + (isMystery ? 18 : (baseTier >= 25 ? 20 : (baseTier >= 5 ? 8 : 3))));
     p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + (isMystery ? 22 : (baseTier >= 25 ? 24 : (baseTier >= 5 ? 12 : 4))));
     this.sfx.egg(this.eggChain);
     if (isMystery) {
@@ -3665,10 +3716,10 @@ export class Game {
     cancelAnimationFrame(this._rafId);
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('pointerdown', this._unlockAudio);
-    this.canvas.removeEventListener('pointerdown', this._onCanvasPointer);
-    this.canvas.removeEventListener('pointermove', this._onCanvasPointerMove);
-    this.canvas.removeEventListener('pointerup', this._onCanvasPointerEnd);
-    this.canvas.removeEventListener('pointercancel', this._onCanvasPointerEnd);
+    this._swipeSurface?.removeEventListener('pointerdown', this._onCanvasPointer);
+    this._swipeSurface?.removeEventListener('pointermove', this._onCanvasPointerMove);
+    window.removeEventListener('pointerup', this._onCanvasPointerEnd);
+    window.removeEventListener('pointercancel', this._onCanvasPointerEnd);
     this.canvas.removeEventListener('webglcontextlost', this._onContextLost);
     this.canvas.removeEventListener('webglcontextrestored', this._onContextRestored);
     window.removeEventListener('keydown', this._unlockAudio);

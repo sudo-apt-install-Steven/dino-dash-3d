@@ -48,7 +48,7 @@ export class EventManager {
     this.bosses = new BossManager(scene);
     this.predators = new PredatorSystem(scene);
 
-    this.cooldown = 16;
+    this.cooldown = 26;
     this.frequencyMult = 1.0;
     this.enabledMap = new Set(EVENT_CATALOG.map((e) => e.id));
     this.sandstormTimer = 0;
@@ -208,10 +208,23 @@ export class EventManager {
       this.eggDayTimer -= dt;
     }
 
-    if (score > 140 && !this.ufo.active && !this.bosses.activeBoss) {
+    const hasActiveMajorEvent =
+      this.ufo.active ||
+      !!this.bosses.activeBoss ||
+      this.predators.state !== 'idle' ||
+      this.sandstormTimer > 0 ||
+      this.earthquakeTimer > 0 ||
+      this.eggDayTimer > 0 ||
+      (this.advanced?.flightTimer || 0) > 0 ||
+      (this.advanced?.lavaCorridorTimer || 0) > 0 ||
+      this.core.meteors.length > 0 ||
+      this.core.herd.length > 0 ||
+      this.core.pteroFlock.length > 0;
+
+    if (score > 260 && !hasActiveMajorEvent) {
       this.cooldown -= dt * this.frequencyMult;
       if (this.cooldown <= 0) {
-        this.cooldown = 16 + Math.random() * 9;
+        this.cooldown = 25 + Math.random() * 13;
         const allowed = EVENT_CATALOG.filter((e) =>
           this.enabledMap.has(e.id) && (!Save.data.teacherMode || TEACHER_FRIENDLY_EVENTS.has(e.id))
         );
@@ -231,7 +244,7 @@ export class EventManager {
   }
 
   reset() {
-    this.cooldown = 16;
+    this.cooldown = 26;
     this.sandstormTimer = 0;
     this.earthquakeTimer = 0;
     this.eggDayTimer = 0;

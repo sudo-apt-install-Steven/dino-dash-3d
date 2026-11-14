@@ -29,6 +29,7 @@ body,
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: none;
   background: var(--bg-deep);
   color: var(--text-light);
   font-family: var(--font-display);
