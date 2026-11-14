@@ -67,6 +67,14 @@ export class MobileController {
     }
   }
 
+  _pulseDamageEdge(color = '#ff3b30') {
+    const flash = document.createElement('div');
+    flash.style.cssText = `position:fixed; inset:0; pointer-events:none; z-index:90; box-shadow:inset 0 0 64px 20px ${color}; opacity:0.95; transition:opacity 0.35s ease;`;
+    document.body.appendChild(flash);
+    requestAnimationFrame(() => { flash.style.opacity = '0'; });
+    setTimeout(() => flash.remove(), 380);
+  }
+
   _bindNetworkEvents() {
     this._onRoom = () => {
       const wasInMatch = this.state.inMatch;
@@ -102,6 +110,11 @@ export class MobileController {
     this._onSnapshot = (msg) => {
       const me = msg?.snapshot?.players?.find((p) => p.peerId === this.net.peerId);
       if (me) {
+        const prev = this.state.selfSnap;
+        if (prev && ((me.lives < prev.lives) || (me.shields < prev.shields && me.lives <= prev.lives))) {
+          this._vibrate([45, 25, 65]);
+          this._pulseDamageEdge(me.lives < prev.lives ? '#ff3b30' : '#38bdf8');
+        }
         this.state.selfSnap = me;
         this.state.dead = !!me.dead;
         this._updateLiveHudBars();
@@ -191,7 +204,7 @@ export class MobileController {
               </div>
               <label>Seu Dinossauro:
                 <select class="select-input" id="ctrl-dino" style="width:100%;">
-                  ${DINO_CATALOG.slice(0, 13).map((d) => `<option value="${d.id}" ${d.id === this.state.dinoId ? 'selected' : ''}>${d.name}</option>`).join('')}
+                  ${DINO_CATALOG.map((d) => `<option value="${d.id}" ${d.id === this.state.dinoId ? 'selected' : ''}>${d.name}</option>`).join('')}
                 </select>
               </label>
               <button class="bone-btn jump" id="ctrl-join" style="width:100%; margin-top:6px;">🦖 CONECTAR À SALA</button>

@@ -5,6 +5,7 @@
   position: fixed;
   inset: 0;
   z-index: 90;
+  pointer-events: auto;
   background:
     radial-gradient(circle at 20% 20%, rgba(166, 98, 45, 0.22), transparent 52%),
     radial-gradient(circle at 80% 80%, rgba(102, 54, 24, 0.35), transparent 55%),

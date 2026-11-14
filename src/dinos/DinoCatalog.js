@@ -140,7 +140,7 @@ export const DINO_CATALOG = [
     id: 'parasaurolophus',
     name: 'Parasaurolophus',
     dinoClass: 'herbivore',
-    unlockCost: 60,
+    unlockCost: 150,
     stats: { speed: 7, jump: 7, hp: 3, defense: 6, attack: 6 },
     ability: { name: 'Trombeta Sônica', desc: 'Atrai ovos próximos e cura aliado no Coop.', cooldown: 9.0, duration: 3.2 },
     colors: { primary: '#e07a5f', secondary: '#f4f1de', eye: '#f2cc8f', spots: '#7a2e1d', spikes: '#3d405b' },
@@ -154,7 +154,7 @@ export const DINO_CATALOG = [
     id: 'compsognathus',
     name: 'Compsognathus',
     dinoClass: 'carnivore',
-    unlockCost: 75,
+    unlockCost: 150,
     stats: { speed: 9, jump: 9, hp: 2, defense: 3, attack: 9 },
     ability: { name: 'Salto Duplo + Furtividade', desc: 'Salto duplo e fase fantasma curta para desviar de perigos.', cooldown: 6.5, duration: 2.0 },
     colors: { primary: '#70e000', secondary: '#e8fccf', eye: '#ffffff', spots: '#007200', spikes: '#ffaa00' },
@@ -168,7 +168,7 @@ export const DINO_CATALOG = [
     id: 'allosaurus',
     name: 'Allosaurus',
     dinoClass: 'carnivore',
-    unlockCost: 95,
+    unlockCost: 600,
     stats: { speed: 8, jump: 7, hp: 3, defense: 6, attack: 10 },
     ability: { name: 'Frenesi Caçador', desc: 'Recarga do Ataque (Q) pela metade por 4s e golpe mais forte.', cooldown: 8.5, duration: 4.0 },
     colors: { primary: '#2b9348', secondary: '#d8f3dc', eye: '#ff9f1c', spots: '#1b4332', spikes: '#ef233c' },
@@ -182,7 +182,7 @@ export const DINO_CATALOG = [
     id: 'baryonyx',
     name: 'Baryonyx',
     dinoClass: 'aquatic',
-    unlockCost: 115,
+    unlockCost: 600,
     stats: { speed: 8, jump: 7, hp: 3, defense: 7, attack: 8 },
     ability: { name: 'Corte Aquático', desc: 'Rajada d’água destrói obstáculos e concede +1 Escudo se estiver na água.', cooldown: 9.0, duration: 2.0 },
     colors: { primary: '#0077b6', secondary: '#caf0f8', eye: '#ffd166', spots: '#03045e', spikes: '#48cae4' },
@@ -196,7 +196,7 @@ export const DINO_CATALOG = [
     id: 'carnotaurus',
     name: 'Carnotaurus',
     dinoClass: 'carnivore',
-    unlockCost: 130,
+    unlockCost: 600,
     stats: { speed: 9, jump: 7, hp: 3, defense: 6, attack: 9 },
     ability: { name: 'Investida Brutal', desc: 'Avança quebrando obstáculos e empurra rivais no PvP/Multiplayer.', cooldown: 8.5, duration: 2.0 },
     colors: { primary: '#b51724', secondary: '#f5b7b1', eye: '#ffdd00', spots: '#4a060b', spikes: '#212529' },
@@ -210,7 +210,7 @@ export const DINO_CATALOG = [
     id: 'pachycephalosaurus',
     name: 'Pachycephalosaurus',
     dinoClass: 'herbivore',
-    unlockCost: 145,
+    unlockCost: 2500,
     stats: { speed: 7, jump: 7, hp: 4, defense: 8, attack: 8 },
     ability: { name: 'Marretada', desc: 'Cabeçada demolidora que quebra pedras e atordoa rivais.', cooldown: 8.0, duration: 2.0 },
     colors: { primary: '#b5651d', secondary: '#f3d5b5', eye: '#ffd166', spots: '#582f0e', spikes: '#ffe8d6' },
@@ -224,7 +224,7 @@ export const DINO_CATALOG = [
     id: 'styracosaurus',
     name: 'Styracosaurus',
     dinoClass: 'herbivore',
-    unlockCost: 165,
+    unlockCost: 2500,
     stats: { speed: 6, jump: 6, hp: 4, defense: 9, attack: 8 },
     ability: { name: 'Coroa de Espinhos', desc: 'Ganha +1 Escudo temporário e lança espinhos frontais.', cooldown: 10.0, duration: 2.2 },
     colors: { primary: '#bc4749', secondary: '#f2e8cf', eye: '#ffca3a', spots: '#6a040f', spikes: '#f8edeb' },
@@ -238,7 +238,7 @@ export const DINO_CATALOG = [
     id: 'oviraptor',
     name: 'Oviraptor',
     dinoClass: 'carnivore',
-    unlockCost: 180,
+    unlockCost: 2500,
     stats: { speed: 9, jump: 8, hp: 2, defense: 4, attack: 9 },
     ability: { name: 'Instinto Coletor', desc: 'Imã amplo temporário + combo acelerado ao quebrar com Q.', cooldown: 10.0, duration: 3.0 },
     colors: { primary: '#f72585', secondary: '#ffe5ec', eye: '#4cc9f0', spots: '#7209b7', spikes: '#ffd166' },
@@ -252,7 +252,7 @@ export const DINO_CATALOG = [
     id: 'therizinosaurus',
     name: 'Therizinosaurus',
     dinoClass: 'herbivore',
-    unlockCost: 195,
+    unlockCost: 2500,
     stats: { speed: 7, jump: 7, hp: 3, defense: 7, attack: 10 },
     ability: { name: 'Corte Duplo', desc: 'Destrói obstáculos em arco duplo e rebate projéteis inimigos.', cooldown: 8.0, duration: 1.6 },
     colors: { primary: '#6c5ce7', secondary: '#dcd6f7', eye: '#00cec9', spots: '#2d256e', spikes: '#fdcb6e' },
@@ -266,7 +266,7 @@ export const DINO_CATALOG = [
     id: 'quetzalcoatlus',
     name: 'Quetzalcoatlus',
     dinoClass: 'mystic',
-    unlockCost: 220,
+    unlockCost: 2500,
     stats: { speed: 9, jump: 10, hp: 2, defense: 4, attack: 7 },
     ability: { name: 'Voo Rasante', desc: 'Plana acima dos perigos terrestres com controle aéreo por 2.6s.', cooldown: 9.5, duration: 2.6 },
     colors: { primary: '#f4a261', secondary: '#fefae0', eye: '#2a9d8f', spots: '#e76f51', spikes: '#264653' },
@@ -280,7 +280,7 @@ export const DINO_CATALOG = [
     id: 'giganotosaurus',
     name: 'Giganotosaurus',
     dinoClass: 'carnivore',
-    unlockCost: 260,
+    unlockCost: 10000,
     stats: { speed: 7, jump: 6, hp: 4, defense: 8, attack: 10 },
     ability: { name: 'Terremoto Apex', desc: 'Onda de choque massiva limpa a pista à frente e atordoa rivais.', cooldown: 11.0, duration: 1.8 },
     colors: { primary: '#4a4e69', secondary: '#e9ecef', eye: '#ff4d6d', spots: '#22223b', spikes: '#ff9f1c' },
@@ -288,6 +288,104 @@ export const DINO_CATALOG = [
     fact: {
       pt: 'Descoberto na Argentina, rivalizava com o T-Rex em tamanho e caçava enormes saurópodes.',
       en: 'Discovered in Patagonia, this giant predator hunted colossal sauropod dinosaurs.'
+    }
+  },
+  {
+    id: 'iguanodon',
+    name: 'Iguanodon',
+    dinoClass: 'herbivore',
+    unlockCost: 150,
+    stats: { speed: 7, jump: 7, hp: 3, defense: 7, attack: 7 },
+    ability: { name: 'Espigão de Polegar', desc: 'Avança derrubando obstáculos frontais com escudo curto.', cooldown: 9.0, duration: 2.0 },
+    colors: { primary: '#52b788', secondary: '#d8f3dc', eye: '#ffb703', spots: '#2d6a4f', spikes: '#e9c46a' },
+    roarPitch: 125,
+    fact: {
+      pt: 'Possuía polegares em forma de punhal afiado para se defender de predadores.',
+      en: 'Had sharp thumb spikes used to defend itself against prehistoric predators.'
+    }
+  },
+  {
+    id: 'gallimimus',
+    name: 'Gallimimus',
+    dinoClass: 'herbivore',
+    unlockCost: 150,
+    stats: { speed: 10, jump: 8, hp: 2, defense: 5, attack: 6 },
+    ability: { name: 'Arranque Relâmpago', desc: 'Velocidade máxima com recarga rápida de estamina e reflexo.', cooldown: 7.5, duration: 2.6 },
+    colors: { primary: '#f4a261', secondary: '#fae1dd', eye: '#ffd166', spots: '#e76f51', spikes: '#f77f00' },
+    roarPitch: 215,
+    fact: {
+      pt: 'Um dos dinossauros mais velozes já descobertos, corria como um avestruz gigante.',
+      en: 'One of the fastest known dinosaurs, sprinting across plains like a giant ostrich.'
+    }
+  },
+  {
+    id: 'deinonychus',
+    name: 'Deinonychus',
+    dinoClass: 'carnivore',
+    unlockCost: 600,
+    stats: { speed: 9, jump: 9, hp: 2, defense: 5, attack: 9 },
+    ability: { name: 'Salto em Foice', desc: 'Salto duplo acrobático e corte múltiplo de espinhos à frente.', cooldown: 8.5, duration: 2.2 },
+    colors: { primary: '#e63946', secondary: '#f1faee', eye: '#ffd166', spots: '#1d3557', spikes: '#ff9f1c' },
+    roarPitch: 170,
+    fact: {
+      pt: 'Inspiração direta dos raptores modernos: emplumado e equipado com garra retrátil fatal.',
+      en: 'Feathered pack hunter armed with a deadly retractable sickle claw.'
+    }
+  },
+  {
+    id: 'kentrosaurus',
+    name: 'Kentrosaurus',
+    dinoClass: 'armored',
+    unlockCost: 600,
+    stats: { speed: 6, jump: 5, hp: 4, defense: 9, attack: 8 },
+    ability: { name: 'Muralha de Espinhos', desc: 'Ativa escudo + rajada radial de espinhos ósseos.', cooldown: 10.0, duration: 2.4 },
+    colors: { primary: '#bc6c25', secondary: '#dda15e', eye: '#fefae0', spots: '#606c38', spikes: '#f4d35e' },
+    roarPitch: 105,
+    fact: {
+      pt: 'Parente africano do Estegossauro, tinha pontas enormes ao longo dos ombros e da cauda.',
+      en: 'African cousin of Stegosaurus bristling with sharp shoulder and tail spikes.'
+    }
+  },
+  {
+    id: 'diplodocus',
+    name: 'Diplodocus',
+    dinoClass: 'herbivore',
+    unlockCost: 2500,
+    stats: { speed: 7, jump: 5, hp: 4, defense: 8, attack: 9 },
+    ability: { name: 'Chicote Supersônico', desc: 'Onda sonora traseira limpa a pista e paralisa rivais.', cooldown: 10.5, duration: 2.0 },
+    colors: { primary: '#457b9d', secondary: '#a8dadc', eye: '#ffd166', spots: '#1d3557', spikes: '#e63946' },
+    roarPitch: 68,
+    fact: {
+      pt: 'Sua cauda longa funcionava como um chicote capaz de quebrar a barreira do som.',
+      en: 'Its whip-like tail could snap faster than the speed of sound to deter predators.'
+    }
+  },
+  {
+    id: 'ceratosaurus',
+    name: 'Ceratosaurus',
+    dinoClass: 'carnivore',
+    unlockCost: 2500,
+    stats: { speed: 8, jump: 7, hp: 3, defense: 7, attack: 9 },
+    ability: { name: 'Chifrada Sísmica', desc: 'Investida feroz que estilhaça obstáculos e dispara projéteis.', cooldown: 9.0, duration: 2.3 },
+    colors: { primary: '#b5179e', secondary: '#ffccd5', eye: '#4cc9f0', spots: '#480ca8', spikes: '#ffd166' },
+    roarPitch: 92,
+    fact: {
+      pt: 'Identificado pelo chifre nasal marcante e cristas vermelhas acima dos olhos.',
+      en: 'Recognizable by its prominent nasal horn and bony crests above each eye.'
+    }
+  },
+  {
+    id: 'argentinosaurus',
+    name: 'Argentinosaurus',
+    dinoClass: 'herbivore',
+    unlockCost: 10000,
+    stats: { speed: 6, jump: 5, hp: 5, defense: 10, attack: 9 },
+    ability: { name: 'Pisão Tectônico', desc: 'Imunidade titânica + tremor destrói todos os perigos na tela.', cooldown: 12.0, duration: 2.8 },
+    colors: { primary: '#3d5a80', secondary: '#e0fbfc', eye: '#ee6c4d', spots: '#293241', spikes: '#ffd447' },
+    roarPitch: 55,
+    fact: {
+      pt: 'Um dos maiores animais terrestres da história, pesando mais de 70 toneladas.',
+      en: 'One of the largest land animals ever discovered, weighing over 70 tons.'
     }
   },
   {

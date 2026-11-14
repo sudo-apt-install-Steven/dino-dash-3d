@@ -7,28 +7,28 @@ export const CARD_POOL = [
     id: 'high_jump',
     name: 'Molas Jurássicas',
     rarity: 'comum',
-    desc: '+15% altura de pulo.',
+    desc: '+15% altura de pulo | Sem desvantagem',
     apply: (p) => { p.jumpMult = (p.jumpMult || 1) * 1.15; }
   },
   {
     id: 'extra_shield',
     name: 'Escama Blindada',
     rarity: 'comum',
-    desc: 'Ganha +1 Escudo imediato.',
+    desc: '+1 Escudo imediato | Sem desvantagem',
     apply: (p) => { p.shields = Math.min(4, p.shields + 1); }
   },
   {
     id: 'egg_magnet',
     name: 'Ímã Pré-Histórico',
     rarity: 'comum',
-    desc: 'Atrai ovos mais de longe permanentemente.',
+    desc: 'Atrai ovos de longe na corrida | Sem desvantagem',
     apply: (p) => { p.permanentMagnet = (p.permanentMagnet || 0) + 2.4; }
   },
   {
     id: 'fast_dash',
     name: 'Reflexos de Raptor',
     rarity: 'rara',
-    desc: 'Troca de faixa 35% mais rápida + recarga menor.',
+    desc: '+35% vel. de faixa & recarga | Sem desvantagem',
     apply: (p) => {
       p.laneSpeedMult = (p.laneSpeedMult || 1) * 1.35;
       p.cooldownMult = (p.cooldownMult || 1) * 0.85;
@@ -38,14 +38,14 @@ export const CARD_POOL = [
     id: 'cooldown_cut',
     name: 'Fôlego Infinito',
     rarity: 'rara',
-    desc: 'Reduz recarga da habilidade em 25%.',
+    desc: '-25% tempo de recarga | Sem desvantagem',
     apply: (p) => { p.cooldownMult = (p.cooldownMult || 1) * 0.75; }
   },
   {
     id: 'life_plus',
     name: 'Coração Ancestral',
     rarity: 'rara',
-    desc: '+1 Vida máxima e cura 1 vida.',
+    desc: '+1 Vida máxima e cura +1 ♥ | Sem desvantagem',
     apply: (p) => {
       p.maxHp = Math.min(7, p.maxHp + 1);
       p.hp = Math.min(p.maxHp, p.hp + 1);
@@ -55,35 +55,35 @@ export const CARD_POOL = [
     id: 'score_boost',
     name: 'Instinto Alfa',
     rarity: 'rara',
-    desc: '+25% de pontos ganhos em tudo.',
+    desc: '+25% pontos em tudo | Sem desvantagem',
     apply: (p) => { p.scoreCardMult = (p.scoreCardMult || 1) * 1.25; }
   },
   {
     id: 'tiny_dino',
     name: 'Furtividade Ágil',
     rarity: 'épica',
-    desc: 'Tamanho e hitbox 20% menores.',
+    desc: '-20% tamanho & hitbox | Sem desvantagem',
     apply: (p) => { p.smallHitbox = true; p.cardScaleMult = (p.cardScaleMult || 1) * 0.84; }
   },
   {
     id: 'half_damage',
     name: 'Casco Titânico',
     rarity: 'épica',
-    desc: 'Ganha +2 Escudos e invulnerabilidade maior após dano.',
+    desc: '+2 Escudos & invulnerabilidade maior | Sem desvantagem',
     apply: (p) => { p.shields += 2; p.postHitInvulnBonus = 1.0; }
   },
   {
     id: 'turbo_skill',
     name: 'Habilidade Turbinada',
     rarity: 'épica',
-    desc: 'Duração e força da habilidade +45%.',
+    desc: '+45% força e duração do poder | Sem desvantagem',
     apply: (p) => { p.abilityPowerMult = (p.abilityPowerMult || 1) * 1.45; }
   },
   {
     id: 'egg_rain',
     name: 'Chuva de Ovos',
     rarity: 'lendária',
-    desc: 'Chove 14 ovos na pista e dá +50% em ovos coletados.',
+    desc: '+14 ovos agora & +50% valor em ovos | Sem desvantagem',
     apply: (p, ctx) => {
       p.eggValueMult = (p.eggValueMult || 1) * 1.5;
       ctx?.spawnEggRain?.(14);
@@ -93,9 +93,10 @@ export const CARD_POOL = [
     id: 'slow_chronos',
     name: 'Ampulheta Jurássica',
     rarity: 'lendária',
-    desc: 'Ativa 6s de câmera lenta e recarrega Bullet-Time.',
+    desc: '6s de câmera lenta & +100% Estamina/Poder | Sem desvantagem',
     apply: (p, ctx) => {
-      p.bulletEnergy = 100;
+      p.stamina = 100;
+      p.abilityCharge = 100;
       if (ctx) ctx.slowMoTimer = 6.0;
     }
   },
@@ -103,7 +104,7 @@ export const CARD_POOL = [
     id: 'curse_fury',
     name: 'Maldição da Fúria',
     rarity: 'maldição',
-    desc: '+65% Pontos e Fúria enche 2x mais rápido, mas -1 Vida máxima.',
+    desc: '+65% Pontos & Fúria 2x mais rápida | -1 Vida máxima',
     apply: (p) => {
       p.scoreCardMult = (p.scoreCardMult || 1) * 1.65;
       p.furyChargeMult = (p.furyChargeMult || 1) * 2.0;

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { LANE_X } from '../world/World.js';
 import { DinoFactory } from '../dinos/DinoFactory.js';
+import { buildVoxelCrater } from '../models/VoxelLibrary.js';
 
 const BOX_GEO = new THREE.BoxGeometry(1, 1, 1);
 
@@ -131,9 +132,8 @@ export class CoreEvents {
         ctx.cameraRig?.triggerShake(0.45, 0.25);
         ctx.particles?.emitExplosion(m.targetX, 0.5, m.targetZ, '#ff5500', 14, true);
 
-        const crater = new THREE.Mesh(BOX_GEO, this.craterMat);
-        crater.scale.set(1.9, 0.14, 1.9);
-        crater.position.set(m.targetX, 0.05, m.targetZ);
+        const crater = buildVoxelCrater(this.craterMat, this.meteorCoreMat);
+        crater.position.set(m.targetX, 0.02, m.targetZ);
         this.scene.add(crater);
         this.craters.push({ mesh: crater, life: 5.0 });
 

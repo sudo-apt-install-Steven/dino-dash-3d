@@ -4,6 +4,7 @@ import { UfoEvent } from './UfoEvent.js';
 import { AdvancedEvents } from './AdvancedEvents.js';
 import { WorldEvents } from './WorldEvents.js';
 import { BossManager } from './BossManager.js';
+import { PredatorSystem } from './PredatorSystem.js';
 import { Save } from '../systems/Save.js';
 
 export const EVENT_CATALOG = [
@@ -45,6 +46,7 @@ export class EventManager {
     this.advanced = new AdvancedEvents(scene);
     this.world = new WorldEvents(scene);
     this.bosses = new BossManager(scene);
+    this.predators = new PredatorSystem(scene);
 
     this.cooldown = 16;
     this.frequencyMult = 1.0;
@@ -114,8 +116,7 @@ export class EventManager {
         this.core.spawnEggMerchant();
         break;
       case 'chaser':
-        ctx.showBanner?.('🦖 PERSEGUIDOR GIGANTE ATRÁS DE VOCÊ! CORRA!', '#ef4444');
-        this.advanced.startChaser(13);
+        this.predators.startEncounter(ctx.currentBiome?.id || 'desert', ctx, ctx.predatorId || null);
         break;
       case 'flight':
         ctx.showBanner?.('🪽 FASE DE VOO! Colete ovos nos céus!', '#c084fc');
@@ -128,10 +129,20 @@ export class EventManager {
       case 'boss':
         if (this.bosses.activeBoss) return false;
         {
+          const returning = this.predators.consumeReturningPredator();
+          this.predators.clearActiveModel();
           const bId = ctx.bossId || ctx.currentBiome?.bossId || 'alpha_trex';
-          ctx.showBanner?.('👑 CHEFE DO BIOMA CHEGANDO! Acerte os pontos fracos dourados!', '#ff2e63');
+          if (returning) {
+            ctx.showBanner?.(`👑 CHEFE + RETORNO DE ${returning.name.toUpperCase()}! Emboscada Dupla!`, returning.accent || '#ff2e63');
+          } else {
+            ctx.showBanner?.('👑 CHEFE DO BIOMA CHEGANDO! Acerte os pontos fracos dourados!', '#ff2e63');
+          }
           ctx.narrator?.say('boss');
-          this.bosses.startBoss(bId, ctx.playerCount || 1);
+          this.bosses.startBoss(bId, (ctx.playerCount || 1) + (returning ? 1 : 0));
+          if (returning && this.bosses.activeBoss) {
+            this.bosses.activeBoss.name = `${this.bosses.activeBoss.name} + ${returning.name}`;
+            this.bosses.activeBoss.bonusCrystals = 1;
+          }
         }
         break;
       case 'aurora':
@@ -215,6 +226,7 @@ export class EventManager {
     this.ufo.update(dt, players, ctx);
     this.advanced.update(dt, speed, players, ctx);
     this.world.update(dt, speed, players, ctx);
+    this.predators.update(dt, speed, score, players, { ...ctx, bossActive: !!this.bosses.activeBoss, ufoActive: this.ufo.active });
     this.bosses.update(dt, speed, players, ctx);
   }
 
@@ -227,6 +239,7 @@ export class EventManager {
     this.ufo.clear();
     this.advanced.clear();
     this.world.clear();
+    this.predators.reset();
     this.bosses.clear();
   }
 }

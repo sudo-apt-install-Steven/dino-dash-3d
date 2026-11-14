@@ -4,6 +4,7 @@
 import { renderQrToCanvas } from '../net/QrGenerator.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
 import { Save } from '../systems/Save.js';
+import { attachModalHelp } from './Menus.js';
 
 export class MultiplayerLobby {
   static renderInto(container, net, callbacks = {}) {
@@ -331,6 +332,7 @@ export class MultiplayerLobby {
           callbacks.onStartMatch?.({ room, botCount });
         });
       }
+      attachModalHelp(container, 'Crie uma sala no PC/TV para compartilhar o QR Code no Wi-Fi ou Online, ou entre pelo código de 4 letras no celular.');
     };
 
     const cleanupListeners = () => {

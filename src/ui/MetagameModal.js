@@ -4,6 +4,7 @@ import { Save } from '../systems/Save.js';
 import { Metagame, TALENT_DEFS, CAMPAIGN_NODES } from '../systems/Metagame.js';
 import { DINO_CATALOG } from '../dinos/DinoCatalog.js';
 import { BIOMES } from '../world/Biomes.js';
+import { attachModalHelp } from './Menus.js';
 
 export class MetagameModal {
   static renderInto(container, game, onClose) {
@@ -58,7 +59,7 @@ export class MetagameModal {
               <div class="cards-grid">
                 ${TALENT_DEFS.map((t) => {
                   const lvl = Save.data.talents[t.id] || 0;
-                  const cost = t.costBase * (lvl + 1);
+                  const cost = Metagame.getTalentCost(t, lvl);
                   return `
                     <div class="item-card">
                       <strong>${t.icon} ${t.name} (${lvl}/${t.maxLevel})</strong>
@@ -320,6 +321,7 @@ export class MetagameModal {
           render();
         };
       }
+      attachModalHelp(container, 'Evolua talentos permanentes, avance na campanha jurássica, crie dinos híbridos, pistas por seed e veja o Ranking Global.');
     };
 
     render();

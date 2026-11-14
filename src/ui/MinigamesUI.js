@@ -1,8 +1,10 @@
 // Minigames Bônus: Pesca de Ovos no Rio, Minigame de Ritmo e Chocar Ovo (cria filhote companheiro).
 import { Save } from '../systems/Save.js';
 import { DINO_CATALOG } from '../dinos/DinoCatalog.js';
+import { attachModalHelp } from './Menus.js';
+import { renderEggSvg } from './SvgIcons.js';
 
-const DAILY_MINIGAME_EGG_CAP = 25;
+const DAILY_MINIGAME_EGG_CAP = 90;
 
 function ensureDailyRecord() {
   const today = new Date().toISOString().slice(0, 10);
@@ -59,16 +61,16 @@ export class MinigamesUI {
             <div class="cards-grid">
               <div class="item-card">
                 <strong>🎣 Pesca de Ovos no Rio</strong>
-                <p style="font-size:0.84rem; color:#d8c2a6;">Clique <strong>exatamente</strong> na zona verde (sem segurar fora e soltar!). 5 tentativas • +3 🥚 por acerto.</p>
+                <p style="font-size:0.84rem; color:#d8c2a6;">Clique <strong>exatamente</strong> na zona verde (sem segurar fora e soltar!). 5 tentativas • +10 🥚 por acerto.</p>
                 <button class="chunky-btn" id="mg-fish">Jogar</button>
               </div>
               <div class="item-card">
                 <strong>🎵 Ritmo Jurássico</strong>
-                <p style="font-size:0.84rem; color:#d8c2a6;">Acerte no exato instante (clique ou Espaço) quando o cursor estiver dentro da zona verde. 10 rodadas • +2 🥚/acerto.</p>
+                <p style="font-size:0.84rem; color:#d8c2a6;">Acerte no exato instante (clique ou Espaço) quando o cursor estiver dentro da zona verde. 10 rodadas • +6 🥚/acerto.</p>
                 <button class="chunky-btn orange" id="mg-rhythm">Jogar</button>
               </div>
               <div class="item-card">
-                <strong>🥚 Chocar o Ovo</strong>
+                <strong style="display:flex; align-items:center; gap:6px;">${renderEggSvg('raro', 22)} Chocar o Ovo</strong>
                 <p style="font-size:0.84rem; color:#d8c2a6;">Aqueça o ovo com cliques rápidos até nascer um filhote companheiro!</p>
                 <button class="chunky-btn" id="mg-hatch">Chocar</button>
               </div>
@@ -80,6 +82,7 @@ export class MinigamesUI {
       container.querySelector('#mg-fish').addEventListener('click', startFishing);
       container.querySelector('#mg-rhythm').addEventListener('click', startRhythm);
       container.querySelector('#mg-hatch').addEventListener('click', startHatch);
+      attachModalHelp(container, 'Minigames rápidos entre corridas! Acerte exatamente na zona verde (clicar fora e soltar não conta) respeitando o teto diário de 90 🥚.');
     };
 
     const startFishing = () => {
@@ -139,12 +142,12 @@ export class MinigamesUI {
 
         if (hitGreen) {
           hits++;
-          const granted = awardMinigameEggs(3);
+          const granted = awardMinigameEggs(10);
           caught += granted;
           sfx?.egg(hits);
           status.textContent = granted > 0
             ? `🎉 Na mosca! +${granted} 🥚 (Total: ${caught} • Limite hoje: ${getDailyRemaining()})`
-            : `🎯 Acertou no treino! (Limite diário de 25 🥚 já atingido hoje)`;
+            : `🎯 Acertou no treino! (Limite diário de ${DAILY_MINIGAME_EGG_CAP} 🥚 já atingido hoje)`;
         } else {
           sfx?.hurt();
           status.textContent = `❌ Fora do verde! Ovos: +${caught} • Restam hoje: ${getDailyRemaining()} 🥚`;
@@ -231,12 +234,12 @@ export class MinigamesUI {
 
         if (hitGreen) {
           hits++;
-          const granted = awardMinigameEggs(2);
+          const granted = awardMinigameEggs(6);
           score += granted;
           sfx?.egg(hits);
           info.textContent = granted > 0
             ? `✨ NO RITMO! Acertos: ${hits} • Erros: ${misses}/3 • +${score} 🥚`
-            : `✨ NO RITMO! (Treino — limite diário de 25 🥚 atingido)`;
+            : `✨ NO RITMO! (Treino — limite diário de ${DAILY_MINIGAME_EGG_CAP} 🥚 atingido)`;
         } else {
           misses++;
           sfx?.hurt();
@@ -280,7 +283,7 @@ export class MinigamesUI {
               <h2>🥚 Chocar Companheiro</h2>
               <button class="chunky-btn secondary" id="mg-back">Menu</button>
             </div>
-            <div style="font-size:4rem; margin: 10px 0;" id="egg-emoji">🥚</div>
+            <div style="font-size:4rem; margin: 10px 0;" id="egg-emoji">${renderEggSvg('dourado', 56)}</div>
             <div class="meter-bar" style="height:16px;"><div class="meter-fill" id="hatch-bar" style="width:0%; background:#ffd447;"></div></div>
             <p id="hatch-msg" style="color:#d8c2a6;">Clique várias vezes para aquecer e chocar um filhote companheiro!</p>
             <button class="chunky-btn" id="hatch-tap">AQUECER OVO!</button>

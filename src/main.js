@@ -54,16 +54,6 @@ function showSplashAndBoot() {
   }
 
   requestAnimationFrame(() => {
-    if (!Save.data.benchmarkDone) {
-      const res = PerfMonitor.runQuickBenchmark();
-      const lbl = splash?.querySelector('#splash-bench-lbl');
-      if (lbl) {
-        lbl.textContent = res.lowSpecSuggested
-          ? `Preset Leve ativado (~${res.estFps} FPS estimados)`
-          : `Desempenho ótimo (~${res.estFps} FPS estimados)`;
-      }
-    }
-
     const game = new Game(canvas, uiRoot);
     window.__DINO_DASH_GAME__ = game;
 
@@ -72,6 +62,16 @@ function showSplashAndBoot() {
         initialRoom: (params.get('room') || '').toUpperCase().trim(),
         initialTransport: params.get('transport') === 'supabase' ? 'supabase' : 'lan',
         deferredInstall: window.__DINO_DEFERRED_INSTALL__
+      });
+    } else if (!Save.data.benchmarkDone) {
+      // Auto-benchmark real em WebGL (~1s não-bloqueante) para classificar Alto/Médio/Baixo
+      PerfMonitor.runTimedBenchmark(game, 1000).then((res) => {
+        if (game.state === 'menu') {
+          game.ui.showMainMenu();
+        }
+        if (res.lowSpecSuggested && !Save.data.lowSpecMode) {
+          game.ui.hud.showBanner(`⚠️ ${res.estFps} FPS detectados (${res.tier}) — Modo "Meu PC é Fraco" sugerido no menu!`, '#f59e0b', 4.5);
+        }
       });
     }
 

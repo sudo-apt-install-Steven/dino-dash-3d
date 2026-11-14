@@ -6,65 +6,230 @@ import { DIFFICULTY_PRESETS } from '../game/Difficulty.js';
 import { EVENT_CATALOG } from '../events/EventManager.js';
 import { DINO_CATALOG } from '../dinos/DinoCatalog.js';
 import { BOSS_DEFS } from '../events/BossManager.js';
+import { PREDATOR_CATALOG } from '../events/PredatorModels.js';
 import { ACHIEVEMENTS_CATALOG, ProgressionManager } from '../systems/Progression.js';
 import { Save } from '../systems/Save.js';
+
+export function attachModalHelp(container, helpText) {
+  const header = container.querySelector('.modal-header');
+  if (!header || header.querySelector('.modal-help-btn')) return;
+
+  const helpBtn = document.createElement('button');
+  helpBtn.type = 'button';
+  helpBtn.className = 'modal-help-btn';
+  helpBtn.title = 'Ajuda sobre esta tela';
+  helpBtn.setAttribute('aria-label', 'Ajuda sobre esta tela');
+  helpBtn.textContent = '?';
+
+  const pop = document.createElement('div');
+  pop.className = 'modal-help-popover hidden';
+  pop.innerHTML = `<strong>❓ Como funciona:</strong> ${helpText}`;
+
+  const rightSlot = header.querySelector('div:last-child');
+  if (rightSlot && rightSlot !== header && rightSlot.querySelector('button')) {
+    rightSlot.prepend(helpBtn);
+  } else {
+    header.appendChild(helpBtn);
+  }
+  header.insertAdjacentElement('afterend', pop);
+
+  helpBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    pop.classList.toggle('hidden');
+  });
+}
 
 export class Menus {
   static renderMainMenu(container, state, actions) {
     const title = Save.data.activeTitle || 'Iniciante';
-    const lowSpec = !!Save.data.lowSpecMode;
     const prestigeLv = Save.data.prestige?.level || 0;
     container.innerHTML = `
       <div class="main-menu-wrap">
-        <div class="chunky-panel main-menu-panel">
+        <div class="chunky-panel main-menu-panel" style="width:min(420px, 92vw); padding:20px; gap:12px;">
           <div>
-            <div class="dino-logo" style="font-size:2.1rem;">DINO <span class="dash-accent">DASH 3D</span></div>
+            <div class="dino-logo" id="main-dino-logo" style="font-size:2.15rem; cursor:pointer; user-select:none;" title="Dino Dash 3D">DINO <span class="dash-accent">DASH 3D</span></div>
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
               <span class="hud-pill">🏆 HI: <strong>${Save.getHighScore()}</strong></span>
               <span class="hud-pill">🥚 Ovos: <strong>${Save.data.eggs}</strong></span>
+              ${(Save.data.crystals || 0) > 0 ? `<span class="hud-pill" style="color:#38bdf8;">💎 ${Save.data.crystals}</span>` : ''}
               <span class="hud-pill">🎖️ ${title}</span>
               ${prestigeLv > 0 ? `<span class="hud-pill" style="color:#ffd447;">✨ P${prestigeLv}</span>` : ''}
             </div>
           </div>
 
-          <div class="item-card" style="padding:10px; font-size:0.84rem;">
-            <div>Modo: <strong style="color:#58d63a;">${state.modeName}</strong> • Dificuldade: <strong style="color:#ff9a24;">${state.diffName}</strong></div>
-            <div>Dino: <strong style="color:#ffd447;">${state.dinoName}</strong> • Mapa: <strong>${state.biomeLabel}</strong></div>
+          <div class="item-card" style="padding:10px 12px; font-size:0.84rem; gap:6px;">
+            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; align-items:center;">
+              <span>Modo: <strong style="color:#58d63a;">${state.modeName}</strong> <button type="button" class="inline-change-btn" data-nav="modes">mudar</button></span>
+              <span>Dif.: <strong style="color:#ff9a24;">${state.diffName}</strong> <button type="button" class="inline-change-btn" data-nav="difficulty">mudar</button></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; align-items:center;">
+              <span>Dino: <strong style="color:#ffd447;">${state.dinoName}</strong> <button type="button" class="inline-change-btn" data-nav="dinos">mudar</button></span>
+              <span>Mapa: <strong>${state.biomeLabel}</strong> <button type="button" class="inline-change-btn" data-nav="maps">mudar</button></span>
+            </div>
           </div>
 
-          <button class="chunky-btn" id="menu-play" style="font-size:1.25rem; padding:14px;">▶ JOGAR AGORA</button>
-          <button class="chunky-btn orange" id="menu-mp-fast" style="font-size:1rem; padding:10px;">🌐 MULTIPLAYER LAN / ONLINE (QR CELULAR)</button>
+          ${(state.benchmarkTier === 'Baixo' && !state.lowSpec) ? `
+            <button type="button" class="lowspec-suggest-pill" id="menu-lowspec-suggest">
+              ⚠️ PC lento detectado (~${state.benchmarkFps} FPS) • Clique para ativar "Meu PC é Fraco"
+            </button>
+          ` : ''}
+
+          <button class="chunky-btn" id="menu-play" style="font-size:1.28rem; padding:15px;">▶ Jogar Agora</button>
+          <button class="chunky-btn orange" data-nav="multiplayer" style="font-size:1.02rem; padding:11px;">🌐 Multiplayer</button>
+
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <button class="chunky-btn" data-nav="tutorial" style="background:linear-gradient(180deg,#0ea5e9,#0284c7); border-color:#7dd3fc;">🎓 MODO TUTORIAL</button>
-            <button class="chunky-btn secondary" data-nav="guide">📖 GUIA & OBSTÁCULOS</button>
+            <button class="chunky-btn secondary" data-nav="dinos" style="padding:11px 10px;">🦖 Dinossauros</button>
+            <button class="chunky-btn secondary" data-nav="custom" style="padding:11px 10px;">🎨 Personalização</button>
           </div>
 
-          <div class="menu-nav-grid">
-            <button class="chunky-btn orange" data-nav="modes">🎮 Modos</button>
-            <button class="chunky-btn orange" data-nav="dinos">🦖 Dinossauros</button>
-            <button class="chunky-btn secondary" data-nav="custom">🎨 Personalizar & Loja</button>
-            <button class="chunky-btn secondary" data-nav="maps">🗺️ Mapas / Biomas</button>
-            <button class="chunky-btn secondary" data-nav="metagame">🧬 Expansão & Híbridos</button>
-            <button class="chunky-btn secondary" data-nav="controller">📱 Controle Celular</button>
-            <button class="chunky-btn secondary" data-nav="difficulty">⚡ Dificuldade</button>
-            <button class="chunky-btn secondary" data-nav="missions">📜 Missões & Passe</button>
-            <button class="chunky-btn secondary" data-nav="album">📖 Álbum & Casa</button>
-            <button class="chunky-btn secondary" data-nav="minigames">🕹️ Minigames & Hub</button>
-            <button class="chunky-btn secondary" data-nav="records">🏅 Recordes</button>
-            <button class="chunky-btn secondary" data-nav="settings">⚙️ Configurações</button>
-            <button class="chunky-btn secondary" id="menu-low-spec">${lowSpec ? '💻 PC Fraco: ATIVO' : '💻 Meu PC é Fraco'}</button>
-            <button class="chunky-btn secondary" data-nav="debug">🛠️ Depurar (F9)</button>
+          <button class="chunky-btn secondary" data-nav="extras" style="padding:11px; display:flex; align-items:center; justify-content:center; gap:8px;">
+            <span>📦 Extras</span>
+            ${!state.tutorialDone ? '<span class="badge-start-here">Comece por aqui!</span>' : ''}
+          </button>
+        </div>
+      </div>
+    `;
+
+    let logoClicks = 0;
+    let lastLogoClick = 0;
+    container.querySelector('#main-dino-logo')?.addEventListener('click', () => {
+      const now = performance.now();
+      if (now - lastLogoClick > 2400) logoClicks = 0;
+      lastLogoClick = now;
+      logoClicks++;
+      if (logoClicks >= 5) {
+        logoClicks = 0;
+        actions.onUnlockDevMode?.();
+      }
+    });
+
+    container.querySelector('#menu-play').addEventListener('click', actions.onPlay);
+    container.querySelector('#menu-lowspec-suggest')?.addEventListener('click', actions.onToggleLowSpec);
+    container.querySelectorAll('[data-nav]').forEach((btn) => {
+      btn.addEventListener('click', () => actions.onNavigate(btn.getAttribute('data-nav')));
+    });
+  }
+
+  static renderExtrasModal(container, state, actions) {
+    container.innerHTML = `
+      <div class="overlay-center">
+        <div class="chunky-panel modal-card" style="max-width: 780px;">
+          <div class="modal-header">
+            <h2>📦 Extras & Opções</h2>
+            <button class="chunky-btn secondary" id="extras-close">Voltar</button>
+          </div>
+
+          <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));">
+            <button class="item-card" data-ex-nav="tutorial" style="text-align:left; cursor:pointer; border-color:${state.tutorialDone ? 'var(--panel-border)' : '#38bdf8'};">
+              <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                <strong style="color:#7dd3fc;">🎓 Tutorial Interativo</strong>
+                ${!state.tutorialDone ? '<span class="badge-start-here">Comece por aqui!</span>' : ''}
+              </div>
+              <small style="color:#d8c2a6;">Aprenda pulo, ataque [Q], habilidade e reações em 1 minuto.</small>
+            </button>
+
+            <button class="item-card" data-ex-nav="guide" style="text-align:left; cursor:pointer;">
+              <strong style="color:#ffd447;">📖 Guia, Obstáculos & Status</strong>
+              <small style="color:#d8c2a6;">Enciclopédia completa de perigos, combos e fraquezas.</small>
+            </button>
+
+            <button class="item-card" data-ex-nav="missions" style="text-align:left; cursor:pointer;">
+              <strong style="color:#58d63a;">📜 Missões & Passe</strong>
+              <small style="color:#d8c2a6;">Objetivos diários, conquistas e títulos desbloqueáveis.</small>
+            </button>
+
+            <button class="item-card" data-ex-nav="album" style="text-align:left; cursor:pointer;">
+              <strong>📖 Álbum & Casa de Troféus</strong>
+              <small style="color:#d8c2a6;">Espécies descobertas e troféus de chefes derrotados.</small>
+            </button>
+
+            <button class="item-card" data-ex-nav="records" style="text-align:left; cursor:pointer;">
+              <strong>🏅 Recordes & Estatísticas</strong>
+              <small style="color:#d8c2a6;">Melhores pontuações por modo e placar de rivalidade.</small>
+            </button>
+
+            <button class="item-card" data-ex-nav="metagame" style="text-align:left; cursor:pointer;">
+              <strong>🧬 Expansão & Híbridos</strong>
+              <small style="color:#d8c2a6;">Campanha, Prestígio, Talentos, Híbridos e Ranking Global.</small>
+            </button>
+
+            <button class="item-card" data-ex-nav="minigames" style="text-align:left; cursor:pointer;">
+              <strong>🕹️ Vila & Minigames</strong>
+              <small style="color:#d8c2a6;">Ritmo Jurássico, Pesca no Rio e Chocadeira de Filhotes.</small>
+            </button>
+
+            <button class="item-card" data-ex-nav="controller" style="text-align:left; cursor:pointer;">
+              <strong>📱 Controle no Celular</strong>
+              <small style="color:#d8c2a6;">Transforme o celular em controle de corrida sem fio.</small>
+            </button>
+
+            <button class="item-card" data-ex-nav="settings" style="text-align:left; cursor:pointer;">
+              <strong>⚙️ Configurações</strong>
+              <small style="color:#d8c2a6;">Gráficos, brilho, áudio, teclas e acessibilidade.</small>
+            </button>
+
+            <button class="item-card ${state.lowSpec ? 'selected' : ''}" id="extras-lowspec" style="text-align:left; cursor:pointer;">
+              <strong style="color:#38bdf8;">${state.lowSpec ? '💻 Meu PC é Fraco: ATIVO' : '💻 Modo "Meu PC é Fraco"'}</strong>
+              <small style="color:#d8c2a6;">Reduz resolução e efeitos pesados para manter o jogo fluido.</small>
+            </button>
+
+            <div class="item-card" style="grid-column: 1 / -1; text-align:left; border-color:#fb923c;">
+              <strong style="color:#fb923c;">🐾 Fixar Predador Caçador (14 Originais)</strong>
+              <small style="color:#d8c2a6;">Escolha qual predador surgirá nas perseguições (ou deixe automático por bioma).</small>
+              <select class="select-input" id="extras-predator" style="margin-top:6px;">
+                <option value="">🎲 Automático (Por Bioma)</option>
+                ${PREDATOR_CATALOG.map((pr) => `<option value="${pr.id}" ${state.pinnedPredator === pr.id ? 'selected' : ''}>${pr.name} — ${pr.title} (${pr.biome})</option>`).join('')}
+              </select>
+            </div>
+
+            <button class="item-card" data-ex-nav="credits" style="text-align:left; cursor:pointer;">
+              <strong>📜 Créditos</strong>
+              <small style="color:#d8c2a6;">Sobre o projeto Dino Dash 3D e tecnologias utilizadas.</small>
+            </button>
+
+            ${state.devMode ? `
+              <button class="item-card" data-ex-nav="debug" style="text-align:left; cursor:pointer; border-color:#38bdf8;">
+                <strong style="color:#38bdf8;">🛠️ Depurar (Debug / QA)</strong>
+                <small style="color:#d8c2a6;">Auditoria visual, simuladores, chefes e FPS ao vivo.</small>
+              </button>
+            ` : ''}
           </div>
         </div>
       </div>
     `;
 
-    container.querySelector('#menu-play').addEventListener('click', actions.onPlay);
-    container.querySelector('#menu-mp-fast').addEventListener('click', () => actions.onNavigate('multiplayer'));
-    container.querySelector('#menu-low-spec').addEventListener('click', () => actions.onToggleLowSpec?.());
-    container.querySelectorAll('[data-nav]').forEach((btn) => {
-      btn.addEventListener('click', () => actions.onNavigate(btn.getAttribute('data-nav')));
+    attachModalHelp(container, 'Todos os recursos extras organizados em um único lugar: tutorial, guias, missões, minigames, controle remoto e configurações.');
+    container.querySelector('#extras-close').addEventListener('click', actions.onClose);
+    container.querySelector('#extras-lowspec').addEventListener('click', actions.onToggleLowSpec);
+    container.querySelector('#extras-predator')?.addEventListener('change', (e) => {
+      actions.onPinPredator?.(e.target.value || null);
     });
+    container.querySelectorAll('[data-ex-nav]').forEach((el) => {
+      el.addEventListener('click', () => actions.onNavigate(el.getAttribute('data-ex-nav')));
+    });
+  }
+
+  static renderCreditsModal(container, onClose) {
+    container.innerHTML = `
+      <div class="overlay-center">
+        <div class="chunky-panel modal-card" style="max-width: 560px;">
+          <div class="modal-header">
+            <h2>📜 Créditos — Dino Dash 3D</h2>
+            <button class="chunky-btn secondary" id="cred-close">Voltar</button>
+          </div>
+          <div class="item-card">
+            <strong style="color:#ffd447;">DINO DASH 3D</strong>
+            <p style="font-size:0.86rem; color:#ffe8b5;">Corredor jurássico 3D procedural em tempo real construído com Three.js, modelos voxel autorais, síntese de áudio via WebAudio API e Multiplayer LAN / Supabase Realtime.</p>
+          </div>
+          <div class="item-card">
+            <strong>Controles Principais</strong>
+            <p style="font-size:0.82rem; color:#d8c2a6;"><strong>W/↑</strong> Pular • <strong>S/↓</strong> Abaixar/Deslizar • <strong>A/D</strong> Trocar de Faixa • <strong>Q</strong> Ataque Direto • <strong>Espaço</strong> Habilidade • <strong>E</strong> Item • <strong>F</strong> Fúria • <strong>Shift</strong> Bullet-Time • <strong>C</strong> Câmera • <strong>R</strong> Reiniciar.</p>
+          </div>
+        </div>
+      </div>
+    `;
+    attachModalHelp(container, 'Informações técnicas e atalhos rápidos do Dino Dash 3D.');
+    container.querySelector('#cred-close').addEventListener('click', onClose);
   }
 
   static renderModesModal(container, currentModeId, currentSeed, onSelectMode, onClose) {
@@ -123,6 +288,7 @@ export class Menus {
         onSelectMode(currentModeId, seedVal);
         onClose();
       });
+      attachModalHelp(container, 'Escolha como correr: Solo Clássico, Cooperação local, Duelo PvP, História, Horda ou Corrida Caótica. Opcionalmente informe uma Seed para repetir a mesma pista.');
     };
     render();
   }
@@ -178,6 +344,7 @@ export class Menus {
         onSelect(selectedBiome, seq);
         onClose();
       });
+      attachModalHelp(container, 'Selecione o bioma inicial da corrida e ative ou não a troca automática pelos Portais de Runas a cada marco.');
     };
     render();
   }
@@ -203,6 +370,10 @@ export class Menus {
             <div class="field-row">
               <span>Dificuldade Adaptativa (ajusta conforme seu desempenho)</span>
               <input type="checkbox" id="diff-adapt" ${diffMgr.adaptive ? 'checked' : ''} />
+            </div>
+            <div class="field-row">
+              <span>💎 Modo Perfeito (1 Hit = Fim • Score ×2.2 • Ovos ×1.5)</span>
+              <input type="checkbox" id="diff-perfect" ${Save.data.perfectMode ? 'checked' : ''} />
             </div>
             ${diffMgr.activeId === 'custom' ? `
               <div class="field-row"><span>Velocidade Inicial (${c.initialSpeed})</span><input type="range" id="dc-spd" min="12" max="32" value="${c.initialSpeed}" /></div>
@@ -234,6 +405,8 @@ export class Menus {
 
       const syncCustom = () => {
         diffMgr.adaptive = container.querySelector('#diff-adapt').checked;
+        Save.data.perfectMode = !!container.querySelector('#diff-perfect')?.checked;
+        Save.save();
         if (diffMgr.activeId === 'custom') {
           c.initialSpeed = Number(container.querySelector('#dc-spd').value);
           c.density = Number(container.querySelector('#dc-dens').value) / 10;
@@ -245,6 +418,7 @@ export class Menus {
 
       container.querySelectorAll('input').forEach((el) => el.addEventListener('change', syncCustom));
       container.querySelector('#diff-close').addEventListener('click', () => { syncCustom(); onClose(); });
+      attachModalHelp(container, 'Escolha entre Iniciante, Normal, Difícil, Pesadelo ou monte regras personalizadas de vidas, velocidade e eventos.');
     };
     render();
   }
@@ -301,6 +475,7 @@ export class Menus {
       Save.data.activeTitle = e.target.value;
       Save.save();
     });
+    attachModalHelp(container, 'Acompanhe missões diárias que rendem Ovos extras, seu Passe de Temporada local e troféus de conquistas.');
     container.querySelector('#mp-close').addEventListener('click', onClose);
   }
 
@@ -313,17 +488,32 @@ export class Menus {
             <h2>📖 Álbum de Dinos & Casa de Troféus</h2>
             <button class="chunky-btn secondary" id="ah-close">Voltar</button>
           </div>
-          <div class="item-card">
-            <strong>🏠 Casa do Dino — Troféus de Chefes (${trophies.length}/${Object.keys(BOSS_DEFS).length})</strong>
-            <div class="tabs-row">
-              ${Object.values(BOSS_DEFS).map((b) => `
-                <span class="hud-pill" style="opacity:${trophies.includes(b.id) ? 1 : 0.4};">
-                  ${trophies.includes(b.id) ? '🏆' : '⬛'} ${b.name}
-                </span>
-              `).join('')}
-            </div>
-          </div>
-          <div class="cards-grid">
+           <div class="item-card">
+             <strong>🏠 Casa do Dino — Troféus de Chefes (${trophies.length}/${Object.keys(BOSS_DEFS).length})</strong>
+             <div class="tabs-row">
+               ${Object.values(BOSS_DEFS).map((b) => `
+                 <span class="hud-pill" style="opacity:${trophies.includes(b.id) ? 1 : 0.4};">
+                   ${trophies.includes(b.id) ? '🏆' : '⬛'} ${b.name}
+                 </span>
+               `).join('')}
+             </div>
+           </div>
+           <div class="item-card" style="margin-top:8px;">
+             <strong>🦴 Fósseis & Lore dos Biomas (${Object.keys(Save.data.discoveredFossils || {}).length}/${BIOMES.length})</strong>
+             <div class="cards-grid" style="margin-top:6px;">
+               ${BIOMES.map((b) => {
+                 const found = !!Save.data.discoveredFossils?.[b.fossil?.id];
+                 return `
+                   <div class="item-card ${found ? 'selected' : ''}" style="opacity:${found ? 1 : 0.72}; padding:8px;">
+                     <strong style="color:#ffd447;">${found ? (b.fossil?.icon || '🦴') : '🔒'} ${b.fossil?.name || b.name}</strong>
+                     <small style="color:#9ce6e0;">${b.name} ${found ? '• Descoberto' : '• Visite o bioma'}</small>
+                     <p style="font-size:0.74rem; color:#d8c2a6; margin-top:4px;">${b.lore || b.theme?.name || ''}</p>
+                   </div>
+                 `;
+               }).join('')}
+             </div>
+           </div>
+           <div class="cards-grid" style="margin-top:8px;">
             ${DINO_CATALOG.map((d) => `
               <div class="item-card ${Save.data.albumDiscovered.includes(d.id) ? 'selected' : ''}">
                 <strong style="color:#ffd447;">${d.name}</strong>
@@ -335,6 +525,7 @@ export class Menus {
         </div>
       </div>
     `;
+    attachModalHelp(container, 'Veja todos os dinossauros já desbloqueados ou encontrados e sua coleção de troféus de chefes.');
     container.querySelector('#ah-close').addEventListener('click', onClose);
   }
 
@@ -362,6 +553,7 @@ export class Menus {
         </div>
       </div>
     `;
+    attachModalHelp(container, 'Compare seus melhores recordes em cada modo de jogo e veja quem lidera os duelos locais P1 × P2.');
     container.querySelector('#rec-close').addEventListener('click', onClose);
   }
 
@@ -396,6 +588,7 @@ export class Menus {
         </div>
       </div>
     `;
+    attachModalHelp(container, 'Atalho rápido entre o treinador de dinossauros, a loja de ovos misteriosos e os minigames.');
     container.querySelector('#hub-dinos').addEventListener('click', onOpenDinos);
     container.querySelector('#hub-shop').addEventListener('click', onOpenShop);
     container.querySelector('#hub-mini').addEventListener('click', onOpenMinigames);

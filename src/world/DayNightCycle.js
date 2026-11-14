@@ -54,40 +54,50 @@ export class DayNightCycle {
   update(dt, baseTheme) {
     this.cycleTime = (this.cycleTime + dt) % 100;
 
+    // Eclipse e Noite escurecem APENAS o céu distante; pista, obstáculos e dino ficam nítidos!
+    const clearVis = !!this.world.clearVision;
+    const minFactor = this.world.brightnessMult || 1.05;
     if (this.eclipseTimer > 0) {
       this.eclipseTimer -= dt;
       this.phase = 'eclipse';
-      this.world.sunLight.intensity = 0.25;
-      this.world.hemiLight.intensity = 0.22;
-      this.scene.fog.density = 0.042;
-      this.scene.background.set('#0a0612');
-      this.scene.fog.color.set('#0a0612');
+      this.world.setCycleLighting(Math.max(1.22, 1.25 * minFactor), Math.max(0.92, 0.96 * minFactor), 1.0);
+      this.scene.fog.density = clearVis ? 0.0065 : 0.0155;
+      this.scene.background.set('#382b6e');
+      this.scene.fog.color.set('#4c3e8f');
       this.starMat.opacity = 0.9;
     } else if (this.cycleTime < 40) {
       // Pôr do sol quente (padrão) / Dia do bioma
       this.phase = 'sunset';
-      this.world.sunLight.intensity = 1.85;
-      this.world.hemiLight.intensity = 0.95;
-      if (baseTheme) {
-        this.scene.background.set(baseTheme.sky);
-        this.scene.fog.color.set(baseTheme.fog);
-        this.scene.fog.density = baseTheme.fogDensity || 0.011;
+      this.world.setCycleLighting(1.85 * minFactor, 1.05 * minFactor, 0.12);
+      if (baseTheme && !this.world.isTransitioningTheme()) {
+        this.scene.background.lerp(this.world.currentSkyColor || new THREE.Color(baseTheme.sky), Math.min(1, dt * 3));
+        this.scene.fog.color.lerp(this.world.currentFogColor || new THREE.Color(baseTheme.fog), Math.min(1, dt * 3));
+        const targetDens = clearVis ? 0.006 : Math.min(0.017, baseTheme.fogDensity || 0.011);
+        this.scene.fog.density += (targetDens - this.scene.fog.density) * Math.min(1, dt * 3);
       }
       this.starMat.opacity = 0;
     } else if (this.cycleTime < 68) {
-      // Crepúsculo suave
+      // Crepúsculo suave com cor de bioma preservada
       this.phase = 'dusk';
-      this.world.sunLight.intensity = 1.35;
-      this.world.hemiLight.intensity = 0.72;
+      this.world.setCycleLighting(1.52 * minFactor, 0.96 * minFactor, 0.55);
+      if (baseTheme && !this.world.isTransitioningTheme()) {
+        const duskSky = new THREE.Color(baseTheme.sky).lerp(new THREE.Color('#472a6e'), 0.45);
+        const duskFog = new THREE.Color(baseTheme.fog || baseTheme.sky).lerp(new THREE.Color('#5a3985'), 0.4);
+        this.scene.background.lerp(duskSky, Math.min(1, dt * 1.5));
+        this.scene.fog.color.lerp(duskFog, Math.min(1, dt * 1.5));
+      }
+      this.scene.fog.density = clearVis ? 0.0065 : 0.014;
       this.starMat.opacity = 0.35;
     } else {
-      // Noite estrelada
+      // Noite estrelada: céu escuro vibrante + pista iluminada por lanternas/cristais
       this.phase = 'night';
-      this.world.sunLight.intensity = 0.75;
-      this.world.hemiLight.intensity = 0.45;
-      this.scene.background.set('#141b33');
-      this.scene.fog.color.set('#18213d');
-      this.scene.fog.density = 0.015;
+      this.world.setCycleLighting(Math.max(1.28, 1.35 * minFactor), Math.max(0.95, 0.98 * minFactor), 0.85);
+      const baseSky = baseTheme?.sky || '#293b75';
+      const nightSky = new THREE.Color(baseSky).lerp(new THREE.Color('#2a3f7d'), 0.55);
+      const nightFog = new THREE.Color(baseTheme?.fog || '#3a5096').lerp(new THREE.Color('#39529e'), 0.45);
+      this.scene.background.lerp(nightSky, Math.min(1, dt * 1.5));
+      this.scene.fog.color.lerp(nightFog, Math.min(1, dt * 1.5));
+      this.scene.fog.density = clearVis ? 0.0065 : 0.0135;
       this.starMat.opacity = 0.92;
     }
 

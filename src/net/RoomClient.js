@@ -11,6 +11,7 @@ export class RoomClient {
     this.peerId = `d_${Math.random().toString(36).slice(2, 9)}`;
     this.room = null;
     this.chatLog = [];
+    this.roundVotes = new Map();
     this.lastSentInputs = null;
     this.listeners = new Map();
     this.lastLanInfo = { ips: [], port: 5174 };
@@ -107,6 +108,16 @@ export class RoomClient {
       this.chatLog.push(entry);
       if (this.chatLog.length > 30) this.chatLog.shift();
       this._emit('chat', entry);
+      return;
+    }
+    if (msg.type === 'round_vote') {
+      const key = msg.peerId || 'host';
+      this.roundVotes.set(key, {
+        peerId: key,
+        biomeId: msg.biomeId || null,
+        mpMode: msg.mpMode || null
+      });
+      this._emit('round_vote', { peerId: key, votes: Array.from(this.roundVotes.values()) });
       return;
     }
     this._emit(msg.type, msg);
@@ -273,6 +284,13 @@ export class RoomClient {
 
   sendBet(targetPeerId, amount = 10) {
     this.activeTransport.send({ type: 'bet', targetPeerId, amount });
+  }
+
+  sendRoundVote(vote = {}) {
+    const entry = { peerId: this.peerId, biomeId: vote.biomeId || null, mpMode: vote.mpMode || null };
+    this.roundVotes.set(this.peerId, entry);
+    this._emit('round_vote', { peerId: this.peerId, votes: Array.from(this.roundVotes.values()) });
+    this.activeTransport.send({ type: 'round_vote', biomeId: entry.biomeId, mpMode: entry.mpMode });
   }
 
   broadcastHostStart(payload = {}) {

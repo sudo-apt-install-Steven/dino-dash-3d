@@ -1,4 +1,8 @@
 // Enciclopédia e Guia Interativo do DINO DASH 3D: controles, obstáculos, alquimia, economia e multiplayer competitivo.
+import { attachModalHelp } from './Menus.js';
+import { PREDATOR_CATALOG } from '../events/PredatorModels.js';
+import { Save } from '../systems/Save.js';
+import { renderEggSvg, renderBuffSvg, renderBossObsSvg, renderSkillSvg } from './SvgIcons.js';
 
 const OBSTACLE_ENTRIES = [
   { icon: '🌵', name: 'Cacto Pequeno', badge: '⬆ Pular ou [Q] 💥', color: '#4ade80', desc: 'Pule por cima (W / ↑) ou estilhace com o Ataque [Q] para ganhar pontos extras.' },
@@ -41,7 +45,8 @@ export class GuideModal {
             <div class="tabs-row">
               <button class="tab-btn ${tab === 'controls' ? 'active' : ''}" data-gtab="controls">🎮 Controles & Ataque (Q)</button>
               <button class="tab-btn ${tab === 'obstacles' ? 'active' : ''}" data-gtab="obstacles">🚧 Obstáculos & Zonas</button>
-              <button class="tab-btn ${tab === 'alchemy' ? 'active' : ''}" data-gtab="alchemy">⚗️ Alquimia & Economia</button>
+              <button class="tab-btn ${tab === 'alchemy' ? 'active' : ''}" data-gtab="alchemy">⚗️ Status, Alquimia & Economia</button>
+              <button class="tab-btn ${tab === 'predators' ? 'active' : ''}" data-gtab="predators">🐾 Predadores (14)</button>
               <button class="tab-btn ${tab === 'multiplayer' ? 'active' : ''}" data-gtab="multiplayer">⚔️ Multiplayer Competitivo</button>
             </div>
 
@@ -65,7 +70,7 @@ export class GuideModal {
                     <p style="font-size:0.84rem; color:#ffe6a7;">Golpe corpo a corpo com recarga própria (1.0s–1.55s, escala com o atributo <strong>Ataque Q</strong>): destrói cactos pequenos, troncos, escorpiões, espinhos voadores, atinge o Orbe de Boss com <strong>2x dano</strong> e empurra rivais no Multiplayer!</p>
                   </div>
                   <div class="item-card">
-                    <strong>⚡ Espaço — Habilidade Única</strong>
+                    <strong style="display:flex; align-items:center; gap:6px;">${renderSkillSvg('rugido', 22)} Espaço — Habilidade Única</strong>
                     <p style="font-size:0.84rem; color:#d8c2a6;">Ativa o poder exclusivo da espécie escolhida (investida, rugido, mergulho, vento térmico, etc.). Evolua na tela de Dinossauros!</p>
                   </div>
                   <div class="item-card">
@@ -84,6 +89,39 @@ export class GuideModal {
               ` : ''}
 
               ${tab === 'obstacles' ? `
+                <div class="item-card" style="margin-bottom:10px; border-color:#38bdf8;">
+                  <strong>⚡ Plataformas de Buff & Ataques de Chefe</strong>
+                  <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
+                    ${[
+                      ['turbo', 'Turbo >>>'],
+                      ['pulo', 'Trampolim'],
+                      ['escudo', 'Escudo'],
+                      ['cura', 'Cura'],
+                      ['ima', 'Ímã'],
+                      ['tempo', 'Relógio']
+                    ].map(([k, lbl]) => `
+                      <span class="hud-pill" style="display:inline-flex; align-items:center; gap:6px; font-size:0.75rem;">
+                        ${renderBuffSvg(k, 20)} ${lbl}
+                      </span>
+                    `).join('')}
+                  </div>
+                  <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
+                    ${[
+                      ['choque', 'Onda'],
+                      ['espinhos', 'Espinhos'],
+                      ['raio', 'Raio'],
+                      ['feixe', 'Feixe OVNI'],
+                      ['poca', 'Poça Tóxica'],
+                      ['magma', 'Magma'],
+                      ['gelo', 'Gelo'],
+                      ['teia', 'Teia']
+                    ].map(([k, lbl]) => `
+                      <span class="hud-pill" style="display:inline-flex; align-items:center; gap:6px; font-size:0.75rem; border-color:#f97316;">
+                        ${renderBossObsSvg(k, 22)} ${lbl}
+                      </span>
+                    `).join('')}
+                  </div>
+                </div>
                 <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));">
                   ${OBSTACLE_ENTRIES.map((o) => `
                     <div class="item-card" style="border-left: 4px solid ${o.color};">
@@ -100,6 +138,25 @@ export class GuideModal {
               ${tab === 'alchemy' ? `
                 <div style="display:flex; flex-direction:column; gap:10px;">
                   <div class="item-card">
+                    <strong>🥚 Tipos de Ovos na Pista</strong>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;">
+                      ${[
+                        ['comum', '+1 🥚'],
+                        ['dourado', 'Dourado +5'],
+                        ['raro', 'Colossal +25'],
+                        ['surpresa', 'Surpresa (?)'],
+                        ['fogo', 'Fogo 🔥'],
+                        ['gelo', 'Gelo ❄️'],
+                        ['raio', 'Raio ⚡'],
+                        ['veneno', 'Veneno ☠️']
+                      ].map(([k, lbl]) => `
+                        <span class="hud-pill" style="display:inline-flex; align-items:center; gap:5px; font-size:0.76rem;">
+                          ${renderEggSvg(k, 22)} ${lbl}
+                        </span>
+                      `).join('')}
+                    </div>
+                  </div>
+                  <div class="item-card">
                     <strong>⚗️ Reações Elementais (Ovos Brilhantes)</strong>
                     <p style="font-size:0.84rem; color:#d8c2a6;">Pegue 2 ovos de elementos diferentes em sequência para disparar uma reação na pista:</p>
                     <div class="cards-grid" style="margin-top:8px;">
@@ -113,12 +170,21 @@ export class GuideModal {
                     </div>
                   </div>
                   <div class="item-card">
+                    <strong>🩺 Status & Ícones do HUD</strong>
+                    <div class="cards-grid" style="margin-top:8px;">
+                      <div class="item-card"><strong>❤️ Vida & 🛡️ Escudo</strong><small style="color:#d8c2a6;">Corações mostram vidas restantes; Escudo azul bloqueia 1 golpe sem perder vida. Passe em cima de <strong>Frutas</strong> ou use <strong>Antídoto [E]</strong> para recuperar.</small></div>
+                      <div class="item-card"><strong>🔥 Fogo & 💥 Fúria [F]</strong><small style="color:#d8c2a6;">Esferas de fogo protegem e criam reações explosivas. Barra Fúria em 100% deixa seu dino gigante e invencível!</small></div>
+                      <div class="item-card"><strong>☠️ Veneno & 🟤 Lama</strong><small style="color:#d8c2a6;">Veneno causa dano periódico; Lama reduz velocidade. Cure imediatamente com <strong>🧪 Antídoto [E]</strong> ou pegando <strong>🔥 Fogo</strong>!</small></div>
+                      <div class="item-card"><strong>❄️ Gelo & ⚡ Raio</strong><small style="color:#d8c2a6;">Gelo reduz ritmo brevemente; Raio dá carga magnética e combina com Gelo para formar <strong>⚡ Tempestade Supercondutora</strong>!</small></div>
+                    </div>
+                  </div>
+                  <div class="item-card">
                     <strong>🥚 Economia Balanceada (Sem Farm Infinito)</strong>
                     <ul style="font-size:0.84rem; color:#e5d3bc; padding-left:18px; display:flex; flex-direction:column; gap:4px;">
-                      <li><strong>Energia removida:</strong> Agora existem apenas Vida, Escudo, Fúria, Bullet-Time e recarga do Ataque [Q]. Frutas carregam +18% de Fúria e têm chance de curar +1 Vida.</li>
-                      <li><strong>20 Dinossauros:</strong> 8 iniciais gratuitos, 11 desbloqueáveis por ovos (60–260 🥚) e 1 secreto lendário. Você pode <em>Testar</em> qualquer espécie antes de comprar!</li>
-                      <li><strong>Ovo Misterioso (80 🥚):</strong> Sorteia um acessório ou rastro faltante da coleção. Com a coleção 100% completa, devolve <strong>35 🥚 + 80 XP</strong> (nunca gera lucro infinito).</li>
-                      <li><strong>Minigames (Limite 25 🥚/dia):</strong> Pesca e Ritmo exigem <strong>clicar exatamente no instante verde</strong> (pressionar fora e soltar dentro não conta!).</li>
+                      <li><strong>Estamina Física:</strong> Agora você gerencia Vida, Escudo, Fúria, <strong>Estamina</strong> (Bullet-Time [Shift] e Pulo Duplo aéreo, recarrega no chão/Oásis/itens) e carga combinada da Habilidade [Espaço] (tempo + combos/pisões/Q).</li>
+                      <li><strong>Pacotes & Patamares:</strong> Ovos valem 1, 5 (Dourado) ou 25 (Colossal) rendendo ~150–400 🥚 por partida de 3 min. Loja segue patamares claros (150 / 600 / 2.500 / 10.000 🥚), loja rotativa (-20%) e Cristais 💎 raros de chefes/baús.</li>
+                      <li><strong>Ovo Misterioso (${600} 🥚):</strong> Sorteia um acessório ou rastro faltante. Com coleção 100% completa, devolve <strong>240 🥚 + 150 XP + 1 💎</strong> (sem farm infinito).</li>
+                      <li><strong>Minigames (Limite 90 🥚/dia):</strong> Pesca e Ritmo exigem <strong>clicar exatamente no instante verde</strong> (pressionar fora e soltar dentro não conta!).</li>
                     </ul>
                   </div>
                 </div>
@@ -149,6 +215,25 @@ export class GuideModal {
                   </div>
                 </div>
               ` : ''}
+
+              ${tab === 'predators' ? `
+                <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));">
+                  ${PREDATOR_CATALOG.map((p) => {
+                    const seen = (Save.data.seenElements || []).includes('pred_intro_' + p.id);
+                    return `
+                      <div class="item-card" style="border-left: 4px solid ${p.accent};">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                          <strong style="color:${p.accent};">🐾 ${p.name}</strong>
+                          <span class="hud-pill" style="font-size:0.68rem; padding:2px 6px;">${seen ? '✅ Avistado' : p.biome}</span>
+                        </div>
+                        <small style="color:#ffd447; font-weight:700;">${p.title} • ${p.archetype}</small>
+                        <p style="font-size:0.81rem; color:#fef3c7; margin:4px 0;">${p.lore}</p>
+                        <small style="color:#86efac;">💡 ${p.counterTip}</small>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              ` : ''}
             </div>
           </div>
         </div>
@@ -168,6 +253,7 @@ export class GuideModal {
       container.querySelector('#guide-tut').addEventListener('click', () => {
         if (onStartTutorial) onStartTutorial();
       });
+      attachModalHelp(container, 'Consulte como superar cada obstáculo, combos de alquimia, status elementais e regras do Multiplayer.');
     };
 
     render();

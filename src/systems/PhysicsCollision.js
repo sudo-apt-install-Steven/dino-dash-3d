@@ -45,8 +45,8 @@ export class PhysicsCollision {
   }
 
   static checkNearMiss(pBox, obs) {
-    if (obs.nearMissed || obs.hit) return false;
-    if (['egg', 'powerup', 'ramp', 'campfire', 'shortcut', 'fruit', 'elemental_egg', 'treasure', 'grapple_point', 'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation'].includes(obs.kind)) return false;
+    if (obs.nearMissed || obs.hit || obs.nonHazard) return false;
+    if (['egg', 'powerup', 'ramp', 'speed_pad', 'trampoline', 'mud_pool', 'toxic_pool', 'tar_pit', 'campfire', 'shortcut', 'fruit', 'elemental_egg', 'treasure', 'grapple_point', 'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation', 'oasis_zone', 'fragile_bridge', 'rescue_cross'].includes(obs.kind)) return false;
     const oz = obs.group.position.z;
     if (oz < pBox.maxZ || oz > pBox.maxZ + 1.15) return false;
     const ox = obs.group.position.x;

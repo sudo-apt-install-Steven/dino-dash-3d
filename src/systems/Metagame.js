@@ -4,11 +4,11 @@
 import { Save } from './Save.js';
 
 export const TALENT_DEFS = [
-  { id: 'speed', name: 'Pés Ligeiros', icon: '⚡', maxLevel: 5, costBase: 55, desc: '+5% velocidade & distância inicial por nível' },
-  { id: 'magnet', name: 'Campo Magnético', icon: '🧲', maxLevel: 5, costBase: 50, desc: '+15% duração e alcance de ímã por nível' },
-  { id: 'vitality', name: 'Casco Ancestral', icon: '❤️', maxLevel: 3, costBase: 85, desc: '+1 coração máximo permanente a cada 2 níveis' },
-  { id: 'alchemy', name: 'Reator Elemental', icon: '⚗️', maxLevel: 5, costBase: 60, desc: '+20% dano/área de reações elementais por nível' },
-  { id: 'greed', name: 'Caçador de Fósseis', icon: '🥚', maxLevel: 5, costBase: 65, desc: '+10% chance de ovos extras & tesouros por nível' }
+  { id: 'speed', name: 'Pés Ligeiros', icon: '⚡', maxLevel: 5, costBase: 150, desc: '+5% velocidade & distância inicial por nível' },
+  { id: 'magnet', name: 'Campo Magnético', icon: '🧲', maxLevel: 5, costBase: 150, desc: '+15% duração e alcance de ímã por nível' },
+  { id: 'vitality', name: 'Casco Ancestral', icon: '❤️', maxLevel: 3, costBase: 220, desc: '+1 coração máximo permanente a cada 2 níveis' },
+  { id: 'alchemy', name: 'Reator Elemental', icon: '⚗️', maxLevel: 5, costBase: 150, desc: '+20% dano/área de reações elementais por nível' },
+  { id: 'greed', name: 'Caçador de Fósseis', icon: '🥚', maxLevel: 5, costBase: 180, desc: '+10% chance de ovos extras & tesouros por nível' }
 ];
 
 export const CAMPAIGN_NODES = [
@@ -49,7 +49,8 @@ export class Metagame {
     p.bonusMult = Number((1 + p.level * 0.25).toFixed(2));
     Save.data.prestige = p;
     Save.data.dinoLevels = {};
-    Save.data.eggs = 25 + Math.min(35, p.level * 10);
+    Save.data.eggs = 150 + Math.min(250, p.level * 50);
+    Save.data.crystals = (Save.data.crystals || 0) + 3;
     if (!Save.data.unlockedTitles.includes(`Prestígio ${p.level}★`)) {
       Save.data.unlockedTitles.push(`Prestígio ${p.level}★`);
     }
@@ -57,12 +58,16 @@ export class Metagame {
     return { ok: true, level: p.level, bonusMult: p.bonusMult };
   }
 
+  static getTalentCost(def, cur) {
+    return Math.round(def.costBase * Math.pow(1.4, cur));
+  }
+
   static upgradeTalent(talentId) {
     const def = TALENT_DEFS.find((t) => t.id === talentId);
     if (!def) return { ok: false, reason: 'Talento inválido.' };
     const cur = Save.data.talents[talentId] || 0;
     if (cur >= def.maxLevel) return { ok: false, reason: 'Nível máximo atingido!' };
-    const cost = def.costBase * (cur + 1);
+    const cost = this.getTalentCost(def, cur);
     if ((Save.data.eggs || 0) < cost) return { ok: false, reason: `Precisa de ${cost} ovos.` };
     Save.addEggs(-cost);
     Save.data.talents[talentId] = cur + 1;

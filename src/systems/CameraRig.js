@@ -22,6 +22,7 @@ export class CameraRig {
     this.photoOrbitAngle = 0.5;
     this.focusPlayerId = null;
     this.spectatorOrbitAngle = 0;
+    this.predatorFocusPos = null;
 
     this.currentPos = new THREE.Vector3(-0.9, 4.9, 9.2);
     this.currentLook = new THREE.Vector3(1.2, 1.3, -11);
@@ -45,6 +46,10 @@ export class CameraRig {
 
   setFocusPlayer(playerId = null) {
     this.focusPlayerId = playerId;
+  }
+
+  setPredatorFocus(pos = null) {
+    this.predatorFocusPos = pos ? { x: pos.x || 0, y: pos.y || 0, z: pos.z || 8 } : null;
   }
 
   update(dt, playersOrPos, speed = 18, reduceShake = false, photoMode = false, spectatorMode = false) {
@@ -97,7 +102,14 @@ export class CameraRig {
       fz = playersOrPos.z || 0;
     }
 
-    if (spectatorMode) {
+    if (this.predatorFocusPos) {
+      const px = this.predatorFocusPos.x || 0;
+      const py = this.predatorFocusPos.y || 0;
+      const pz = this.predatorFocusPos.z || 8.2;
+      const sway = Math.sin(this.cinematicTime * 1.15) * 2.1;
+      this.targetPos.set(px + sway - 1.6, py + 3.2, pz - 6.8);
+      this.targetLook.set(px, py + 1.85, pz + 0.5);
+    } else if (spectatorMode) {
       this.spectatorOrbitAngle += dt * 0.55;
       const r = 10.5;
       this.targetPos.set(fx + Math.sin(this.spectatorOrbitAngle) * r, 5.2 + fy * 0.4, fz + Math.cos(this.spectatorOrbitAngle) * r);

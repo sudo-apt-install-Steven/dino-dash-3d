@@ -129,4 +129,20 @@ export class SoundEffects {
       this.engine.playTone({ freq: f, duration: 0.1, type: 'sine', gain: 0.2, delay: i * 0.04 });
     });
   }
+
+  shieldBreak() {
+    this.engine.playTone({ freq: 1180, endFreq: 320, duration: 0.2, type: 'triangle', gain: 0.25 });
+    this.engine.playNoise({ duration: 0.14, filterFreq: 2200, gain: 0.18 });
+  }
+
+  heal() {
+    [523, 659, 784].forEach((f, i) => {
+      this.engine.playTone({ freq: f, duration: 0.12, type: 'sine', gain: 0.2, delay: i * 0.05 });
+    });
+  }
+
+  pickupRarity(rarity = 'comum') {
+    const base = rarity === 'lendária' ? 880 : rarity === 'épica' ? 740 : rarity === 'rara' ? 620 : 500;
+    this.engine.playTone({ freq: base, endFreq: base * 1.35, duration: 0.11, type: 'triangle', gain: 0.18 });
+  }
 }

@@ -8,6 +8,8 @@ export const BIOMES = [
     tier: 'essential',
     name: 'Deserto Dourado',
     ruleDesc: 'Pista clássica com rio lateral, cactos, escorpiões e águias.',
+    lore: 'Antigo leito marinho transformado em dunas douradas onde escorpiões gigantes vigiam os oásis.',
+    fossil: { id: 'fossil_desert', name: 'Pinça Fóssil Real', icon: '🦂' },
     bossId: 'scorpion_king',
     theme: {
       sky: '#f78c4f', fog: '#f28549', fogDensity: 0.011,
@@ -21,6 +23,8 @@ export const BIOMES = [
     tier: 'essential',
     name: 'Rio Jurássico',
     ruleDesc: 'Pista alagada com correnteza lateral; aquáticos ganham impulso!',
+    lore: 'Afluente ancestral raso onde nadadores jurássicos cruzam troncos submersos em busca de cardumes.',
+    fossil: { id: 'fossil_river', name: 'Dente de Espinossauro', icon: '🦷' },
     bossId: 'plesiosaur',
     waterTrack: true,
     currentForce: 1.8,
@@ -36,13 +40,15 @@ export const BIOMES = [
     tier: 'essential',
     name: 'Vulcão em Erupção',
     ruleDesc: 'Poças de lava e calor intenso; pule as poças ou use escudo!',
-    bossId: 'alpha_trex',
+    lore: 'Caldeira ativa de obsidiana moldada por erupções contínuas e vigiada pelo Golem de Magma.',
+    fossil: { id: 'fossil_volcano', name: 'Núcleo de Obsidiana', icon: '🌋' },
+    bossId: 'lava_golem',
     heatDrain: true,
     theme: {
-      sky: '#591616', fog: '#7f1d1d', fogDensity: 0.014,
-      ground: '#2c2525', track: '#423737', stripe: '#ff5e00', bank: '#1f1919',
-      river: '#ff4500', riverEmissive: '#d00000', sun: '#ff6d00', sunGlow: '#ff0000',
-      scenery: { pebble: '#5c4d4d', rock: '#3d3131', flora: '#7f1d1d', flower: '#ff9100', mesa: '#4a1c1c', cloud: '#6b4b4b', wood: '#2b1f1f' }
+      sky: '#993322', fog: '#bd4c2e', fogDensity: 0.011,
+      ground: '#61413b', track: '#8d6e63', stripe: '#ffb74d', bank: '#4a302b', edgeGlow: '#ff6d00',
+      river: '#ff5722', riverEmissive: '#e65100', sun: '#ffa726', sunGlow: '#ff5252',
+      scenery: { pebble: '#8d6e63', rock: '#6d4c41', flora: '#a83324', flower: '#ffb300', mesa: '#732920', cloud: '#a16b62', wood: '#593b36' }
     }
   },
   {
@@ -50,7 +56,9 @@ export const BIOMES = [
     tier: 'essential',
     name: 'Era do Gelo',
     ruleDesc: 'Pista escorregadia e placas de gelo fino que racham.',
-    bossId: 'storm_eagle',
+    lore: 'Planície congelada onde manadas antigas preservaram presas de marfim sob o gelo eterno.',
+    fossil: { id: 'fossil_ice', name: 'Presa de Mamute Glacial', icon: '🦣' },
+    bossId: 'frost_mammoth',
     slippery: true,
     theme: {
       sky: '#99d9f2', fog: '#b5e6fa', fogDensity: 0.012,
@@ -64,13 +72,15 @@ export const BIOMES = [
     tier: 'essential',
     name: 'Planeta Alienígena',
     ruleDesc: 'Baixa gravidade: pulos gigantes e armadilhas alienígenas!',
+    lore: 'Satélite roxo colonizado por sondas extraterrestres que estudam DNA pré-histórico.',
+    fossil: { id: 'fossil_alien', name: 'Âmbar Estelar Antigo', icon: '🛸' },
     bossId: 'mother_ufo',
     lowGravity: 0.62,
     theme: {
-      sky: '#240046', fog: '#3c096c', fogDensity: 0.012,
-      ground: '#1a0b2e', track: '#5a189a', stripe: '#00f5d4', bank: '#3c096c',
-      river: '#00f5d4', riverEmissive: '#7209b7', sun: '#f72585', sunGlow: '#7209b7',
-      scenery: { pebble: '#9d4edd', rock: '#240046', flora: '#00f5d4', flower: '#ffbe0b', mesa: '#480ca8', cloud: '#c77dff', wood: '#7209b7' }
+      sky: '#4b1d78', fog: '#663399', fogDensity: 0.010,
+      ground: '#3c2563', track: '#7c4dff', stripe: '#00f5d4', bank: '#512da8', edgeGlow: '#00f5d4',
+      river: '#00f5d4', riverEmissive: '#7c4dff', sun: '#ff4081', sunGlow: '#aa00ff',
+      scenery: { pebble: '#b388ff', rock: '#5e35b1', flora: '#00f5d4', flower: '#ffd54f', mesa: '#512da8', cloud: '#d1c4e9', wood: '#8e24aa' }
     }
   },
 
@@ -80,6 +90,8 @@ export const BIOMES = [
     tier: 'advanced',
     name: 'Floresta Jurássica',
     ruleDesc: 'Árvores gigantes, folhagem densa e raptors na espreita.',
+    lore: 'Selva de samambaias colossais e sequoias antigas onde o T-Rex Alfa reina soberano.',
+    fossil: { id: 'fossil_forest', name: 'Âmbar de Samambaia', icon: '🌿' },
     bossId: 'alpha_trex',
     theme: {
       sky: '#6ab04c', fog: '#4d8a35', fogDensity: 0.013,
@@ -93,13 +105,15 @@ export const BIOMES = [
     tier: 'advanced',
     name: 'Pântano Sombrio',
     ruleDesc: 'Lama que desacelera e neblina densa com vaga-lumes.',
-    bossId: 'scorpion_king',
+    lore: 'Brejo milenar de águas turvas onde a Hidra de três cabeças regenera suas escamas.',
+    fossil: { id: 'fossil_swamp', name: 'Escama de Hidra', icon: '🐍' },
+    bossId: 'swamp_hydra',
     mudSlow: 0.86,
     theme: {
-      sky: '#2b3a2e', fog: '#1f2d22', fogDensity: 0.018,
-      ground: '#253326', track: '#4a4031', stripe: '#6b705c', bank: '#344e41',
-      river: '#588157', riverEmissive: '#3a5a40', sun: '#d4e09b', sunGlow: '#a3b18a',
-      scenery: { pebble: '#582f0e', rock: '#3a5a40', flora: '#344e41', flower: '#ccff33', mesa: '#1b4332', cloud: '#4f6d5a', wood: '#3d2b1f' }
+      sky: '#477057', fog: '#5b8a6e', fogDensity: 0.012,
+      ground: '#3e5c42', track: '#82785f', stripe: '#e6f598', bank: '#4e735c', edgeGlow: '#bef264',
+      river: '#6b9e78', riverEmissive: '#4b7f52', sun: '#e9f5a6', sunGlow: '#b7ce63',
+      scenery: { pebble: '#7f5539', rock: '#588157', flora: '#4a7c59', flower: '#d9ff47', mesa: '#3a5a40', cloud: '#88ad96', wood: '#5c4033' }
     }
   },
   {
@@ -107,12 +121,14 @@ export const BIOMES = [
     tier: 'advanced',
     name: 'Cemitério de Fósseis',
     ruleDesc: 'Ossadas colossais e fantasmas noturnos.',
-    bossId: 'alpha_trex',
+    lore: 'Desfiladeiro de costelas gigantes guardado pela Aranha Cavernosa tecelã de teias ácidas.',
+    fossil: { id: 'fossil_graveyard', name: 'Crânio de Titã', icon: '💀' },
+    bossId: 'cave_spider',
     theme: {
-      sky: '#4a4e69', fog: '#22223b', fogDensity: 0.0135,
-      ground: '#5c5552', track: '#9a8c98', stripe: '#c9ada7', bank: '#4a4e69',
-      river: '#4cc9f0', riverEmissive: '#3f37c9', sun: '#f2e9e4', sunGlow: '#9a8c98',
-      scenery: { pebble: '#e5e5e5', rock: '#6c757d', flora: '#dcd6f7', flower: '#4cc9f0', mesa: '#3d3456', cloud: '#c9ada7', wood: '#495057' }
+      sky: '#6b7094', fog: '#53567d', fogDensity: 0.011,
+      ground: '#736c69', track: '#b0a2af', stripe: '#e5d4ce', bank: '#606485', edgeGlow: '#72efdd',
+      river: '#4cc9f0', riverEmissive: '#4361ee', sun: '#f8edeb', sunGlow: '#b5a7c7',
+      scenery: { pebble: '#e5e5e5', rock: '#8a949e', flora: '#dcd6f7', flower: '#4cc9f0', mesa: '#534973', cloud: '#dcd0cb', wood: '#666d73' }
     }
   },
   {
@@ -120,7 +136,9 @@ export const BIOMES = [
     tier: 'advanced',
     name: 'Cidade em Ruínas',
     ruleDesc: 'Templos pré-históricos, estátuas e armadilhas antigas.',
-    bossId: 'scorpion_king',
+    lore: 'Templos esquecidos cobertos por ouro e besouros sagrados guardiões dos enigmas rúnicos.',
+    fossil: { id: 'fossil_ruins', name: 'Relíquia do Escaravelho', icon: '🪲' },
+    bossId: 'amber_scarab',
     theme: {
       sky: '#d4a373', fog: '#bc8a5f', fogDensity: 0.0115,
       ground: '#7f5539', track: '#b08968', stripe: '#e6ccb2', bank: '#6c584c',
@@ -133,11 +151,13 @@ export const BIOMES = [
     tier: 'advanced',
     name: 'Montanha Nevada',
     ruleDesc: 'Vento lateral nas alturas e pedras rolando da encosta.',
+    lore: 'Picos ventosos onde águias colossais patrulham passagens estreitas entre penhascos.',
+    fossil: { id: 'fossil_mountain', name: 'Pena Petrificada', icon: '🦅' },
     bossId: 'storm_eagle',
     windBias: 1.5,
     theme: {
-      sky: '#74c0fc', fog: '#a5d8ff', fogDensity: 0.012,
-      ground: '#e9ecef', track: '#dee2e6', stripe: '#4dabf7', bank: '#adb5bd',
+      sky: '#74c0fc', fog: '#a5d8ff', fogDensity: 0.011,
+      ground: '#eff6ff', track: '#a8c7e6', stripe: '#3b82f6', bank: '#93c5fd', edgeGlow: '#60a5fa',
       river: '#339af0', riverEmissive: '#1864ab', sun: '#fff9db', sunGlow: '#74c0fc',
       scenery: { pebble: '#adb5bd', rock: '#495057', flora: '#2b8a3e', flower: '#e7f5ff', mesa: '#868e96', cloud: '#ffffff', wood: '#495057' }
     }
@@ -147,12 +167,14 @@ export const BIOMES = [
     tier: 'advanced',
     name: 'Caverna de Cristais',
     ruleDesc: 'Escuridão iluminada por cristais brilhantes.',
-    bossId: 'mother_ufo',
+    lore: 'Gruta profunda de ametista bioluminescente habitada pela lendária Serpe Cristalina.',
+    fossil: { id: 'fossil_crystal', name: 'Geodo de Ametista', icon: '🔮' },
+    bossId: 'crystal_wyrm',
     theme: {
-      sky: '#10002b', fog: '#10002b', fogDensity: 0.017,
-      ground: '#1b1433', track: '#2b1e4a', stripe: '#72efdd', bank: '#240046',
-      river: '#64dfdf', riverEmissive: '#5e60ce', sun: '#72efdd', sunGlow: '#5390d9',
-      scenery: { pebble: '#5e60ce', rock: '#3c096c', flora: '#64dfdf', flower: '#ff70a6', mesa: '#240046', cloud: '#3c096c', wood: '#3a0ca3' }
+      sky: '#3c256b', fog: '#56398f', fogDensity: 0.011,
+      ground: '#3c2f63', track: '#6b56a6', stripe: '#72efdd', bank: '#4c2d85', edgeGlow: '#80ffdb',
+      river: '#64dfdf', riverEmissive: '#5e60ce', sun: '#80ffdb', sunGlow: '#748ffc',
+      scenery: { pebble: '#748ffc', rock: '#5b3a96', flora: '#64dfdf', flower: '#ff85b3', mesa: '#452782', cloud: '#7950b5', wood: '#5f3dc4' }
     }
   },
   {
@@ -160,6 +182,8 @@ export const BIOMES = [
     tier: 'advanced',
     name: 'Savana da Migração',
     ruleDesc: 'Manadas frequentes onde é possível montar herbívoros.',
+    lore: 'Planície dourada de manadas em movimento e caçadores velozes de olhos de águia.',
+    fossil: { id: 'fossil_savanna', name: 'Pegada de Manada', icon: '🐾' },
     bossId: 'alpha_trex',
     theme: {
       sky: '#f4a261', fog: '#e76f51', fogDensity: 0.01,
@@ -173,6 +197,8 @@ export const BIOMES = [
     tier: 'advanced',
     name: 'Praia e Mar Aberto',
     ruleDesc: 'Ondas empurram na areia e marés sobem rapidamente.',
+    lore: 'Costa tropical pré-histórica onde conchas gigantes e leviatãs emergem na maré alta.',
+    fossil: { id: 'fossil_beach', name: 'Amonite Dourada', icon: '🐚' },
     bossId: 'plesiosaur',
     currentForce: 1.2,
     theme: {
@@ -187,11 +213,13 @@ export const BIOMES = [
     tier: 'advanced',
     name: 'Deserto de Tempestade',
     ruleDesc: 'Redemoinhos e ventania constante desviam saltos.',
+    lore: 'Dunas carregadas de raios estáticos onde tempestades de areia escondem relíquias antigas.',
+    fossil: { id: 'fossil_storm', name: 'Fulgurito Elétrico', icon: '⚡' },
     bossId: 'storm_eagle',
     windBias: -2.0,
     theme: {
-      sky: '#b5651d', fog: '#9c5221', fogDensity: 0.016,
-      ground: '#a45a2a', track: '#cc7733', stripe: '#7a3e13', bank: '#8b4513',
+      sky: '#c9782c', fog: '#b56a33', fogDensity: 0.012,
+      ground: '#a86535', track: '#db8c48', stripe: '#fff3a1', bank: '#8f4d20', edgeGlow: '#fde047',
       river: '#4ea8de', riverEmissive: '#277da1', sun: '#ffba08', sunGlow: '#e85d04',
       scenery: { pebble: '#7f4f24', rock: '#582f0e', flora: '#55a630', flower: '#ff9ebb', mesa: '#6f1d1b', cloud: '#d4a373', wood: '#432818' }
     }
@@ -201,13 +229,15 @@ export const BIOMES = [
     tier: 'advanced',
     name: 'Fábrica Alienígena',
     ruleDesc: 'Esteiras turbo, drones e lasers rotativos.',
-    bossId: 'mother_ufo',
+    lore: 'Complexo mecânico orbital onde clones robóticos e o Raptor Cibernético protegem o núcleo.',
+    fossil: { id: 'fossil_factory', name: 'Chip Fóssil Quântico', icon: '🤖' },
+    bossId: 'cyber_raptor',
     speedMod: 1.15,
     theme: {
-      sky: '#0f172a', fog: '#1e1b4b', fogDensity: 0.012,
-      ground: '#1e293b', track: '#334155', stripe: '#22d3ee', bank: '#0f172a',
-      river: '#a855f7', riverEmissive: '#7e22ce', sun: '#22d3ee', sunGlow: '#a855f7',
-      scenery: { pebble: '#64748b', rock: '#475569', flora: '#22d3ee', flower: '#f43f5e', mesa: '#312e81', cloud: '#475569', wood: '#334155' }
+      sky: '#334e78', fog: '#485b96', fogDensity: 0.010,
+      ground: '#475569', track: '#6f829c', stripe: '#38bdf8', bank: '#334155', edgeGlow: '#38bdf8',
+      river: '#c084fc', riverEmissive: '#9333ea', sun: '#38bdf8', sunGlow: '#c084fc',
+      scenery: { pebble: '#94a3b8', rock: '#64748b', flora: '#38bdf8', flower: '#fb7185', mesa: '#4338ca', cloud: '#94a3b8', wood: '#475569' }
     }
   }
 ];

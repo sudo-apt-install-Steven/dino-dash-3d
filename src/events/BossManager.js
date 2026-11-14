@@ -4,6 +4,37 @@ import * as THREE from 'three';
 import { LANE_X } from '../world/World.js';
 import { Save } from '../systems/Save.js';
 import { buildBossModel } from './BossModels.js';
+import { StatusSystem } from '../systems/StatusSystem.js';
+import { buildVoxelWeakOrb } from '../models/VoxelLibrary.js';
+import { buildClaudeBossObstacle } from '../models/ClaudeVoxelModels.js';
+
+export const BOSS_ATTACK_PROFILES = {
+  alpha_trex: ['tronco', 'rocha', 'onda'],
+  scorpion_king: ['espinhos', 'rocha'],
+  storm_eagle: ['raio', 'onda'],
+  mother_ufo: ['feixe', 'raio'],
+  swamp_hydra: ['poca', 'tronco'],
+  lava_golem: ['magma', 'rocha'],
+  frost_mammoth: ['gelo', 'onda'],
+  cave_spider: ['teia', 'poca'],
+  plesiosaur: ['onda', 'poca'],
+  amber_scarab: ['espinhos', 'rocha'],
+  crystal_wyrm: ['gelo', 'raio'],
+  cyber_raptor: ['feixe', 'raio']
+};
+
+export const BOSS_OBS_CFG = {
+  tronco: { minY: 0, maxY: 0.9, halfW: 0.85, halfD: 0.45, spinX: true, centeredBody: true, yPos: 0.42, scale: 1.25, extraSpeed: 9, label: '🪵 TRONCO DO CHEFE!' },
+  rocha: { minY: 0, maxY: 1.48, halfW: 0.72, halfD: 0.68, yPos: 0, scale: 1.15, extraSpeed: 7, label: '🪨 ROCHA PARTIDA!' },
+  onda: { minY: 0, maxY: 0.72, halfW: 0.98, halfD: 0.95, yPos: 0, scale: 0.9, extraSpeed: 10, label: '🌊 ONDA SÍSMICA!' },
+  espinhos: { minY: 0, maxY: 1.4, halfW: 0.85, halfD: 0.85, yPos: 0, scale: 1.0, extraSpeed: 8, label: '🌵 ESPINHOS DE AREIA!' },
+  raio: { minY: 0, maxY: 2.3, halfW: 0.65, halfD: 0.65, yPos: 0, scale: 1.05, extraSpeed: 12, label: '⚡ RAIO DO CHEFE!' },
+  feixe: { minY: 0, maxY: 2.5, halfW: 0.8, halfD: 0.8, yPos: 0, scale: 0.98, extraSpeed: 11, label: '🛸 FEIXE ABDUÇÃO!' },
+  poca: { minY: 0, maxY: 0.48, halfW: 0.82, halfD: 0.82, yPos: 0, scale: 1.0, extraSpeed: 5, status: 'poison', label: '☠️ POÇA TÓXICA!' },
+  magma: { minY: 0, maxY: 1.65, halfW: 0.7, halfD: 0.7, yPos: 0, scale: 1.05, extraSpeed: 8, label: '🌋 PILAR DE MAGMA!' },
+  gelo: { minY: 0, maxY: 1.85, halfW: 0.82, halfD: 0.82, yPos: 0, scale: 1.0, extraSpeed: 9, label: '❄️ ESTALACTITES!' },
+  teia: { minY: 0, maxY: 1.95, halfW: 0.85, halfD: 0.55, yPos: 0, scale: 0.95, extraSpeed: 6, status: 'mud', label: '🕸️ TEIA PEGAJOSA!' }
+};
 
 export const BOSS_DEFS = {
   scorpion_king: {
@@ -50,6 +81,69 @@ export const BOSS_DEFS = {
     color: '#0284c7',
     weakOrder: [0, 1, 2],
     rewardAccessory: 'aura_fire'
+  },
+  swamp_hydra: {
+    id: 'swamp_hydra',
+    name: 'Hidra do Pântano',
+    title: 'Terror de Três Cabeças',
+    hp: 5,
+    color: '#65a30d',
+    weakOrder: [0, 2, 1],
+    rewardAccessory: 'leaf_cape'
+  },
+  lava_golem: {
+    id: 'lava_golem',
+    name: 'Golem de Magma',
+    title: 'Titã da Caldeira',
+    hp: 6,
+    color: '#f97316',
+    weakOrder: [1, 0, 2],
+    rewardAccessory: 'aura_fire'
+  },
+  frost_mammoth: {
+    id: 'frost_mammoth',
+    name: 'Mamute Glacial',
+    title: 'Colosso da Tundra',
+    hp: 6,
+    color: '#38bdf8',
+    weakOrder: [2, 1, 0],
+    rewardAccessory: 'aura_ice'
+  },
+  cave_spider: {
+    id: 'cave_spider',
+    name: 'Aranha Cavernosa',
+    title: 'Rainha das Sombras',
+    hp: 5,
+    color: '#84cc16',
+    weakOrder: [0, 1, 0],
+    rewardAccessory: 'bat_wings'
+  },
+  amber_scarab: {
+    id: 'amber_scarab',
+    name: 'Escaravelho de Âmbar',
+    title: 'Guardião Dourado',
+    hp: 5,
+    color: '#f59e0b',
+    weakOrder: [1, 2, 1],
+    rewardAccessory: 'amber_medallion'
+  },
+  crystal_wyrm: {
+    id: 'crystal_wyrm',
+    name: 'Serpe Cristalina',
+    title: 'Dragão de Ametista',
+    hp: 6,
+    color: '#c084fc',
+    weakOrder: [2, 0, 2],
+    rewardAccessory: 'crystal_wings'
+  },
+  cyber_raptor: {
+    id: 'cyber_raptor',
+    name: 'Raptor Cibernético [Mini-Boss]',
+    title: 'Unidade Alfa-X',
+    hp: 4,
+    color: '#22d3ee',
+    weakOrder: [0, 1, 2],
+    rewardAccessory: 'visor_neon'
   }
 };
 
@@ -65,17 +159,8 @@ export class BossManager {
     this.animCycleTimer = 0;
     this.currentAnim = 'idle';
 
-    // Orbe Ponto Fraco facetado (cristal rotativo + anel)
-    this.weakOrb = new THREE.Group();
-    const crystal = new THREE.Mesh(
-      new THREE.OctahedronGeometry(0.75, 0),
-      new THREE.MeshStandardMaterial({ color: '#ffd447', emissive: '#ff9500', emissiveIntensity: 0.95 })
-    );
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.9, 0.08, 6, 16),
-      new THREE.MeshBasicMaterial({ color: '#ffffff' })
-    );
-    this.weakOrb.add(crystal, ring);
+    // Orbe Ponto Fraco multi-voxel facetado (cristal cruzado + 4 nodos orbitais)
+    this.weakOrb = buildVoxelWeakOrb();
     this.weakOrb.visible = false;
     this.scene.add(this.weakOrb);
 
@@ -90,8 +175,8 @@ export class BossManager {
     this.scene.add(this.shockRing);
 
     this.hazardShots = [];
+    this.obsWarnCooldown = 0;
     this.shotMat = new THREE.MeshStandardMaterial({ color: '#ff2e63', emissive: '#ff5500', emissiveIntensity: 0.85 });
-    this.shotGeo = new THREE.OctahedronGeometry(0.62, 0);
   }
 
   startBoss(bossId = 'alpha_trex', playerCount = 1) {
@@ -102,6 +187,7 @@ export class BossManager {
 
     this.activeBoss = {
       ...def,
+      weakness: StatusSystem.getBossWeakness(def.id),
       currentHp: scaledHp,
       maxHp: scaledHp,
       stepIndex: 0,
@@ -182,19 +268,23 @@ export class BossManager {
     }
 
     // Dispara ataques variados por fase (rugido, mordida/investida, rabada dupla)
+    this.obsWarnCooldown = Math.max(0, (this.obsWarnCooldown || 0) - dt);
     if (b.introTimer <= 0) {
       this.attackTimer -= dt;
       if (this.attackTimer <= 0) {
         const hpLost = b.maxHp - b.currentHp;
         this.attackTimer = Math.max(0.72, 1.75 - hpLost * 0.13);
         const attackRoll = Math.floor(Math.random() * 3);
+        const profile = BOSS_ATTACK_PROFILES[b.id] || ['rocha', 'onda'];
+        const chosenObs = profile[Math.floor(Math.random() * profile.length)];
 
         if (attackRoll === 0) {
           this.currentAnim = 'bite';
           this.animCycleTimer = 0.6;
           b.lungeZ = 4.2;
           const lane = Math.floor(Math.random() * 3);
-          this._spawnShot(LANE_X[lane], 0.72, -31);
+          this._spawnShot(LANE_X[lane], 0, -31, { obsType: chosenObs });
+          this._announceObs(chosenObs, players, ctx, b);
         } else if (attackRoll === 1) {
           this.currentAnim = 'tail_sweep';
           this.animCycleTimer = 0.7;
@@ -203,37 +293,41 @@ export class BossManager {
           for (let l = 0; l < 3; l++) {
             if (l === safe && b.phase < 3) continue;
             if (l === safe && b.phase >= 3 && Math.random() < 0.75) continue;
-            this._spawnShot(LANE_X[l], 0.68, -32);
+            this._spawnShot(LANE_X[l], 0, -32, { obsType: chosenObs });
           }
+          this._announceObs(chosenObs, players, ctx, b);
         } else {
           this.currentAnim = 'roar';
           this.animCycleTimer = 0.75;
           ctx.cameraRig?.triggerShake(0.32, 0.25);
           this._triggerShockwave(this.group.position.x, -32, b.color);
           const lane = Math.floor(Math.random() * 3);
-          this._spawnShot(LANE_X[lane], 1.35, -32); // tiro alto p/ abaixar!
+          this._spawnShot(LANE_X[lane], 1.15, -32, { obsType: chosenObs, isHigh: true });
+          this._announceObs(chosenObs, players, ctx, b, true);
         }
       }
     }
 
-    // Move projéteis do boss
+    // Move obstáculos & ataques temáticos do boss
     for (let i = this.hazardShots.length - 1; i >= 0; i--) {
       const s = this.hazardShots[i];
-      s.mesh.position.z += (speed + 10) * dt;
-      s.mesh.rotation.x += dt * 7;
-      s.mesh.rotation.y += dt * 5;
+      s.mesh.position.z += (speed + s.extraSpeed) * dt;
+      if (s.spinX) {
+        s.mesh.rotation.x += dt * 8;
+        if (s.isHigh) s.mesh.rotation.y += dt * 4;
+      }
       if (!s.hit) {
         for (const p of players) {
           if (p.dead) continue;
           const pTop = p.y + (p.ducking ? 0.95 : 1.85);
-          const shotY = s.mesh.position.y;
           if (
-            Math.abs(p.x - s.mesh.position.x) < 0.85 &&
-            Math.abs(p.z - s.mesh.position.z) < 0.85 &&
-            p.y < shotY + 0.55 &&
-            pTop > shotY - 0.5
+            Math.abs(p.x - s.mesh.position.x) < s.halfW &&
+            Math.abs(p.z - s.mesh.position.z) < s.halfD &&
+            p.y < s.maxY &&
+            pTop > s.minY
           ) {
             s.hit = true;
+            if (s.status) StatusSystem.apply(p, s.status, 3.0, ctx);
             ctx.damagePlayer?.(p);
           }
         }
@@ -266,11 +360,66 @@ export class BossManager {
     ctx.onBossHudUpdate?.(this.activeBoss);
   }
 
-  _spawnShot(x, y, z) {
-    const shot = new THREE.Mesh(this.shotGeo, this.shotMat);
-    shot.position.set(x, y, z);
+  _announceObs(obsType, players, ctx, boss, isHigh = false) {
+    boss.lastObsType = obsType;
+    if (this.obsWarnCooldown > 0 || !players.length) return;
+    const cfg = BOSS_OBS_CFG[obsType];
+    if (!cfg) return;
+    this.obsWarnCooldown = 4.2;
+    const msg = isHigh ? '⬇️ ABAIXE! ATAQUE ALTO!' : cfg.label;
+    ctx.showFloatText?.(players[0], msg, boss.color);
+  }
+
+  _spawnShot(x, y, z, opts = {}) {
+    const obsType = opts.obsType || 'rocha';
+    const cfg = BOSS_OBS_CFG[obsType] || BOSS_OBS_CFG.rocha;
+    const isHigh = !!opts.isHigh;
+
+    // Ataques altos permitem passar abaixado (rocha/tronco arremessados ou cristal elevado)
+    const buildType = isHigh && !['tronco', 'rocha', 'gelo'].includes(obsType) ? 'rocha' : obsType;
+    const buildCfg = BOSS_OBS_CFG[buildType] || cfg;
+    const shot = buildClaudeBossObstacle(buildType, {
+      withWarn: !isHigh,
+      centeredBody: isHigh && buildType !== 'gelo' ? true : !!buildCfg.centeredBody
+    });
+
+    if (isHigh) {
+      const isIceBarrier = buildType === 'gelo';
+      shot.scale.setScalar(isIceBarrier ? 0.98 : 0.86);
+      shot.position.set(x, isIceBarrier ? 0.48 : 1.38, z);
+      this.scene.add(shot);
+      this.hazardShots.push({
+        mesh: shot,
+        hit: false,
+        obsType: buildType,
+        isHigh: true,
+        spinX: !isIceBarrier,
+        minY: 1.05,
+        maxY: 2.38,
+        halfW: 0.78,
+        halfD: 0.78,
+        extraSpeed: 10,
+        status: null
+      });
+      return;
+    }
+
+    shot.scale.setScalar(buildCfg.scale || 1);
+    shot.position.set(x, buildCfg.yPos ?? y, z);
     this.scene.add(shot);
-    this.hazardShots.push({ mesh: shot, hit: false });
+    this.hazardShots.push({
+      mesh: shot,
+      hit: false,
+      obsType: buildType,
+      isHigh: false,
+      spinX: !!buildCfg.spinX,
+      minY: buildCfg.minY,
+      maxY: buildCfg.maxY,
+      halfW: buildCfg.halfW,
+      halfD: buildCfg.halfD,
+      extraSpeed: buildCfg.extraSpeed ?? 9,
+      status: buildCfg.status || null
+    });
   }
 
   _hitBossWeakPoint(player, players, ctx) {
@@ -290,9 +439,22 @@ export class BossManager {
       b.teamComboIds.clear();
     }
 
-    const dmg = (player.abilityDuration > 0 || player.attackTimer > 0) ? 2 : 1;
+    const weakMatch = b.weakness && player.element === b.weakness.element;
+    const baseDmg = (player.abilityDuration > 0 || player.attackTimer > 0) ? 2 : 1;
+    const dmg = baseDmg + (weakMatch ? 1 : 0);
+    if (weakMatch) {
+      ctx.showFloatText?.(player, `${b.weakness.icon} FRAQUEZA ELEMENTAL! +DANO!`, '#fde047');
+    }
     b.currentHp = Math.max(0, b.currentHp - dmg);
     b.stepIndex++;
+
+    // Mecânica especial da Hidra do Pântano: regenera +1 cabeça/HP na primeira vez que cai abaixo de 50%!
+    if (b.id === 'swamp_hydra' && !b.hydraRegenUsed && b.currentHp > 0 && b.currentHp <= Math.ceil(b.maxHp * 0.5)) {
+      b.hydraRegenUsed = true;
+      b.currentHp = Math.min(b.maxHp, b.currentHp + 1);
+      ctx.showFloatText?.(player, '🐍 HIDRA REGENEROU +1 CABEÇA (+1 HP)!', '#a3e635');
+      ctx.sfx?.roar('swamp_hydra');
+    }
 
     const hpRatio = b.currentHp / b.maxHp;
     const prevPhase = b.phase;
@@ -319,7 +481,8 @@ export class BossManager {
       this.clear();
       ctx.onBossHudUpdate?.(null);
       ctx.addScore?.(750);
-      Save.addEggs(18);
+      Save.addEggs(55);
+      Save.data.crystals = (Save.data.crystals || 0) + 3 + (defeated.bonusCrystals || 0);
       if (!Save.data.dinoHouse.trophies.includes(defeated.id)) {
         Save.data.dinoHouse.trophies.push(defeated.id);
       }
@@ -329,7 +492,7 @@ export class BossManager {
       Save.save();
       ctx.sfx?.victory();
       ctx.onBossDefeated?.(defeated);
-      ctx.showFloatText?.(player, `🏆 ${defeated.name} DERROTADO! +18 OVOS & TROFÉU!`, '#58d63a');
+      ctx.showFloatText?.(player, `🏆 ${defeated.name} DERROTADO! +55 🥚 & +3 💎!`, '#58d63a');
     } else {
       this._spawnNextWeakOrb();
     }

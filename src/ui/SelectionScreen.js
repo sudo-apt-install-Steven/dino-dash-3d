@@ -2,10 +2,13 @@
 // barras de atributos, passiva, habilidade, árvore de níveis 1-10 e botão "Testar".
 import * as THREE from 'three';
 import { DINO_CATALOG, DINO_CLASSES, getDinoSpec } from '../dinos/DinoCatalog.js';
+import { getDinoSkins } from '../dinos/DinoCustomization.js';
 import { DinoFactory } from '../dinos/DinoFactory.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { Save } from '../systems/Save.js';
 import { ProgressionManager } from '../systems/Progression.js';
+import { attachModalHelp } from './Menus.js';
+import { renderSkillSvg } from './SvgIcons.js';
 
 let _sharedPreviewStage = null;
 
@@ -188,6 +191,19 @@ export class SelectionScreen {
                   <button class="chunky-btn secondary" id="sel-test">Testar</button>
                   <button class="chunky-btn secondary" id="sel-roar">🔊 Rugido</button>
                 </div>
+                <div style="margin-top:8px;">
+                  <div style="font-size:0.74rem; color:#ffd447; margin-bottom:4px;">🎨 Skins Fixas da Espécie:</div>
+                  <div class="tabs-row" style="gap:6px;">
+                    ${(() => {
+                      const activePreset = Save.data.customization.p1.presets[Save.data.customization.p1.activePreset];
+                      const skins = getDinoSkins(spec);
+                      return skins.map((sk) => {
+                        const isSkinActive = activePreset.skinId ? activePreset.skinId === sk.id : (!activePreset.useCustomColors && sk.isOriginal);
+                        return `<button class="tab-btn ${isSkinActive ? 'active' : ''}" data-skin-id="${sk.id}" title="${sk.badge}">${sk.badge} ${sk.name}</button>`;
+                      }).join('');
+                    })()}
+                  </div>
+                </div>
               </div>
 
               <div style="display:flex; flex-direction:column; gap:10px;">
@@ -197,8 +213,13 @@ export class SelectionScreen {
                 </div>
                 <div style="font-size:0.84rem; color:#9ce6e0;">Passiva: ${cls.passive.pt}</div>
                 <div class="item-card" style="padding:10px;">
-                  <strong style="color:#ff9a24;">Habilidade: ${spec.ability.name}</strong>
-                  <span style="font-size:0.84rem; color:#e5d3bc;">${spec.ability.desc}</span>
+                  <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+                    ${renderSkillSvg(spec.id, 34)}
+                    <div style="display:flex; flex-direction:column; gap:2px;">
+                      <strong style="color:#ff9a24;">Habilidade: ${spec.ability.name}</strong>
+                      <span style="font-size:0.84rem; color:#e5d3bc;">${spec.ability.desc}</span>
+                    </div>
+                  </div>
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
                     <span style="font-size:0.78rem; color:#ffd447;">Árvore de Habilidade Nv.${level} (+${(level - 1) * 8}% poder)</span>
                     <button class="tab-btn" id="sel-upgrade" ${(!isUnlocked || level >= 10) ? 'disabled' : ''}>
@@ -272,6 +293,28 @@ export class SelectionScreen {
         if (onPlayRoar) onPlayRoar(currentId);
       });
 
+      container.querySelectorAll('[data-skin-id]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const skinId = btn.getAttribute('data-skin-id');
+          const skins = getDinoSkins(spec);
+          const skin = skins.find((s) => s.id === skinId);
+          if (!skin) return;
+          const p1c = Save.data.customization.p1;
+          const preset = p1c.presets[p1c.activePreset];
+          preset.skinId = skin.id;
+          preset.useCustomColors = !skin.isOriginal;
+          preset.primary = skin.primary;
+          preset.secondary = skin.secondary;
+          preset.eye = skin.eye;
+          preset.spots = skin.spots;
+          preset.spikes = skin.spikes;
+          preset.pattern = skin.pattern || 'solid';
+          Save.save();
+          noticeMsg = `${skin.badge} Skin "${skin.name}" aplicada em ${spec.name}!`;
+          render();
+        });
+      });
+
       container.querySelector('#sel-upgrade')?.addEventListener('click', () => {
         const res = ProgressionManager.upgradeDinoSkill(currentId);
         if (res.ok) {
@@ -318,6 +361,7 @@ export class SelectionScreen {
         preview?.destroy();
         if (onClose) onClose();
       });
+      attachModalHelp(container, 'Gire o dino em 3D, compare passivas e atributos, evolua a habilidade e clique em "Testar" antes de comprar.');
     };
 
     render();

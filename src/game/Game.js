@@ -9,6 +9,7 @@ import { BIOMES, getBiomeById } from '../world/Biomes.js';
 import { DayNightCycle } from '../world/DayNightCycle.js';
 import { WeatherSystem } from '../world/Weather.js';
 import { DinoFactory } from '../dinos/DinoFactory.js';
+import { buildVoxelGoldenEgg, buildVoxelDebris } from '../models/VoxelLibrary.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { DinoAbilities } from '../dinos/DinoAbilities.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
@@ -17,6 +18,7 @@ import { CompanionManager } from '../dinos/Companion.js';
 import { Spawner } from '../systems/Spawner.js';
 import { PhysicsCollision } from '../systems/PhysicsCollision.js';
 import { Backpack } from '../systems/Items.js';
+import { StatusSystem } from '../systems/StatusSystem.js';
 import { CARD_MILESTONES, CARD_POOL, drawThreeCards } from '../systems/Cards.js';
 import { ProgressionManager } from '../systems/Progression.js';
 import { ReplayRecorder, getTodaySeed } from '../systems/Replay.js';
@@ -100,6 +102,9 @@ export class Game {
     this.activeCustomTrack = null;
     this.multiplayerSession = null;
     this.merchantUses = 0;
+    this.hitStopTimer = 0;
+    this.spotlightActive = false;
+    this._lastFrameRenderAt = 0;
     this.pendingRestart = false;
     this.restartPrevState = 'playing';
     this.tutorialState = null;
@@ -175,18 +180,35 @@ export class Game {
 
   applySettings() {
     const s = Save.data.settings;
-    const pr = s.quality === 'low' ? 1 : (s.quality === 'high' ? Math.min(window.devicePixelRatio || 1, 2) : 1.4);
+    const isLowSpec = !!Save.data.lowSpecMode;
+    const dpr = window.devicePixelRatio || 1;
+    const pr = isLowSpec
+      ? 0.65
+      : (s.quality === 'low' ? 0.72 : (s.quality === 'high' ? Math.min(dpr, 2) : Math.min(dpr, 1.35)));
     this.renderer.setPixelRatio(pr);
-    this.renderer.shadowMap.enabled = s.shadows;
-    this.world.setShadowEnabled(s.shadows);
+    const useShadows = isLowSpec ? false : !!s.shadows;
+    this.renderer.shadowMap.enabled = useShadows;
+    this.world.setShadowEnabled(useShadows);
+    this.world.setLowSpec(isLowSpec);
+    this.particles?.setLowSpec?.(isLowSpec || s.particles === 'min');
+    this.world.setBrightness(s.brightness ?? 1.05);
+    this.world.setClearVision(!!s.clearVision);
+    this.weather?.setClearVision?.(!!s.clearVision);
+    this.renderer.toneMappingExposure = 0.96 * (s.brightness ?? 1.05);
     this.cameraRig.baseFov = s.fov || 58;
-    this.camera.far = Save.data.lowSpecMode ? 145 : 260;
+    this.camera.far = isLowSpec ? 125 : 260;
     this.camera.updateProjectionMatrix();
     this.spawner.setObstacleHints(s.obstacleHints !== false);
     this.audio.applyVolumes();
+    this.ui?.hud?.setDebugButtonVisible?.(!!Save.data.devMode);
     if (this.multiplayerSession?.active) {
       this.tvHud.setVisible(true, !!Save.data.network?.tvScale);
     }
+  }
+
+  setLowLod(active) {
+    this.lowLod = Boolean(active || Save.data.lowSpecMode);
+    this.world?.scenery?.setLowDetail?.(this.lowLod);
   }
 
   _bindNetworkEvents() {
@@ -276,6 +298,7 @@ export class Game {
       this.lastPodiumSummary = summary;
       this.ui.showPodium(summary, {
         onReplay: () => this.ui.hud.showBanner('🎬 Replay disponível apenas na tela do Host.', '#ffd447', 2.4),
+        onVote: (v) => this.net.sendRoundVote(v),
         onAgain: () => this.ui.hud.showBanner('⏳ Aguardando o Dono da Sala iniciar a próxima rodada...', '#38bdf8', 2.6),
         onMenu: () => this.openMainMenu()
       });
@@ -311,7 +334,26 @@ export class Game {
     this.currentBiome = getBiomeById(biomeId);
     this.world.applyTheme(this.currentBiome.theme);
     this.spawner.setBiome(this.currentBiome.id);
+    this._discoverCurrentBiomeFossil(true);
     this.ui.hud.showBanner(`🌍 Bioma alterado para: ${this.currentBiome.name}`, '#00f5d4', 2.8);
+  }
+
+  _discoverCurrentBiomeFossil(silent = false) {
+    const fossil = this.currentBiome?.fossil;
+    if (!fossil?.id) return;
+    if (!Save.data.discoveredFossils) Save.data.discoveredFossils = {};
+    if (!Save.data.discoveredFossils[fossil.id]) {
+      Save.data.discoveredFossils[fossil.id] = {
+        name: fossil.name,
+        icon: fossil.icon,
+        biome: this.currentBiome.name,
+        at: Date.now()
+      };
+      Save.save();
+      if (!silent) {
+        this.ui.hud.showBanner(`${fossil.icon} Fóssil Descoberto: ${fossil.name} (${this.currentBiome.name})!`, '#ffd447', 3.4);
+      }
+    }
   }
 
   startCampaignNode(node) {
@@ -386,6 +428,15 @@ export class Game {
     if (brokeAny && this.tutorialState?.active && this.tutorialState.step === 3) {
       this._advanceTutorialStep();
     }
+    if (p.index === 0) {
+      this._triggerFirstUseSpotlight('spotlight_attack', {
+        icon: '⚔️',
+        title: 'Ataque Rápido [Q]',
+        desc: 'Use [Q] perto de cactos quebráveis, troncos e espinhos para destruí-los e carregar sua habilidade!',
+        selector: '#bar-attack',
+        accent: '#fb923c'
+      });
+    }
 
     const isDuel = (this.multiplayerSession?.active && this.multiplayerSession.mpMode === 'duel')
       || this.modeId === 'pvp'
@@ -458,13 +509,41 @@ export class Game {
     this.companions.clear();
   }
 
+  _createPlayerNameTag(name, color = '#ffd447', highlight = false) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 256, 64);
+    ctx.fillStyle = 'rgba(18, 10, 6, 0.82)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(14, 10, 228, 44, 14);
+    else ctx.fillRect(14, 10, 228, 44);
+    ctx.fill();
+    ctx.lineWidth = highlight ? 4 : 2.5;
+    ctx.strokeStyle = color || '#ffd447';
+    ctx.stroke();
+    ctx.fillStyle = '#fff6de';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const text = String(name || 'Dino').slice(0, 14);
+    ctx.fillText(highlight ? `★ ${text}` : text, 128, 33);
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const spr = new THREE.Sprite(mat);
+    spr.scale.set(2.2, 0.55, 1);
+    return spr;
+  }
+
   rebuildPlayers(customRoster = null) {
     this._clearPlayersFromScene();
     const modeDef = getModeDef(this.modeId);
     const diff = this.difficultyMgr.getConfig();
     const talents = Save.data.talents || {};
     const vitalityBonus = Math.floor((talents.vitality || 0) / 2);
-    const baseHp = (this.modeId === 'hardcore' ? 1 : diff.lives) + vitalityBonus;
+    const isPerfect = !!Save.data.perfectMode && this.modeId !== 'zen' && !this.isTestTrack;
+    const baseHp = isPerfect ? 1 : ((this.modeId === 'hardcore' ? 1 : diff.lives) + vitalityBonus);
     const activeSeason = Metagame.getActiveSeason();
     const hasCrown = (Save.data.partySkins || []).includes('lan_crown');
 
@@ -495,9 +574,16 @@ export class Game {
       const startLane = count === 1 ? 1 : (i % 3);
       const laneOffset = count > 3 ? ((Math.floor(i / 3) - 0.5) * 0.45) : 0;
       model.root.position.set(LANE_X[startLane] + laneOffset, 0, Math.floor(i / 3) * 0.65);
+      if (count > 1) {
+        const nameTag = this._createPlayerNameTag(slot.name || spec.name, slot.color || spec.colors.primary, i === 0);
+        nameTag.position.set(0, 2.75, 0);
+        model.root.add(nameTag);
+        model.nameTag = nameTag;
+      }
       this.scene.add(model.root);
 
-      const startShields = spec.dinoClass === 'herbivore' && this.modeId !== 'hardcore' ? 1 : 0;
+      const diffShield = this.difficultyMgr.activeId === 'easy' && this.modeId !== 'hardcore' ? 1 : 0;
+      const startShields = isPerfect ? 0 : Math.min(4, (spec.dinoClass === 'herbivore' && this.modeId !== 'hardcore' ? 1 : 0) + diffShield);
 
       this.players.push({
         index: i,
@@ -538,7 +624,8 @@ export class Game {
         abilityCooldown: 0,
         abilityMaxCooldown: spec.ability.cooldown,
         abilityDuration: 0,
-        bulletEnergy: 100,
+        abilityCharge: 100,
+        stamina: 100,
         element: null,
         wantedStars: 0,
         attackTimer: 0,
@@ -581,10 +668,13 @@ export class Game {
     this.photoMode = false;
     this.spectatorMode = false;
     this.pendingRestart = false;
+    this._dismissSpotlight();
     this.tutorialState = null;
     this.multiplayerSession = null;
     this.tvHud.setVisible(false);
     this.cameraRig.setFocusPlayer(null);
+    this.cameraRig.setPredatorFocus(null);
+    this.ui.hud.setPredatorIntroHud?.(null);
     this.music.setPlaying(false);
     this.spawner.reset();
     this.events.reset();
@@ -846,6 +936,7 @@ export class Game {
         ts.spawnCd = 1.6;
       } else if (ts.step === 4) {
         p0.abilityCooldown = 0;
+        p0.abilityCharge = 100;
         ts.spawnCd = 1.0;
       } else if (ts.step === 5 && !hasHazardAhead) {
         const nextElem = ts.elemCount === 0 ? 'fire' : 'ice';
@@ -913,8 +1004,10 @@ export class Game {
     this.runStomps = 0;
     this.nextCardIdx = 0;
     this.evolutionTier = 0;
+    this.hitStopTimer = 0;
     this.slowMoTimer = 0;
     this.decoyTimer = 0;
+    this.currentOasis = 0;
     this.shortcutTimer = 0;
     this.sharedSwapTimer = 60;
     this.sharedFlipped = false;
@@ -932,6 +1025,7 @@ export class Game {
     // Seed determinística para Desafio Diário, Multiplayer ou Seed compartilhável
     const seed = opts.seed || this.activeCustomTrack?.seed || (this.modeId === 'daily_challenge' ? getTodaySeed() : this.customSeed);
     this.spawner.setSeed(seed);
+    this.spawner.setDifficultyId(this.difficultyMgr.activeId);
     this.spawner.setDensity(diff.density * (this.activeCustomTrack?.obstacleRate || 1.0));
     this.events.configure(diff.eventFreq, diff.enabledEvents);
 
@@ -940,6 +1034,7 @@ export class Game {
     this.currentBiome = getBiomeById(startId);
     this.world.applyTheme(this.currentBiome.theme);
     this.spawner.setBiome(this.currentBiome.id);
+    if (!isTestTrack) this._discoverCurrentBiomeFossil();
 
     // Mutação aleatória divertida na partida (1 por corrida em modos normais)
     if (!isTestTrack && this.players[0]) {
@@ -948,6 +1043,9 @@ export class Game {
       if (mut.id === 'bouncy') this.players[0].jumpMult = 1.15;
       if (mut.id === 'tiny_core') this.players[0].smallHitbox = true;
       this.ui.hud.showBanner(`🧬 Mutação da Partida: ${mut.name} (${mut.desc})`, '#c084fc', 3.4);
+      if (Save.data.perfectMode) {
+        this.ui.hud.showBanner('💎 MODO PERFEITO ATIVO! 1 Vida • 0 Escudos • Score 2.2x • Ovos 1.5x', '#38bdf8', 3.6);
+      }
     }
 
     // Filhote companheiro ativo se chocado no minigame
@@ -963,18 +1061,9 @@ export class Game {
       this.ui.hud.showBanner(`⚔️ PVP MELHOR DE 3 — P1 (${this.pvpRounds.p1}) × (${this.pvpRounds.p2}) P2`, '#ff9a24', 3.2);
     }
 
-    // Ovo Dourado visível no modo Captura o Ovo
+    // Ovo Dourado multi-voxel visível no modo Captura o Ovo
     if (this.modeId === 'capture_egg') {
-      this.goldenEggProp = new THREE.Mesh(
-        new THREE.BoxGeometry(0.46, 0.58, 0.46),
-        new THREE.MeshStandardMaterial({
-          color: '#ffd447',
-          emissive: '#ff9f1c',
-          emissiveIntensity: 0.75,
-          metalness: 0.5,
-          roughness: 0.2
-        })
-      );
+      this.goldenEggProp = buildVoxelGoldenEgg();
       this.scene.add(this.goldenEggProp);
       this.ui.hud.showBanner('🥚 CAPTURA O OVO (30s)! Esbarrar rouba o Ovo Dourado!', '#ffd447', 3.4);
     }
@@ -1114,9 +1203,9 @@ export class Game {
   }
 
   _getMerchantCost() {
-    if (this.merchantUses <= 0) return 20;
-    if (this.merchantUses === 1) return 30;
-    return 45;
+    if (this.merchantUses <= 0) return 80;
+    if (this.merchantUses === 1) return 140;
+    return 220;
   }
 
   buyFromMerchant() {
@@ -1129,10 +1218,9 @@ export class Game {
     this.merchantUses++;
     const p = this.players[0];
     if (p) {
-      p.hp = Math.min(p.maxHp, p.hp + 1);
+      this._healPlayer(p, 1, '🛒 CURA DO MERCADOR & ESCUDO!');
       p.shields = Math.min(4, p.shields + 1);
-      this.sfx.powerup();
-      this.ui.hud.showFloatText('+1 VIDA & ESCUDO!', '#58d63a');
+      this.ui.hud.triggerEdgeFlash('rara');
     }
     this.ui.hud.hideMerchant();
   }
@@ -1141,6 +1229,7 @@ export class Game {
     if (this.multiplayerSession?.active && !this.multiplayerSession.isHost) {
       this.net.sendCardPick(card);
       this.sfx.card(card.rarity === 'lendária');
+      this.ui.hud.triggerEdgeFlash(card.rarity || 'comum');
       this.ui.hud.showFloatText(`CARTA ENVIADA: ${card.name}!`, '#ffd447');
       this.state = 'playing';
       return;
@@ -1149,6 +1238,8 @@ export class Game {
       if (!p.dead) card.apply(p, this);
     }
     this.sfx.card(card.rarity === 'lendária');
+    this.sfx.pickupRarity(card.rarity || 'comum');
+    this.ui.hud.triggerEdgeFlash(card.rarity || 'comum');
     this.ui.hud.showFloatText(`CARTA: ${card.name}!`, '#ffd447');
     this.state = 'playing';
     this.lastTime = performance.now();
@@ -1164,9 +1255,10 @@ export class Game {
   }
 
   addScore(pts, player = null) {
-    this.score += pts;
+    const scaledPts = Save.data.perfectMode ? pts * 2.2 : pts;
+    this.score += scaledPts;
     if (player && !player.dead) {
-      player.score = (player.score || 0) + pts;
+      player.score = (player.score || 0) + scaledPts;
     }
   }
 
@@ -1179,6 +1271,9 @@ export class Game {
       scene: this.scene,
       spawner: this.spawner,
       cameraRig: this.cameraRig,
+      currentBiome: this.currentBiome,
+      isMultiplayer: Boolean(this.multiplayerSession?.active),
+      headlessBot: Boolean(this.headlessBot),
       particles: this.particles,
       weather: this.weather,
       dayNight: this.dayNight,
@@ -1197,11 +1292,12 @@ export class Game {
       },
       onBossHudUpdate: (b) => this.ui.hud.setBossHud(b),
       onUfoHudUpdate: (a, t, pr) => this.ui.hud.setUfoHud(a, t, pr),
-      onChaserHudUpdate: (a, d) => this.ui.hud.setChaserHud(a, d),
+      onChaserHudUpdate: (a, d, spec) => this.ui.hud.setChaserHud(a, d, spec),
+      onPredatorIntroHud: (info) => this.ui.hud.setPredatorIntroHud(info, () => this.events.predators.skipIntro(this._eventContext())),
       clearNearbyObstacles: (x, z, radius, stunOnly) => this._clearNearbyObstacles(x, z, radius, stunOnly),
       healPartner: (source) => {
         for (const p of this.players) {
-          if (p !== source && !p.dead) p.hp = Math.min(p.maxHp, p.hp + 1);
+          if (p !== source && !p.dead) this._healPlayer(p, 1, '💚 PARCEIRO CUROU!');
         }
       },
       pushPvPRival: (source) => {
@@ -1224,7 +1320,7 @@ export class Game {
 
   _clearNearbyObstacles(px, pz, radius = 25, pushAway = false) {
     for (const obs of this.spawner.getActiveObstacles()) {
-      if (obs.hit || ['egg', 'powerup', 'ramp', 'campfire', 'shortcut', 'fruit', 'elemental_egg', 'treasure', 'grapple_point', 'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation'].includes(obs.kind)) continue;
+      if (obs.hit || obs.nonHazard || ['egg', 'powerup', 'ramp', 'campfire', 'shortcut', 'fruit', 'elemental_egg', 'treasure', 'grapple_point', 'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation', 'oasis_zone', 'fragile_bridge', 'rescue_cross'].includes(obs.kind)) continue;
       if (Math.hypot(obs.group.position.x - px, obs.group.position.z - pz) < radius) {
         obs.hit = true;
         obs.pool?.release(obs);
@@ -1236,10 +1332,7 @@ export class Game {
   }
 
   _spawnImpactDebris(x, z, color) {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(0.45, 0.45, 0.45),
-      new THREE.MeshStandardMaterial({ color: color || '#ffd447' })
-    );
+    const mesh = buildVoxelDebris(color || '#ffd447');
     mesh.position.set(x, 0.6, z);
     this.scene.add(mesh);
     this.impactDebris.push({ mesh, vx: (Math.random() - 0.5) * 4, vy: 5.5, vz: -34, life: 1.4 });
@@ -1248,6 +1341,53 @@ export class Game {
   _clearDebris() {
     for (const d of this.impactDebris) this.scene.remove(d.mesh);
     this.impactDebris = [];
+  }
+
+  _healPlayer(p, amount = 1, text = '💚 +1 VIDA!') {
+    if (!p || p.dead) return false;
+    const prev = p.hp;
+    p.hp = Math.min(p.maxHp, p.hp + amount);
+    const healed = p.hp > prev;
+    this.sfx.heal();
+    this.particles.emitExplosion(p.x, p.y + 0.9, p.z, '#4ade80', 14, false);
+    this.ui.hud.triggerEdgeFlash('heal');
+    this.ui.hud.pulseHp('heal');
+    this.ui.hud.showFloatText(healed ? text : '💚 VIDA CHEIA!', '#4ade80');
+    return healed;
+  }
+
+  _describeDeathCause(cause) {
+    const map = {
+      cactus_small: { label: '🌵 Cacto Pequeno', tip: 'Pule com [W/↑] ou destrua usando o Ataque [Q].' },
+      cactus_tall: { label: '🌵 Cacto Alto', tip: 'Troque de faixa com [A/D] ou segure [W/↑] para pulo alto.' },
+      cactus_cluster: { label: '🌵 Conjunto de Cactos', tip: 'Antecipe mudando para uma faixa livre com [A/D].' },
+      bird: { label: '🦅 Ave / Pterodáctilo', tip: 'Abaixe com [S/↓] nas aves altas ou pule em cima das baixas.' },
+      scorpion: { label: '🦂 Escorpião Veloz', tip: 'Ele vem rápido: pule em cima para pisotear ou quebre com [Q].' },
+      rolling_log: { label: '🪵 Tronco Rolante', tip: 'Pule antes do choque com [W/↑] ou estilhace com [Q].' },
+      tall_rock: { label: '🪨 Pedra Alta', tip: 'Troque de faixa ou aperte [W/↑] duas vezes perto para Wall Jump.' },
+      lava_pool: { label: '🔥 Poça de Lava', tip: 'Pule bem alto sobre o anel brilhante ou mantenha um Escudo.' },
+      thin_ice: { label: '❄️ Gelo Frágil', tip: 'Desvie do piso rachado azul-claro usando [A/D] ou pulando.' },
+      alien_trap: { label: '🛸 Armadilha Laser', tip: 'Troque de faixa antes que o laser dispare.' },
+      cactus_shooter: { label: '🌵 Cacto Atirador', tip: 'Mude de faixa assim que o cacto carregar o disparo.' },
+      cactus_spine: { label: '📌 Espinho Voador', tip: 'Corte o projétil no ar com [Q] ou mude de faixa.' },
+      meteor: { label: '☄️ Chuva de Meteoros', tip: 'Saia da faixa com círculo vermelho no chão antes do impacto!' },
+      ufo: { label: '🛸 Raio do OVNI', tip: 'Observe a sombra luminosa na pista e troque de faixa.' },
+      boss: { label: '👑 Ataque do Chefe', tip: 'Use [Q] para acertar o Orbe do Chefe (bônus se usar elemento fraco!).' },
+      predator: { label: '🦖 Predador Alfa', tip: 'Guarde [Espaço] e Escudos ao ouvir o rugido da perseguição!' },
+      poison: { label: '☠️ Veneno Acumulado', tip: 'Use Antídoto [E] ou pegue Esfera de Fogo 🔥 para neutralizar o veneno.' },
+      amber_crystal: { label: '🔶 Cristal de Âmbar', tip: 'Quebre o Cristal com Ataque [Q] ou pule/desvie para outra faixa!' },
+      geyser_vent: { label: '💨 Gêiser Vulcânico', tip: 'Troque de faixa com [A/D] ou dê um salto alto sobre o jato!' },
+      tar_pit: { label: '🖤 Poço de Piche', tip: 'Pule sobre o piche com [W/↑] para não perder estamina e velocidade!' },
+      falling_stalactite: { label: '🪨 Estalactite Cristalina', tip: 'Destrua com [Q] ou desvie de faixa antes do impacto.' },
+      electric_pylon: { label: '⚡ Bobina Elétrica', tip: 'Desvie da faixa energizada usando [A/D]!' },
+      spike_barricade: { label: '🪵 Barricada de Espinhos', tip: 'Pule com [W/↑] ou quebre com [Q] / Fúria!' },
+      pvp: { label: '⚔️ Ataque de Rival', tip: 'Contra-ataque com [Q] ou mantenha escudos ativos nos Duelos.' }
+    };
+    const found = map[cause];
+    return found || {
+      label: '⚠️ Perigo na Pista',
+      tip: 'Use [W/↑] para pular, [S/↓] para abaixar e [A/D] para desviar.'
+    };
   }
 
   _damagePlayer(p, cause = 'obstacle') {
@@ -1261,7 +1401,9 @@ export class Game {
     // Filhote companheiro pode bloquear 1 dano!
     if (p.index === 0 && this.companions.tryBlockDamage()) {
       p.invulnTimer = 1.4;
-      this.sfx.click();
+      this.hitStopTimer = 0.06;
+      this.sfx.shieldBreak();
+      this.ui.hud.triggerEdgeFlash('blue');
       this.ui.hud.showFloatText('FILHOTE BLOQUEOU!', '#58d63a');
       return;
     }
@@ -1269,9 +1411,12 @@ export class Game {
     if (p.shields > 0) {
       p.shields -= 1;
       p.invulnTimer = 1.6;
-      this.sfx.hurt();
-      this.cameraRig.triggerShake(0.38, 0.22);
-      this.ui.hud.showFloatText('ESCUDO QUEBRADO!', '#38bdf8');
+      this.hitStopTimer = 0.08;
+      this.sfx.shieldBreak();
+      this.cameraRig.triggerShake(0.45, 0.25);
+      this.ui.hud.triggerEdgeFlash('blue');
+      this.ui.hud.pulseHp('shield');
+      this.ui.hud.showFloatText('🛡️ ESCUDO QUEBRADO!', '#38bdf8');
       return;
     }
 
@@ -1279,10 +1424,13 @@ export class Game {
     p.hp -= dmg;
     p.animator.triggerHurt(1.2);
     p.invulnTimer = 1.6 + (p.postHitInvulnBonus || 0);
+    this.hitStopTimer = 0.085;
     this.combo = 1;
     this.sfx.hurt();
     this.narrator.say('hurt');
-    this.cameraRig.triggerShake(0.6, 0.32);
+    this.cameraRig.triggerShake(0.68, 0.34);
+    this.ui.hud.triggerEdgeFlash('red');
+    this.ui.hud.pulseHp('hurt');
     this.particles.emitExplosion(p.x, p.y + 0.9, p.z, p.model.colors.primary, 16, true);
 
     if (p.hp <= 0) {
@@ -1291,12 +1439,14 @@ export class Game {
         p.hp = 1;
         p.invulnTimer = 2.5;
         this.sfx.evolution();
+        this.ui.hud.pulseHp('heal');
         this.ui.hud.showBanner('🔥 REVIVIDO PELA FOGUEIRA CHECKPOINT!', '#ff9a24', 3);
         return;
       }
       p.hp = 0;
       p.dead = true;
       p._lastDeathCause = cause;
+      this.slowMoTimer = 0.45;
       const customDeath = getActivePreset(p.key).deathEffect;
       if (customDeath === 'fireworks') {
         this.particles.emitExplosion(p.x, p.y + 1.0, p.z, '#ffbe0b', 18, true);
@@ -1480,12 +1630,26 @@ export class Game {
       this.tvHud.setVisible(false);
       this.ui.showPodium(summary, {
         onReplay: () => this.startReplayPlayback(),
-        onAgain: () => this.restartRun(),
+        onVote: (v) => this.net.sendRoundVote(v),
+        onAgain: (voteRes) => {
+          if (voteRes?.votedBiome) {
+            this.setBiomeConfig(voteRes.votedBiome, this.sequenceBiomes);
+          }
+          if (voteRes?.votedMpMode && this.multiplayerSession) {
+            this.multiplayerSession.mpMode = voteRes.votedMpMode;
+            if (this.multiplayerSession.room) {
+              this.multiplayerSession.room.mpMode = voteRes.votedMpMode;
+              this.multiplayerSession.room.elimination = (voteRes.votedMpMode === 'elimination');
+            }
+          }
+          this.restartRun();
+        },
         onMenu: () => this.openMainMenu()
       });
       return;
     }
 
+    const deathInfo = this._describeDeathCause(this.players[0]?._lastDeathCause);
     this.lastPodiumSummary = null;
     this.lastGameOverArgs = {
       title: displayTitle,
@@ -1495,7 +1659,9 @@ export class Game {
       distance: this.distance,
       eggs: this.runEggs,
       maxCombo: this.maxCombo,
-      dinoId: this.players[0]?.id || 'trex'
+      dinoId: this.players[0]?.id || 'trex',
+      causeLabel: deathInfo.label,
+      avoidTip: deathInfo.tip
     };
 
     this.ui.hud.showGameOver(this.lastGameOverArgs);
@@ -1606,9 +1772,11 @@ export class Game {
 
     // Vento ou correnteza do bioma empurram suavemente
     const envWind = (this.weather.windForce || 0) + (this.currentBiome.windBias || 0) + (p.spec.dinoClass === 'aquatic' ? 0 : (this.currentBiome.currentForce || 0));
+    if ((p._moveComboCd || 0) > 0) p._moveComboCd = Math.max(0, p._moveComboCd - dt);
 
     if (leftJust && p.lane > 0) {
       p.lane--;
+      p._lastLaneSwitchAt = this.runTime;
       this.sfx.dash();
       this.particles.emitDust(p.x, 0.2, p.z, 3, '#ffd447', 1.4);
       if (this.tutorialState?.active && this.tutorialState.step === 0 && p.index === 0) {
@@ -1619,6 +1787,7 @@ export class Game {
     }
     if (rightJust && p.lane < 2) {
       p.lane++;
+      p._lastLaneSwitchAt = this.runTime;
       this.sfx.dash();
       this.particles.emitDust(p.x, 0.2, p.z, 3, '#ffd447', 1.4);
       if (this.tutorialState?.active && this.tutorialState.step === 0 && p.index === 0) {
@@ -1628,7 +1797,8 @@ export class Game {
       }
     }
 
-    const laneSpeed = 16 * (p.laneSpeedMult || 1);
+    const iceLaneMult = p.statuses?.ice ? 0.72 : 1;
+    const laneSpeed = 16 * (p.laneSpeedMult || 1) * iceLaneMult;
     const targetX = LANE_X[p.lane] + (p.xOffset || 0) + Math.sin(this.runTime * 2) * (Math.abs(envWind) > 0.2 ? envWind * 0.15 : 0);
     const prevX = p.x;
     p.x += (targetX - p.x) * Math.min(1, dt * laneSpeed);
@@ -1645,9 +1815,17 @@ export class Game {
         p.ducking = false;
         p.sliding = false;
         p.jumpHoldTimer = 0.18;
+        p._lastJumpAt = this.runTime;
         this.runJumps++;
         this.sfx.jump(false);
         this.particles.emitDust(p.x, 0.12, p.z + 0.2, 6, '#f2c57c', 2.2);
+        if ((this.runTime - (p._lastLaneSwitchAt ?? -99)) <= 0.65 && (p._moveComboCd || 0) <= 0) {
+          p._moveCombo = Math.min(8, (p._moveCombo || 0) + 1);
+          p._moveComboCd = 1.6;
+          this.addScore(35 * p._moveCombo, p);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 6);
+          this.ui.hud.showFloatText(`🏃 ESQUIVA ÁGIL! +${35 * p._moveCombo}`, '#5eead4');
+        }
         if (this.tutorialState?.active && this.tutorialState.step === 1 && p.index === 0) {
           this.tutorialState.progress++;
           this._syncTutorialHud();
@@ -1658,6 +1836,14 @@ export class Game {
         p.vy = 13.0 * jumpMult;
         this.sfx.jump(true);
         this.particles.emitDust(p.x, p.y, p.z, 8, '#90e0ef', 2.4);
+      } else if ((p.stamina ?? 100) >= 35) {
+        p.stamina = Math.max(0, (p.stamina ?? 100) - 35);
+        p.vy = 12.6 * jumpMult;
+        this.sfx.jump(true);
+        this.particles.emitDust(p.x, p.y, p.z, 8, '#34d399', 2.4);
+      } else if (!p._lowStamToastCooldown) {
+        p._lowStamToastCooldown = 0.8;
+        this.ui.hud.showFloatText('💨 Estamina baixa (toque o chão!)', '#fbbf24');
       }
     }
 
@@ -1670,6 +1856,13 @@ export class Game {
     // Abaixar / Deslizar (abaixar em movimento no chão dá deslizada com impulso)
     if (duckHeld) {
       if (!p.grounded) {
+        if (p.vy > -18 && (this.runTime - (p._lastJumpAt ?? -99)) <= 0.85 && (p._moveComboCd || 0) <= 0) {
+          p._moveCombo = Math.min(8, (p._moveCombo || 0) + 1);
+          p._moveComboCd = 1.6;
+          this.addScore(45 * p._moveCombo, p);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 8);
+          this.ui.hud.showFloatText(`⚡ MERGULHO PERFEITO! +${45 * p._moveCombo}`, '#38bdf8');
+        }
         p.vy = Math.min(p.vy, -20);
         p.ducking = true;
       } else if (!p.sliding && !p.ducking) {
@@ -1700,6 +1893,15 @@ export class Game {
         const activated = this.abilities.activate(p, this._eventContext());
         if (activated) {
           Metagame.recordSkill(p.id);
+          if (p.index === 0) {
+            this._triggerFirstUseSpotlight('spotlight_ability', {
+              icon: '⚡',
+              title: 'Habilidade Especial [Espaço]',
+              desc: 'Cada dino ativa um poder próprio no [Espaço]. Recarregue pegando ovos ou fazendo rasantes!',
+              selector: '#bar-ability',
+              accent: '#38bdf8'
+            });
+          }
           if (this.tutorialState?.active && this.tutorialState.step === 4 && p.index === 0) {
             this._advanceTutorialStep();
           }
@@ -1793,10 +1995,17 @@ export class Game {
       p.model.rig.rotation.x = 0;
     }
 
-    // Temporizadores de buffs e recargas
+    // Temporizadores de buffs, estamina e recarga combinada
+    if (p._lowStamToastCooldown > 0) p._lowStamToastCooldown = Math.max(0, p._lowStamToastCooldown - dt);
     if (p.invulnTimer > 0) p.invulnTimer = Math.max(0, p.invulnTimer - dt);
     if (p.abilityCooldown > 0) p.abilityCooldown = Math.max(0, p.abilityCooldown - dt);
     if (p.abilityDuration > 0) p.abilityDuration = Math.max(0, p.abilityDuration - dt);
+    p.abilityCharge = this.isTestTrack
+      ? 100
+      : Math.min(100, (p.abilityCharge ?? 100) + dt * 11);
+    const inOasis = !!this.currentOasis;
+    const stamRegen = inOasis ? 58 : (p.grounded ? 28 : 8);
+    p.stamina = Math.min(100, (p.stamina ?? 100) + stamRegen * dt);
     if (p.resonanceWindow > 0) p.resonanceWindow = Math.max(0, p.resonanceWindow - dt);
     if (p.ramTimer > 0) p.ramTimer = Math.max(0, p.ramTimer - dt);
     if (p.turboTimer > 0) p.turboTimer = Math.max(0, p.turboTimer - dt);
@@ -1810,6 +2019,7 @@ export class Game {
     if (p.diveTimer > 0) p.diveTimer = Math.max(0, p.diveTimer - dt);
     if (p.mountedTimer > 0) p.mountedTimer = Math.max(0, p.mountedTimer - dt);
     if (p.armorSlowTimer > 0) p.armorSlowTimer = Math.max(0, p.armorSlowTimer - dt);
+    StatusSystem.tick(p, dt);
     if (p.furyTimer > 0) {
       p.furyTimer = Math.max(0, p.furyTimer - dt);
       p.giantScale = 1.52;
@@ -1834,6 +2044,10 @@ export class Game {
     }
 
     p.model.root.position.set(p.x, p.y - (p.diveTimer > 0 ? 0.55 : 0), p.z);
+    if (p.model.nameTag) {
+      p.model.nameTag.visible = !p.dead;
+      if (p.model.nameTag.material) p.model.nameTag.material.opacity = p.dead ? 0 : 0.95;
+    }
     p.animator.update(dt, {
       speed: this.speed,
       grounded: p.grounded,
@@ -1842,6 +2056,9 @@ export class Game {
       sliding: p.sliding,
       swimming: this.currentBiome.waterTrack,
       dead: p.dead,
+      invulnActive: p.invulnTimer > 0 && !p.dead,
+      furyActive: p.furyTimer > 0,
+      dashing: Boolean(p.sliding || p.ramTimer > 0 || p.turboTimer > 0),
       giantScale: p.giantScale,
       laneLean
     });
@@ -1987,15 +2204,27 @@ export class Game {
       return;
     }
 
-    // Bullet-Time (ShiftLeft)
+    if (this.hitStopTimer > 0) {
+      this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
+      const camPlayers = this.players.filter((x) => !x.dead);
+      this.cameraRig.update(
+        dt,
+        camPlayers.length > 0 ? camPlayers : this.players,
+        this.speed,
+        Save.data.settings.accessibility.reduceShake,
+        this.photoMode,
+        this.spectatorMode
+      );
+      return;
+    }
+
+    // Bullet-Time / Foco com Estamina (ShiftLeft)
     const bulletHeld = this.input.isActionDown('p1', 'bullet', false);
     const p0 = this.players[0];
     let timeScale = 1.0;
-    if (bulletHeld && p0 && p0.bulletEnergy > 2) {
+    if (bulletHeld && p0 && (p0.stamina ?? 0) > 2) {
       timeScale = 0.42;
-      p0.bulletEnergy = Math.max(0, p0.bulletEnergy - dt * 32);
-    } else if (p0) {
-      p0.bulletEnergy = Math.min(100, p0.bulletEnergy + dt * 14);
+      p0.stamina = Math.max(0, (p0.stamina ?? 0) - dt * 32);
     }
     if (this.slowMoTimer > 0) {
       this.slowMoTimer -= dt;
@@ -2004,6 +2233,7 @@ export class Game {
 
     const worldDt = dt * timeScale;
     this.runTime += dt;
+    if (this.currentOasis > 0) this.currentOasis = Math.max(0, this.currentOasis - dt);
 
     // Velocidade progressiva + bônus de turbo/slide + dificuldade adaptativa
     const baseDiff = this.difficultyMgr.getConfig();
@@ -2020,7 +2250,7 @@ export class Game {
       }
     }
 
-    let speedMult = adaptiveMult;
+    let speedMult = adaptiveMult * (p0 ? StatusSystem.getSpeedMultiplier(p0) : 1);
     if (p0?.turboTimer > 0 || p0?.rocketTimer > 0 || p0?.minecartTimer > 0) speedMult *= 1.42;
     if (p0?.sliding) speedMult *= 1.15;
     if (this.activeChaosRule?.id === 'turbo_frenzy') speedMult *= 1.38;
@@ -2039,13 +2269,20 @@ export class Game {
       }
     }
 
-    this.speed = Math.min(this.maxSpeed, this.baseSpeed + this.score * this.speedAccel) * speedMult;
+    // Curva de velocidade não-linear por fases & vales de respiro (Evita subida reta entediante)
+    const phase = Math.floor(this.score / 850);
+    const phaseProgress = (this.score % 850) / 850;
+    const phaseCurve = Math.log1p(phase * 0.85) * 4.2 + this.score * (this.speedAccel * 0.65);
+    const waveRelief = phaseProgress < 0.16 ? 0.90 : (0.98 + Math.sin(phaseProgress * Math.PI) * 0.08);
+    const bossRelief = this.events.bosses.activeBoss ? 0.96 : 1.0;
+    this.speed = Math.min(this.maxSpeed, this.baseSpeed + phaseCurve) * waveRelief * bossRelief * speedMult;
     this.distance += this.speed * worldDt;
-    const scoreGain = this.speed * worldDt * 0.55 * (p0?.scoreCardMult || 1) * (p0?.scoreMultBonus || 1);
+    const perfectMult = Save.data.perfectMode ? 2.2 : 1;
+    const scoreGain = this.speed * worldDt * 0.55 * (p0?.scoreCardMult || 1) * (p0?.scoreMultBonus || 1) * perfectMult;
     this.score += scoreGain;
     for (const p of this.players) {
       if (!p.dead) {
-        p.score = (p.score || 0) + this.speed * worldDt * 0.55 * (p.scoreCardMult || 1) * (p.scoreMultBonus || 1);
+        p.score = (p.score || 0) + this.speed * worldDt * 0.55 * (p.scoreCardMult || 1) * (p.scoreMultBonus || 1) * perfectMult;
       }
     }
 
@@ -2087,9 +2324,10 @@ export class Game {
       const targetBiome = BIOMES[targetIdx];
       if (targetBiome && targetBiome.id !== this.currentBiome.id) {
         this.currentBiome = targetBiome;
-        this.world.applyTheme(targetBiome.theme);
+        this.world.applyTheme(targetBiome.theme, false);
         this.spawner.setBiome(targetBiome.id);
         this.ui.hud.showBanner(`🌀 PORTAL! Entrando em: ${targetBiome.name}`, '#00f5d4', 3.5);
+        this._discoverCurrentBiomeFossil();
         if (targetBiome.id === 'jurassic_river') Save.unlockAchievement('river_king');
       }
     }
@@ -2106,8 +2344,9 @@ export class Game {
         }
         const nextCh = STORY_CHAPTERS[this.storyChapterIdx];
         this.currentBiome = getBiomeById(nextCh.biome);
-        this.world.applyTheme(this.currentBiome.theme);
+        this.world.applyTheme(this.currentBiome.theme, false);
         this.spawner.setBiome(this.currentBiome.id);
+        this._discoverCurrentBiomeFossil();
         this.ui.hud.showBanner(`📖 ${nextCh.title}: ${nextCh.dialogue}`, '#ffd447', 4.5);
       }
     }
@@ -2365,6 +2604,15 @@ export class Game {
     this.particles.update(worldDt, this.speed);
     this.events.update(worldDt, this.speed, this.score, this.players, this._eventContext());
 
+    if (this.events.predators?.state === 'intro' && this.events.predators.activeModel) {
+      this.cameraRig.setPredatorFocus(this.events.predators.activeModel.root.position);
+      for (const pl of this.players) {
+        pl.invulnTimer = Math.max(pl.invulnTimer || 0, 0.35);
+      }
+    } else {
+      this.cameraRig.setPredatorFocus(null);
+    }
+
     this.abilities.update(worldDt, this.spawner, this.particles, () => {
       this.addScore(45 * this.combo);
     });
@@ -2413,6 +2661,7 @@ export class Game {
           this.maxCombo = Math.max(this.maxCombo, this.combo);
           this.comboDecayTimer = 4.5;
           p.resonanceWindow = 0.55;
+          p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + 18);
           p.fury = Math.min(100, p.fury + (p.spec.dinoClass === 'carnivore' ? 18 : 13) * (p.furyChargeMult || 1));
           this.addScore(25 * this.combo);
           this.sfx.nearMiss();
@@ -2426,7 +2675,7 @@ export class Game {
         if (obs.kind === 'egg') {
           obs.hit = true;
           obs.pool?.release(obs);
-          this._collectEgg(p, obs.isGold);
+          this._collectEgg(p, obs.eggTier || (obs.isGold ? 5 : 1), !!obs.isMystery);
           continue;
         }
 
@@ -2457,12 +2706,158 @@ export class Game {
           continue;
         }
 
+        if (obs.kind === 'speed_pad') {
+          obs.hit = true;
+          p.turboTimer = Math.max(p.turboTimer || 0, 2.6);
+          p.invulnTimer = Math.max(p.invulnTimer || 0, 1.4);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 35);
+          this.sfx.dash();
+          this.addScore(60 * this.combo, p);
+          this.particles.emitExplosion(obs.group.position.x, 0.3, obs.group.position.z, '#facc15', 10, false);
+          this._hintOnce('speed_pad', '⚡ Speed Pad (>>>): dá Turbo e recupera Estamina!', '#facc15');
+          this.ui.hud.showFloatText('⚡ TURBO PAD +ESTAMINA!', '#facc15');
+          continue;
+        }
+
+        if (obs.kind === 'trampoline') {
+          obs.hit = true;
+          p.vy = 21.5;
+          p.grounded = false;
+          p.flipTimer = 0.72;
+          this.sfx.jump(true);
+          this.addScore(110 * this.combo, p);
+          this._hintOnce('trampoline', '🟢 Trampolim (▲): salto gigante sobre perigos!', '#4ade80');
+          this.ui.hud.showFloatText('🟢 TRAMPOLIM!', '#4ade80');
+          continue;
+        }
+
+        if (obs.kind === 'mud_pool') {
+          obs.hit = true;
+          StatusSystem.apply(p, 'mud', 3.4, this);
+          this.sfx.slide();
+          this._hintOnce('mud_pool', '🟤 Lama: desacelera brevemente! Pule ou use Fogo/Antídoto.', '#fbbf24');
+          this.ui.hud.showFloatText('🟤 LAMA!', '#fbbf24');
+          continue;
+        }
+
+        if (obs.kind === 'toxic_pool') {
+          obs.hit = true;
+          StatusSystem.apply(p, 'poison', 5.5, this);
+          this.sfx.damage();
+          this._hintOnce('toxic_pool', '☠️ Poça Tóxica: envenena! Cure com Antídoto (E) ou Fogo.', '#bef264');
+          continue;
+        }
+
+        if (obs.kind === 'tar_pit') {
+          obs.hit = true;
+          StatusSystem.apply(p, 'mud', 3.8, this);
+          p.stamina = Math.max(0, (p.stamina ?? 100) - 24);
+          this.sfx.slide();
+          this._hintOnce('tar_pit', '🖤 Piche Fóssil: drena estamina e reduz velocidade! Pule com [W/↑].', '#d4d4d8');
+          this.ui.hud.showFloatText('🖤 PICHE! -ESTAMINA', '#d4d4d8');
+          continue;
+        }
+
+        if (obs.kind === 'geyser_vent') {
+          if (p.y > 1.72) continue;
+          obs.hit = true;
+          p.vy = Math.max(p.vy, 11.5);
+          p.grounded = false;
+          this._damagePlayer(p, 'geyser_vent');
+          continue;
+        }
+
+        if (obs.kind === 'oasis_zone') {
+          if (!obs._hitBy) obs._hitBy = new Set();
+          if (obs._hitBy.has(p.key)) continue;
+          obs._hitBy.add(p.key);
+          if (p.statuses) {
+            p.statuses.mud = 0;
+            p.statuses.poison = 0;
+          }
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 40);
+          this.currentOasis = 3.2;
+          this.spawner.oasisReliefTimer = 4.0;
+          this.addScore(80 * this.combo, p);
+          if (!Save.data.perfectMode) {
+            this._healPlayer(p, 1, '🌴 OÁSIS +1 VIDA!');
+          } else {
+            this.sfx.heal();
+            this.ui.hud.showFloatText('🌴 OÁSIS +ESTAMINA!', '#5eead4');
+          }
+          continue;
+        }
+
+        if (obs.kind === 'fragile_bridge') {
+          if (p.y > 0.65) continue;
+          if (!obs._hitBy) obs._hitBy = new Set();
+          if (obs._hitBy.has(p.key)) continue;
+          obs._hitBy.add(p.key);
+          if (Math.abs(p.x - LANE_X[1]) < 0.85) {
+            StatusSystem.apply(p, 'mud', 0.45, this);
+            p.armorSlowTimer = Math.max(p.armorSlowTimer || 0, 0.45);
+            this.sfx.slide();
+            this.ui.hud.showFloatText('🪵 TÁBUA RACHADA! (-0.4s)', '#fb923c');
+          } else {
+            p.stamina = Math.min(100, (p.stamina ?? 100) + 20);
+            const bonus = 85 * this.combo;
+            this.addScore(bonus, p);
+            this.sfx.powerup();
+            this.ui.hud.showFloatText(`🌉 PONTE SEGURA! +${bonus}`, '#4ade80');
+          }
+          continue;
+        }
+
+        if (obs.kind === 'rescue_cross') {
+          if (!obs._hitBy) obs._hitBy = new Set();
+          if (obs._hitBy.has(p.key)) continue;
+          obs._hitBy.add(p.key);
+          const allowRevive = this.modeId === 'coop' || this.modeId === 'shared' || (this.multiplayerSession?.active && !this.multiplayerSession?.elimination && this.multiplayerSession?.mpMode !== 'duel');
+          const fallen = allowRevive ? this.players.find((pl) => pl !== p && pl.dead) : null;
+          if (fallen && !Save.data.perfectMode) {
+            fallen.dead = false;
+            fallen.hp = 1;
+            fallen.invulnTimer = 3.0;
+            fallen.reviveProgress = 0;
+            fallen.y = 0;
+            fallen.vy = 0;
+            this.ui.hud.showBanner(`🚨 RESGATE TÁTICO! ${fallen.name || 'Aliado'} REVIVIDO!`, '#38bdf8', 2.8);
+          } else if (!Save.data.perfectMode) {
+            p.shields = Math.min(4, (p.shields || 0) + 1);
+            this.ui.hud.showFloatText('🚨 RESGATE +1 ESCUDO & ESTAMINA!', '#38bdf8');
+          } else {
+            this.ui.hud.showFloatText('🚨 RESGATE +ESTAMINA!', '#38bdf8');
+          }
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 35);
+          this.sfx.powerup();
+          this.addScore(75 * this.combo, p);
+          continue;
+        }
+
         if (obs.kind === 'shortcut') {
           obs.hit = true;
           obs.pool?.release(obs);
           p.invulnTimer = Math.max(p.invulnTimer, 2.5);
-          this.spawnEggRain(5);
-          this.ui.hud.showBanner('🕳️ ATALHO SECRETO! Escudo temporário + Ovos!', '#00f5d4', 3);
+          this._hintOnce('shortcut', '🌀 Portais de Runas levam a outro bioma (Azul), Ovos (Dourado) ou Surpresa (Roxo)!', obs.color || '#38bdf8');
+          if (obs.portalDest === 'biome' && this.modeId !== 'story') {
+            const idx = (BIOMES.findIndex((b) => b.id === this.currentBiome.id) + 1) % BIOMES.length;
+            const nextB = BIOMES[idx];
+            if (nextB) {
+              this.currentBiome = nextB;
+              this.world.applyTheme(nextB.theme, false);
+              this.spawner.setBiome(nextB.id);
+              this._discoverCurrentBiomeFossil();
+              this.ui.hud.showBanner(`🌀 PORTAL AZUL → Entrando em: ${nextB.name}!`, '#38bdf8', 3.2);
+            }
+          } else if (obs.portalDest === 'mystery') {
+            p.shields = Math.min(4, p.shields + 1);
+            p.turboTimer = Math.max(p.turboTimer || 0, 3.0);
+            this.spawnEggRain(5);
+            this.ui.hud.showBanner('🌀 PORTAL ROXO → Escudo + Turbo + Ovos!', '#c084fc', 3.0);
+          } else {
+            this.spawnEggRain(9);
+            this.ui.hud.showBanner('🌀 PORTAL DOURADO → Chuva de Ovos & Escudo!', '#ffd447', 3.0);
+          }
           continue;
         }
 
@@ -2470,17 +2865,23 @@ export class Game {
           obs.hit = true;
           obs.pool?.release(obs);
           p.fury = Math.min(100, (p.fury || 0) + 18 * (p.furyChargeMult || 1));
-          let bonusMsg = '🍉 FÚRIA +18%!';
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 30);
+          p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + 14);
+          let bonusMsg = '🍉 +ESTAMINA & FÚRIA!';
           if (p.hp < p.maxHp && Math.random() < 0.35) {
-            p.hp++;
-            bonusMsg = '🍉 +1 VIDA & FÚRIA!';
+            this._healPlayer(p, 1, '🍉 +1 VIDA & FÚRIA!');
           } else if (Math.random() < 0.25) {
             p.shields = Math.min(4, p.shields + 1);
             bonusMsg = '🍉 +ESCUDO & FÚRIA!';
+            this.sfx.pickupRarity('rara');
+            this.ui.hud.triggerEdgeFlash('rara');
+            this.ui.hud.showFloatText(bonusMsg, '#4ade80');
+          } else {
+            this.sfx.egg(6);
+            this.ui.hud.triggerEdgeFlash('comum');
+            this.ui.hud.showFloatText(bonusMsg, '#4ade80');
           }
-          this.sfx.egg(6);
           this.addScore(45 * this.combo, p);
-          this.ui.hud.showFloatText(bonusMsg, '#4ade80');
           continue;
         }
 
@@ -2494,12 +2895,15 @@ export class Game {
         if (obs.kind === 'treasure') {
           obs.hit = true;
           obs.pool?.release(obs);
-          const gold = 7 + Math.floor((Save.data.talents?.greed || 0) * 1.5);
+          const gold = 25 + Math.floor((Save.data.talents?.greed || 0) * 6);
           Save.addEggs(gold);
+          Save.data.crystals = (Save.data.crystals || 0) + 1;
+          Save.save();
           this.runEggs += gold;
-          this.sfx.victory();
+          this.sfx.pickupRarity('épica');
+          this.ui.hud.triggerEdgeFlash('épica');
           this.addScore(180 * this.combo, p);
-          this.ui.hud.showBanner(`💎 BAÚ DO TESOURO! +${gold} Ovos!`, '#ffd447', 2.8);
+          this.ui.hud.showBanner(`💎 BAÚ DO TESOURO! +${gold} 🥚 & +1 💎!`, '#ffd447', 2.8);
           continue;
         }
 
@@ -2575,6 +2979,8 @@ export class Game {
           this._spawnImpactDebris(obs.group.position.x, obs.group.position.z, obs.color);
           this.sfx.stomp();
           p.wantedStars = Math.min(5, (p.wantedStars || 0) + 0.25);
+          p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + 15);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 10);
           this.addScore(65 * this.combo, p);
           if (p.attackTimer > 0 && this.tutorialState?.active && this.tutorialState.step === 3) {
             this._advanceTutorialStep();
@@ -2591,6 +2997,8 @@ export class Game {
           this.combo = Math.min(10, this.combo + 1);
           this.maxCombo = Math.max(this.maxCombo, this.combo);
           this.comboDecayTimer = 4.5;
+          p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + 16);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 12);
           const stompBonus = p.spec.dinoClass === 'carnivore' ? 75 : 55;
           this.addScore(stompBonus * this.combo, p);
           this.sfx.stomp();
@@ -2611,6 +3019,7 @@ export class Game {
       ? this.players.find((x) => x.peerId === this.net.peerId)
       : null) || this.players.find((x) => !x.dead) || p0;
     if (lead) {
+      this.world.updatePlayerFocus(lead.x, lead.y, lead.z, this.currentBiome?.theme?.edgeGlow || '#fde047');
       this.ui.hud.updatePlayStatus(
         lead,
         Save.data.eggs,
@@ -2687,9 +3096,40 @@ export class Game {
   }
 
   _hintOnce(key, msg, color = '#38bdf8') {
-    if (this.seenHints.has(key)) return;
+    const savedSeen = Save.data.seenElements || [];
+    if (this.seenHints.has(key) || savedSeen.includes(key)) return;
     this.seenHints.add(key);
+    if (!Save.data.seenElements) Save.data.seenElements = [];
+    Save.data.seenElements.push(key);
+    Save.save();
     this.ui.hud.showBanner(msg, color, 2.8);
+  }
+
+  _dismissSpotlight() {
+    if (!this.spotlightActive) return;
+    this.spotlightActive = false;
+    this.ui.hud.hideSpotlight(false);
+    this.lastTime = performance.now();
+  }
+
+  _triggerFirstUseSpotlight(key, cfg) {
+    if (this.spotlightActive || this.state !== 'playing') return;
+    if (this.multiplayerSession?.active || this.tutorialState?.active || this.isTestTrack || this.headlessBot) return;
+    const savedSeen = Save.data.seenElements || [];
+    if (this.seenHints.has(key) || savedSeen.includes(key)) return;
+    this.seenHints.add(key);
+    if (!Save.data.seenElements) Save.data.seenElements = [];
+    Save.data.seenElements.push(key);
+    Save.save();
+
+    this.spotlightActive = true;
+    this.ui.hud.showSpotlight({
+      ...cfg,
+      onDismiss: () => {
+        this.spotlightActive = false;
+        this.lastTime = performance.now();
+      }
+    });
   }
 
   _applyElementalEgg(p, element) {
@@ -2698,65 +3138,102 @@ export class Game {
     if (this.tutorialState?.active && this.tutorialState.step === 5 && p.index === 0) {
       this.tutorialState.elemCount = (this.tutorialState.elemCount || 0) + 1;
     }
-
-    if ((prev === 'fire' && element === 'ice') || (prev === 'ice' && element === 'fire')) {
-      p.element = null;
-      this.sfx.reaction();
-      this._clearNearbyObstacles(p.x, p.z, alchRadius * 1.4, false);
-      this.addScore(180 * this.combo, p);
-      this.ui.hud.showBanner('💨 REAÇÃO DE VAPOR! Fogo + Gelo limpou a pista!', '#e2e8f0', 2.8);
-      if (this.tutorialState?.active && this.tutorialState.step === 5) this._advanceTutorialStep();
-      return;
+    if (p.index === 0) {
+      this._triggerFirstUseSpotlight('spotlight_alchemy', {
+        icon: '✨',
+        title: 'Esferas Elementais & Alquimia',
+        desc: 'Pegue 2 elementos diferentes (ex: 🔥 + ❄️ ou ⚡ + ❄️) para desencadear combos que limpam a pista!',
+        selector: '#hud-lives',
+        accent: '#a855f7'
+      });
     }
 
-    if ((prev === 'poison' && element === 'fire') || (prev === 'fire' && element === 'poison')) {
-      p.element = null;
+    const combo = StatusSystem.resolveElementCombo(prev, element, !!this.currentBiome.waterTrack);
+    if (combo) {
+      p.element = combo.keepElement || null;
       this.sfx.reaction();
-      p.fury = Math.min(100, (p.fury || 0) + 45);
-      this._clearNearbyObstacles(p.x, p.z, alchRadius * 1.5, false);
-      this.addScore(200 * this.combo, p);
-      this.ui.hud.showBanner('💥 NOVA TÓXICA! Fúria + Explosão!', '#a3e635', 2.8);
-      if (this.tutorialState?.active && this.tutorialState.step === 5) this._advanceTutorialStep();
-      return;
-    }
-
-    if (element === 'lightning' && this.currentBiome.waterTrack) {
-      p.element = 'lightning';
-      this.sfx.reaction();
-      this._clearNearbyObstacles(p.x, p.z, alchRadius * 1.35, false);
-      this.addScore(160 * this.combo, p);
-      this.ui.hud.showBanner('⚡ CHOQUE HIDRELÉTRICO! Rio eletrificado!', '#facc15', 2.8);
+      if (combo.clearRadius) this._clearNearbyObstacles(p.x, p.z, Math.max(alchRadius, combo.clearRadius), false);
+      if (combo.bonusFury) p.fury = Math.min(100, (p.fury || 0) + combo.bonusFury);
+      if (combo.bonusShield) p.shields = Math.min(4, p.shields + combo.bonusShield);
+      if (combo.bonusTurbo) p.turboTimer = Math.max(p.turboTimer || 0, combo.bonusTurbo);
+      this.addScore(combo.bonusScore * this.combo, p);
+      this.ui.hud.showBanner(combo.title, combo.color, 3.0);
       if (this.tutorialState?.active && this.tutorialState.step === 5) this._advanceTutorialStep();
       return;
     }
 
     p.element = element;
-    this.sfx.powerup();
+    StatusSystem.apply(p, element, 16, this);
+    this.sfx.pickupRarity('rara');
+    this.ui.hud.triggerEdgeFlash('rara');
     this.addScore(65 * this.combo, p);
     const icons = { fire: '🔥', ice: '❄️', lightning: '⚡', poison: '☠️' };
+    this._hintOnce('elemental_egg', '✨ Esferas Elementais dão bônus e criam combos entre si (ex: 🔥+❄️)!', '#38bdf8');
     this.ui.hud.showFloatText(`${icons[element] || '✨'} ELEMENTO ${element.toUpperCase()}!`, '#38bdf8');
     if (this.tutorialState?.active && this.tutorialState.step === 5 && (this.tutorialState.elemCount || 0) >= 2) {
       this._advanceTutorialStep();
     }
   }
 
-  _collectEgg(p, isGold) {
+  _collectEgg(p, tierOrGold = 1, isMystery = false) {
+    const baseTier = isMystery
+      ? (4 + Math.floor(Math.random() * 5))
+      : (tierOrGold === true ? 5 : (tierOrGold === false ? 1 : (Number(tierOrGold) || 1)));
     this.eggChain = Math.min(20, this.eggChain + 1);
     this.eggChainTimer = 3.2;
-    const val = Math.round((isGold ? 3 : 1) * (p.eggValueMult || 1));
+    const perfectEggMult = Save.data.perfectMode ? 1.5 : 1;
+    const val = Math.round(baseTier * (p.eggValueMult || 1) * perfectEggMult);
     this.runEggs += val;
     Save.addEggs(val);
-    this.addScore((15 + this.eggChain * 5) * this.combo, p);
-    p.fury = Math.min(100, p.fury + 6 * (p.furyChargeMult || 1));
+    this.addScore((15 + this.eggChain * 5 + baseTier * 2) * this.combo, p);
+    p.fury = Math.min(100, p.fury + (isMystery ? 24 : (baseTier >= 25 ? 20 : (baseTier >= 5 ? 12 : 6))) * (p.furyChargeMult || 1));
+    p.stamina = Math.min(100, (p.stamina ?? 100) + (isMystery ? 40 : (baseTier >= 25 ? 45 : (baseTier >= 5 ? 22 : 10))));
+    p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + (isMystery ? 22 : (baseTier >= 25 ? 24 : (baseTier >= 5 ? 12 : 4))));
     this.sfx.egg(this.eggChain);
-    if (isGold) this.ui.hud.showFloatText(`OVO DOURADO +${val}!`, '#ffd447');
+    if (isMystery) {
+      let bonusText = '+FÚRIA & ESTAMINA!';
+      if ((p.shields || 0) < 3) {
+        p.shields = Math.min(3, (p.shields || 0) + 1);
+        bonusText = '+1 🛡️ ESCUDO!';
+      } else {
+        p.magnetTimer = Math.max(p.magnetTimer || 0, 5.0);
+        bonusText = '🧲 ÍMÃ 5s!';
+      }
+      this.sfx.pickupRarity('épica');
+      this.ui.hud.triggerEdgeFlash('épica');
+      this.ui.hud.showFloatText(`❓ OVO SURPRESA +${val} 🥚 (${bonusText})`, '#c084fc');
+    } else if (baseTier >= 25) {
+      this.sfx.pickupRarity('lendária');
+      this.ui.hud.triggerEdgeFlash('lendária');
+      this.ui.hud.showFloatText(`💎 OVO COLOSSAL +${val}!`, '#e879f9');
+    } else if (baseTier >= 5) {
+      this.sfx.pickupRarity('rara');
+      this.ui.hud.triggerEdgeFlash('rara');
+      this.ui.hud.showFloatText(`🥚 NINHO DOURADO +${val}!`, '#ffd447');
+    }
   }
 
   _collectPowerup(p, obs) {
-    this.sfx.powerup();
+    const isMajor = ['shield', 'rocket', 'bomb', 'turbo'].includes(obs.powerId);
+    const rarity = isMajor ? 'épica' : 'rara';
+    if (obs.powerId === 'heal') {
+      this._healPlayer(p, 1, '💚 +1 VIDA!');
+      return;
+    }
+    this.sfx.pickupRarity(rarity);
+    this.ui.hud.triggerEdgeFlash(rarity);
     if (obs.isBackpack) {
       const added = p.backpack.add(obs.powerId);
       this.ui.hud.showFloatText(added ? 'ITEM NA MOCHILA!' : 'MOCHILA CHEIA!', '#f59e0b');
+      if (p.index === 0) {
+        this._triggerFirstUseSpotlight('spotlight_item', {
+          icon: '🎒',
+          title: 'Item Guardado na Mochila!',
+          desc: 'Pressione [E] durante a corrida para usar o item ativo na sua mochila no momento certo!',
+          selector: '.backpack-pill',
+          accent: '#f59e0b'
+        });
+      }
       return;
     }
 
@@ -2766,8 +3243,13 @@ export class Game {
       case 'turbo': p.turboTimer = 5; p.invulnTimer = Math.max(p.invulnTimer, 5); break;
       case 'clock': this.slowMoTimer = 5.5; break;
       case 'rocket': p.rocketTimer = 4.2; p.invulnTimer = Math.max(p.invulnTimer, 4.5); break;
-      case 'heal': p.hp = Math.min(p.maxHp, p.hp + 1); break;
       case 'bomb': this._clearNearbyObstacles(p.x, p.z, 55, false); break;
+      case 'mega_stamina':
+        p.stamina = 100;
+        p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + 25);
+        p.turboTimer = Math.max(p.turboTimer || 0, 2.2);
+        this.ui.hud.showFloatText('🔋 MEGA ESTAMINA + TURBO!', '#a3e635');
+        return;
       default: break;
     }
     this.ui.hud.showFloatText(`⚡ ${obs.powerId.toUpperCase()}!`, '#38bdf8');
@@ -2777,6 +3259,20 @@ export class Game {
     const activeTag = document.activeElement?.tagName;
     if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT') {
       return;
+    }
+
+    if (this.spotlightActive) {
+      if (this.input.wasKeyJustPressed('Space') || this.input.wasKeyJustPressed('Enter') || this.input.wasKeyJustPressed('Escape')) {
+        this._dismissSpotlight();
+      }
+      return;
+    }
+
+    if (this.state === 'playing' && this.events.predators?.state === 'intro') {
+      if (this.input.wasKeyJustPressed('Space') || this.input.wasKeyJustPressed('Enter')) {
+        this.events.predators.skipIntro(this._eventContext());
+        return;
+      }
     }
 
     if (this.pendingRestart) {
@@ -2789,6 +3285,11 @@ export class Game {
     }
 
     if (this.input.wasKeyJustPressed('F9')) {
+      if (!Save.data.devMode) {
+        Save.data.devMode = true;
+        Save.save();
+        this.ui.hud.setDebugButtonVisible(true);
+      }
       this.ui.openSection('debug');
       return;
     }
@@ -2825,12 +3326,27 @@ export class Game {
 
   _loop(now) {
     this._rafId = requestAnimationFrame(this._loop.bind(this));
+    const fpsCap = Number(Save.data.settings?.fpsCap || 0);
+    if (fpsCap > 0 && this._lastFrameRenderAt) {
+      const minInterval = 1000 / fpsCap - 1.5;
+      if (now - this._lastFrameRenderAt < minInterval) {
+        return;
+      }
+    }
+    this._lastFrameRenderAt = now;
+
     const dt = Math.min(0.05, Math.max(0.0001, (now - this.lastTime) / 1000));
     this.lastTime = now;
 
     this.input.beginFrame();
     this._updateGlobalKeys();
     this.ui.hud.tickTimers(dt);
+
+    if (this.spotlightActive) {
+      this.renderer.render(this.scene, this.camera);
+      this.input.endFrame();
+      return;
+    }
 
     if (this.ui?.controllerInstance) {
       this.input.endFrame();
@@ -2843,6 +3359,9 @@ export class Game {
       this.particles.update(dt, 14);
       for (const p of this.players) {
         p.animator.update(dt, { speed: 14, grounded: true });
+      }
+      if (this.players[0]) {
+        this.world.updatePlayerFocus(this.players[0].x, this.players[0].y, this.players[0].z, '#fde047');
       }
       this.cameraRig.update(dt, { x: -1.4, y: 0.2, z: 0 }, 14, true, false);
     } else if (this.state === 'playing') {

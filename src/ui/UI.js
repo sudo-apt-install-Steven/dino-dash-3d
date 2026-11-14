@@ -31,6 +31,7 @@ export class UIManager {
       onSkipTutorial: () => this.game.skipTutorial(),
       onOpenGuide: () => this.openSection('guide'),
       onReplay: () => this.game.startReplayPlayback(),
+      onGoDinos: () => this.openSection('dinos'),
       onGoMenu: () => this.game.openMainMenu(),
       onTogglePause: () => this.game.togglePause(),
       onTogglePhoto: () => this.game.togglePhotoMode(),
@@ -66,6 +67,7 @@ export class UIManager {
     if (s.accessibility.colorblind && s.accessibility.colorblind !== 'none') {
       app.classList.add(`cb-${s.accessibility.colorblind}`);
     }
+    this.hud.setDebugButtonVisible(!!Save.data.devMode);
   }
 
   _clearModal() {
@@ -95,7 +97,12 @@ export class UIManager {
         modeName: modeDef.name,
         diffName: diffCfg.name,
         dinoName: dinoSpec.name,
-        biomeLabel
+        biomeLabel,
+        lowSpec: !!Save.data.lowSpecMode,
+        benchmarkFps: Save.data.benchmarkFps || 0,
+        benchmarkTier: Save.data.benchmarkTier || '',
+        tutorialDone: !!Save.data.tutorialDone,
+        devMode: !!Save.data.devMode
       },
       {
         onPlay: () => {
@@ -107,6 +114,13 @@ export class UIManager {
           this.game.sfx.click();
           PerfMonitor.applyLowSpec(this.game, !Save.data.lowSpecMode);
           this.showMainMenu();
+        },
+        onUnlockDevMode: () => {
+          Save.data.devMode = true;
+          Save.save();
+          this.hud.setDebugButtonVisible(true);
+          this.game.sfx.powerup();
+          this.hud.showBanner('🛠️ Modo Desenvolvedor ativado! (F9 / Extras)', '#38bdf8', 3.0);
         },
         onNavigate: (section) => {
           this.game.sfx.click();
@@ -279,9 +293,41 @@ export class UIManager {
         this._clearModal();
         this.game.startTutorial();
         break;
+      case 'extras':
+        Menus.renderExtrasModal(
+          this.hud.modalLayer,
+          {
+            tutorialDone: !!Save.data.tutorialDone,
+            devMode: !!Save.data.devMode,
+            lowSpec: !!Save.data.lowSpecMode,
+            pinnedPredator: Save.data.pinnedPredator || ''
+          },
+          {
+            onNavigate: (sec) => {
+              this.game.sfx.click();
+              this.openSection(sec);
+            },
+            onToggleLowSpec: () => {
+              this.game.sfx.click();
+              PerfMonitor.applyLowSpec(this.game, !Save.data.lowSpecMode);
+              this.openSection('extras');
+            },
+            onPinPredator: (predId) => {
+              this.game.sfx.click();
+              Save.data.pinnedPredator = predId || null;
+              Save.save();
+            },
+            onClose: back
+          }
+        );
+        break;
+      case 'credits':
+        Menus.renderCreditsModal(this.hud.modalLayer, () => this.openSection('extras'));
+        break;
       case 'settings':
         SettingsModal.renderInto(this.hud.modalLayer, {
           onClose: back,
+          onRunBenchmark: () => PerfMonitor.runTimedBenchmark(this.game, 1050),
           onApplySettings: () => {
             this.applyVisualSettings();
             this.game.applySettings();

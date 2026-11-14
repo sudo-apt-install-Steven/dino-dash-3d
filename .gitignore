@@ -4,6 +4,7 @@ dist/
 .env.local
 .env.*.local
 .vercel/
+temp/
 *.log
 npm-debug.log*
 .DS_Store

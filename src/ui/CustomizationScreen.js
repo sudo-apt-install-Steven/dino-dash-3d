@@ -8,6 +8,8 @@ import {
 } from '../dinos/DinoCustomization.js';
 import { ProgressionManager, MYSTERY_EGG_COST } from '../systems/Progression.js';
 import { DinoPreview3D } from './SelectionScreen.js';
+import { attachModalHelp } from './Menus.js';
+import { renderEggSvg } from './SvgIcons.js';
 
 export class CustomizationScreen {
   static renderInto(container, { onClose, onApplyCustom }) {
@@ -21,6 +23,7 @@ export class CustomizationScreen {
       const preset = cfg.presets[cfg.activePreset];
       const dinoId = Save.data.selectedDino || 'trex';
       const eggStatus = ProgressionManager.getMysteryEggStatus();
+      const rotatingShop = ProgressionManager.getRotatingShop();
 
       container.innerHTML = `
         <div class="overlay-center">
@@ -29,6 +32,7 @@ export class CustomizationScreen {
               <h2>🎨 Personalizar & Loja</h2>
               <div style="display:flex; gap:8px; align-items:center;">
                 <span class="hud-pill">🥚 Ovos: <strong>${Save.data.eggs}</strong></span>
+                <span class="hud-pill" style="color:#38bdf8;">💎 <strong>${Save.data.crystals || 0}</strong></span>
                 <button class="chunky-btn secondary" id="cust-close">Concluir</button>
               </div>
             </div>
@@ -104,15 +108,44 @@ export class CustomizationScreen {
                     </select>
                   </div>
                 ` : `
+                  <div class="item-card" style="margin-bottom:10px; border-color:#38bdf8;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+                      <div>
+                        <strong style="color:#38bdf8;">🔄 Loja Rotativa (-20% em destaques)</strong>
+                        <div style="font-size:0.76rem; color:#bae6fd;">Atualiza em ${rotatingShop.refreshIn}</div>
+                      </div>
+                      <div style="display:flex; gap:6px;">
+                        <button class="tab-btn" id="rot-reroll-cryst" style="padding:4px 8px; font-size:0.75rem;">🔄 2 💎</button>
+                        <button class="tab-btn" id="rot-reroll-egg" style="padding:4px 8px; font-size:0.75rem;">🔄 120 🥚</button>
+                      </div>
+                    </div>
+                    <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));">
+                      ${rotatingShop.offers.map((o) => {
+                        const bought = rotatingShop.purchasedIds.includes(o.offerId);
+                        return `
+                          <div class="item-card">
+                            <small style="color:#ffd447;">${o.rarity} • -${o.discountPct}%</small>
+                            <strong>${o.name}</strong>
+                            <button class="tab-btn ${bought ? '' : 'active'}" data-buy-rot="${o.offerId}" ${bought ? 'disabled' : ''}>
+                              ${bought ? '✅ Comprado' : `Comprar (${o.price} 🥚)`}
+                            </button>
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
                   <div class="item-card rarity-lendária" style="margin-bottom:10px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-                      <div>
-                        <strong>🥚 Ovo Misterioso</strong>
-                        <p style="font-size:0.8rem; color:#d8c2a6;">
-                          ${eggStatus.collectionComplete
-                            ? `Coleção 100% completa! Abrir devolve ${eggStatus.dupRefund} 🥚 + ${eggStatus.dupXp} XP no Passe.`
-                            : `Sorteia 1 acessório ou rastro faltante (restam ${eggStatus.totalRemaining} na coleção)!`}
-                        </p>
+                      <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:220px;">
+                        ${renderEggSvg('surpresa', 36)}
+                        <div>
+                          <strong>Ovo Misterioso</strong>
+                          <p style="font-size:0.8rem; color:#d8c2a6;">
+                            ${eggStatus.collectionComplete
+                              ? `Coleção 100% completa! Abrir devolve ${eggStatus.dupRefund} 🥚 + ${eggStatus.dupXp} XP + 1 💎 (sem farm infinito).`
+                              : `Sorteia 1 acessório ou rastro faltante (restam ${eggStatus.totalRemaining} na coleção)!`}
+                          </p>
+                        </div>
                       </div>
                       <button class="chunky-btn" id="buy-mystery">Abrir (${MYSTERY_EGG_COST} 🥚)</button>
                     </div>
@@ -220,6 +253,27 @@ export class CustomizationScreen {
           render();
         });
 
+        container.querySelector('#rot-reroll-cryst')?.addEventListener('click', () => {
+          const res = ProgressionManager.rerollRotatingShop(true);
+          statusMsg = res.ok ? '🔄 Loja rotativa atualizada!' : res.reason;
+          render();
+        });
+
+        container.querySelector('#rot-reroll-egg')?.addEventListener('click', () => {
+          const res = ProgressionManager.rerollRotatingShop(false);
+          statusMsg = res.ok ? '🔄 Loja rotativa atualizada!' : res.reason;
+          render();
+        });
+
+        container.querySelectorAll('[data-buy-rot]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const res = ProgressionManager.buyRotatingOffer(btn.getAttribute('data-buy-rot'));
+            statusMsg = res.ok ? `🎉 Oferta adquirida: ${res.offer.name}!` : res.reason;
+            if (onApplyCustom) onApplyCustom();
+            render();
+          });
+        });
+
         container.querySelectorAll('[data-buy-acc]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const id = btn.getAttribute('data-buy-acc');
@@ -268,6 +322,7 @@ export class CustomizationScreen {
         if (onApplyCustom) onApplyCustom();
         if (onClose) onClose();
       });
+      attachModalHelp(container, 'Personalize cores, padrões de pele, acessórios e rastros para P1/P2 em até 3 presets salvos ou compre na Loja.');
     };
 
     render();

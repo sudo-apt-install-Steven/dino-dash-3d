@@ -5,6 +5,11 @@ import * as THREE from 'three';
 import { LANE_X } from '../world/World.js';
 import { DinoFactory } from '../dinos/DinoFactory.js';
 import { Save } from '../systems/Save.js';
+import {
+  buildVoxelBonusPortal,
+  buildVoxelRuinsPlate,
+  buildVoxelSpear
+} from '../models/VoxelLibrary.js';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 
@@ -89,12 +94,20 @@ export class WorldEvents {
   // 123. Cometa raro no céu!
   spawnRareComet() {
     const g = new THREE.Group();
-    const core = new THREE.Mesh(BOX, new THREE.MeshStandardMaterial({ color: '#67e8f9', emissive: '#22d3ee', emissiveIntensity: 1.5 }));
+    const coreMat = new THREE.MeshStandardMaterial({ color: '#67e8f9', emissive: '#22d3ee', emissiveIntensity: 1.5 });
+    const tailMat = new THREE.MeshBasicMaterial({ color: '#a5f3fc', transparent: true, opacity: 0.7 });
+    const core = new THREE.Mesh(BOX, coreMat);
     core.scale.set(1.6, 1.6, 1.6);
-    const tail = new THREE.Mesh(BOX, new THREE.MeshBasicMaterial({ color: '#a5f3fc', transparent: true, opacity: 0.7 }));
+    const halo = new THREE.Mesh(BOX, coreMat);
+    halo.scale.set(1.1, 2.2, 1.1);
+    halo.rotation.set(0.4, 0.4, 0);
+    const tail = new THREE.Mesh(BOX, tailMat);
     tail.scale.set(0.9, 0.9, 5.5);
     tail.position.set(0, 0, -3.2);
-    g.add(core, tail);
+    const tailOuter = new THREE.Mesh(BOX, tailMat);
+    tailOuter.scale.set(0.5, 0.5, 7.2);
+    tailOuter.position.set(0, 0, -4.1);
+    g.add(core, halo, tail, tailOuter);
     g.position.set(-28, 22, -85);
     this.scene.add(g);
     this.comet = { group: g, timer: 4.5, dropped: false };
@@ -103,16 +116,7 @@ export class WorldEvents {
   // 124. Portal dimensional para fase bônus de ovos
   spawnBonusPortal() {
     if (this.bonusPortal) return;
-    const g = new THREE.Group();
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(1.7, 0.25, 8, 20),
-      new THREE.MeshStandardMaterial({ color: '#a855f7', emissive: '#9333ea', emissiveIntensity: 1.1 })
-    );
-    const inner = new THREE.Mesh(
-      new THREE.CircleGeometry(1.5, 16),
-      new THREE.MeshBasicMaterial({ color: '#fde047', transparent: true, opacity: 0.55, side: THREE.DoubleSide })
-    );
-    g.add(ring, inner);
+    const g = buildVoxelBonusPortal();
     const lane = Math.floor(Math.random() * 3);
     g.position.set(LANE_X[lane], 1.7, -85);
     this.scene.add(g);
@@ -123,16 +127,23 @@ export class WorldEvents {
   spawnPteroNest() {
     if (this.pteroNest) return;
     const g = new THREE.Group();
-    const twigs = new THREE.Mesh(BOX, new THREE.MeshStandardMaterial({ color: '#78350f' }));
+    const twigMat = new THREE.MeshStandardMaterial({ color: '#78350f' });
+    const twigs = new THREE.Mesh(BOX, twigMat);
     twigs.scale.set(1.9, 0.35, 1.9);
     twigs.position.y = 0.2;
+    const rimL = new THREE.Mesh(BOX, twigMat);
+    rimL.scale.set(0.28, 0.28, 1.85);
+    rimL.position.set(-0.85, 0.38, 0);
+    const rimR = new THREE.Mesh(BOX, twigMat);
+    rimR.scale.set(0.28, 0.28, 1.85);
+    rimR.position.set(0.85, 0.38, 0);
     const chick1 = new THREE.Mesh(BOX, new THREE.MeshStandardMaterial({ color: '#fde047' }));
     chick1.scale.set(0.45, 0.5, 0.45);
     chick1.position.set(-0.35, 0.55, 0);
     const chick2 = new THREE.Mesh(BOX, new THREE.MeshStandardMaterial({ color: '#fdba74' }));
     chick2.scale.set(0.45, 0.5, 0.45);
     chick2.position.set(0.35, 0.55, 0);
-    g.add(twigs, chick1, chick2);
+    g.add(twigs, rimL, rimR, chick1, chick2);
     const lane = Math.floor(Math.random() * 3);
     g.position.set(LANE_X[lane], 0, -78);
     this.scene.add(g);
@@ -166,9 +177,8 @@ export class WorldEvents {
         emissive: i === 0 ? '#ff9f1c' : '#334155',
         emissiveIntensity: i === 0 ? 1.1 : 0.35
       });
-      const plate = new THREE.Mesh(BOX, mat);
-      plate.scale.set(1.65, 0.18, 2.2);
-      plate.position.set(LANE_X[order[i]], 0.09, -45 - i * 24);
+      const plate = buildVoxelRuinsPlate(mat);
+      plate.position.set(LANE_X[order[i]], 0, -45 - i * 24);
       this.scene.add(plate);
       this.ruinsPlates.push({ mesh: plate, mat, lane: order[i], index: i, lit: false });
     }
@@ -307,8 +317,7 @@ export class WorldEvents {
       if (!h.shot && h.mesh.position.z > -28) {
         h.shot = true;
         const lane = Math.floor(Math.random() * 3);
-        const sp = new THREE.Mesh(BOX, new THREE.MeshStandardMaterial({ color: '#ffd166', emissive: '#f97316', emissiveIntensity: 0.4 }));
-        sp.scale.set(0.16, 0.16, 1.8);
+        const sp = buildVoxelSpear();
         sp.position.set(h.side, 0.9, h.mesh.position.z);
         this.scene.add(sp);
         this.spears.push({ mesh: sp, targetX: LANE_X[lane], hit: false });

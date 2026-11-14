@@ -15,22 +15,27 @@ export class WeatherSystem {
     this.windForce = 0;
     this.tidePhase = 0;
 
-    // Partículas de chuva/neve/folhas em InstancedMesh
-    const dropGeo = new THREE.BoxGeometry(0.08, 0.45, 0.08);
-    this.dropMat = new THREE.MeshBasicMaterial({ color: '#90e0ef', transparent: true, opacity: 0.65 });
-    this.dropsMesh = new THREE.InstancedMesh(dropGeo, this.dropMat, 120);
+    // Partículas de chuva/neve/folhas em InstancedMesh (suaves e fora do corredor visual central)
+    const dropGeo = new THREE.BoxGeometry(0.06, 0.36, 0.06);
+    this.dropMat = new THREE.MeshBasicMaterial({ color: '#90e0ef', transparent: true, opacity: 0.4 });
+    this.clearVision = false;
+    this.dropsMesh = new THREE.InstancedMesh(dropGeo, this.dropMat, 96);
     this.dropsMesh.visible = false;
     this.scene.add(this.dropsMesh);
 
     this.drops = [];
-    for (let i = 0; i < 120; i++) {
-      this.drops.push({
-        x: (Math.random() - 0.5) * 28,
-        y: Math.random() * 14,
-        z: -35 + Math.random() * 45
-      });
+    for (let i = 0; i < 96; i++) {
+      let x = (Math.random() - 0.5) * 30;
+      const z = -36 + Math.random() * 44;
+      if (Math.abs(x) < 4.8 && z > -14) x = (x < 0 ? -1 : 1) * (4.8 + Math.random() * 8);
+      this.drops.push({ x, y: Math.random() * 14, z });
     }
     this._dummy = new THREE.Object3D();
+  }
+
+  setClearVision(enabled = false) {
+    this.clearVision = !!enabled;
+    this.dropMat.opacity = this.clearVision ? 0.16 : 0.4;
   }
 
   setWeather(weatherId) {
@@ -81,21 +86,29 @@ export class WeatherSystem {
     }
 
     if (this.dropsMesh.visible) {
-      const fallSpeed = this.current === 'rain' ? 24 : 5.5;
+      const fallSpeed = this.current === 'rain' ? 22 : 5.2;
+      const visScale = this.clearVision ? 0.5 : 1.0;
       for (let i = 0; i < this.drops.length; i++) {
         const d = this.drops[i];
         d.y -= fallSpeed * dt;
         d.x += this.windForce * 0.5 * dt;
         if (d.y < 0) {
           d.y = 14;
-          d.x = (Math.random() - 0.5) * 28;
+          let nx = (Math.random() - 0.5) * 30;
+          if (Math.abs(nx) < 4.8 && d.z > -14) nx = (nx < 0 ? -1 : 1) * (4.8 + Math.random() * 8);
+          d.x = nx;
+        }
+        // Evita obstruir o corredor câmera->dino mesmo sob vento forte
+        if (Math.abs(d.x) < 4.5 && d.z > -12) {
+          this._dummy.scale.set(0, 0, 0);
+        } else {
+          this._dummy.scale.set(
+            (this.current === 'rain' ? 0.85 : 1.7) * visScale,
+            (this.current === 'rain' ? 0.9 : 0.3) * visScale,
+            (this.current === 'rain' ? 0.85 : 1.7) * visScale
+          );
         }
         this._dummy.position.set(d.x, d.y, d.z);
-        this._dummy.scale.set(
-          this.current === 'rain' ? 1 : 2.2,
-          this.current === 'rain' ? 1 : 0.35,
-          this.current === 'rain' ? 1 : 2.2
-        );
         this._dummy.updateMatrix();
         this.dropsMesh.setMatrixAt(i, this._dummy.matrix);
       }

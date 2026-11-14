@@ -9,6 +9,7 @@ export class ParticleSystem {
     this.scene = scene;
     this.group = new THREE.Group();
     this.scene.add(this.group);
+    this.lowSpec = false;
 
     this.pool = new ObjectPool(
       () => {
@@ -38,8 +39,13 @@ export class ParticleSystem {
     );
   }
 
+  setLowSpec(enabled) {
+    this.lowSpec = !!enabled;
+  }
+
   emitDust(x, y, z, count = 4, color = '#e6b873', spread = 1.2) {
-    for (let i = 0; i < count; i++) {
+    const finalCount = this.lowSpec ? Math.max(1, Math.floor(count * 0.35)) : count;
+    for (let i = 0; i < finalCount; i++) {
       const p = this.pool.acquire();
       p.mat.color.set(color);
       p.size = 0.14 + Math.random() * 0.14;
@@ -60,7 +66,8 @@ export class ParticleSystem {
   }
 
   emitExplosion(x, y, z, color = '#58d63a', count = 16, bounce = true) {
-    for (let i = 0; i < count; i++) {
+    const finalCount = this.lowSpec ? Math.max(2, Math.floor(count * 0.35)) : count;
+    for (let i = 0; i < finalCount; i++) {
       const p = this.pool.acquire();
       p.mat.color.set(color);
       p.size = 0.2 + Math.random() * 0.22;

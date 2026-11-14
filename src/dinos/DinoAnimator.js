@@ -38,6 +38,15 @@ export class DinoAnimator {
     m.torso.rotation.set(0, 0, 0);
     m.neckPivot.rotation.set(0, 0, 0);
     m.jaw.rotation.set(0, 0, 0);
+    if (m.eyeGroups) {
+      m.eyeGroups.forEach((eg) => eg.scale.set(1, 1, 1));
+    }
+    if (m.browGroups) {
+      m.browGroups.forEach((bg) => {
+        bg.rotation.set(0, 0, 0);
+        if (bg._baseY !== undefined) bg.position.y = bg._baseY;
+      });
+    }
     m.root.visible = true;
   }
 
@@ -52,6 +61,7 @@ export class DinoAnimator {
       swimming = false,
       dead = false,
       victory = false,
+      invulnActive = false,
       giantScale = 1.0,
       laneLean = 0
     } = state;
@@ -74,8 +84,10 @@ export class DinoAnimator {
     if (this.roarTimer > 0) this.roarTimer = Math.max(0, this.roarTimer - dt);
     if (this.hurtTimer > 0) {
       this.hurtTimer = Math.max(0, this.hurtTimer - dt);
-      // Pisca suavemente no estado de invulnerabilidade pós-dano
+      // Pisca claramente no estado de invulnerabilidade pós-dano
       m.root.visible = Math.floor(this.hurtTimer * 18) % 2 === 0;
+    } else if (invulnActive) {
+      m.root.visible = Math.floor(performance.now() * 0.016) % 2 === 0;
     } else {
       m.root.visible = true;
     }
@@ -143,11 +155,36 @@ export class DinoAnimator {
       m.armR.hip.rotation.x = -0.35 - swing * 0.35;
     }
 
-    // Pescoço e boca (abaixar nivela cabeça; rugido abre a mandíbula)
-    const targetNeckPitch = ducking ? -0.35 : (sliding ? 0.28 : 0);
+    // Pescoço, mandíbula e expressões faciais (Pulo / Dano / Rugido / Dash)
+    const isHurtFace = this.hurtTimer > 0;
+    const isRoarFace = this.roarTimer > 0 || !!state.furyActive;
+    const isDashFace = !!(sliding || state.dashing);
+    const isJumpFace = !grounded && vy > 2;
+
+    const targetNeckPitch = ducking ? -0.35 : (sliding ? 0.28 : (isRoarFace ? -0.16 : 0));
     m.neckPivot.rotation.x += (targetNeckPitch - m.neckPivot.rotation.x) * Math.min(1, dt * 12);
-    const targetJaw = this.roarTimer > 0 ? 0.52 : 0.04 + Math.max(0, Math.sin(this.runPhase * 0.5)) * 0.05;
+    const targetJaw = isRoarFace ? 0.56 : (isHurtFace ? 0.42 : (isJumpFace ? 0.16 : 0.04 + Math.max(0, Math.sin(this.runPhase * 0.5)) * 0.05));
     m.jaw.rotation.x += (targetJaw - m.jaw.rotation.x) * Math.min(1, dt * 18);
+
+    if (m.eyeGroups?.length === 2) {
+      const eyeScaleY = isHurtFace ? 0.26 : (isDashFace ? 0.68 : (isJumpFace ? 1.24 : 1.0));
+      const eyeScaleZ = isHurtFace ? 1.18 : 1.0;
+      m.eyeGroups.forEach((eg) => {
+        eg.scale.y += (eyeScaleY - eg.scale.y) * Math.min(1, dt * 18);
+        eg.scale.z += (eyeScaleZ - eg.scale.z) * Math.min(1, dt * 18);
+      });
+    }
+    if (m.browGroups?.length === 2) {
+      const browTilt = isHurtFace ? 0.42 : (isRoarFace ? 0.34 : (isDashFace ? 0.22 : (isJumpFace ? -0.22 : 0)));
+      const browYOff = isJumpFace ? 0.045 : (isHurtFace || isRoarFace ? -0.025 : 0);
+      m.browGroups.forEach((bg, idx) => {
+        if (bg._baseY === undefined) bg._baseY = bg.position.y;
+        const sideSign = idx === 0 ? -1 : 1;
+        bg.rotation.x += (browTilt - bg.rotation.x) * Math.min(1, dt * 16);
+        bg.rotation.y += (sideSign * browTilt * 0.35 - bg.rotation.y) * Math.min(1, dt * 16);
+        bg.position.y += ((bg._baseY + browYOff) - bg.position.y) * Math.min(1, dt * 16);
+      });
+    }
 
     // Cauda articulada com onda senoidal atrasada por segmento
     m.tailSegments.forEach((seg, idx) => {

@@ -163,6 +163,14 @@ export class SceneryInstancer {
     this.update(0, 0);
   }
 
+  setLowDetail(enabled) {
+    const low = !!enabled;
+    if (this.bugMesh) this.bugMesh.visible = !low;
+    if (this.faunaMesh) this.faunaMesh.visible = !low;
+    if (this.boneMesh) this.boneMesh.visible = !low;
+    if (this.flowerMesh) this.flowerMesh.visible = !low;
+  }
+
   setBiomePalette(palette) {
     this.pebbleMat.color.set(palette.pebble || '#c48f4d');
     this.rockMat.color.set(palette.rock || '#9c6644');

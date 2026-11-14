@@ -15,9 +15,26 @@ export class PartyModals {
     const modeName = summary?.mpMode === 'duel'
       ? '⚔️ Duelo PvP'
       : (summary?.mpMode === 'elimination' ? '⏳ Eliminação 30s' : '🏁 Corrida Competitiva');
-    container.innerHTML = `
+    const voteBiomes = [
+      { id: 'desert', label: '🏜️ Deserto' },
+      { id: 'volcano', label: '🌋 Vulcão' },
+      { id: 'ice_age', label: '❄️ Gelo' },
+      { id: 'dark_swamp', label: '🧪 Pântano' },
+      { id: 'crystal_cavern', label: '💎 Cristais' },
+      { id: 'alien_planet', label: '🛸 Alien' }
+    ];
+    const voteModes = [
+      { id: 'race', label: '🏁 Corrida' },
+      { id: 'duel', label: '⚔️ Duelo PvP' },
+      { id: 'elimination', label: '⏳ Eliminação' }
+    ];
+    let pickedBiome = summary?._votedBiome || 'desert';
+    let pickedMode = summary?._votedMpMode || summary?.mpMode || 'race';
+
+    const renderView = () => {
+      container.innerHTML = `
       <div class="overlay-center">
-        <div class="chunky-panel modal-card" style="max-width:680px; text-align:center;">
+        <div class="chunky-panel modal-card" style="max-width:700px; text-align:center;">
           <h2 style="color:#ffd447; font-size:1.75rem;">🏆 PÓDIO MULTIPLAYER (${modeName})</h2>
           ${mvp ? `<div class="item-card" style="border-color:#ffd447; margin:10px 0;">
             <strong style="font-size:1.15rem; color:#58d63a;">🥇 CAMPEÃO & MVP: ${mvp.name} (${Math.floor(mvp.score)} pts)</strong>
@@ -25,13 +42,22 @@ export class PartyModals {
               ${summary?.rewardEggs > 0 ? `🥚 Prêmio ganho nesta corrida: <strong>+${summary.rewardEggs} Ovos</strong>` : '👑 Coroa de Campeão conquistada! (Prêmios de ovos exigem 2+ humanos na sala)'}
             </div>
           </div>` : ''}
-          <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
+          <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
             ${standings.map((p, i) => `
               <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:10px; background:rgba(0,0,0,0.35); border-left:4px solid ${p.color || '#ffd447'};">
                 <span><strong>#${i + 1} ${p.name}</strong> ${i === 0 ? '👑 MVP' : ''}</span>
                 <span>${Math.floor(p.score)} pts${p.pvpHits ? ` • ⚔️ ${p.pvpHits}` : ''} • 📶 ${p.pingMs || 2}ms</span>
               </div>
             `).join('')}
+          </div>
+          <div class="item-card" style="margin-bottom:10px; text-align:left; border-color:#38bdf8;">
+            <strong style="color:#38bdf8; font-size:0.86rem;">🗳️ Votação para Próxima Rodada (Mapa & Modo):</strong>
+            <div class="tabs-row" style="margin-top:6px; gap:5px;">
+              ${voteBiomes.map((b) => `<button class="tab-btn ${pickedBiome === b.id ? 'active' : ''}" data-vbiome="${b.id}">${b.label}</button>`).join('')}
+            </div>
+            <div class="tabs-row" style="margin-top:6px; gap:5px;">
+              ${voteModes.map((m) => `<button class="tab-btn ${pickedMode === m.id ? 'active' : ''}" data-vmode="${m.id}">${m.label}</button>`).join('')}
+            </div>
           </div>
           <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
             <button class="chunky-btn orange" id="pod-replay">🎬 Replay Melhores Jogadas</button>
@@ -44,14 +70,32 @@ export class PartyModals {
         </div>
       </div>
     `;
-    container.querySelector('#pod-replay').onclick = actions.onReplay;
-    container.querySelector('#pod-again').onclick = actions.onAgain;
-    container.querySelector('#pod-trivia').onclick = () => {
-      if (summary?._triviaDone) return;
-      if (summary) summary._triviaDone = true;
-      this.renderTriviaModal(container, () => this.renderPodiumModal(container, summary, actions));
+      container.querySelectorAll('[data-vbiome]').forEach((b) => {
+        b.onclick = () => {
+          pickedBiome = b.getAttribute('data-vbiome');
+          if (summary) summary._votedBiome = pickedBiome;
+          actions.onVote?.({ biomeId: pickedBiome, mpMode: pickedMode });
+          renderView();
+        };
+      });
+      container.querySelectorAll('[data-vmode]').forEach((b) => {
+        b.onclick = () => {
+          pickedMode = b.getAttribute('data-vmode');
+          if (summary) summary._votedMpMode = pickedMode;
+          actions.onVote?.({ biomeId: pickedBiome, mpMode: pickedMode });
+          renderView();
+        };
+      });
+      container.querySelector('#pod-replay').onclick = actions.onReplay;
+      container.querySelector('#pod-again').onclick = () => actions.onAgain?.({ votedBiome: pickedBiome, votedMpMode: pickedMode });
+      container.querySelector('#pod-trivia').onclick = () => {
+        if (summary?._triviaDone) return;
+        if (summary) summary._triviaDone = true;
+        this.renderTriviaModal(container, () => renderView());
+      };
+      container.querySelector('#pod-menu').onclick = actions.onMenu;
     };
-    container.querySelector('#pod-menu').onclick = actions.onMenu;
+    renderView();
   }
 
   static renderTriviaModal(container, onDone) {

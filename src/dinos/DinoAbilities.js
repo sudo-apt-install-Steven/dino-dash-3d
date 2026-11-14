@@ -1,6 +1,7 @@
 // Habilidades ativas dos 13+1 dinos, passivas de classe, ressonância, combos Coop e fusão.
 import * as THREE from 'three';
 import { getDinoSpec } from './DinoCatalog.js';
+import { buildVoxelProjectile } from '../models/VoxelLibrary.js';
 
 export class DinoAbilities {
   constructor(scene) {
@@ -8,10 +9,8 @@ export class DinoAbilities {
     this.projectiles = [];
     this.shockwaves = [];
 
-    const geo = new THREE.BoxGeometry(0.45, 0.45, 0.65);
     this.acidMat = new THREE.MeshBasicMaterial({ color: '#7bf118' });
     this.spikeMat = new THREE.MeshBasicMaterial({ color: '#ff6b35' });
-    this.projGeo = geo;
   }
 
   getSkillLevelScale(level = 1) {
@@ -21,6 +20,10 @@ export class DinoAbilities {
   activate(player, gameCtx) {
     const spec = getDinoSpec(player.id);
     if (player.abilityCooldown > 0) return false;
+    if ((player.abilityCharge ?? 100) < 100) {
+      gameCtx.showFloatText?.(player, `⏳ CARGA ${Math.floor(player.abilityCharge || 0)}% (combos/pisões/Q!)`, '#fbbf24');
+      return false;
+    }
 
     const lvlScale = this.getSkillLevelScale(player.skillLevel || 1);
     const cdMult = player.cooldownMult || 1;
@@ -32,6 +35,7 @@ export class DinoAbilities {
     player.abilityCooldown = spec.ability.cooldown * cdMult;
     player.abilityDuration = spec.ability.duration * durMult;
     player.abilityMaxCooldown = player.abilityCooldown;
+    player.abilityCharge = 0;
     player.animator.triggerRoar(0.5);
     gameCtx.sfx?.roar(player.id);
 
@@ -155,6 +159,51 @@ export class DinoAbilities {
         player.furyTimer = Math.max(player.furyTimer, 2.5);
         gameCtx.showFloatText?.(player, 'RUGIDO COLOSSAL!', '#fb7185');
         break;
+      case 'iguanodon':
+        player.ramTimer = player.abilityDuration;
+        player.shields = Math.max(player.shields, 1);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 18, false);
+        gameCtx.showFloatText?.(player, 'ESPIGÃO DE POLEGAR!', '#52b788');
+        break;
+      case 'gallimimus':
+        player.turboTimer = Math.max(player.turboTimer, player.abilityDuration);
+        player.stamina = Math.min(player.maxStamina || 100, (player.stamina || 0) + 60);
+        gameCtx.showFloatText?.(player, 'ARRANQUE RELÂMPAGO!', '#f4a261');
+        break;
+      case 'deinonychus':
+        player.extraJumps = Math.max(player.extraJumps, 2);
+        this._spawnProjectile(player.x - 0.5, 1.1, player.z - 0.7, -2.2, -46, this.spikeMat);
+        this._spawnProjectile(player.x, 1.1, player.z - 0.8, 0, -48, this.spikeMat);
+        this._spawnProjectile(player.x + 0.5, 1.1, player.z - 0.7, 2.2, -46, this.spikeMat);
+        gameCtx.showFloatText?.(player, 'SALTO EM FOICE!', '#e63946');
+        break;
+      case 'kentrosaurus':
+        player.shields = Math.min(4, (player.shields || 0) + 1);
+        for (let i = 0; i < 6; i++) {
+          const ang = (i / 6) * Math.PI * 2;
+          this._spawnProjectile(player.x, 1.0, player.z, Math.cos(ang) * 20, Math.sin(ang) * 20, this.spikeMat);
+        }
+        gameCtx.showFloatText?.(player, 'MURALHA DE ESPINHOS!', '#f4d35e');
+        break;
+      case 'diplodocus':
+        this._spawnWave(player.x, player.z, '#38bdf8', 22);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 26, false);
+        gameCtx.stunPvPRival?.(player);
+        gameCtx.showFloatText?.(player, 'CHICOTE SUPERSÔNICO!', '#a8dadc');
+        break;
+      case 'ceratosaurus':
+        player.ramTimer = player.abilityDuration;
+        this._spawnProjectile(player.x - 0.7, 1.0, player.z - 0.8, -1.5, -45, this.spikeMat);
+        this._spawnProjectile(player.x + 0.7, 1.0, player.z - 0.8, 1.5, -45, this.spikeMat);
+        gameCtx.showFloatText?.(player, 'CHIFRADA SÍSMICA!', '#b5179e');
+        break;
+      case 'argentinosaurus':
+        this._spawnWave(player.x, player.z, '#3d5a80', 30);
+        player.invulnTimer = Math.max(player.invulnTimer, player.abilityDuration);
+        gameCtx.cameraRig?.triggerShake(0.7, 0.35);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 44, false);
+        gameCtx.showFloatText?.(player, 'PISÃO TECTÔNICO!', '#ffd447');
+        break;
       case 'ghostgold':
         player.invulnTimer = Math.max(player.invulnTimer, player.abilityDuration);
         player.scoreMultBonus = 1.8;
@@ -169,7 +218,7 @@ export class DinoAbilities {
   }
 
   _spawnProjectile(x, y, z, vx, vz, mat) {
-    const mesh = new THREE.Mesh(this.projGeo, mat);
+    const mesh = buildVoxelProjectile(mat);
     mesh.position.set(x, y, z);
     this.scene.add(mesh);
     this.projectiles.push({ mesh, vx, vz, life: 1.5 });
