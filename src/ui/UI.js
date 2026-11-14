@@ -38,9 +38,11 @@ export class UIManager {
       onCycleCamera: () => this.game.cycleCamera(),
       onUseItem: () => this.game.usePlayerItem(0),
       onMerchantBuy: () => this.game.buyFromMerchant(),
+      onMerchantSkip: () => this.game.closeMerchant(true),
       onOpenDebug: () => this.openSection('debug'),
       onRecordClip: () => this.game.toggleClipRecording(),
       onBasicAttack: () => this.game.triggerManualAttack(0),
+      onTriggerFury: () => this.game.input.triggerVirtualPulse('p1', 'fury', 100),
       onTouchAction: (act, active) => this.game.input.setVirtualAction('p1', act, active)
     });
 
@@ -90,6 +92,10 @@ export class UIManager {
     const biomeLabel = this.game.sequenceBiomes
       ? `Sequência (${getBiomeById(this.game.startBiomeId).name})`
       : getBiomeById(this.game.startBiomeId).name;
+    const isPerf = !!Save.data.perfectMode && modeDef.id !== 'zen';
+    const effectiveLives = (isPerf || modeDef.id === 'hardcore')
+      ? 1
+      : Math.max(1, Math.min(7, diffCfg.lives + Math.floor((Save.data.talents?.vitality || 0) / 2) + ((dinoSpec.stats?.hp ?? 3) - 3)));
 
     Menus.renderMainMenu(
       this.hud.modalLayer,
@@ -97,6 +103,7 @@ export class UIManager {
         modeName: modeDef.name,
         diffName: diffCfg.name,
         dinoName: dinoSpec.name,
+        effectiveLives,
         biomeLabel,
         lowSpec: !!Save.data.lowSpecMode,
         benchmarkFps: Save.data.benchmarkFps || 0,
@@ -264,6 +271,7 @@ export class UIManager {
           this._clearModal();
           if (wasPlaying) {
             this.game.state = 'playing';
+            this.game.lastTime = performance.now();
           } else {
             back();
           }
@@ -278,6 +286,7 @@ export class UIManager {
             this._clearModal();
             if (wasPlaying) {
               this.game.state = 'playing';
+              this.game.lastTime = performance.now();
             } else {
               back();
             }
@@ -309,6 +318,7 @@ export class UIManager {
             },
             onToggleLowSpec: () => {
               this.game.sfx.click();
+              Save.data.lowSpecManual = true;
               PerfMonitor.applyLowSpec(this.game, !Save.data.lowSpecMode);
               this.openSection('extras');
             },

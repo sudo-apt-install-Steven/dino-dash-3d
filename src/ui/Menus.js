@@ -60,10 +60,10 @@ export class Menus {
           <div class="item-card" style="padding:10px 12px; font-size:0.84rem; gap:6px;">
             <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; align-items:center;">
               <span>Modo: <strong style="color:#58d63a;">${state.modeName}</strong> <button type="button" class="inline-change-btn" data-nav="modes">mudar</button></span>
-              <span>Dif.: <strong style="color:#ff9a24;">${state.diffName}</strong> <button type="button" class="inline-change-btn" data-nav="difficulty">mudar</button></span>
+              <span>Dif.: <strong style="color:#ff9a24;">${state.diffName}</strong>${Save.data.perfectMode ? ' <strong style="color:#38bdf8;">• 💎 1 Vida</strong>' : ''} <button type="button" class="inline-change-btn" data-nav="difficulty">mudar</button></span>
             </div>
             <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; align-items:center;">
-              <span>Dino: <strong style="color:#ffd447;">${state.dinoName}</strong> <button type="button" class="inline-change-btn" data-nav="dinos">mudar</button></span>
+              <span>Dino: <strong style="color:#ffd447;">${state.dinoName}</strong> <span style="color:#fda4af;">(${state.effectiveLives ?? 3}❤️)</span> <button type="button" class="inline-change-btn" data-nav="dinos">mudar</button></span>
               <span>Mapa: <strong>${state.biomeLabel}</strong> <button type="button" class="inline-change-btn" data-nav="maps">mudar</button></span>
             </div>
           </div>
@@ -391,7 +391,13 @@ export class Menus {
                   `).join('')}
                 </div>
               </div>
-            ` : `<p style="font-size:0.9rem; color:#d8c2a6;">Preset selecionado: <strong>${diffMgr.getConfig().name}</strong> • Vidas: ${diffMgr.getConfig().lives} • Multiplicador: ${diffMgr.getConfig().scoreMult}x</p>`}
+            ` : (() => {
+              const cfg = diffMgr.getConfig();
+              const selDino = DINO_CATALOG.find((d) => d.id === Save.data.selectedDino) || DINO_CATALOG[0];
+              const vit = Math.floor((Save.data.talents?.vitality || 0) / 2);
+              const eff = Save.data.perfectMode ? 1 : Math.max(1, Math.min(7, cfg.lives + vit + ((selDino?.stats?.hp ?? 3) - 3)));
+              return `<p style="font-size:0.9rem; color:#d8c2a6;">Preset selecionado: <strong>${cfg.name}</strong> • Vidas (${selDino?.name || 'Dino'}): ${Save.data.perfectMode ? '<strong style="color:#38bdf8;">1 (💎 Modo Perfeito ativo!)</strong>' : `<strong>${eff}❤️</strong> (base ${cfg.lives})`} • Multiplicador: ${cfg.scoreMult}x</p>`;
+            })()}
           </div>
         </div>
       `;

@@ -102,6 +102,7 @@ export class Game {
     this.activeCustomTrack = null;
     this.multiplayerSession = null;
     this.merchantUses = 0;
+    this._merchantGuardUntil = 0;
     this.hitStopTimer = 0;
     this.spotlightActive = false;
     this._lastFrameRenderAt = 0;
@@ -143,15 +144,63 @@ export class Game {
     };
     window.addEventListener('resize', this._onResize);
 
-    // Desbloqueio WebAudio + toque/clique para escapar do OVNI + Konami Easter Egg
+    // Desbloqueio WebAudio + Gestos Touch (Swipe) + Toque OVNI / Pular Intro + Konami
     this._unlockAudio = () => this.audio.ensureContext();
-    this._onCanvasPointer = () => {
-      if (this.state === 'playing' && this.events.ufo.active) {
+    this._canvasSwipe = null;
+    this._onCanvasPointer = (e) => {
+      if (this.state !== 'playing') return;
+      if (this.events.predators?.state === 'intro') {
+        if ((this.events.predators.introElapsed || 0) > 0.35) {
+          this.events.predators.skipIntro(this._eventContext());
+          this._skipIntroGuardFrames = 3;
+        }
+        return;
+      }
+      if (this.events.ufo.active) {
         this.events.ufo.mashBreak();
       }
+      if (e.isPrimary !== false) {
+        this._canvasSwipe = {
+          id: e.pointerId,
+          startX: e.clientX,
+          startY: e.clientY,
+          handled: false,
+          action: null
+        };
+      }
+    };
+    this._onCanvasPointerMove = (e) => {
+      const sw = this._canvasSwipe;
+      if (!sw || sw.id !== e.pointerId || sw.handled || this.state !== 'playing') return;
+      if (this.events.predators?.state === 'intro') return;
+      const dx = e.clientX - sw.startX;
+      const dy = e.clientY - sw.startY;
+      if (Math.hypot(dx, dy) < 22) return;
+      sw.handled = true;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        sw.action = dx < 0 ? 'left' : 'right';
+        this.input.triggerVirtualPulse('p1', sw.action, 70);
+      } else if (dy < 0) {
+        sw.action = 'jump';
+        this.input.triggerVirtualPulse('p1', 'jump', 380);
+      } else {
+        sw.action = 'duck';
+        this.input.triggerVirtualPulse('p1', 'duck', 520);
+      }
+    };
+    this._onCanvasPointerEnd = (e) => {
+      const sw = this._canvasSwipe;
+      if (!sw || sw.id !== e.pointerId) return;
+      if (sw.action === 'jump') {
+        this.input.setVirtualAction('p1', 'jump', false);
+      }
+      this._canvasSwipe = null;
     };
     window.addEventListener('pointerdown', this._unlockAudio, { passive: true });
     this.canvas.addEventListener('pointerdown', this._onCanvasPointer);
+    this.canvas.addEventListener('pointermove', this._onCanvasPointerMove);
+    this.canvas.addEventListener('pointerup', this._onCanvasPointerEnd);
+    this.canvas.addEventListener('pointercancel', this._onCanvasPointerEnd);
     window.addEventListener('keydown', this._unlockAudio);
 
     this.input.onKonami = () => {
@@ -542,8 +591,8 @@ export class Game {
     const diff = this.difficultyMgr.getConfig();
     const talents = Save.data.talents || {};
     const vitalityBonus = Math.floor((talents.vitality || 0) / 2);
-    const isPerfect = !!Save.data.perfectMode && this.modeId !== 'zen' && !this.isTestTrack;
-    const baseHp = isPerfect ? 1 : ((this.modeId === 'hardcore' ? 1 : diff.lives) + vitalityBonus);
+    const isPerfect = !!Save.data.perfectMode && this.modeId !== 'zen' && !this.isTestTrack && !this.tutorialState?.active;
+    const baseHp = (isPerfect || this.modeId === 'hardcore') ? 1 : (diff.lives + vitalityBonus);
     const activeSeason = Metagame.getActiveSeason();
     const hasCrown = (Save.data.partySkins || []).includes('lan_crown');
 
@@ -584,6 +633,10 @@ export class Game {
 
       const diffShield = this.difficultyMgr.activeId === 'easy' && this.modeId !== 'hardcore' ? 1 : 0;
       const startShields = isPerfect ? 0 : Math.min(4, (spec.dinoClass === 'herbivore' && this.modeId !== 'hardcore' ? 1 : 0) + diffShield);
+      const speciesHpOffset = (spec.stats?.hp ?? 3) - 3;
+      const playerMaxHp = (isPerfect || this.modeId === 'hardcore')
+        ? 1
+        : Math.max(1, Math.min(7, baseHp + speciesHpOffset));
 
       this.players.push({
         index: i,
@@ -612,8 +665,9 @@ export class Game {
         slideTimer: 0,
         jumpHoldTimer: 0,
         extraJumps: dinoId === 'compsognathus' ? 1 : 0,
-        hp: baseHp,
-        maxHp: baseHp,
+        isPerfectMode: isPerfect,
+        hp: playerMaxHp,
+        maxHp: playerMaxHp,
         shields: startShields,
         dead: false,
         reviveProgress: 0,
@@ -674,6 +728,8 @@ export class Game {
     this.tvHud.setVisible(false);
     this.cameraRig.setFocusPlayer(null);
     this.cameraRig.setPredatorFocus(null);
+    this.events?.reset?.();
+    this.ui.hud.setPredatorIntroHud(null);
     this.ui.hud.setPredatorIntroHud?.(null);
     this.music.setPlaying(false);
     this.spawner.reset();
@@ -963,7 +1019,9 @@ export class Game {
   startRun(isTestTrack = false, opts = {}) {
     this.isTestTrack = isTestTrack;
     this.pendingRestart = false;
+    this.spotlightActive = false;
     this.merchantUses = 0;
+    this._merchantGuardUntil = 0;
     this.seenHints = new Set();
     if (!opts.tutorial) {
       this.tutorialState = null;
@@ -1007,6 +1065,9 @@ export class Game {
     this.hitStopTimer = 0;
     this.slowMoTimer = 0;
     this.decoyTimer = 0;
+    this._pendingStartBanners = [];
+    this._skipIntroGuardFrames = 0;
+    this._lastIntroLook = null;
     this.currentOasis = 0;
     this.shortcutTimer = 0;
     this.sharedSwapTimer = 60;
@@ -1042,9 +1103,19 @@ export class Game {
       this.activeMutation = mut;
       if (mut.id === 'bouncy') this.players[0].jumpMult = 1.15;
       if (mut.id === 'tiny_core') this.players[0].smallHitbox = true;
-      this.ui.hud.showBanner(`🧬 Mutação da Partida: ${mut.name} (${mut.desc})`, '#c084fc', 3.4);
-      if (Save.data.perfectMode) {
-        this.ui.hud.showBanner('💎 MODO PERFEITO ATIVO! 1 Vida • 0 Escudos • Score 2.2x • Ovos 1.5x', '#38bdf8', 3.6);
+      const mutText = `🧬 Mutação: ${mut.name} (${mut.desc})`;
+      if (Save.data.perfectMode && this.modeId !== 'zen') {
+        this._pendingStartBanners.push({
+          text: `💎 MODO PERFEITO (1 Vida • Score 2.2x) • ${mutText}`,
+          color: '#38bdf8',
+          dur: 4.2
+        });
+      } else {
+        this._pendingStartBanners.push({
+          text: mutText,
+          color: '#c084fc',
+          dur: 3.4
+        });
       }
     }
 
@@ -1110,15 +1181,45 @@ export class Game {
     if (!Save.data.tutorialDone) {
       Save.data.tutorialDone = true;
       Save.save();
-      this.ui.hud.showBanner('Dica: Use W/↑ para pular, S/↓ para abaixar/deslizar e A/D para trocar de faixa!', '#58d63a', 4.5);
+      this._pendingStartBanners.push({
+        text: 'Dica: Use W/↑ para pular, S/↓ para abaixar/deslizar e A/D para trocar de faixa!',
+        color: '#58d63a',
+        dur: 4.5
+      });
     }
 
     this.ui.hud.setSharedRolesHint(
       this.modeId === 'shared_controls' ? '👥 A: Move faixas (A/D) | B: Pulo/Abaixar/Habilidade (↑/↓/Enter)' : ''
     );
     this.ui.hud.setCameraLabel(this.cameraRig.currentMode.label);
+    this.cameraRig.setPredatorFocus(null);
+    this.ui.hud.setPredatorIntroHud(null);
     this.replay.reset();
     this.music.setPlaying(true);
+
+    const lead0 = this.players[0];
+    if (lead0) {
+      lead0.model?.root.position.set(lead0.x, 0, lead0.z);
+      lead0.animator?.update(0.016, { speed: 0, grounded: true });
+      this.ui.hud.updatePlayStatus(
+        lead0,
+        Save.data.eggs,
+        this.currentBiome.name,
+        Math.ceil((this.score + 1) / 1000) * 1000,
+        this.combo,
+        this.score
+      );
+    }
+
+    const introStarted = this.events.predators.startOpeningIntro(
+      this.currentBiome.id,
+      this._eventContext()
+    );
+    if (introStarted) {
+      this._updatePredatorIntro(0.001);
+    } else {
+      this._flushStartBanners();
+    }
   }
 
   requestRestart() {
@@ -1208,21 +1309,41 @@ export class Game {
     return 220;
   }
 
+  closeMerchant(grantGrace = true) {
+    this.ui.hud.hideMerchant();
+    if (this.state === 'paused' && !this.photoMode && !this.pendingRestart) {
+      this.state = 'playing';
+      if (this.music.enabled) this.music.setPlaying(true);
+    }
+    const p = this.players[0];
+    if (grantGrace && p && !p.dead) {
+      p.invulnTimer = Math.max(p.invulnTimer || 0, 1.8);
+    }
+    this.lastTime = performance.now();
+  }
+
   buyFromMerchant() {
+    if (performance.now() < (this._merchantGuardUntil || 0)) return;
     const cost = this._getMerchantCost();
     if (Save.data.eggs < cost) {
       this.ui.hud.showFloatText(`Precisa de ${cost} ovos!`, '#ff4757');
+      this.closeMerchant(true);
       return;
     }
     Save.addEggs(-cost);
     this.merchantUses++;
     const p = this.players[0];
     if (p) {
-      this._healPlayer(p, 1, '🛒 CURA DO MERCADOR & ESCUDO!');
-      p.shields = Math.min(4, p.shields + 1);
+      if (Save.data.perfectMode || p.isPerfectMode) {
+        p.shields = Math.min(5, (p.shields || 0) + 1);
+        this.ui.hud.showFloatText('🛒 +1 ESCUDO DO MERCADOR!', '#38bdf8');
+      } else {
+        this._healPlayer(p, 1, '🛒 CURA DO MERCADOR & ESCUDO!');
+        p.shields = Math.min(4, (p.shields || 0) + 1);
+      }
       this.ui.hud.triggerEdgeFlash('rara');
     }
-    this.ui.hud.hideMerchant();
+    this.closeMerchant(true);
   }
 
   applyPickedCard(card) {
@@ -1286,14 +1407,34 @@ export class Game {
       showBanner: (t, c, d) => this.ui.hud.showBanner(t, c, d),
       showFloatText: (p, t, c) => this.ui.hud.showFloatText(t, c),
       damagePlayer: (p, cause = 'event') => this._damagePlayer(p, cause),
+      healPlayer: (p, amt = 1, text = '💚 +1 VIDA!') => this._healPlayer(p, amt, text),
       onMerchantEncounter: () => {
-        this.ui.hud.setMerchantCost(this._getMerchantCost());
+        if (this.state !== 'playing' || this.isTestTrack || this.headlessBot || this.multiplayerSession?.active) return;
+        const cost = this._getMerchantCost();
+        this.state = 'paused';
+        this.music.setPlaying(false);
+        this._merchantGuardUntil = performance.now() + 450;
+        this.ui.hud.setMerchantCost(cost, Save.data.eggs);
         this.ui.hud.showMerchant();
       },
       onBossHudUpdate: (b) => this.ui.hud.setBossHud(b),
       onUfoHudUpdate: (a, t, pr) => this.ui.hud.setUfoHud(a, t, pr),
       onChaserHudUpdate: (a, d, spec) => this.ui.hud.setChaserHud(a, d, spec),
-      onPredatorIntroHud: (info) => this.ui.hud.setPredatorIntroHud(info, () => this.events.predators.skipIntro(this._eventContext())),
+      onPredatorIntroHud: (info) => this.ui.hud.setPredatorIntroHud(info, () => {
+        this._skipIntroGuardFrames = 2;
+        this.events.predators.skipIntro(this._eventContext());
+      }),
+      onIntroEnd: () => {
+        this._skipIntroGuardFrames = 2;
+        if (this.cameraRig?.currentPos && this._lastIntroLook) {
+          this.cameraRig.currentPos.copy(this.camera.position);
+          this.cameraRig.currentLook.copy(this._lastIntroLook);
+          this._lastIntroLook = null;
+        }
+        this._flushStartBanners();
+      },
+      isTestTrack: Boolean(this.isTestTrack),
+      isTutorial: Boolean(this.tutorialState?.active),
       clearNearbyObstacles: (x, z, radius, stunOnly) => this._clearNearbyObstacles(x, z, radius, stunOnly),
       healPartner: (source) => {
         for (const p of this.players) {
@@ -1345,14 +1486,27 @@ export class Game {
 
   _healPlayer(p, amount = 1, text = '💚 +1 VIDA!') {
     if (!p || p.dead) return false;
-    const prev = p.hp;
-    p.hp = Math.min(p.maxHp, p.hp + amount);
+    const curMax = Number.isFinite(p.maxHp) && p.maxHp > 0 ? p.maxHp : 3;
+    const curHp = Number.isFinite(p.hp) ? p.hp : curMax;
+    p.maxHp = curMax;
+    if (p.isPerfectMode || Save.data.perfectMode) {
+      p.hp = 1;
+      p.shields = Math.min(5, (p.shields || 0) + 1);
+      try { this.sfx?.heal?.(); } catch {}
+      this.particles?.emitExplosion?.(p.x, p.y + 0.9, p.z, '#38bdf8', 12, false);
+      this.ui?.hud?.triggerEdgeFlash?.('rara');
+      this.ui?.hud?.showFloatText?.('🛡️ +1 ESCUDO (PERFEITO)!', '#38bdf8');
+      return false;
+    }
+    const prev = Math.min(curMax, curHp);
+    const inc = Math.max(1, Number(amount) || 1);
+    p.hp = Math.min(curMax, Math.max(1, prev + inc));
     const healed = p.hp > prev;
-    this.sfx.heal();
-    this.particles.emitExplosion(p.x, p.y + 0.9, p.z, '#4ade80', 14, false);
-    this.ui.hud.triggerEdgeFlash('heal');
-    this.ui.hud.pulseHp('heal');
-    this.ui.hud.showFloatText(healed ? text : '💚 VIDA CHEIA!', '#4ade80');
+    try { this.sfx?.heal?.(); } catch {}
+    this.particles?.emitExplosion?.(p.x, p.y + 0.9, p.z, '#4ade80', 14, false);
+    this.ui?.hud?.triggerEdgeFlash?.('heal');
+    this.ui?.hud?.pulseHp?.('heal');
+    this.ui?.hud?.showFloatText?.(healed ? text : '💚 VIDA CHEIA!', '#4ade80');
     return healed;
   }
 
@@ -1739,7 +1893,7 @@ export class Game {
       duckHeld = this.input.isActionDown(actKey, 'duck', true);
       abilityJust = this.input.wasActionJustPressed(actKey, 'ability', false);
       attackJust = this.input.wasActionJustPressed(actKey, 'attack', false);
-      furyJust = this.input.wasKeyJustPressed('KeyF');
+      furyJust = this.input.wasKeyJustPressed('KeyF') || this.input.wasActionJustPressed('p1', 'fury', false);
       itemJust = this.input.wasKeyJustPressed('KeyE');
     } else if (isRemotePeer) {
       leftJust = !!this.input.virtualJustPressed[p.key]?.has('left');
@@ -1761,8 +1915,14 @@ export class Game {
       duckHeld = this.input.isActionDown(inKey, 'duck', allowClassic);
       abilityJust = this.input.wasActionJustPressed(inKey, 'ability', false);
       attackJust = this.input.wasActionJustPressed(inKey, 'attack', false);
-      furyJust = isLocalMain && this.input.wasKeyJustPressed('KeyF');
+      furyJust = isLocalMain && (this.input.wasKeyJustPressed('KeyF') || this.input.wasActionJustPressed('p1', 'fury', false));
       itemJust = isLocalMain ? this.input.wasKeyJustPressed('KeyE') : this.input.wasActionJustPressed(inKey, 'item', false);
+    }
+
+    if ((this._skipIntroGuardFrames || 0) > 0) {
+      jumpJust = false;
+      jumpHeld = false;
+      abilityJust = false;
     }
 
     // Regra do Modo Caos ou Modo Espelhado: controles invertidos!
@@ -2195,12 +2355,89 @@ export class Game {
     this.tvHud.updatePlayers(this.players, this.multiplayerSession.elimTimer, this.spectatorMode);
   }
 
+  _flushStartBanners() {
+    if (!this._pendingStartBanners?.length) return;
+    const first = this._pendingStartBanners.shift();
+    this.ui.hud.showBanner(first.text, first.color, first.dur);
+    this._pendingStartBanners.length = 0;
+  }
+
+  _updatePredatorIntro(dt) {
+    const pred = this.events.predators;
+    if (!pred || pred.state !== 'intro') return false;
+
+    // Pausa corrida, velocidade, pontuação, obstáculos e eventos durante a apresentação inicial estilo Subway Surfers
+    this.speed = 0;
+    this.cameraRig.setPredatorFocus(null);
+
+    for (const p of this.players) {
+      if (!p.dead) {
+        p.vy = 0;
+        p.y = 0;
+        p.grounded = true;
+        p.sliding = false;
+        p.model.root.position.set(p.x, 0, p.z);
+        p.animator.update(dt, { speed: 0, grounded: true, vy: 0, ducking: false });
+      }
+    }
+
+    const p0 = this.players[0];
+    if (p0) {
+      this.ui.hud.updatePlayStatus(
+        p0,
+        Save.data.eggs,
+        this.currentBiome.name,
+        Math.ceil((this.score + 1) / 1000) * 1000,
+        this.combo,
+        this.score
+      );
+      this.ui.hud.updateScore(Math.max(this.hiScore, this.score), this.score, 0);
+    }
+
+    const camPlayers = this.players.filter((x) => !x.dead);
+    this.cameraRig.update(
+      dt,
+      camPlayers.length > 0 ? camPlayers : this.players,
+      this.baseSpeed,
+      Save.data.settings.accessibility.reduceShake,
+      this.photoMode,
+      this.spectatorMode
+    );
+
+    const chasePos = this.camera.position.clone();
+    const chaseLook = this.cameraRig.currentLook.clone();
+    const px = p0 ? p0.x : 0;
+
+    const stillIntro = pred.updateIntro(dt, this.players, this._eventContext());
+    if (stillIntro && pred.state === 'intro') {
+      const blendWindow = 0.75;
+      const tOut = pred.introTimer <= blendWindow
+        ? 1 - Math.max(0, pred.introTimer) / blendWindow
+        : 0;
+      const smooth = tOut * tOut * (3 - 2 * tOut);
+      const subtlePan = Math.sin(pred.introElapsed * 1.1) * 0.22;
+      const introPos = new THREE.Vector3(-3.85 + px * 0.4 + subtlePan, 2.58, -5.85);
+      const introLook = new THREE.Vector3(px + 0.32, 1.92, 2.25);
+
+      this.camera.position.lerpVectors(introPos, chasePos, smooth);
+      introLook.lerp(chaseLook, smooth);
+      this.camera.lookAt(introLook);
+      this._lastIntroLook = introLook.clone();
+    }
+    return stillIntro;
+  }
+
   _updatePlaying(dt) {
     const perfMsg = this.perf.recordFrame(dt, this);
     if (perfMsg) this.ui.hud.showBanner(perfMsg, '#38bdf8', 3.4);
 
     if (this.multiplayerSession?.active && !this.multiplayerSession.isHost) {
       this._updateMultiplayerGuest(dt);
+      return;
+    }
+
+    if (this.events.predators?.state === 'intro') {
+      this._updatePredatorIntro(dt);
       return;
     }
 
@@ -2239,7 +2476,7 @@ export class Game {
     const baseDiff = this.difficultyMgr.getConfig();
     let adaptiveMult = 1.0;
     if (this.difficultyMgr.adaptive && p0) {
-      if (p0.hp <= 1 && baseDiff.lives > 1) {
+      if (p0.hp <= 1 && p0.maxHp > 1) {
         adaptiveMult = 0.88;
         this.spawner.setDensity(baseDiff.density * 0.8);
       } else if (this.combo >= 4 && p0.hp >= p0.maxHp) {
@@ -2250,32 +2487,40 @@ export class Game {
       }
     }
 
+    // Soft-cap nos multiplicadores de velocidade para evitar aceleração insana com buffs empilhados
     let speedMult = adaptiveMult * (p0 ? StatusSystem.getSpeedMultiplier(p0) : 1);
-    if (p0?.turboTimer > 0 || p0?.rocketTimer > 0 || p0?.minecartTimer > 0) speedMult *= 1.42;
-    if (p0?.sliding) speedMult *= 1.15;
-    if (this.activeChaosRule?.id === 'turbo_frenzy') speedMult *= 1.38;
-    if (this.currentBiome.speedMod) speedMult *= this.currentBiome.speedMod;
+    const hasBoost = Boolean(p0?.turboTimer > 0 || p0?.rocketTimer > 0 || p0?.minecartTimer > 0);
+    if (hasBoost) speedMult *= 1.24;
+    if (p0?.sliding) speedMult *= 1.07;
+    if (this.activeChaosRule?.id === 'turbo_frenzy') speedMult *= 1.18;
+    if (this.currentBiome.speedMod) speedMult *= (1 + (this.currentBiome.speedMod - 1) * 0.55);
 
     // Morte Súbita Competitiva (>= 60s em Multiplayer)
     if (this.multiplayerSession?.active) {
       if (this.runTime >= 60 && !this.multiplayerSession.suddenDeath) {
         this.multiplayerSession.suddenDeath = true;
         this.sfx.roar('trex');
-        this.ui.hud.showBanner('🔥 MORTE SÚBITA (60s+)! Velocidade +35% e Obstáculos Intensos!', '#ff4757', 4.0);
+        this.ui.hud.showBanner('🔥 MORTE SÚBITA (60s+)! Velocidade +22% e Obstáculos Intensos!', '#ff4757', 4.0);
       }
       if (this.multiplayerSession.suddenDeath) {
-        speedMult *= 1.35;
+        speedMult *= 1.22;
         this.spawner.setDensity(baseDiff.density * 1.35);
       }
     }
 
-    // Curva de velocidade não-linear por fases & vales de respiro (Evita subida reta entediante)
+    if (speedMult > 1.32) {
+      speedMult = 1.32 + Math.min(0.14, (speedMult - 1.32) * 0.35);
+    }
+
+    // Curva de velocidade não-linear por fases & teto rígido jogável
     const phase = Math.floor(this.score / 850);
     const phaseProgress = (this.score % 850) / 850;
-    const phaseCurve = Math.log1p(phase * 0.85) * 4.2 + this.score * (this.speedAccel * 0.65);
-    const waveRelief = phaseProgress < 0.16 ? 0.90 : (0.98 + Math.sin(phaseProgress * Math.PI) * 0.08);
-    const bossRelief = this.events.bosses.activeBoss ? 0.96 : 1.0;
-    this.speed = Math.min(this.maxSpeed, this.baseSpeed + phaseCurve) * waveRelief * bossRelief * speedMult;
+    const phaseCurve = Math.log1p(phase * 0.85) * 3.8 + this.score * (this.speedAccel * 0.58);
+    const waveRelief = phaseProgress < 0.16 ? 0.90 : (0.98 + Math.sin(phaseProgress * Math.PI) * 0.06);
+    const bossRelief = this.events.bosses.activeBoss ? 0.94 : 1.0;
+    const rawSpeed = Math.min(this.maxSpeed, this.baseSpeed + phaseCurve) * waveRelief * bossRelief * speedMult;
+    const hardSpeedCeiling = this.maxSpeed * (hasBoost ? 1.22 : 1.08);
+    this.speed = Math.max(this.baseSpeed * 0.65, Math.min(hardSpeedCeiling, rawSpeed));
     this.distance += this.speed * worldDt;
     const perfectMult = Save.data.perfectMode ? 2.2 : 1;
     const scoreGain = this.speed * worldDt * 0.55 * (p0?.scoreCardMult || 1) * (p0?.scoreMultBonus || 1) * perfectMult;
@@ -2352,7 +2597,12 @@ export class Game {
     }
 
     // Marcos de Cartas (500, 1500, 3000...) e Evolução Visual
-    if (!this.isTestTrack && this.nextCardIdx < CARD_MILESTONES.length && this.score >= CARD_MILESTONES[this.nextCardIdx]) {
+    if (
+      !this.isTestTrack &&
+      this.events.predators?.state !== 'intro' &&
+      this.nextCardIdx < CARD_MILESTONES.length &&
+      this.score >= CARD_MILESTONES[this.nextCardIdx]
+    ) {
       const milestone = CARD_MILESTONES[this.nextCardIdx];
       this.nextCardIdx++;
       if (this.nextCardIdx % 2 === 0 && this.evolutionTier < 2) {
@@ -2603,15 +2853,7 @@ export class Game {
     this.spawner.update(worldDt, this.speed, this.score, this.players);
     this.particles.update(worldDt, this.speed);
     this.events.update(worldDt, this.speed, this.score, this.players, this._eventContext());
-
-    if (this.events.predators?.state === 'intro' && this.events.predators.activeModel) {
-      this.cameraRig.setPredatorFocus(this.events.predators.activeModel.root.position);
-      for (const pl of this.players) {
-        pl.invulnTimer = Math.max(pl.invulnTimer || 0, 0.35);
-      }
-    } else {
-      this.cameraRig.setPredatorFocus(null);
-    }
+    this.cameraRig.setPredatorFocus(null);
 
     this.abilities.update(worldDt, this.spawner, this.particles, () => {
       this.addScore(45 * this.combo);
@@ -2772,8 +3014,8 @@ export class Game {
           if (obs._hitBy.has(p.key)) continue;
           obs._hitBy.add(p.key);
           if (p.statuses) {
-            p.statuses.mud = 0;
-            p.statuses.poison = 0;
+            delete p.statuses.mud;
+            delete p.statuses.poison;
           }
           p.stamina = Math.min(100, (p.stamina ?? 100) + 40);
           this.currentOasis = 3.2;
@@ -3052,6 +3294,7 @@ export class Game {
       this.photoMode,
       this.spectatorMode
     );
+    if ((this._skipIntroGuardFrames || 0) > 0) this._skipIntroGuardFrames--;
 
     if (this.multiplayerSession?.active) {
       this.tvHud.updatePlayers(this.players, this.multiplayerSession.elimTimer, this.spectatorMode);
@@ -3113,7 +3356,7 @@ export class Game {
   }
 
   _triggerFirstUseSpotlight(key, cfg) {
-    if (this.spotlightActive || this.state !== 'playing') return;
+    if (this.state !== 'playing') return;
     if (this.multiplayerSession?.active || this.tutorialState?.active || this.isTestTrack || this.headlessBot) return;
     const savedSeen = Save.data.seenElements || [];
     if (this.seenHints.has(key) || savedSeen.includes(key)) return;
@@ -3122,14 +3365,9 @@ export class Game {
     Save.data.seenElements.push(key);
     Save.save();
 
-    this.spotlightActive = true;
-    this.ui.hud.showSpotlight({
-      ...cfg,
-      onDismiss: () => {
-        this.spotlightActive = false;
-        this.lastTime = performance.now();
-      }
-    });
+    // Dica não-bloqueante em banner no topo para nunca congelar o jogo no meio da corrida
+    this.spotlightActive = false;
+    this.ui.hud.showBanner(`${cfg.icon || '💡'} ${cfg.title}: ${cfg.desc}`, cfg.accent || '#38bdf8', 3.6);
   }
 
   _applyElementalEgg(p, element) {
@@ -3143,7 +3381,7 @@ export class Game {
         icon: '✨',
         title: 'Esferas Elementais & Alquimia',
         desc: 'Pegue 2 elementos diferentes (ex: 🔥 + ❄️ ou ⚡ + ❄️) para desencadear combos que limpam a pista!',
-        selector: '#hud-lives',
+        selector: '#hud-hp-text',
         accent: '#a855f7'
       });
     }
@@ -3268,8 +3506,23 @@ export class Game {
       return;
     }
 
+    if (this.ui.hud.isMerchantOpen?.()) {
+      if (this.input.wasKeyJustPressed('Escape')) {
+        this.closeMerchant(true);
+      } else if (this.input.wasKeyJustPressed('Enter') && performance.now() >= (this._merchantGuardUntil || 0)) {
+        this.buyFromMerchant();
+      }
+      return;
+    }
+
     if (this.state === 'playing' && this.events.predators?.state === 'intro') {
-      if (this.input.wasKeyJustPressed('Space') || this.input.wasKeyJustPressed('Enter')) {
+      if (
+        this.input.wasKeyJustPressed('Space') ||
+        this.input.wasKeyJustPressed('Enter') ||
+        this.input.wasKeyJustPressed('KeyW') ||
+        this.input.wasKeyJustPressed('ArrowUp')
+      ) {
+        this._skipIntroGuardFrames = 2;
         this.events.predators.skipIntro(this._eventContext());
         return;
       }
@@ -3413,6 +3666,9 @@ export class Game {
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('pointerdown', this._unlockAudio);
     this.canvas.removeEventListener('pointerdown', this._onCanvasPointer);
+    this.canvas.removeEventListener('pointermove', this._onCanvasPointerMove);
+    this.canvas.removeEventListener('pointerup', this._onCanvasPointerEnd);
+    this.canvas.removeEventListener('pointercancel', this._onCanvasPointerEnd);
     this.canvas.removeEventListener('webglcontextlost', this._onContextLost);
     this.canvas.removeEventListener('webglcontextrestored', this._onContextRestored);
     window.removeEventListener('keydown', this._unlockAudio);

@@ -46,8 +46,8 @@ export class SettingsModal {
             <div class="field-row">
               <span>🎬 Intros dos Predadores</span>
               <select id="set-intromode">
-                <option value="always" ${(s.introMode !== 'off' && s.introMode !== 'first_time' && !s.disableIntro) ? 'selected' : ''}>Sempre (6.5s, pulável)</option>
-                <option value="first_time" ${s.introMode === 'first_time' ? 'selected' : ''}>Somente 1ª vez</option>
+                <option value="always" ${(s.introMode !== 'off' && s.introMode !== 'first_time' && !s.disableIntro) ? 'selected' : ''}>Sempre (3.2s, pulável)</option>
+                <option value="first_time" ${s.introMode === 'first_time' ? 'selected' : ''}>Somente 1ª vez (Padrão)</option>
                 <option value="off" ${(s.introMode === 'off' || s.disableIntro) ? 'selected' : ''}>Desativar Intros</option>
               </select>
             </div>
@@ -240,12 +240,14 @@ export class SettingsModal {
       s.audio.muted = container.querySelector('#set-muted').checked;
       s.obstacleHints = container.querySelector('#set-hints').checked;
       s.narrator = container.querySelector('#set-narrator').checked;
-      s.introMode = container.querySelector('#set-intromode')?.value || 'always';
+      s.introMode = container.querySelector('#set-intromode')?.value || 'first_time';
       s.disableIntro = s.introMode === 'off';
+      Save.data.introModeCustom = true;
 
       const lowSpecChecked = container.querySelector('#set-lowspec').checked;
       if (lowSpecChecked !== !!Save.data.lowSpecMode) {
         Save.data.lowSpecMode = lowSpecChecked;
+        Save.data.lowSpecManual = true;
         if (lowSpecChecked) {
           s.quality = 'low';
           s.shadows = false;

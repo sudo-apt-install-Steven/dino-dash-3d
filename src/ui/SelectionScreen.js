@@ -65,8 +65,8 @@ export class DinoPreview3D {
 
   mountInto(containerEl) {
     this.container = containerEl;
-    this.width = Math.max(240, containerEl.clientWidth || 280);
-    this.height = Math.max(220, containerEl.clientHeight || 270);
+    this.width = Math.max(180, containerEl.clientWidth || 260);
+    this.height = Math.max(170, containerEl.clientHeight || 225);
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(this.width, this.height, false);
@@ -141,8 +141,15 @@ export class SelectionScreen {
     let classFilter = 'all';
     let preview = null;
     let noticeMsg = '';
+    let dinoScrollTop = 0;
 
     const render = () => {
+      const prevList = container.querySelector('#sel-dino-list');
+      if (prevList) dinoScrollTop = prevList.scrollTop;
+      queueMicrotask(() => {
+        const listEl = container.querySelector('#sel-dino-list');
+        if (listEl) listEl.scrollTop = dinoScrollTop;
+      });
       const spec = getDinoSpec(currentId);
       const cls = DINO_CLASSES[spec.dinoClass] || DINO_CLASSES.carnivore;
       const level = Save.data.dinoLevels[currentId] || 1;
@@ -160,16 +167,16 @@ export class SelectionScreen {
 
       container.innerHTML = `
         <div class="overlay-center">
-          <div class="chunky-panel modal-card">
+          <div class="chunky-panel modal-card dino-modal">
             <div class="modal-header">
               <h2>🦖 Dinossauros (${unlockedCount}/${DINO_CATALOG.length})</h2>
-              <div style="display:flex; gap:8px; align-items:center;">
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <span class="hud-pill">🥚 Ovos: <strong>${Save.data.eggs}</strong></span>
                 <button class="chunky-btn secondary" id="sel-close">Voltar</button>
               </div>
             </div>
 
-            ${noticeMsg ? `<div class="hud-pill" style="color:#ffd447; text-align:center;">${noticeMsg}</div>` : ''}
+            ${noticeMsg ? `<div class="hud-pill" style="color:#ffd447; text-align:center; padding:6px 12px; font-size:0.82rem;">${noticeMsg}</div>` : ''}
 
             <div class="tabs-row" style="margin-bottom:6px;">
               <button class="tab-btn ${classFilter === 'all' ? 'active' : ''}" data-cfilter="all">Todos (${allNonSecret.length})</button>
@@ -184,12 +191,12 @@ export class SelectionScreen {
                 <p style="font-size:0.75rem; color:#d8c2a6; text-align:center; margin-top:6px;">
                   Arraste para girar o modelo 3D • ${isUnlocked ? '✔ Desbloqueado' : `🔒 Custo: ${spec.unlockCost} 🥚`}
                 </p>
-                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-                  <button class="chunky-btn ${isUnlocked ? '' : 'orange'}" id="sel-confirm" style="flex:1;">
-                    ${isUnlocked ? (isEquipped ? '✔ Equipado' : 'Equipar') : `🔓 Desbloquear (${spec.unlockCost} 🥚)`}
+                <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                  <button class="chunky-btn ${isUnlocked ? '' : 'orange'}" id="sel-confirm" style="flex:1 1 150px; white-space:nowrap; font-size:0.86rem; padding:9px 12px;">
+                    ${isUnlocked ? (isEquipped ? '✔ Equipado' : 'Equipar') : `🔓 Liberar (${spec.unlockCost} 🥚)`}
                   </button>
-                  <button class="chunky-btn secondary" id="sel-test">Testar</button>
-                  <button class="chunky-btn secondary" id="sel-roar">🔊 Rugido</button>
+                  <button class="chunky-btn secondary" id="sel-test" style="padding:9px 12px; font-size:0.86rem;">Testar</button>
+                  <button class="chunky-btn secondary" id="sel-roar" style="padding:9px 12px; font-size:0.86rem;">🔊 Rugido</button>
                 </div>
                 <div style="margin-top:8px;">
                   <div style="font-size:0.74rem; color:#ffd447; margin-bottom:4px;">🎨 Skins Fixas da Espécie:</div>
@@ -248,11 +255,11 @@ export class SelectionScreen {
               </div>
             </div>
 
-            <div class="tabs-row" style="margin-top:4px; max-height:110px; overflow-y:auto;">
+            <div class="dino-selector-row" id="sel-dino-list">
               ${filteredDinos.map((d) => {
                 const owned = Save.data.unlockedDinos.includes(d.id) || (d.unlockCost || 0) === 0;
                 return `
-                  <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${d.id}">
+                  <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${d.id}" title="${d.name}">
                     ${d.id === Save.data.selectedDino ? '★ ' : (!owned ? '🔒 ' : '')}${d.name}
                   </button>
                 `;

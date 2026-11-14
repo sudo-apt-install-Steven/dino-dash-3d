@@ -9,13 +9,15 @@ export class PredatorSystem {
     this.activeModel = null;
     this.activeSpec = null;
     this.introTimer = 0;
-    this.introMax = 6.5;
+    this.introElapsed = 0;
+    this.introMax = 3.2;
     this.chaseTimer = 0;
-    this.distance = 14;
+    this.distance = 6.2;
     this.returningPredator = null;
     this.encounteredInRun = new Set();
-    this.nextAutoScore = 360;
+    this.nextAutoScore = 420;
     this._stepAudioTimer = 0;
+    this._roarTriggered = false;
   }
 
   _shouldPlayIntro(predatorId) {
@@ -37,6 +39,51 @@ export class PredatorSystem {
     }
   }
 
+  startOpeningIntro(biomeId, ctx = {}, overrideId = null) {
+    this.clearActiveModel();
+
+    if (ctx.headlessBot || ctx.isMultiplayer || ctx.isTestTrack || ctx.isTutorial) {
+      this.state = 'idle';
+      this.introTimer = 0;
+      ctx.onPredatorIntroHud?.(null);
+      return false;
+    }
+
+    const pinned = Save.data.pinnedPredator || null;
+    const spec = overrideId
+      ? getPredatorSpec(overrideId)
+      : (pinned ? getPredatorSpec(pinned) : getPredatorForBiome(biomeId));
+
+    if (!this._shouldPlayIntro(spec.id)) {
+      this.state = 'idle';
+      this.introTimer = 0;
+      ctx.onPredatorIntroHud?.(null);
+      return false;
+    }
+    this._markIntroSeen(spec.id);
+
+    this.activeSpec = spec;
+    this.activeModel = buildPredatorModel(spec.id);
+    this.activeModel.root.scale.setScalar(1.38);
+    this.activeModel.root.position.set(0.48, 0, 11.0);
+    this.activeModel.root.rotation.y = 0;
+    this.scene.add(this.activeModel.root);
+
+    this.state = 'intro';
+    this.introMax = 3.2;
+    this.introTimer = this.introMax;
+    this.introElapsed = 0;
+    this._roarTriggered = false;
+
+    ctx.onChaserHudUpdate?.(false);
+    ctx.onPredatorIntroHud?.({
+      spec,
+      remaining: this.introTimer,
+      total: this.introMax
+    });
+    return true;
+  }
+
   startEncounter(biomeId, ctx = {}, overrideId = null) {
     this.clearActiveModel();
 
@@ -47,47 +94,87 @@ export class PredatorSystem {
 
     this.activeSpec = spec;
     this.activeModel = buildPredatorModel(spec.id);
-    this.activeModel.root.scale.setScalar(1.38);
-    this.activeModel.root.position.set(0, 0, 12.5);
+    this.activeModel.root.scale.setScalar(1.06);
+    this.activeModel.root.position.set(-0.78, 0, 4.6);
+    this.activeModel.root.rotation.y = 0;
     this.scene.add(this.activeModel.root);
 
     this.encounteredInRun.add(spec.id);
-    this.chaseTimer = 15.5;
-    this.distance = 13.5;
+    this.chaseTimer = 14.5;
+    this.distance = 6.2;
     this._stepAudioTimer = 0;
 
-    const skipIntro = ctx.headlessBot || ctx.isMultiplayer || !this._shouldPlayIntro(spec.id);
-    this._markIntroSeen(spec.id);
-
-    if (skipIntro) {
-      this.state = 'chasing';
-      this.introTimer = 0;
-      ctx.onPredatorIntroHud?.(null);
-      ctx.showBanner?.(`🐾 ${spec.name.toUpperCase()} (${spec.title}) ESTÁ CAÇANDO VOCÊ!`, spec.accent, 3.2);
-      ctx.onChaserHudUpdate?.(true, this.distance, spec);
-      return true;
-    }
-
-    this.state = 'intro';
-    this.introMax = spec.introDuration || 6.5;
-    this.introTimer = this.introMax;
-    ctx.sfx?.roar?.() || ctx.sfx?.meteor?.();
-    ctx.cameraRig?.triggerShake?.(0.5, 0.8);
-    ctx.onPredatorIntroHud?.({
-      spec,
-      remaining: this.introTimer,
-      total: this.introMax
-    });
+    // Perseguição ativa no meio da corrida começa visível logo atrás do jogador, sem sequestrar a câmera nem bloquear a lente
+    this.state = 'chasing';
+    this.introTimer = 0;
+    ctx.onPredatorIntroHud?.(null);
+    ctx.showBanner?.(`🐾 CAÇADOR: ${spec.name.toUpperCase()} (${spec.title}) ATRÁS DE VOCÊ!`, spec.accent, 3.0);
+    ctx.onChaserHudUpdate?.(true, this.distance, spec);
     return true;
   }
 
   skipIntro(ctx = {}) {
-    if (this.state !== 'intro' || !this.activeSpec) return false;
-    this.state = 'chasing';
+    if (this.state !== 'intro') return false;
+    const spec = this.activeSpec;
+    this.state = 'idle';
     this.introTimer = 0;
+    this.introElapsed = 0;
+    this.clearActiveModel();
     ctx.onPredatorIntroHud?.(null);
-    ctx.onChaserHudUpdate?.(true, this.distance, this.activeSpec);
-    ctx.showBanner?.(`🏃 FUJA DE ${this.activeSpec.name.toUpperCase()}!`, this.activeSpec.accent, 2.6);
+    ctx.onChaserHudUpdate?.(false);
+    if (spec) {
+      ctx.onIntroEnd?.(spec);
+    }
+    return true;
+  }
+
+  updateIntro(dt, players, ctx = {}) {
+    if (this.state !== 'intro' || !this.activeModel || !this.activeSpec) return false;
+
+    this.introElapsed += dt;
+    this.introTimer = Math.max(0, this.introMax - this.introElapsed);
+
+    const lead = players?.[0];
+    const lx = lead ? lead.x : 0;
+    const px = lx + 0.48;
+    let pz = 4.9;
+    let py = 0;
+    let roarScale = 1.0;
+
+    if (this.introElapsed < 0.55) {
+      // Aproximação dramática inicial (salto/avanço até ficar logo atrás do dino do jogador)
+      const u = Math.min(1, this.introElapsed / 0.55);
+      const ease = 1 - Math.pow(1 - u, 3);
+      pz = 11.0 - ease * (11.0 - 4.9);
+      py = Math.sin(u * Math.PI) * 0.42;
+      roarScale = u * 0.55;
+      if (u >= 0.72 && !this._roarTriggered) {
+        this._roarTriggered = true;
+        ctx.sfx?.roar?.() || ctx.sfx?.meteor?.();
+        ctx.cameraRig?.triggerShake?.(0.38, 0.55);
+      }
+    } else if (this.introElapsed > this.introMax - 0.75) {
+      // Recua suavemente enquanto a câmera desliza para a posição normal de corrida
+      const u = Math.min(1, (this.introElapsed - (this.introMax - 0.75)) / 0.75);
+      const ease = u * u * (3 - 2 * u);
+      pz = 4.9 + ease * 7.2;
+      roarScale = Math.max(0.15, 1.0 - ease);
+    }
+
+    this.activeModel.root.position.set(px, py, pz);
+    this.activeModel.root.rotation.y = Math.sin(this.introElapsed * 2.4) * 0.1;
+    this.activeModel.update(dt, roarScale, 'intro');
+
+    ctx.onPredatorIntroHud?.({
+      spec: this.activeSpec,
+      remaining: this.introTimer,
+      total: this.introMax
+    });
+
+    if (this.introTimer <= 0) {
+      this.skipIntro(ctx);
+      return false;
+    }
     return true;
   }
 
@@ -98,6 +185,8 @@ export class PredatorSystem {
   }
 
   update(dt, speed, score, players, ctx = {}) {
+    if (this.state === 'intro') return;
+
     if (this.state === 'idle' && score >= this.nextAutoScore && !ctx.bossActive && !ctx.ufoActive) {
       this.nextAutoScore += 750;
       this.startEncounter(ctx.currentBiome?.id || 'desert', ctx);
@@ -108,54 +197,40 @@ export class PredatorSystem {
 
     const lead = players[0];
 
-    if (this.state === 'intro') {
-      this.introTimer -= dt;
-      // Predador ruge na pista atrás do jogador durante a cutscene skippable de 6.5s
-      const lx = lead ? lead.x : 0;
-      this.activeModel.root.position.set(lx, 0, 8.2);
-      this.activeModel.root.rotation.y = Math.sin(performance.now() * 0.004) * 0.14;
-      this.activeModel.update(dt, 1.0);
-      ctx.onPredatorIntroHud?.({
-        spec: this.activeSpec,
-        remaining: Math.max(0, this.introTimer),
-        total: this.introMax
-      });
-      if (this.introTimer <= 0) {
-        this.skipIntro(ctx);
-      }
-      return;
-    }
-
     if (this.state === 'chasing') {
       this.chaseTimer -= dt;
-      const paceBonus = speed > 25 ? 2.4 : (speed < 19 ? -2.2 : -0.6);
-      const decoyPush = ctx.decoyTimer > 0 ? 6.5 : 0;
-      this.distance = Math.max(1.5, Math.min(22, this.distance + (paceBonus + decoyPush) * dt));
+      const paceBonus = speed >= 25.5 ? 1.15 : (speed < 20 ? -1.45 : -0.25);
+      const decoyPush = ctx.decoyTimer > 0 ? 3.8 : 0;
+      this.distance = Math.max(1.4, Math.min(9.2, this.distance + (paceBonus + decoyPush) * dt));
 
       if (lead) {
-        this.activeModel.root.position.x += (lead.x - this.activeModel.root.position.x) * Math.min(1, dt * 4.2);
+        const flankX = lead.x >= 0 ? -0.78 : 0.78;
+        const targetX = lead.x * 0.72 + flankX;
+        this.activeModel.root.position.x += (targetX - this.activeModel.root.position.x) * Math.min(1, dt * 4.4);
       }
       this.activeModel.root.rotation.y = 0;
-      this.activeModel.root.position.z = this.distance;
-      this.activeModel.update(dt, this.distance < 6 ? 0.8 : 0.2);
+      // Mantém o predador sempre visível atrás do dino (z = 2.2..5.9) e bem à frente da lente da câmera (z >= 9.4)
+      const visualZ = Math.max(2.2, Math.min(5.9, 2.0 + (this.distance - 1.5) * 0.56));
+      this.activeModel.root.position.z = visualZ;
+      this.activeModel.update(dt, this.distance < 3.5 ? 0.85 : 0.25);
 
-      // Som/pulsação de tensão quando o predador se aproxima (< 6.5m)
-      if (this.distance < 6.5) {
+      // Som/pulsação de tensão quando o predador se aproxima (< 3.8m)
+      if (this.distance < 3.8) {
         this._stepAudioTimer -= dt;
         if (this._stepAudioTimer <= 0) {
-          this._stepAudioTimer = Math.max(0.28, this.distance * 0.09);
+          this._stepAudioTimer = Math.max(0.28, this.distance * 0.12);
           ctx.sfx?.step?.();
         }
       }
 
       ctx.onChaserHudUpdate?.(true, this.distance, this.activeSpec);
 
-      if (this.distance <= 1.85 && lead && !lead.dead) {
+      if (this.distance <= 1.75 && lead && !lead.dead) {
         ctx.damagePlayer?.(lead, `mordida de ${this.activeSpec.name}`);
-        this.distance = 9.5;
+        this.distance = 5.8;
       }
 
-      if (this.distance >= 21.2 || this.chaseTimer <= 0) {
+      if (this.distance >= 8.6 || this.chaseTimer <= 0) {
         const escapedSpec = this.activeSpec;
         this.returningPredator = escapedSpec;
         this.clearActiveModel();
@@ -182,12 +257,14 @@ export class PredatorSystem {
   reset() {
     this.state = 'idle';
     this.introTimer = 0;
+    this.introElapsed = 0;
     this.chaseTimer = 0;
-    this.distance = 14;
+    this.distance = 6.2;
     this.returningPredator = null;
-    this.nextAutoScore = 360;
-    this.encounteredInRun.clear();
+    this.nextAutoScore = 420;
+    this._roarTriggered = false;
     this.clearActiveModel();
+    this.encounteredInRun.clear();
   }
 }
 

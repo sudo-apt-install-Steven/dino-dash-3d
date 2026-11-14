@@ -68,8 +68,14 @@ export class Backpack {
         break;
       case 'antidote':
         StatusSystem.cureDebuffs(player, ctx);
-        player.hp = Math.min(player.maxHp, player.hp + 1);
-        ctx.showFloatText?.(player, '🧪 ANTÍDOTO! Status limpos +1❤️!', '#4ade80');
+        if (ctx.healPlayer) {
+          ctx.healPlayer(player, 1, '🧪 ANTÍDOTO! Status limpos +1❤️!');
+        } else {
+          if (!player.isPerfectMode) {
+            player.hp = Math.min(player.maxHp, player.hp + 1);
+          }
+          ctx.showFloatText?.(player, player.isPerfectMode ? '🧪 ANTÍDOTO! Status limpos!' : '🧪 ANTÍDOTO! Status limpos +1❤️!', '#4ade80');
+        }
         break;
       case 'amber_totem':
         player.magnetTimer = Math.max(player.magnetTimer || 0, 8.0);

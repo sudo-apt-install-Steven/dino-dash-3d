@@ -134,7 +134,7 @@ export class DinoAbilities {
         break;
       case 'styracosaurus':
         player.ramTimer = player.abilityDuration;
-        player.shield = Math.max(player.shield, 1);
+        player.shields = Math.min(4, Math.max(player.shields || 0, 1));
         gameCtx.clearNearbyObstacles?.(player.x, player.z, 12, false);
         gameCtx.showFloatText?.(player, 'FALANGE DE CHIFRES!', '#f97316');
         break;

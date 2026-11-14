@@ -28,7 +28,7 @@ export class HUD {
       <div class="hud-top">
         <div class="hud-pills">
           <div class="dino-logo" style="font-size: 1.25rem;">DINO <span class="dash-accent">DASH 3D</span></div>
-          <div class="hud-pill" id="hud-camera" data-tip="Troca a câmera de visão (Tecla C).">Câmera: <strong>3ª Pessoa</strong></div>
+          <div class="hud-pill" id="hud-camera" style="cursor:pointer; pointer-events:auto;" data-tip="Troca a câmera de visão (Tecla C ou toque)."><span class="kb-only">Câmera: </span><span class="mob-only">📷 </span><strong>3ª Pessoa</strong></div>
           <div class="hud-pill" id="hud-speed" data-tip="Velocidade atual da corrida.">Vel: <strong>1.0x</strong></div>
           <div class="hud-pill" id="hud-eggs" data-tip="Total de Ovos guardados para Loja e Dinossauros.">${renderEggSvg('dourado', 18)} <strong>0</strong></div>
           <div class="hud-pill hidden" id="hud-combo" style="color:#ffd447;" data-tip="Multiplicador por quase-colisões e pisões seguidos.">Combo: <strong>x1</strong></div>
@@ -37,17 +37,17 @@ export class HUD {
           <div class="hud-pill hidden" id="hud-wanted" style="color:#ff4757;" data-tip="Nível de Caçada: aumenta recompensa e atenção de predadores.">🚨 ★</div>
         </div>
 
-        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-          <div style="display:flex; gap:8px; align-items:center;">
-            <button class="chunky-btn secondary" id="btn-guide" style="padding:5px 10px; font-size:0.75rem;" data-tip="Abre o Guia Visual de obstáculos, status e chefes.">📖 Guia</button>
-            <button class="chunky-btn secondary" id="btn-clip-rec" style="padding:5px 10px; font-size:0.75rem;" data-tip="Gravar clipe curto da corrida (.webm).">🎥 Clipe</button>
-            <button class="chunky-btn secondary ${Save.data.devMode ? '' : 'hidden'}" id="btn-debug" style="padding:5px 10px; font-size:0.75rem;" data-tip="Painel de Depuração e Testes (F9).">🛠️ Debug</button>
+        <div class="hud-top-right" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+          <div class="hud-top-actions" style="display:flex; gap:8px; align-items:center;">
+            <button class="chunky-btn secondary" id="btn-guide" style="padding:5px 10px; font-size:0.75rem;" data-tip="Abre o Guia Visual de obstáculos, status e chefes.">📖<span class="btn-label"> Guia</span></button>
+            <button class="chunky-btn secondary" id="btn-clip-rec" style="padding:5px 10px; font-size:0.75rem;" data-tip="Gravar clipe curto da corrida (.webm).">🎥<span class="btn-label"> Clipe</span></button>
+            <button class="chunky-btn secondary ${Save.data.devMode ? '' : 'hidden'}" id="btn-debug" style="padding:5px 10px; font-size:0.75rem;" data-tip="Painel de Depuração e Testes (F9).">🛠️<span class="btn-label"> Debug</span></button>
             <button class="chunky-btn secondary" id="btn-photo-mode" style="padding:5px 10px; font-size:0.75rem;" data-tip="Modo Foto (pausa para capturar cena).">📷</button>
-            <button class="chunky-btn secondary" id="btn-pause" style="padding:5px 12px; font-size:0.75rem;" data-tip="Pausar corrida (Tecla P).">⏸ P</button>
+            <button class="chunky-btn secondary" id="btn-pause" style="padding:5px 12px; font-size:0.75rem;" data-tip="Pausar corrida (Tecla P).">⏸<span class="btn-label"> P</span></button>
             <div class="hud-score-box" id="hud-score" data-tip="Recorde máximo (HI) e Pontuação atual."><span class="hi-label">HI 00000</span>  00000</div>
           </div>
           <div class="treasure-map" id="hud-treasure-map" data-tip="Progresso até o próximo Portal de mudança de Bioma!">
-            <strong style="color:#fbbf24; font-size:0.68rem;">PROGRESSO</strong>
+            <strong class="kb-only" style="color:#fbbf24; font-size:0.68rem;">PROGRESSO</strong>
             <span id="map-biome-name">Deserto Dourado</span>
             <div class="treasure-track"><div class="treasure-fill" id="map-fill" style="width:0%"></div></div>
             <span id="map-next-portal">Portal em 1000</span>
@@ -102,24 +102,24 @@ export class HUD {
 
           <div class="hud-group" id="hud-group-combat">
             <span class="hud-group-title">Combate</span>
-            <div class="meter-pill" data-tip="Fúria (F): ao encher 100%, fica gigante e invencível por 6s!">
-              <span>🔥 Fúria (F)</span>
+            <div class="meter-pill" id="btn-fury-melee" style="cursor:pointer; pointer-events:auto;" data-tip="Fúria (F): ao encher 100%, clique ou aperte F para ficar gigante!">
+              <span>🔥 <span class="btn-label">Fúria</span> <span class="kb-only">(F)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-fury" style="width:0%; background:linear-gradient(90deg,#ff5e1a,#ffd447);"></div></div>
             </div>
             <div class="meter-pill" data-tip="Habilidade especial do seu Dino (Espaço): carrega por tempo + ações (combos, pisões e Q).">
-              <span id="lbl-ability">⚡ Habilidade (Espaço)</span>
+              <span id="lbl-ability">⚡ <span class="btn-label">Habilidade</span> <span class="kb-only">(Espaço)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-ability" style="width:100%; background:#58d63a;"></div></div>
             </div>
             <div class="meter-pill" id="btn-attack-melee" style="cursor:pointer; pointer-events:auto;" data-tip="Ataque rápido (Q): corta cactos, espinhos e acerta chefes!">
-              <span>⚔️ Ataque (Q)</span>
+              <span>⚔️ <span class="btn-label">Ataque</span> <span class="kb-only">(Q)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-attack" style="width:100%; background:#f97316;"></div></div>
             </div>
             <div class="meter-pill" data-tip="Estamina Física (Shift=Lento / W no ar=Pulo 2x): recarrega no chão e com itens!">
-              <span>🏃 Estamina (Shift/2x⬆)</span>
+              <span>🏃 <span class="btn-label">Estamina</span> <span class="kb-only">(Shift/2x⬆)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-bullet" style="width:100%; background:#34d399;"></div></div>
             </div>
             <div class="meter-pill" id="hud-backpack" style="cursor:pointer; pointer-events:auto;" data-tip="Mochila (E): clique ou aperte E para usar o próximo item guardado.">
-              🎒 <strong id="lbl-backpack">Vazia</strong>
+              🎒 <span class="kb-only">(E) </span><strong id="lbl-backpack">Vazia</strong>
             </div>
           </div>
         </div>
@@ -131,15 +131,15 @@ export class HUD {
 
       <!-- Botões virtuais touch para dispositivos móveis -->
       <div class="touch-controls" id="touch-controls">
-        <div class="touch-cluster">
-          <button class="touch-btn" data-tact="left">◀</button>
-          <button class="touch-btn" data-tact="right">▶</button>
+        <div class="touch-cluster touch-cluster-left">
+          <button class="touch-btn" data-tact="left" aria-label="Faixa Esquerda">◀</button>
+          <button class="touch-btn" data-tact="right" aria-label="Faixa Direita">▶</button>
         </div>
-        <div class="touch-cluster">
-          <button class="touch-btn" data-tact="duck">▼</button>
-          <button class="touch-btn" data-tact="attack">⚔️</button>
-          <button class="touch-btn" data-tact="ability">⚡</button>
-          <button class="touch-btn" data-tact="jump">▲</button>
+        <div class="touch-cluster touch-cluster-right">
+          <button class="touch-btn" data-tact="duck" aria-label="Abaixar">▼</button>
+          <button class="touch-btn" data-tact="attack" aria-label="Ataque">⚔️</button>
+          <button class="touch-btn" data-tact="ability" aria-label="Habilidade">⚡</button>
+          <button class="touch-btn" data-tact="jump" aria-label="Pular">▲</button>
         </div>
       </div>
 
@@ -163,18 +163,18 @@ export class HUD {
         </div>
       </div>
 
-      <!-- Predator Skippable Intro Banner (6-8s) -->
-      <div class="chunky-panel hidden" id="hud-predator-intro" style="position:fixed; bottom:84px; left:50%; transform:translateX(-50%); z-index:48; width:min(520px, 92vw); pointer-events:auto; padding:14px 18px; border-width:3px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+      <!-- Predator Opening Intro Banner (Subway Surfers style, pre-run, top-left clear of center action & biome pill) -->
+      <div class="chunky-panel hidden" id="hud-predator-intro" style="position:fixed; top:74px; left:18px; z-index:48; width:min(380px, calc(100vw - 36px)); pointer-events:auto; padding:9px 13px; border-width:3px; background:rgba(20, 11, 6, 0.88); cursor:pointer;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
           <div>
-            <span class="hud-pill" id="pred-intro-arch" style="font-size:0.72rem; color:#ffd447;">🐾 PREDADOR ORIGINAL</span>
-            <h2 id="pred-intro-name" style="margin:4px 0 2px; color:#fff; font-size:1.35rem;">Cindermaw</h2>
-            <div id="pred-intro-title" style="font-size:0.86rem; color:#fb923c; font-weight:700;">Fauces de Brasa</div>
+            <span class="hud-pill" id="pred-intro-arch" style="font-size:0.68rem; padding:2px 8px; color:#ffd447;">🐾 PREDADOR ALFA</span>
+            <h2 id="pred-intro-name" style="margin:2px 0 0; color:#fff; font-size:1.15rem; line-height:1.15;">Cindermaw</h2>
+            <div id="pred-intro-title" style="font-size:0.8rem; color:#fb923c; font-weight:700;">Fauces de Brasa</div>
           </div>
-          <button class="chunky-btn orange" id="pred-intro-skip" style="padding:8px 14px; font-size:0.86rem;">⏭ Pular (<span id="pred-intro-sec">6.5</span>s)</button>
+          <button class="chunky-btn orange" id="pred-intro-skip" style="padding:7px 12px; font-size:0.8rem;">⏭ Pular (<span id="pred-intro-sec">3.9</span>s)</button>
         </div>
-        <p id="pred-intro-lore" style="margin:8px 0 4px; font-size:0.84rem; color:#fef3c7; line-height:1.35;"></p>
-        <div id="pred-intro-tip" style="font-size:0.8rem; color:#38bdf8; font-weight:700;"></div>
+        <p id="pred-intro-lore" style="margin:4px 0 2px; font-size:0.78rem; color:#fef3c7; line-height:1.28;"></p>
+        <div id="pred-intro-tip" style="font-size:0.74rem; color:#38bdf8; font-weight:700; line-height:1.25;"></div>
       </div>
 
       <!-- Confirmação de Reinício (R) -->
@@ -331,12 +331,20 @@ export class HUD {
     this.root.querySelector('#btn-guide').addEventListener('click', () => this.callbacks.onOpenGuide?.());
     this.root.querySelector('#tut-skip').addEventListener('click', () => this.callbacks.onSkipTutorial?.());
     this.root.querySelector('#btn-clip-rec').addEventListener('click', () => this.callbacks.onRecordClip?.());
+    this.root.querySelector('#btn-fury-melee')?.addEventListener('click', () => this.callbacks.onTriggerFury?.());
     this.root.querySelector('#btn-attack-melee').addEventListener('click', () => this.callbacks.onBasicAttack?.());
+    this.root.querySelector('#hud-camera')?.addEventListener('click', () => this.callbacks.onCycleCamera?.());
     this.root.querySelector('#photo-exit').addEventListener('click', () => this.callbacks.onTogglePhoto?.());
     this.root.querySelector('#photo-cam').addEventListener('click', () => this.callbacks.onCycleCamera?.());
     this.root.querySelector('#hud-backpack').addEventListener('click', () => this.callbacks.onUseItem?.());
     this.root.querySelector('#merch-heal').addEventListener('click', () => this.callbacks.onMerchantBuy?.());
-    this.root.querySelector('#merch-skip').addEventListener('click', () => this.hideMerchant());
+    this.root.querySelector('#merch-skip').addEventListener('click', () => {
+      if (this.callbacks.onMerchantSkip) {
+        this.callbacks.onMerchantSkip();
+      } else {
+        this.hideMerchant();
+      }
+    });
 
     // Tooltips rápidos ao passar o mouse / tocar nos blocos da HUD
     if (this.tooltipEl) {
@@ -365,9 +373,15 @@ export class HUD {
     // Botões virtuais Touch
     this.root.querySelectorAll('[data-tact]').forEach((btn) => {
       const act = btn.getAttribute('data-tact');
-      btn.addEventListener('pointerdown', (e) => { e.preventDefault(); this.callbacks.onTouchAction?.(act, true); });
-      btn.addEventListener('pointerup', () => this.callbacks.onTouchAction?.(act, false));
-      btn.addEventListener('pointercancel', () => this.callbacks.onTouchAction?.(act, false));
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.callbacks.onTouchAction?.(act, true);
+      });
+      const release = () => this.callbacks.onTouchAction?.(act, false);
+      btn.addEventListener('pointerup', release);
+      btn.addEventListener('pointercancel', release);
+      btn.addEventListener('pointerleave', release);
     });
   }
 
@@ -420,9 +434,13 @@ export class HUD {
     this.restartConfirmOverlay?.classList.toggle('hidden', !show);
   }
 
-  setMerchantCost(cost) {
+  setMerchantCost(cost, eggs = null) {
     if (this.merchHealBtn) {
-      this.merchHealBtn.textContent = `Comprar +1 Vida / Escudo (${cost} 🥚)`;
+      const lacking = typeof eggs === 'number' && eggs < cost;
+      this.merchHealBtn.textContent = lacking
+        ? `Ovos insuficientes (${eggs}/${cost} 🥚) — Toque para fechar`
+        : `Comprar +1 Vida / Escudo (${cost} 🥚)`;
+      this.merchHealBtn.style.opacity = lacking ? '0.82' : '1';
     }
   }
 
@@ -454,24 +472,33 @@ export class HUD {
     if (!this.hpText) return;
     const cls = kind === 'heal' ? 'hp-pop' : 'hp-shake';
     this.hpText.classList.remove('hp-shake', 'hp-pop');
-    void this.hpText.offsetWidth;
-    this.hpText.classList.add(cls);
     clearTimeout(this._hpPulseTid);
-    this._hpPulseTid = setTimeout(() => this.hpText?.classList.remove('hp-shake', 'hp-pop'), 320);
+    requestAnimationFrame(() => {
+      this.hpText?.classList.add(cls);
+      this._hpPulseTid = setTimeout(() => this.hpText?.classList.remove('hp-shake', 'hp-pop'), 320);
+    });
   }
 
   updatePlayStatus(player, eggsTotal, biomeName, nextPortalDist, combo, score) {
     this.eggsEl.textContent = String(eggsTotal);
-    this.hpText.textContent = `❤️ ${player.hp}/${player.maxHp} • 🛡️ ${player.shields}`;
+    const maxHp = Math.max(1, player.maxHp || 1);
+    const hp = Math.max(0, Math.min(maxHp, Math.round(player.hp ?? 0)));
+    const hearts = maxHp <= 6 ? `${'❤️'.repeat(hp)}${'🖤'.repeat(maxHp - hp)} ` : '❤️ ';
+    const perfBadge = Save.data.perfectMode && maxHp === 1 ? '💎 ' : '';
+    this.hpText.textContent = `${perfBadge}${hearts}${hp}/${maxHp} • 🛡️ ${player.shields || 0}`;
     const pulseLowHp = !!Save.data.settings.lowHpPulse;
     const lowHpActive = pulseLowHp && player.hp <= 1 && !player.dead;
     this.dmgVignette.classList.toggle('hidden', !lowHpActive);
     this.dmgVignette.classList.toggle('low-hp-pulse', lowHpActive);
 
     this.barFury.style.width = `${Math.min(100, player.fury || 0)}%`;
+    const furyPill = this.root.querySelector('#btn-fury-melee');
+    if (furyPill) {
+      furyPill.style.borderColor = (player.fury || 0) >= 100 ? '#ffd447' : '';
+    }
     if (this.lblAbility && this._lastAbilityDinoId !== player.id) {
       this._lastAbilityDinoId = player.id;
-      this.lblAbility.innerHTML = `${renderSkillSvg(player.id, 18)} Habilidade (Espaço)`;
+      this.lblAbility.innerHTML = `${renderSkillSvg(player.id, 18)} <span class="btn-label">Habilidade</span> <span class="kb-only">(Espaço)</span>`;
     }
     const cdPct = player.abilityMaxCooldown > 0
       ? Math.max(0, 100 * (1 - player.abilityCooldown / player.abilityMaxCooldown))
@@ -561,10 +588,10 @@ export class HUD {
     this.chaserEl.classList.toggle('hidden', !active);
     if (active) {
       const label = spec ? `${spec.name}` : 'Perseguidor';
-      const pct = Math.max(0, Math.min(100, Math.round((distance / 22) * 100)));
-      const urgency = distance < 6 ? '🚨 PERIGO!' : (distance < 13 ? '🏃 Corra!' : '💨 Afastando');
-      this.chaserEl.style.color = distance < 6 ? '#ff4757' : (distance < 13 ? '#facc15' : '#4ade80');
-      this.chaserEl.textContent = `🐾 ${label} a ${distance.toFixed(1)}m (${pct}% • ${urgency})`;
+      const pct = Math.max(0, Math.min(100, Math.round((distance / 8.6) * 100)));
+      const urgency = distance < 3.5 ? '🚨 MUITO PERTO!' : (distance < 6.0 ? '🏃 Corra!' : '💨 Afastando');
+      this.chaserEl.style.color = distance < 3.5 ? '#ff4757' : (distance < 6.0 ? '#facc15' : '#4ade80');
+      this.chaserEl.textContent = `🐾 CAÇADOR: ${label} • ${distance.toFixed(1)}m (${pct}% • ${urgency})`;
     }
   }
 
@@ -575,7 +602,7 @@ export class HUD {
     if (!active) return;
     const { spec, remaining } = info;
     this.predIntroEl.style.borderColor = spec.accent || '#fb923c';
-    this.predIntroArch.textContent = `🐾 ${spec.archetype || 'Predador Original'} • Espaço/Clique pula`;
+    this.predIntroArch.textContent = `🐾 ${spec.archetype || 'Predador Alfa'} • Espaço/W/Clique pula`;
     this.predIntroName.textContent = spec.name;
     this.predIntroTitle.textContent = spec.title;
     this.predIntroTitle.style.color = spec.accent || '#fb923c';
@@ -583,10 +610,12 @@ export class HUD {
     this.predIntroTip.textContent = `💡 ${spec.counterTip || ''}`;
     this.predIntroSec.textContent = Number(remaining || 0).toFixed(1);
     if (onSkip) {
-      this.predIntroSkip.onclick = (e) => {
+      const handleSkip = (e) => {
         e.stopPropagation();
         onSkip();
       };
+      this.predIntroSkip.onclick = handleSkip;
+      this.predIntroEl.onclick = handleSkip;
     }
   }
 
@@ -685,6 +714,10 @@ export class HUD {
 
   hideMerchant() {
     this.merchantOverlay.classList.add('hidden');
+  }
+
+  isMerchantOpen() {
+    return Boolean(this.merchantOverlay && !this.merchantOverlay.classList.contains('hidden'));
   }
 
   showGameOver({ title = 'GAME OVER!', causeLabel = '', avoidTip = '', score, hiScore, isNewRecord, distance, eggs, maxCombo, dinoId }) {

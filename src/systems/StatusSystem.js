@@ -165,8 +165,13 @@ export class StatusSystem {
     if (!player || player.dead) return;
     this.ensurePlayer(player);
     for (const key of Object.keys(player.statuses)) {
-      player.statuses[key].timeLeft -= dt;
-      if (player.statuses[key].timeLeft <= 0) {
+      const st = player.statuses[key];
+      if (!st || typeof st !== 'object') {
+        delete player.statuses[key];
+        continue;
+      }
+      st.timeLeft -= dt;
+      if (st.timeLeft <= 0) {
         delete player.statuses[key];
       }
     }
@@ -197,7 +202,7 @@ export class StatusSystem {
 
   static getActiveList(player) {
     if (!player?.statuses) return [];
-    const list = Object.values(player.statuses).filter((s) => s.timeLeft > 0.05);
+    const list = Object.values(player.statuses).filter((s) => s && typeof s === 'object' && s.timeLeft > 0.05);
     if (player.element && !player.statuses[player.element]) {
       const def = STATUS_DEFS[player.element];
       if (def) {

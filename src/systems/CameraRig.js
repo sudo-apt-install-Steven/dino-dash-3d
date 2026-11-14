@@ -102,29 +102,33 @@ export class CameraRig {
       fz = playersOrPos.z || 0;
     }
 
+    const aspect = this.camera.aspect || 1;
+    const isPortrait = aspect > 0 && aspect < 0.85;
+    const portraitDist = isPortrait ? Math.min(2.9, (0.85 - aspect) * 6.4) : 0;
+
     if (this.predatorFocusPos) {
       const px = this.predatorFocusPos.x || 0;
       const py = this.predatorFocusPos.y || 0;
       const pz = this.predatorFocusPos.z || 8.2;
-      const sway = Math.sin(this.cinematicTime * 1.15) * 2.1;
-      this.targetPos.set(px + sway - 1.6, py + 3.2, pz - 6.8);
+      const sway = Math.sin(this.cinematicTime * 1.15) * (isPortrait ? 1.25 : 2.1);
+      this.targetPos.set(px + sway - (isPortrait ? 0.9 : 1.6), py + 3.2 + portraitDist * 0.25, pz - (isPortrait ? 8.3 : 6.8));
       this.targetLook.set(px, py + 1.85, pz + 0.5);
     } else if (spectatorMode) {
       this.spectatorOrbitAngle += dt * 0.55;
-      const r = 10.5;
+      const r = 10.5 + portraitDist;
       this.targetPos.set(fx + Math.sin(this.spectatorOrbitAngle) * r, 5.2 + fy * 0.4, fz + Math.cos(this.spectatorOrbitAngle) * r);
       this.targetLook.set(fx, 1.3 + fy, fz - 4.0);
     } else if (photoMode) {
       this.photoOrbitAngle += dt * 0.4;
-      const r = 8.5;
+      const r = 8.5 + portraitDist * 0.6;
       this.targetPos.set(fx + Math.sin(this.photoOrbitAngle) * r, 3.6 + fy, fz + Math.cos(this.photoOrbitAngle) * r);
       this.targetLook.set(fx, 1.3 + fy, fz - 1.5);
     } else {
       switch (this.currentMode.id) {
         case 'third':
-          // Leve deslocamento à esquerda para exibir o dino e o rio azul ao lado
-          this.targetPos.set(fx * 0.6 - 0.8, 4.9 + fy * 0.35 + spreadExtra * 0.4, fz + 9.1 + spreadExtra + highlightZoom);
-          this.targetLook.set(fx * 0.45 + 1.1, 1.35 + fy * 0.25, fz - 11.5);
+          // Leve deslocamento à esquerda no desktop; no celular retrato centraliza e recua para mostrar as 3 faixas e predador atrás
+          this.targetPos.set(fx * (isPortrait ? 0.52 : 0.6) - (isPortrait ? 0.35 : 0.8), 5.05 + fy * 0.35 + spreadExtra * 0.4 + portraitDist * 0.36, fz + 9.4 + spreadExtra + highlightZoom + portraitDist);
+          this.targetLook.set(fx * (isPortrait ? 0.4 : 0.45) + (isPortrait ? 0.45 : 1.1), 1.35 + fy * 0.25, fz - 11.5);
           break;
         case 'side':
           this.targetPos.set(fx - 13.0, 3.4 + fy * 0.25, fz - 2.5);
@@ -170,8 +174,10 @@ export class CameraRig {
 
     this.camera.lookAt(this.currentLook);
 
-    const speedExtra = Math.max(0, (speed - 18) * 0.36);
-    const targetFov = Math.min(82, this.baseFov + speedExtra);
+    const speedExtra = Math.min(11, Math.max(0, (speed - 18) * 0.32));
+    const portraitExtraFov = isPortrait ? Math.min(16, (0.85 - aspect) * 30) : 0;
+    const maxFov = isPortrait ? 85 : 79;
+    const targetFov = Math.min(maxFov, this.baseFov + portraitExtraFov + speedExtra);
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 6);
       this.camera.updateProjectionMatrix();

@@ -1007,7 +1007,9 @@ export class Spawner {
         this._spawnOne(speed, score);
         const easyRelief = (this.difficultyId === 'easy' && score < 500) ? 1.38 : 1.0;
         const oasisSlow = this.oasisReliefTimer > 0 ? 1.65 : 1.0;
-        const minGap = Math.max(0.42, (1.06 - (speed - 18) * 0.02) / this.densityMult) * easyRelief * oasisSlow;
+        const minReactionTime = Math.max(0.54, 15.5 / Math.max(16, speed));
+        const rawMinGap = ((1.08 - Math.max(0, speed - 18) * 0.015) / this.densityMult) * easyRelief * oasisSlow;
+        const minGap = Math.max(minReactionTime, rawMinGap);
         const maxGap = (minGap + (0.52 / this.densityMult) * easyRelief * oasisSlow);
         this.spawnTimer = minGap + this.rng() * (maxGap - minGap);
       }

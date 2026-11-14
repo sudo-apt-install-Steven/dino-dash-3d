@@ -17,10 +17,11 @@ export class InputSystem {
 
     // Estado virtual (celular / toque / rede para p1..p8)
     this.virtualState = {
-      p1: { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false },
-      p2: { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false }
+      p1: { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false },
+      p2: { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false }
     };
     this.virtualJustPressed = { p1: new Set(), p2: new Set() };
+    this._virtualPulseTimers = new Map();
     this.gamepadPrevButtons = new Map();
 
     this._onKeyDown = this._handleKeyDown.bind(this);
@@ -89,7 +90,7 @@ export class InputSystem {
 
   setVirtualAction(playerKey, action, active) {
     if (!this.virtualState[playerKey]) {
-      this.virtualState[playerKey] = { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false };
+      this.virtualState[playerKey] = { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false };
       this.virtualJustPressed[playerKey] = new Set();
     }
     const prev = this.virtualState[playerKey][action];
@@ -99,8 +100,27 @@ export class InputSystem {
     }
   }
 
+  triggerVirtualPulse(playerKey, action, holdMs = 0) {
+    if (!this.virtualState[playerKey]) {
+      this.virtualState[playerKey] = { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false };
+      this.virtualJustPressed[playerKey] = new Set();
+    }
+    this.virtualJustPressed[playerKey].add(action);
+    const key = `${playerKey}:${action}`;
+    const prevTid = this._virtualPulseTimers.get(key);
+    if (prevTid) clearTimeout(prevTid);
+    if (holdMs > 0) {
+      this.virtualState[playerKey][action] = true;
+      const tid = setTimeout(() => {
+        if (this.virtualState[playerKey]) this.virtualState[playerKey][action] = false;
+        this._virtualPulseTimers.delete(key);
+      }, holdMs);
+      this._virtualPulseTimers.set(key, tid);
+    }
+  }
+
   applyRemoteInputMap(playerKey, inputs = {}) {
-    for (const action of ['left', 'right', 'jump', 'duck', 'ability', 'item', 'bullet', 'attack']) {
+    for (const action of ['left', 'right', 'jump', 'duck', 'ability', 'item', 'bullet', 'attack', 'fury']) {
       if (inputs[action] !== undefined) {
         this.setVirtualAction(playerKey, action, !!inputs[action]);
       }
@@ -231,5 +251,7 @@ export class InputSystem {
     window.removeEventListener('keydown', this._onKeyDown);
     window.removeEventListener('keyup', this._onKeyUp);
     window.removeEventListener('blur', this._onBlur);
+    for (const tid of this._virtualPulseTimers.values()) clearTimeout(tid);
+    this._virtualPulseTimers.clear();
   }
 }

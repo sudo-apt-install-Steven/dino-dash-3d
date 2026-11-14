@@ -62,10 +62,14 @@ const DEFAULT_SAVE = {
   teacherMode: false,
   mirroredMode: false,
   lowSpecMode: false,
+  lowSpecManual: false,
   autoQuality: true,
   benchmarkFps: 0,
   benchmarkTier: '',
   benchmarkDone: false,
+  benchmarkVersion: 2,
+  benchmarkGpu: '',
+  introModeCustom: false,
   devMode: false,
   crystals: 0,
   shopRotation: { slotKey: '', offers: [], purchasedIds: [], rerolls: 0 },
@@ -85,7 +89,7 @@ const DEFAULT_SAVE = {
     clearVision: false,
     lowHpPulse: false,
     disableIntro: false,
-    introMode: 'always',
+    introMode: 'first_time',
     fpsCap: 0,
     sensitivity: 1.0,
     lang: 'pt',
@@ -137,10 +141,12 @@ class SaveSystem {
 
   load() {
     let loaded = null;
+    let prevBenchVer = 2;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
+        prevBenchVer = parsed?.benchmarkVersion || 1;
         loaded = mergeDefaults(parsed, DEFAULT_SAVE);
       }
     } catch {
@@ -155,6 +161,20 @@ class SaveSystem {
     const freeStarters = DEFAULT_SAVE.unlockedDinos;
     for (const id of freeStarters) {
       if (!loaded.unlockedDinos.includes(id)) loaded.unlockedDinos.push(id);
+    }
+    // Revalida benchmark antigo (v1 media frames sem aquecimento de shader e falso-negava placas RTX/GTX)
+    if (prevBenchVer < 2) {
+      const wasLowTier = loaded.benchmarkTier === 'Baixo';
+      loaded.benchmarkVersion = 2;
+      loaded.benchmarkDone = false;
+      loaded.benchmarkTier = '';
+      loaded.benchmarkFps = 0;
+      if (!loaded.lowSpecManual && loaded.lowSpecMode && wasLowTier) {
+        loaded.lowSpecMode = false;
+      }
+    }
+    if (!loaded.introModeCustom && loaded.settings?.introMode === 'always' && !loaded.settings.disableIntro) {
+      loaded.settings.introMode = 'first_time';
     }
     return loaded;
   }

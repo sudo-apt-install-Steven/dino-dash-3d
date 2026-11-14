@@ -337,19 +337,63 @@ export function buildPredatorModel(id) {
     vox(tail, 0.26, 0.24, 0.68, 0, 0.1, 1.92, accentMat);
   }
 
+  // Anel luminoso vermelho de ameaça sob os pés para diferenciar claramente Caçador vs Jogador
+  const threatMat = new THREE.MeshBasicMaterial({
+    color: '#ff2e4c',
+    transparent: true,
+    opacity: 0.72,
+    side: THREE.DoubleSide
+  });
+  const threatRing = new THREE.Mesh(new THREE.RingGeometry(1.08, 1.46, 24), threatMat);
+  threatRing.rotation.x = -Math.PI / 2;
+  threatRing.position.set(0, 0.05, 0);
+  root.add(threatRing);
+
   return {
     root,
     spec,
-    parts: { body, headPivot, jaw, legL, legR, tail, wingL, wingR, lure },
+    parts: { body, headPivot, jaw, legL, legR, tail, wingL, wingR, lure, threatRing },
     phase: 0,
-    update(dt, roarScale = 0) {
+    update(dt, roarScale = 0, mode = 'chase') {
+      if (threatRing) {
+        const pulse = 0.5 + 0.5 * Math.sin(this.phase * 2.2);
+        threatMat.opacity = 0.48 + pulse * 0.4;
+        threatRing.scale.setScalar(0.95 + pulse * 0.12);
+      }
+      if (mode === 'intro') {
+        this.phase += dt * 4.4;
+        const breathe = Math.sin(this.phase * 1.4);
+        const roarPulse = Math.max(0, Math.sin(this.phase * 1.8));
+        // Patas firmes plantadas no chão durante a pose/rugido de abertura (sem corrida no lugar)
+        legL.rotation.x = 0.14 + Math.max(0, Math.sin(this.phase * 0.9)) * 0.10;
+        legR.rotation.x = -0.14 - Math.max(0, -Math.sin(this.phase * 0.9)) * 0.10;
+        body.position.y = 1.38 + breathe * 0.04;
+        body.rotation.x = 0.06 + roarScale * 0.08 * roarPulse;
+        headPivot.rotation.x = -0.16 * roarScale * (0.4 + 0.6 * roarPulse);
+        headPivot.rotation.z = Math.sin(this.phase * 3.1) * 0.07 * roarScale;
+        tail.rotation.y = Math.sin(this.phase * 0.9) * 0.34;
+        jaw.rotation.x = -(0.14 + roarScale * (0.28 + roarPulse * 0.36));
+        if (wingL && wingR) {
+          const spread = 0.24 + roarPulse * 0.32;
+          wingL.rotation.z = spread;
+          wingR.rotation.z = -spread;
+        }
+        if (lure) {
+          lure.rotation.y += dt * 4.2;
+        }
+        return;
+      }
+
       this.phase += dt * 11;
       const swing = Math.sin(this.phase) * 0.52;
       legL.rotation.x = swing;
       legR.rotation.x = -swing;
       body.position.y = 1.38 + Math.abs(Math.sin(this.phase)) * 0.14;
+      body.rotation.x = 0;
+      headPivot.rotation.x = 0;
+      headPivot.rotation.z = 0;
       tail.rotation.y = Math.sin(this.phase * 0.7) * 0.24;
-      jaw.rotation.x = 0.18 + Math.abs(Math.sin(this.phase * 0.9)) * 0.32 + roarScale * 0.35;
+      jaw.rotation.x = -(0.18 + Math.abs(Math.sin(this.phase * 0.9)) * 0.32 + roarScale * 0.35);
       if (wingL && wingR) {
         const flap = Math.sin(this.phase * 1.1) * 0.52;
         wingL.rotation.z = flap;

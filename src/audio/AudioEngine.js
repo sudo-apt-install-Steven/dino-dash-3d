@@ -55,53 +55,67 @@ export class AudioEngine {
   }) {
     const ctx = this.ensureContext();
     if (!ctx) return;
-    const now = ctx.currentTime + delay;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
+    try {
+      const safeDur = Math.max(0.02, Number(duration) || 0.12);
+      const safeFreq = Math.max(25, Number(freq) || 440);
+      const safeGain = Math.max(0.001, Math.min(1, Number(gain) || 0.2));
+      const now = ctx.currentTime + Math.max(0, Number(delay) || 0);
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
 
-    osc.type = type;
-    osc.frequency.setValueAtTime(Math.max(25, freq), now);
-    if (endFreq !== null) {
-      osc.frequency.exponentialRampToValueAtTime(Math.max(25, endFreq), now + duration);
+      osc.type = type;
+      osc.frequency.setValueAtTime(safeFreq, now);
+      if (endFreq !== null) {
+        osc.frequency.exponentialRampToValueAtTime(Math.max(25, Number(endFreq) || safeFreq), now + safeDur);
+      }
+
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(safeGain, now + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + safeDur);
+
+      osc.connect(g);
+      g.connect(bus === 'music' ? this.musicGain : this.sfxGain);
+      osc.start(now);
+      osc.stop(now + safeDur + 0.02);
+    } catch {
+      // ignora erro transitório de WebAudio durante retomada/aba oculta
     }
-
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.linearRampToValueAtTime(gain, now + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-    osc.connect(g);
-    g.connect(bus === 'music' ? this.musicGain : this.sfxGain);
-    osc.start(now);
-    osc.stop(now + duration + 0.02);
   }
 
   playNoise({ duration = 0.18, filterFreq = 900, gain = 0.2, bus = 'sfx', delay = 0 }) {
     const ctx = this.ensureContext();
     if (!ctx) return;
-    const sampleRate = ctx.sampleRate;
-    const frameCount = Math.max(1, Math.floor(sampleRate * duration));
-    const buffer = ctx.createBuffer(1, frameCount, sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < frameCount; i++) {
-      data[i] = Math.random() * 2 - 1;
+    try {
+      const safeDur = Math.max(0.02, Number(duration) || 0.15);
+      const safeFilter = Math.max(40, Number(filterFreq) || 900);
+      const safeGain = Math.max(0.001, Math.min(1, Number(gain) || 0.2));
+      const sampleRate = ctx.sampleRate || 44100;
+      const frameCount = Math.max(1, Math.floor(sampleRate * safeDur));
+      const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < frameCount; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = safeFilter;
+      filter.Q.value = 1.1;
+
+      const g = ctx.createGain();
+      const now = ctx.currentTime + Math.max(0, Number(delay) || 0);
+      g.gain.setValueAtTime(safeGain, now);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + safeDur);
+
+      src.connect(filter);
+      filter.connect(g);
+      g.connect(bus === 'music' ? this.musicGain : this.sfxGain);
+      src.start(now);
+    } catch {
+      // ignora erro transitório de WebAudio
     }
-
-    const src = ctx.createBufferSource();
-    src.buffer = buffer;
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = filterFreq;
-    filter.Q.value = 1.1;
-
-    const g = ctx.createGain();
-    const now = ctx.currentTime + delay;
-    g.gain.setValueAtTime(gain, now);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-    src.connect(filter);
-    filter.connect(g);
-    g.connect(bus === 'music' ? this.musicGain : this.sfxGain);
-    src.start(now);
   }
 }

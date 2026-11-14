@@ -63,9 +63,9 @@ function showSplashAndBoot() {
         initialTransport: params.get('transport') === 'supabase' ? 'supabase' : 'lan',
         deferredInstall: window.__DINO_DEFERRED_INSTALL__
       });
-    } else if (!Save.data.benchmarkDone) {
-      // Auto-benchmark real em WebGL (~1s não-bloqueante) para classificar Alto/Médio/Baixo
-      PerfMonitor.runTimedBenchmark(game, 1000).then((res) => {
+    } else if (!Save.data.benchmarkDone || (Save.data.benchmarkVersion || 1) < 2) {
+      // Auto-benchmark real em WebGL com pré-compilação e aquecimento para classificar Alto/Médio/Baixo sem falsos positivos
+      PerfMonitor.runTimedBenchmark(game, 1250).then((res) => {
         if (game.state === 'menu') {
           game.ui.showMainMenu();
         }

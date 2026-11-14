@@ -45,10 +45,14 @@ export const CARD_POOL = [
     id: 'life_plus',
     name: 'Coração Ancestral',
     rarity: 'rara',
-    desc: '+1 Vida máxima e cura +1 ♥ | Sem desvantagem',
+    desc: '+1 Vida máxima e cura +1 ♥ (ou +1 Escudo no Modo Perfeito)',
     apply: (p) => {
-      p.maxHp = Math.min(7, p.maxHp + 1);
-      p.hp = Math.min(p.maxHp, p.hp + 1);
+      if (p.isPerfectMode) {
+        p.shields = Math.min(5, (p.shields || 0) + 1);
+      } else {
+        p.maxHp = Math.min(7, p.maxHp + 1);
+        p.hp = Math.min(p.maxHp, p.hp + 1);
+      }
     }
   },
   {
@@ -70,7 +74,7 @@ export const CARD_POOL = [
     name: 'Casco Titânico',
     rarity: 'épica',
     desc: '+2 Escudos & invulnerabilidade maior | Sem desvantagem',
-    apply: (p) => { p.shields += 2; p.postHitInvulnBonus = 1.0; }
+    apply: (p) => { p.shields = Math.min(5, (p.shields || 0) + 2); p.postHitInvulnBonus = 1.0; }
   },
   {
     id: 'turbo_skill',

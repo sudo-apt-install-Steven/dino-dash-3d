@@ -71,7 +71,7 @@ export class DinoAnimator {
       const p = this.deathProgress;
       m.rig.rotation.z = p * (Math.PI * 0.48);
       m.rig.position.y = -p * 0.42;
-      m.jaw.rotation.x = 0.45 * p;
+      m.jaw.rotation.x = -0.45 * p;
       return;
     } else if (this.deathProgress > 0) {
       this.deathProgress = 0;
@@ -124,7 +124,7 @@ export class DinoAnimator {
       this.runPhase += dt * 10;
       m.torso.position.y = this.baseTorsoY + Math.abs(Math.sin(this.runPhase)) * 0.35;
       m.torso.rotation.x = -0.15;
-      m.jaw.rotation.x = 0.35;
+      m.jaw.rotation.x = -0.35;
       return;
     }
 
@@ -163,7 +163,7 @@ export class DinoAnimator {
 
     const targetNeckPitch = ducking ? -0.35 : (sliding ? 0.28 : (isRoarFace ? -0.16 : 0));
     m.neckPivot.rotation.x += (targetNeckPitch - m.neckPivot.rotation.x) * Math.min(1, dt * 12);
-    const targetJaw = isRoarFace ? 0.56 : (isHurtFace ? 0.42 : (isJumpFace ? 0.16 : 0.04 + Math.max(0, Math.sin(this.runPhase * 0.5)) * 0.05));
+    const targetJaw = -(isRoarFace ? 0.56 : (isHurtFace ? 0.42 : (isJumpFace ? 0.16 : 0.04 + Math.max(0, Math.sin(this.runPhase * 0.5)) * 0.05)));
     m.jaw.rotation.x += (targetJaw - m.jaw.rotation.x) * Math.min(1, dt * 18);
 
     if (m.eyeGroups?.length === 2) {
