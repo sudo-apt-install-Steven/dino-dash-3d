@@ -10,6 +10,7 @@ import {
   buildVoxelRuinsPlate,
   buildVoxelSpear
 } from '../models/VoxelLibrary.js';
+import { buildHollowEarthPortalGroup, buildEarthquakeCrackGroup } from '../models/ClaudeVoxelModels.js';
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 
@@ -52,6 +53,12 @@ export class WorldEvents {
     this.ruinsStep = 0;
     this.toxicFogTimer = 0;
     this.npcDuel = null;
+    this.hollowPortal = null;
+    this.crackHazards = [];
+    this.magneticTimer = 0;
+    this.crystalCubes = [];
+    this.lunarTimer = 0;
+    this.skySwarm = [];
   }
 
   // 121. Estampida reversa: vêm por trás (+Z -> -Z)!
@@ -197,6 +204,81 @@ export class WorldEvents {
     model.root.position.set(LANE_X[1], 0, -52);
     this.scene.add(model.root);
     this.npcDuel = { model, lane: 1, hp: 2, z: -52, switchTimer: 1.4 };
+  }
+
+  // 131. Terremoto Avançado: Rachaduras no chão + Portal da Terra Oca
+  spawnEarthquakeEffects(world, ctx = {}) {
+    world?.spawnEarthquakeCracks?.(7);
+    const showRed = ctx?.difficulty?.showRedHazardSignage ?? true;
+    const lane = Math.floor(Math.random() * 3);
+    for (let i = 0; i < 2; i++) {
+      const fLane = (lane + i) % 3;
+      const crack = buildEarthquakeCrackGroup(showRed);
+      crack.position.set(LANE_X[fLane], 0.03, -44 - i * 24);
+      this.scene.add(crack);
+      this.crackHazards.push({ mesh: crack, lane: fLane, hit: false });
+    }
+    if (!this.hollowPortal) {
+      const portalLane = (lane + 2) % 3;
+      const g = buildHollowEarthPortalGroup();
+      g.position.set(LANE_X[portalLane], 0.1, -86);
+      this.scene.add(g);
+      this.hollowPortal = { group: g, lane: portalLane, entered: false };
+    }
+  }
+
+  // 132. Tempestade Magnética (atrai ovos e dá leve impulso magnético)
+  triggerMagneticStorm(duration = 9) {
+    this.magneticTimer = duration;
+  }
+
+  // 133. Chuva de Cristais Subterrâneos (+Estamina e +3 Ovos)
+  spawnCrystalShower(count = 8) {
+    const crysMat = new THREE.MeshStandardMaterial({
+      color: '#2dd4bf',
+      emissive: '#14b8a6',
+      emissiveIntensity: 0.95,
+      roughness: 0.25
+    });
+    for (let i = 0; i < count; i++) {
+      const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.45, 0), crysMat);
+      m.scale.set(0.8, 1.35, 0.8);
+      const lane = i % 3;
+      m.position.set(LANE_X[lane], 0.95, -42 - i * 10);
+      this.scene.add(m);
+      this.crystalCubes.push({ mesh: m, collected: false });
+    }
+  }
+
+  // 134. Gravidade Lunar (flutuabilidade ampliada em pulos por 10s)
+  triggerLunarGravity(duration = 10) {
+    this.lunarTimer = duration;
+  }
+
+  // 135. Enxame Aéreo de Pterossauros (exige abaixar ou trocar de faixa)
+  spawnPterosaurSwarm(ctx = {}) {
+    const showRed = ctx?.difficulty?.showRedHazardSignage ?? true;
+    const matBody = new THREE.MeshStandardMaterial({ color: '#7c3aed', roughness: 0.5 });
+    const matWarn = new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#dc2626', emissiveIntensity: 0.9 });
+    const safeLane = Math.floor(Math.random() * 3);
+    for (let i = 0; i < 3; i++) {
+      const lane = (safeLane + 1 + (i % 2)) % 3;
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(BOX, matBody);
+      body.scale.set(0.75, 0.42, 1.35);
+      const wing = new THREE.Mesh(BOX, matBody);
+      wing.scale.set(2.1, 0.1, 0.6);
+      g.add(body, wing);
+      if (showRed) {
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.6, 0.78, 16), matWarn);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = -1.35;
+        g.add(ring);
+      }
+      g.position.set(LANE_X[lane], 1.48, -56 - i * 16);
+      this.scene.add(g);
+      this.skySwarm.push({ mesh: g, hit: false });
+    }
   }
 
   update(dt, speed, players, ctx) {
@@ -431,6 +513,105 @@ export class WorldEvents {
         this.npcDuel = null;
       }
     }
+
+    // 131. Portal da Terra Oca & Fissuras de Terremoto
+    if (this.hollowPortal) {
+      const hp = this.hollowPortal;
+      hp.group.position.z += speed * dt;
+      hp.group.rotation.z += dt * 2.2;
+      if (!hp.entered) {
+        for (const p of players) {
+          if (p.dead) continue;
+          if (Math.abs(p.x - hp.group.position.x) < 1.35 && Math.abs(p.z - hp.group.position.z) < 1.55) {
+            hp.entered = true;
+            this.scene.remove(hp.group);
+            this.hollowPortal = null;
+            ctx.enterHollowEarth?.(22, p);
+            break;
+          }
+        }
+      }
+      if (this.hollowPortal && hp.group.position.z > 16) {
+        this.scene.remove(hp.group);
+        this.hollowPortal = null;
+      }
+    }
+
+    for (let i = this.crackHazards.length - 1; i >= 0; i--) {
+      const ch = this.crackHazards[i];
+      ch.mesh.position.z += speed * dt;
+      if (!ch.hit) {
+        for (const p of players) {
+          if (p.dead || p.y > 0.52) continue;
+          if (Math.abs(p.x - ch.mesh.position.x) < 0.85 && Math.abs(p.z - ch.mesh.position.z) < 1.15) {
+            ch.hit = true;
+            p.mudTimer = Math.max(p.mudTimer || 0, 1.8);
+            ctx.damagePlayer?.(p, 'fissura sísmica');
+          }
+        }
+      }
+      if (ch.mesh.position.z > 16) {
+        this.scene.remove(ch.mesh);
+        this.crackHazards.splice(i, 1);
+      }
+    }
+
+    // 132. Tempestade Magnética
+    if (this.magneticTimer > 0) {
+      this.magneticTimer = Math.max(0, this.magneticTimer - dt);
+    }
+
+    // 133. Chuva de Cristais Subterrâneos
+    for (let i = this.crystalCubes.length - 1; i >= 0; i--) {
+      const cc = this.crystalCubes[i];
+      cc.mesh.position.z += speed * dt;
+      cc.mesh.rotation.y += dt * 3.5;
+      if (!cc.collected) {
+        for (const p of players) {
+          if (p.dead) continue;
+          if (Math.abs(p.x - cc.mesh.position.x) < 1.2 && Math.abs(p.z - cc.mesh.position.z) < 1.35 && Math.abs(p.y - cc.mesh.position.y) < 1.7) {
+            cc.collected = true;
+            Save.addEggs(3);
+            p.stamina = Math.min(p.maxStamina || 100, (p.stamina || 0) + 22);
+            ctx.addScore?.(120);
+            ctx.sfx?.pickup?.();
+            ctx.showFloatText?.(p, '💎 +3 OVOS & +22 ESTAMINA!', '#2dd4bf');
+            this.scene.remove(cc.mesh);
+            this.crystalCubes.splice(i, 1);
+            break;
+          }
+        }
+      }
+      if (cc && cc.mesh && cc.mesh.parent && cc.mesh.position.z > 16) {
+        this.scene.remove(cc.mesh);
+        this.crystalCubes.splice(i, 1);
+      }
+    }
+
+    // 134. Gravidade Lunar
+    if (this.lunarTimer > 0) {
+      this.lunarTimer = Math.max(0, this.lunarTimer - dt);
+    }
+
+    // 135. Enxame Aéreo de Pterossauros
+    for (let i = this.skySwarm.length - 1; i >= 0; i--) {
+      const sk = this.skySwarm[i];
+      sk.mesh.position.z += (speed + 8) * dt;
+      if (!sk.hit) {
+        for (const p of players) {
+          if (p.dead) continue;
+          const pTop = p.y + (p.ducking ? 0.92 : 1.85);
+          if (Math.abs(p.x - sk.mesh.position.x) < 0.85 && Math.abs(p.z - sk.mesh.position.z) < 1.0 && pTop > 1.08 && p.y < 2.25) {
+            sk.hit = true;
+            ctx.damagePlayer?.(p, 'mergulho de pterossauro');
+          }
+        }
+      }
+      if (sk.mesh.position.z > 16) {
+        this.scene.remove(sk.mesh);
+        this.skySwarm.splice(i, 1);
+      }
+    }
   }
 
   clear() {
@@ -443,6 +624,10 @@ export class WorldEvents {
     for (const s of this.spears) this.scene.remove(s.mesh);
     for (const p of this.ruinsPlates) this.scene.remove(p.mesh);
     if (this.npcDuel) this.scene.remove(this.npcDuel.model.root);
+    if (this.hollowPortal) this.scene.remove(this.hollowPortal.group);
+    for (const ch of this.crackHazards) this.scene.remove(ch.mesh);
+    for (const cc of this.crystalCubes) this.scene.remove(cc.mesh);
+    for (const sk of this.skySwarm) this.scene.remove(sk.mesh);
     this.reverseHerd = [];
     this.tsunami = null;
     this.comet = null;
@@ -455,5 +640,11 @@ export class WorldEvents {
     this.ruinsStep = 0;
     this.toxicFogTimer = 0;
     this.npcDuel = null;
+    this.hollowPortal = null;
+    this.crackHazards = [];
+    this.magneticTimer = 0;
+    this.crystalCubes = [];
+    this.lunarTimer = 0;
+    this.skySwarm = [];
   }
 }

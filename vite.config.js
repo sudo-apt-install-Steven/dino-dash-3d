@@ -1,5 +1,14 @@
 import { defineConfig } from 'vite';
 
+const lanProxy = {
+  '/api/lan-info': 'http://127.0.0.1:5174',
+  '/api/rooms': 'http://127.0.0.1:5174',
+  '/ws': {
+    target: 'ws://127.0.0.1:5174',
+    ws: true
+  }
+};
+
 export default defineConfig({
   server: {
     host: true,
@@ -8,14 +17,12 @@ export default defineConfig({
     watch: {
       ignored: ['**/*.md']
     },
-    proxy: {
-      '/api/lan-info': 'http://127.0.0.1:5174',
-      '/api/rooms': 'http://127.0.0.1:5174',
-      '/ws': {
-        target: 'ws://127.0.0.1:5174',
-        ws: true
-      }
-    }
+    proxy: lanProxy
+  },
+  preview: {
+    host: true,
+    port: 4173,
+    proxy: lanProxy
   },
   build: {
     target: 'es2022',

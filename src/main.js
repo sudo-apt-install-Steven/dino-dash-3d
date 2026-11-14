@@ -8,9 +8,10 @@ import { PerfMonitor } from './systems/PerfMonitor.js';
 const LOADING_TIPS = [
   'Dica: Cada dinossauro possui uma habilidade única no Espaço — teste todos na Pista de Testes!',
   'Dica: Combine elementos na corrida! Fogo + Gelo cria Vapor que desintegra obstáculos.',
-  'Dica: Escaneie o QR Code no Multiplayer LAN para transformar qualquer celular em Controle Jurássico!',
-  'Dica: Pressione Q no teclado para atacar cactos quebráveis e afastar rivais.',
-  'Dica: Ative "Meu PC é fraco" no menu ou nas configurações se quiser FPS máximo em qualquer máquina.'
+  'Dica: Arraste o dedo para os lados, cima ou baixo no celular para controlar sem poluir a tela!',
+  'Dica: Fique atento aos 30.000 pts — uma 4ª pista lateral abre rumo à Lojinha Exclusiva!',
+  'Dica: No Terra Oca você entra através das rachaduras e portais de Terremoto!',
+  'Dica: Abra Caixas Fósseis no Gacha 3D para ganhar skins Shiny, Mecânico e Mutações de DNA!'
 ];
 
 window.__DINO_DEFERRED_INSTALL__ = null;
@@ -25,6 +26,46 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+function scheduleBgIdle(fn) {
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(fn, { timeout: 650 });
+  } else {
+    setTimeout(fn, 60);
+  }
+}
+
+function runBackgroundWarmup(game, onStep = null) {
+  const steps = [
+    { label: 'Aquecendo shaders 3D & mundo...', fn: () => game.renderer.compile?.(game.scene, game.camera) },
+    { label: 'Preparando dinossauros e predadores...', fn: () => game.spawner?.setBiome?.(game.currentBiome?.id || 'desert') },
+    {
+      label: 'Calibrando FPS ideal para seu dispositivo...',
+      fn: () => {
+        if (!Save.data.benchmarkDone || (Save.data.benchmarkVersion || 1) < 3) {
+          PerfMonitor.runTimedBenchmark(game, 950).then((res) => {
+            if (game.state === 'menu') game.ui.showMainMenu();
+            if (res.lowSpecSuggested && !Save.data.lowSpecMode) {
+              game.ui.hud.showBanner(`⚠️ ${res.estFps} FPS (${res.tier}) — Modo "Meu PC é Fraco" sugerido!`, '#f59e0b', 4.5);
+            }
+          });
+        }
+      }
+    }
+  ];
+  let idx = 0;
+  const next = () => {
+    if (idx >= steps.length) {
+      onStep?.(100, 'Pronto para correr!');
+      return;
+    }
+    const step = steps[idx++];
+    try { step.fn(); } catch {}
+    onStep?.(Math.round((idx / steps.length) * 100), step.label);
+    scheduleBgIdle(next);
+  };
+  scheduleBgIdle(next);
+}
+
 function showSplashAndBoot() {
   const canvas = document.getElementById('game-canvas');
   const uiRoot = document.getElementById('ui-root');
@@ -32,25 +73,41 @@ function showSplashAndBoot() {
   const isControllerUrl = params.get('controller') === '1' || (Boolean(params.get('room')) && params.get('screen') !== '1');
 
   let splash = null;
+  let skipped = false;
+  const dismissSplash = () => {
+    if (!splash || skipped) return;
+    skipped = true;
+    splash.style.opacity = '0';
+    splash.style.pointerEvents = 'none';
+    setTimeout(() => splash?.remove(), 260);
+  };
+
   if (!isControllerUrl) {
     splash = document.createElement('div');
     splash.id = 'dino-loading-splash';
     splash.style.cssText = [
       'position:fixed', 'inset:0', 'z-index:999',
-      'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center', 'gap:12px',
-      'background:radial-gradient(circle at 50% 35%, #5c2d14 0%, #241208 75%)',
-      'color:#fff6e5', 'font-family:Segoe UI, system-ui, sans-serif', 'text-align:center', 'padding:24px',
-      'transition:opacity 0.25s ease', 'pointer-events:none'
+      'display:flex', 'flex-direction:column', 'align-items:center', 'justify-content:center', 'gap:14px',
+      'background:radial-gradient(circle at 50% 30%, #422006 0%, #180c05 55%, #09090b 100%)',
+      'color:#fafafa', 'font-family:Segoe UI, system-ui, sans-serif', 'text-align:center', 'padding:24px',
+      'transition:opacity 0.25s ease', 'pointer-events:auto'
     ].join(';');
     const tip = LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)];
     splash.innerHTML = `
-      <div style="font-size:2.2rem; font-weight:900; letter-spacing:2px; color:#58d63a; text-shadow:0 3px 0 #1b380f;">
+      <div style="font-size:clamp(1.9rem, 5vw, 2.7rem); font-weight:900; letter-spacing:2px; color:#58d63a; text-shadow:0 4px 0 #14532d;">
         DINO <span style="color:#ff9a24;">DASH 3D</span>
       </div>
-      <div style="font-size:0.92rem; color:#ffd447; max-width:480px; line-height:1.45;">🦕 ${tip}</div>
-      <div style="font-size:0.78rem; color:#d8c2a6;" id="splash-bench-lbl">Calibrando gráficos 3D...</div>
+      <div style="font-size:0.86rem; color:#e4e4e7; background:rgba(24,24,27,0.8); border:1px solid rgba(255,212,71,0.28); border-radius:14px; padding:10px 16px; max-width:460px; line-height:1.45;">
+        🥚 ${tip}
+      </div>
+      <div style="width:min(340px, 82vw); background:rgba(39,39,42,0.9); border-radius:999px; height:10px; overflow:hidden; border:1px solid rgba(255,255,255,0.12);">
+        <div id="splash-prog-fill" style="width:22%; height:100%; background:linear-gradient(90deg, #58d63a, #fde047, #f97316); transition:width 0.22s ease;"></div>
+      </div>
+      <div style="font-size:0.8rem; color:#fcd34d;" id="splash-bench-lbl">Carregando biomas, dinos e shaders 3D (22%)...</div>
+      <button id="splash-skip-btn" type="button" style="margin-top:4px; padding:8px 18px; border-radius:999px; border:1px solid rgba(255,255,255,0.22); background:rgba(39,39,42,0.92); color:#f4f4f5; font-weight:700; font-size:0.82rem; cursor:pointer;">⏭ Pular (carregar em 2º plano)</button>
     `;
     document.body.appendChild(splash);
+    splash.querySelector('#splash-skip-btn')?.addEventListener('click', dismissSplash);
   }
 
   requestAnimationFrame(() => {
@@ -63,24 +120,22 @@ function showSplashAndBoot() {
         initialTransport: params.get('transport') === 'supabase' ? 'supabase' : 'lan',
         deferredInstall: window.__DINO_DEFERRED_INSTALL__
       });
-    } else if (!Save.data.benchmarkDone || (Save.data.benchmarkVersion || 1) < 2) {
-      // Auto-benchmark real em WebGL com pré-compilação e aquecimento para classificar Alto/Médio/Baixo sem falsos positivos
-      PerfMonitor.runTimedBenchmark(game, 1250).then((res) => {
-        if (game.state === 'menu') {
-          game.ui.showMainMenu();
-        }
-        if (res.lowSpecSuggested && !Save.data.lowSpecMode) {
-          game.ui.hud.showBanner(`⚠️ ${res.estFps} FPS detectados (${res.tier}) — Modo "Meu PC é Fraco" sugerido no menu!`, '#f59e0b', 4.5);
-        }
-      });
+      return;
     }
 
-    if (splash) {
-      setTimeout(() => {
-        splash.style.opacity = '0';
-        setTimeout(() => splash.remove(), 260);
-      }, 220);
-    }
+    runBackgroundWarmup(game, (pct, lbl) => {
+      if (!splash || skipped) return;
+      const fill = splash.querySelector('#splash-prog-fill');
+      const txt = splash.querySelector('#splash-bench-lbl');
+      if (fill) fill.style.width = `${pct}%`;
+      if (txt) txt.textContent = `${lbl} (${pct}%)`;
+      if (pct >= 100) {
+        setTimeout(dismissSplash, 240);
+      }
+    });
+
+    // Fallback de segurança para nunca prender tela caso algum browser adie requestIdleCallback
+    setTimeout(dismissSplash, 2600);
   });
 }
 

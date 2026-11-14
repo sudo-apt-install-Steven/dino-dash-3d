@@ -2,7 +2,7 @@
 // rampas, pedras de wall-jump, ovos, power-ups, fogueiras e atalhos secretos.
 import * as THREE from 'three';
 import { ObjectPool } from './ObjectPool.js';
-import { LANE_X } from '../world/World.js';
+import { LANE_X, RIVER_LANE_X, SHOP_LANE_X, SKY_CORRIDOR_Y } from '../world/World.js';
 import { TRACK_POWERUPS, TRACK_POWERUP_KEYS, BACKPACK_ITEM_KEYS } from './Items.js';
 import { Save } from './Save.js';
 import {
@@ -36,7 +36,11 @@ import {
 import {
   buildClaudeEggGroup,
   buildClaudeBuffPlatform,
-  buildClaudeBossObstacle
+  buildClaudeBossObstacle,
+  buildHazardFloorSign,
+  buildTallProhibitionBarrier,
+  buildDuckSignOverlay,
+  buildShopLaneGateGroup
 } from '../models/ClaudeVoxelModels.js';
 
 const BOX_GEO = new THREE.BoxGeometry(1, 1, 1);
@@ -54,10 +58,13 @@ function makeBox(parent, w, h, d, x, y, z, mat) {
 }
 
 function addDangerTrim(parent, w, d) {
-  makeBox(parent, w + 0.14, 0.05, 0.07, 0, 0.03, d * 0.5 + 0.04, DANGER_TRIM_MAT);
-  makeBox(parent, w + 0.14, 0.05, 0.07, 0, 0.03, -d * 0.5 - 0.04, DANGER_TRIM_MAT);
-  makeBox(parent, 0.07, 0.05, d, -w * 0.5 - 0.04, 0.03, 0, DANGER_TRIM_MAT);
-  makeBox(parent, 0.07, 0.05, d, w * 0.5 + 0.04, 0.03, 0, DANGER_TRIM_MAT);
+  const trimGroup = new THREE.Group();
+  makeBox(trimGroup, w + 0.14, 0.05, 0.07, 0, 0.03, d * 0.5 + 0.04, DANGER_TRIM_MAT);
+  makeBox(trimGroup, w + 0.14, 0.05, 0.07, 0, 0.03, -d * 0.5 - 0.04, DANGER_TRIM_MAT);
+  makeBox(trimGroup, 0.07, 0.05, d, -w * 0.5 - 0.04, 0.03, 0, DANGER_TRIM_MAT);
+  makeBox(trimGroup, 0.07, 0.05, d, w * 0.5 + 0.04, 0.03, 0, DANGER_TRIM_MAT);
+  parent.add(trimGroup);
+  return trimGroup;
 }
 
 export function createSeededRng(seedStr) {
@@ -82,18 +89,24 @@ export class Spawner {
     this.scene.add(this.group);
 
     this.rng = Math.random;
-    this.spawnTimer = 1.45;
+    this.spawnTimer = 1.65;
     this.difficultyId = 'normal';
+    this.showRedHazardSignage = true;
+    this.minSafePaths = 2;
+    this.habitatMode = 'land';
+    this.isAquaticBiome = false;
+    this.bossManager = null;
+    this.magneticStormActive = false;
     this.elapsed = 0;
     this.biomeId = 'desert';
     this.densityMult = 1.0;
     this.tutorialMode = false;
     this.showObstacleHints = true;
     this.oasisReliefTimer = 0;
-    this.chunkCooldown = 26;
-    this.powerupCooldown = 5;
-    this.featureCooldown = 4;
-    this.collectibleCooldown = 2.5;
+    this.chunkCooldown = 34;
+    this.powerupCooldown = 8;
+    this.featureCooldown = 7;
+    this.collectibleCooldown = 4.5;
     this._hintMaterials = new Map();
     this._hintSprites = [];
 
@@ -237,7 +250,8 @@ export class Spawner {
       spike_barricade: new ObjectPool(() => this._makeSpikeBarricade(), resetBase, 6),
       oasis_zone: new ObjectPool(() => this._makeOasisZone(), resetBase, 2),
       fragile_bridge: new ObjectPool(() => this._makeFragileBridge(), resetBase, 2),
-      rescue_cross: new ObjectPool(() => this._makeRescueCross(), resetBase, 2)
+      rescue_cross: new ObjectPool(() => this._makeRescueCross(), resetBase, 2),
+      shop_gate: new ObjectPool(() => this._makeShopGate(), resetBase, 2)
     };
   }
 
@@ -248,7 +262,7 @@ export class Spawner {
     if (hintCfg) {
       hintSprite = this._attachHint(group, hintCfg.y, hintCfg.label, hintCfg.color, hintCfg.scaleX || 2.45);
     }
-    return { kind, pool: null, group, hintSprite, hit: false, nearMissed: false, stomped: false, ...props };
+    return { kind, pool: null, group, hintSprite, hit: false, nearMissed: false, stomped: false, dangerVisuals: [], ...props };
   }
 
   _makeCactusSmall() {
@@ -257,8 +271,8 @@ export class Spawner {
     makeBox(g, 0.24, 0.46, 0.24, -0.38, 0.65, 0, this.cactusDarkMat);
     makeBox(g, 0.24, 0.42, 0.24, 0.38, 0.55, 0, this.cactusDarkMat);
     makeBox(g, 0.28, 0.18, 0.28, 0, 1.24, 0, this.flowerMat);
-    addDangerTrim(g, 0.88, 0.62);
-    return this._reg('cactus_small', g, { halfW: 0.42, minY: 0, maxY: 1.2, halfD: 0.36, color: '#2f9e36' }, { y: 1.75, label: '⬆ PULAR / [Q]', color: '#4ade80' });
+    const trim = addDangerTrim(g, 0.88, 0.62);
+    return this._reg('cactus_small', g, { halfW: 0.42, minY: 0, maxY: 1.2, halfD: 0.36, color: '#2f9e36', dangerVisuals: [trim] }, { y: 1.75, label: '⬆ PULAR / [Q]', color: '#4ade80' });
   }
 
   _makeCactusTall() {
@@ -267,8 +281,8 @@ export class Spawner {
     makeBox(g, 0.28, 0.65, 0.28, -0.44, 1.05, 0, this.cactusDarkMat);
     makeBox(g, 0.28, 0.55, 0.28, 0.44, 0.9, 0, this.cactusDarkMat);
     makeBox(g, 0.34, 0.22, 0.34, 0, 1.85, 0, this.flowerMat);
-    addDangerTrim(g, 0.98, 0.68);
-    return this._reg('cactus_tall', g, { halfW: 0.48, minY: 0, maxY: 1.75, halfD: 0.38, color: '#2f9e36' }, { y: 2.35, label: '⬆ PULO ALTO', color: '#22c55e' });
+    const trim = addDangerTrim(g, 0.98, 0.68);
+    return this._reg('cactus_tall', g, { halfW: 0.48, minY: 0, maxY: 1.75, halfD: 0.38, color: '#2f9e36', dangerVisuals: [trim] }, { y: 2.35, label: '⬆ PULO ALTO', color: '#22c55e' });
   }
 
   _makeCactusCluster() {
@@ -277,8 +291,11 @@ export class Spawner {
     makeBox(g, 0.52, 1.62, 0.52, 0, 0.81, 0.12, this.cactusDarkMat);
     makeBox(g, 0.42, 1.18, 0.42, 0.5, 0.59, -0.08, this.cactusMat);
     makeBox(g, 0.26, 0.18, 0.26, 0, 1.7, 0.12, this.flowerMat);
-    addDangerTrim(g, 1.45, 0.72);
-    return this._reg('cactus_cluster', g, { halfW: 0.78, minY: 0, maxY: 1.62, halfD: 0.42, color: '#1f7024' }, { y: 2.2, label: '⬅➡ MUDE FAIXA', color: '#ef4444' });
+    const trim = addDangerTrim(g, 1.45, 0.72);
+    const floorSign = buildHazardFloorSign();
+    floorSign.scale.setScalar(0.08);
+    g.add(floorSign);
+    return this._reg('cactus_cluster', g, { halfW: 0.78, minY: 0, maxY: 1.62, halfD: 0.42, color: '#1f7024', dangerVisuals: [trim, floorSign] }, { y: 2.2, label: '⬅➡ MUDE FAIXA', color: '#ef4444' });
   }
 
   _makeBird() {
@@ -294,9 +311,14 @@ export class Spawner {
     wingR.position.set(0.22, 0.08, 0);
     makeBox(wingR, 0.75, 0.1, 0.38, 0.38, 0, 0, this.birdWingMat);
     g.add(wingR);
+    const duckOverlay = buildDuckSignOverlay();
+    duckOverlay.scale.setScalar(0.09);
+    duckOverlay.position.set(0, -0.25, 0.35);
+    g.add(duckOverlay);
     return this._reg('bird', g, {
-      wingL, wingR, flapPhase: 0, baseY: 1.6,
-      halfW: 0.65, minY: 1.28, maxY: 1.98, halfD: 0.45,
+      wingL, wingR, flapPhase: 0, baseY: 1.6, duckOverlay,
+      dangerVisuals: [duckOverlay],
+      halfW: 0.65, minY: -0.34, maxY: 0.36, halfD: 0.45,
       extraSpeed: 4.5, stompable: true, color: '#a86438'
     }, { y: 0.85, label: '⬇ ABAIXAR / PISAR', color: '#38bdf8' });
   }
@@ -322,22 +344,28 @@ export class Spawner {
     model.scale.set(1.38, 1.25, 1.25);
     body.add(model);
     g.add(body);
-    addDangerTrim(g, 1.85, 0.85);
+    const trim = addDangerTrim(g, 1.85, 0.85);
     return this._reg('rolling_log', g, {
-      body, halfW: 0.96, minY: 0, maxY: 0.74, halfD: 0.38,
+      body, halfW: 0.96, minY: 0, maxY: 0.74, halfD: 0.38, dangerVisuals: [trim],
       extraSpeed: 5.5, color: '#7f4f24'
     }, { y: 1.35, label: '⬆ PULAR / [Q]', color: '#fb923c' });
   }
 
   _makeTallRock() {
     const g = new THREE.Group();
-    const model = buildClaudeBossObstacle('rocha', { withWarn: true });
-    model.scale.set(1.45, 1.55, 1.45);
-    g.add(model);
+    const cleanModel = buildTallProhibitionBarrier(false);
+    cleanModel.scale.setScalar(0.11);
+    const warnModel = buildTallProhibitionBarrier(true);
+    warnModel.scale.setScalar(0.11);
+    const floorSign = buildHazardFloorSign();
+    floorSign.scale.setScalar(0.088);
+    g.add(cleanModel, warnModel, floorSign);
     return this._reg('tall_rock', g, {
-      halfW: 0.72, minY: 0, maxY: 2.15, halfD: 0.68,
-      wallJumpable: true, color: '#6c757d'
-    }, { y: 2.65, label: '🧱 PULO DUPLO ⬆', color: '#cbd5e1' });
+      halfW: 0.82, minY: 0, maxY: 2.85, halfD: 0.55,
+      cleanVisuals: [cleanModel],
+      dangerVisuals: [warnModel, floorSign],
+      wallJumpable: true, unjumpable: true, color: '#64748b'
+    }, { y: 3.15, label: '⛔ MUITO ALTO! ⬅➡', color: '#ef4444' });
   }
 
   _makeRamp() {
@@ -438,9 +466,12 @@ export class Spawner {
       makeBox(g, w + 0.18, 0.08, d + 0.18, 0, 0.04, 0, this.iceCrackMat);
       makeBox(g, w * 0.92, 0.04, 0.08, 0, h + 0.02, 0.2, this.iceCrackMat).rotation.y = 0.35;
       makeBox(g, w * 0.75, 0.04, 0.08, 0.1, h + 0.02, -0.25, this.iceCrackMat).rotation.y = -0.5;
+      const floorSign = buildHazardFloorSign();
+      floorSign.scale.setScalar(0.085);
+      g.add(floorSign);
       return this._reg(kind, g, {
         halfW: w * 0.46, minY: 0, maxY: 0.4, halfD: d * 0.46,
-        isFloorHazard: true, color: '#7dd3fc'
+        isFloorHazard: true, dangerVisuals: [floorSign], color: '#7dd3fc'
       }, { y: 1.15, label: '❄️ GELO FRÁGIL', color: '#7dd3fc' });
     }
     // Poça de lava com borda de pedra basáltica multi-peças
@@ -449,9 +480,12 @@ export class Spawner {
     makeBox(g, 0.38, 0.18, 0.38, -w * 0.46, 0.1, -d * 0.38, this.rockMat);
     makeBox(g, 0.34, 0.16, 0.36, w * 0.46, 0.09, d * 0.36, this.rockMat);
     makeBox(g, 0.42, 0.08, 0.42, 0.1, h + 0.05, 0, this.fireMat);
+    const floorSign = buildHazardFloorSign();
+    floorSign.scale.setScalar(0.088);
+    g.add(floorSign);
     return this._reg(kind, g, {
       halfW: w * 0.46, minY: 0, maxY: 0.4, halfD: d * 0.46,
-      isFloorHazard: true, color: '#ff5e00'
+      isFloorHazard: true, dangerVisuals: [floorSign], color: '#ff5e00'
     }, { y: 1.15, label: '🔥 LAVA PULE', color: '#ff5e00' });
   }
 
@@ -488,11 +522,13 @@ export class Spawner {
 
   _makeToxicPool() {
     const g = new THREE.Group();
-    const model = buildClaudeBossObstacle('poca', { withWarn: true });
+    const model = buildClaudeBossObstacle('poca', { withWarn: false });
     model.scale.set(1.05, 1.1, 1.1);
-    g.add(model);
+    const floorSign = buildHazardFloorSign();
+    floorSign.scale.setScalar(0.085);
+    g.add(model, floorSign);
     return this._reg('toxic_pool', g, {
-      poolModel: model, halfW: 0.86, minY: 0, maxY: 0.42, halfD: 0.95, color: '#a3e635'
+      poolModel: model, dangerVisuals: [floorSign], halfW: 0.86, minY: 0, maxY: 0.42, halfD: 0.95, color: '#a3e635'
     }, { y: 1.15, label: '☠️ POÇA TÓXICA', color: '#bef264' });
   }
 
@@ -501,9 +537,9 @@ export class Spawner {
     makeBox(g, 0.8, 0.35, 0.8, 0, 0.2, 0, this.alienMat);
     makeBox(g, 0.2, 0.9, 0.2, 0, 0.65, 0, this.alienMat);
     makeBox(g, 0.5, 0.18, 0.5, 0, 1.1, 0, this.beakMat);
-    addDangerTrim(g, 0.95, 0.95);
+    const trim = addDangerTrim(g, 0.95, 0.95);
     return this._reg('alien_trap', g, {
-      halfW: 0.45, minY: 0, maxY: 1.15, halfD: 0.45, color: '#b5179e'
+      halfW: 0.45, minY: 0, maxY: 1.15, halfD: 0.45, dangerVisuals: [trim], color: '#b5179e'
     }, { y: 1.7, label: '👽 ARMADILHA ⬅➡', color: '#e879f9' });
   }
 
@@ -634,10 +670,18 @@ export class Spawner {
 
   _makeStalactite() {
     const g = new THREE.Group();
-    const model = buildClaudeBossObstacle('gelo', { withWarn: true });
+    const model = buildClaudeBossObstacle('gelo', { withWarn: false });
     model.scale.set(1.05, 1.0, 1.05);
-    g.add(model);
-    return this._reg('falling_stalactite', g, { halfW: 0.62, minY: 0, maxY: 1.85, halfD: 0.62, breakable: true, color: '#38bdf8' }, { y: 2.2, label: '❄️ ESTALACTITE [Q]', color: '#38bdf8' });
+    const floorSign = buildHazardFloorSign();
+    floorSign.scale.setScalar(0.08);
+    g.add(model, floorSign);
+    return this._reg('falling_stalactite', g, { halfW: 0.62, minY: 0, maxY: 1.85, halfD: 0.62, breakable: true, unjumpable: true, dangerVisuals: [floorSign], color: '#38bdf8' }, { y: 2.2, label: '❄️ ESTALACTITE [Q]', color: '#38bdf8' });
+  }
+
+  _makeShopGate() {
+    const g = buildShopLaneGateGroup();
+    g.scale.setScalar(0.11);
+    return this._reg('shop_gate', g, { halfW: 1.35, minY: 0, maxY: 2.5, halfD: 1.25, nonHazard: true, color: '#34d399' }, { y: 2.95, label: '🏪 LOJINHA DA PISTA!', color: '#34d399', scaleX: 2.9 });
   }
 
   _makeElectricPylon() {
@@ -679,6 +723,78 @@ export class Spawner {
 
   setDifficultyId(id) {
     this.difficultyId = id || 'normal';
+    this.showRedHazardSignage = id === 'easy' || id === 'normal';
+    this.minSafePaths = this.showRedHazardSignage ? 2 : 1;
+  }
+
+  setDifficultyConfig(diff) {
+    if (!diff) return;
+    this.difficultyId = diff.id || 'normal';
+    this.showRedHazardSignage = diff.showRedHazardSignage !== undefined
+      ? !!diff.showRedHazardSignage
+      : (this.difficultyId === 'easy' || this.difficultyId === 'normal');
+    this.minSafePaths = Math.max(1, diff.minSafePaths ?? (this.showRedHazardSignage ? 2 : 1));
+  }
+
+  setBossManager(bossManager) {
+    this.bossManager = bossManager || null;
+  }
+
+  setHabitatMode(mode = 'land', isAquaticBiome = false) {
+    this.habitatMode = mode || 'land';
+    this.isAquaticBiome = !!isAquaticBiome;
+  }
+
+  _getLaneX(laneIdx = 1) {
+    const idx = Math.max(0, Math.min(2, Math.floor(laneIdx)));
+    return (this.habitatMode === 'aquatic' && !this.isAquaticBiome) ? RIVER_LANE_X[idx] : LANE_X[idx];
+  }
+
+  _getLaneIndexFromX(x) {
+    const lanes = (this.habitatMode === 'aquatic' && !this.isAquaticBiome) ? RIVER_LANE_X : LANE_X;
+    let best = -1;
+    let bestD = 1.1;
+    for (let i = 0; i < 3; i++) {
+      const d = Math.abs(x - lanes[i]);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  _getBaseY(defaultY = 0) {
+    return (this.habitatMode === 'flying' ? (SKY_CORRIDOR_Y - 1.15) : 0) + defaultY;
+  }
+
+  _getBlockedLanesNearZ(zMin, zMax) {
+    const blocked = this.bossManager?.getBlockedLanesNearZ?.(zMin, zMax) || new Set();
+    const skipKinds = new Set([
+      'egg', 'powerup', 'fruit', 'elemental_egg', 'treasure', 'speed_pad',
+      'trampoline', 'ramp', 'campfire', 'shortcut', 'grapple_point',
+      'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation',
+      'oasis_zone', 'fragile_bridge', 'rescue_cross', 'shop_gate'
+    ]);
+    for (const key of Object.keys(this.pools)) {
+      if (skipKinds.has(key)) continue;
+      const active = this.pools[key].active;
+      for (let i = 0; i < active.length; i++) {
+        const o = active[i];
+        const oz = o.group.position.z;
+        if (oz >= zMin && oz <= zMax) {
+          const idx = this._getLaneIndexFromX(o.group.position.x);
+          if (idx >= 0) blocked.add(idx);
+        }
+      }
+    }
+    return blocked;
+  }
+
+  _canBlockLane(laneIdx, spawnZ) {
+    const blocked = this._getBlockedLanesNearZ(spawnZ - 11, spawnZ + 11);
+    blocked.add(laneIdx);
+    return (3 - blocked.size) >= (this.minSafePaths || 1);
   }
 
   getActiveObstacles() {
@@ -690,16 +806,28 @@ export class Spawner {
     return out;
   }
 
-  _acquire(kind, x, y, z) {
+  _acquire(kind, x, y, z, opts = {}) {
     const pool = this.pools[kind];
     if (!pool) return null;
     const item = pool.acquire();
     item.pool = pool;
     item.breakable = kind === 'cactus_small' || kind === 'scorpion' || kind === 'rolling_log' || kind === 'cactus_shooter' || kind === 'cactus_spine' || kind === 'amber_crystal' || kind === 'falling_stalactite' || kind === 'spike_barricade';
-    item.group.position.set(x, y, z);
+    const baseY = opts.rawY ? y : this._getBaseY(y);
+    item.group.position.set(x, baseY, z);
     item.group.visible = true;
+    const showRed = !!this.showRedHazardSignage;
+    if (Array.isArray(item.dangerVisuals)) {
+      for (let i = 0; i < item.dangerVisuals.length; i++) {
+        item.dangerVisuals[i].visible = showRed;
+      }
+    }
+    if (Array.isArray(item.cleanVisuals)) {
+      for (let i = 0; i < item.cleanVisuals.length; i++) {
+        item.cleanVisuals[i].visible = !showRed;
+      }
+    }
     const seen = Save.data.seenElements || [];
-    const alwaysHelpful = kind === 'bifurcation' || kind === 'shortcut';
+    const alwaysHelpful = kind === 'bifurcation' || kind === 'shortcut' || kind === 'shop_gate';
     if (item.hintSprite) {
       item.hintSprite.visible = this.showObstacleHints && (this.tutorialMode || alwaysHelpful || !seen.includes(kind));
     }
@@ -715,8 +843,9 @@ export class Spawner {
     if (kind === 'bird') {
       const isHigh = !!opts.highBird;
       item.baseY = isHigh ? 1.62 : 0.72;
-      item.minY = isHigh ? 1.28 : 0.38;
-      item.maxY = isHigh ? 1.98 : 1.08;
+      item.minY = -0.34;
+      item.maxY = 0.36;
+      item.group.position.y = this._getBaseY(item.baseY);
       this._setHint(item, isHigh ? '⬇ ABAIXAR / PISAR' : '⬆ PULAR / PISAR', isHigh ? '#38bdf8' : '#fbbf24');
     } else if (kind === 'elemental_egg') {
       const elems = [
@@ -761,7 +890,7 @@ export class Spawner {
   }
 
   spawnEggArc(laneIdx, count = 3, tierOrBool = false, startZ = -125) {
-    const x = LANE_X[laneIdx];
+    const x = this._getLaneX(laneIdx);
     for (let i = 0; i < count; i++) {
       const egg = this._acquire('egg', x, Math.sin((i / Math.max(1, count - 1)) * Math.PI) * 1.1, startZ - i * 2.2);
       if (!egg) continue;
@@ -783,7 +912,7 @@ export class Spawner {
   spawnEggRain(count = 8) {
     for (let i = 0; i < count; i++) {
       const laneIdx = Math.floor(this.rng() * 3);
-      const egg = this._acquire('egg', LANE_X[laneIdx], 0.2 + this.rng() * 1.5, -55 - i * 3.4);
+      const egg = this._acquire('egg', this._getLaneX(laneIdx), 0.2 + this.rng() * 1.5, -55 - i * 3.4);
       if (egg) {
         const r = this.rng();
         const tier = r < 0.05 ? 25 : (r < 0.28 ? 5 : 1);
@@ -793,12 +922,17 @@ export class Spawner {
   }
 
   spawnCampfire() {
-    this._acquire('campfire', LANE_X[1], 0, -125);
+    this._acquire('campfire', this._getLaneX(1), 0, -125);
+  }
+
+  spawnShopGate(side = 'right', startZ = -115) {
+    const x = SHOP_LANE_X[side] ?? SHOP_LANE_X.right;
+    return this._acquire('shop_gate', x, 0, startZ, { rawY: this.habitatMode !== 'flying' });
   }
 
   spawnShortcutPortal(destType = null) {
     const laneIdx = this.rng() < 0.5 ? 0 : 2;
-    const portal = this._acquire('shortcut', LANE_X[laneIdx], 0, -125);
+    const portal = this._acquire('shortcut', this._getLaneX(laneIdx), 0, -125);
     if (portal) {
       const dest = destType || (this.rng() < 0.45 ? 'biome' : (this.rng() < 0.72 ? 'eggs' : 'mystery'));
       const cfg = {
@@ -818,34 +952,35 @@ export class Spawner {
   spawnFruitRain(count = 10) {
     for (let i = 0; i < count; i++) {
       const laneIdx = Math.floor(this.rng() * 3);
-      this._acquire('fruit', LANE_X[laneIdx], 0.15, -45 - i * 4.2);
+      this._acquire('fruit', this._getLaneX(laneIdx), 0.15, -45 - i * 4.2);
     }
   }
 
   _spawnOne(speed, score) {
     const spawnZ = -125;
     const laneIdx = Math.floor(this.rng() * 3);
-    const x = LANE_X[laneIdx];
+    const x = this._getLaneX(laneIdx);
     const r = this.rng();
 
     // Ondas organizadas em ritmo limpo (sem empilhar ovos, zonas e 2 obstáculos no mesmo trecho)
     const waveRoll = this.rng();
     const otherLane = (laneIdx + 1) % 3;
+    const thirdLane = [0, 1, 2].find((idx) => idx !== laneIdx && idx !== otherLane) ?? otherLane;
 
-    // 1. Onda de recompensa leve (apenas arco de ovos limpo, sem obstáculos juntos na maioria das vezes)
-    if (waveRoll < 0.16) {
+    // 1. Onda de recompensa leve (apenas arco de ovos limpo no início; obstáculo leve só após 480 pts com caminho garantido)
+    if (waveRoll < 0.17) {
       this.spawnEggArc(laneIdx, 2 + Math.floor(this.rng() * 2), null, spawnZ - 1);
-      if (score > 160 && this.rng() < 0.45) {
-        this._acquire('cactus_small', LANE_X[otherLane], 0, spawnZ - 3);
+      if (score > 480 && this.rng() < 0.42 && this._canBlockLane(otherLane, spawnZ - 3)) {
+        this._acquire('cactus_small', this._getLaneX(otherLane), 0, spawnZ - 3);
       }
       return;
     }
 
     // 2. Onda de Power-Up ou Mochila (cooldown mínimo para não poluir a pista)
-    if (waveRoll < 0.25 && score > 60 && this.powerupCooldown <= 0) {
-      this.powerupCooldown = 11 + this.rng() * 6;
+    if (waveRoll < 0.25 && score > 160 && this.powerupCooldown <= 0) {
+      this.powerupCooldown = 13 + this.rng() * 6;
       const pLane = (laneIdx + 2) % 3;
-      const p = this._acquire('powerup', LANE_X[pLane], 0, spawnZ - 2);
+      const p = this._acquire('powerup', this._getLaneX(pLane), 0, spawnZ - 2);
       if (p) {
         const isBackpack = this.rng() < 0.28;
         p.isBackpack = isBackpack;
@@ -867,13 +1002,13 @@ export class Spawner {
     }
 
     // 3. Onda de coletável especial (Fruta, Ovo Elemental ou Tesouro espaçados)
-    if (waveRoll < 0.34 && score > 75 && this.collectibleCooldown <= 0) {
-      this.collectibleCooldown = 6.5 + this.rng() * 4.0;
+    if (waveRoll < 0.34 && score > 190 && this.collectibleCooldown <= 0) {
+      this.collectibleCooldown = 8.5 + this.rng() * 4.5;
       const bonusRoll = this.rng();
       if (bonusRoll < 0.46) {
-        this._acquire('fruit', LANE_X[otherLane], 0.1, spawnZ - 3);
-      } else if (bonusRoll < 0.8 && score > 110) {
-        const ee = this._acquire('elemental_egg', LANE_X[otherLane], 0.1, spawnZ - 3);
+        this._acquire('fruit', this._getLaneX(otherLane), 0.1, spawnZ - 3);
+      } else if (bonusRoll < 0.8 && score > 240) {
+        const ee = this._acquire('elemental_egg', this._getLaneX(otherLane), 0.1, spawnZ - 3);
         if (ee) {
           const elems = [
             { id: 'fire', color: '#ff5e1a', label: '🔥 OVO FOGO' },
@@ -889,137 +1024,175 @@ export class Spawner {
           this._setElementalVisual(ee, pick.id);
           this._setHint(ee, pick.label, pick.color);
         }
-      } else if (score > 160) {
-        this._acquire('treasure', LANE_X[otherLane], 0, spawnZ - 3);
+      } else if (score > 340) {
+        this._acquire('treasure', this._getLaneX(otherLane), 0, spawnZ - 3);
       }
-      if (score > 200 && this.rng() < 0.5) {
+      if (score > 520 && this.rng() < 0.45 && this._canBlockLane(laneIdx, spawnZ)) {
         this._acquire('cactus_small', x, 0, spawnZ);
       }
       return;
     }
 
-    // 4. Onda de zona interativa / mecanismo de pista (espaçados para manter clareza visual)
-    if (waveRoll < 0.44 && score > 90 && this.featureCooldown <= 0) {
-      this.featureCooldown = 6.5 + this.rng() * 4.5;
+    // 4. Onda de zona interativa / mecanismo de pista (apenas após aprendizado inicial)
+    if (waveRoll < 0.43 && score > 320 && this.featureCooldown <= 0 && this.habitatMode === 'land') {
+      this.featureCooldown = 9.0 + this.rng() * 5.0;
       const featRoll = this.rng();
-      if (featRoll < 0.24) {
+      if (featRoll < 0.28) {
         this._acquire('speed_pad', x, 0, spawnZ);
-      } else if (featRoll < 0.46) {
+      } else if (featRoll < 0.54) {
         this._acquire('trampoline', x, 0, spawnZ);
-      } else if (featRoll < 0.6 && score > 180) {
+      } else if (featRoll < 0.68 && score > 450) {
         this._acquire('grapple_point', x, 0, spawnZ);
-      } else if (featRoll < 0.74 && score > 240) {
-        const gz = this._acquire('gravity_zone', LANE_X[otherLane], 0, spawnZ);
+      } else if (featRoll < 0.8 && score > 520) {
+        const gz = this._acquire('gravity_zone', this._getLaneX(otherLane), 0, spawnZ);
         if (gz) {
           gz.gravMode = this.rng() < 0.5 ? 'low' : 'heavy';
           this._setHint(gz, gz.gravMode === 'low' ? '🪐 GRAVIDADE BAIXA' : '🪨 GRAVIDADE PESADA', gz.gravMode === 'low' ? '#818cf8' : '#a78bfa');
         }
-      } else if (featRoll < 0.86 && score > 280) {
+      } else if (featRoll < 0.9 && score > 620) {
         this._acquire('minecart_zone', x, 0, spawnZ);
-      } else if (score > 220 && featRoll < 0.94) {
-        this._acquire('river_log', LANE_X[2], 0, spawnZ);
-      } else if (score > 340) {
+      } else if (score > 560 && featRoll < 0.96) {
+        this._acquire('river_log', this._getLaneX(2), 0, spawnZ);
+      } else if (score > 750) {
         this._acquire('bifurcation', 0, 0, spawnZ - 4);
       }
       return;
     }
 
+    // Garante que esta faixa pode receber obstáculo sem violar minSafePaths (2 rotas no Fácil/Normal!)
+    let targetLane = laneIdx;
+    if (!this._canBlockLane(targetLane, spawnZ)) {
+      const alt = [otherLane, thirdLane].find((idx) => this._canBlockLane(idx, spawnZ));
+      if (alt === undefined) {
+        this.spawnEggArc(laneIdx, 3, null, spawnZ);
+        return;
+      }
+      targetLane = alt;
+    }
+    const obsX = this._getLaneX(targetLane);
+
     // Pequeno bônus eventual de 2 ovos em faixa separada em ondas de obstáculo
     if (this.rng() < 0.14) {
-      this.spawnEggArc(otherLane, 2, null, spawnZ - 2);
+      this.spawnEggArc((targetLane + 1) % 3, 2, null, spawnZ - 2);
     }
 
-    if (this.biomeId === 'dark_swamp' && r < 0.2) {
-      this._acquire(this.rng() < 0.62 ? 'mud_pool' : 'toxic_pool', x, 0, spawnZ);
-      return;
-    }
-    if (this.biomeId === 'jurassic_forest' && r < 0.14) {
-      this._acquire('mud_pool', x, 0, spawnZ);
-      return;
-    }
-
-    // Obstáculos específicos do bioma + clássicos
-    if (this.biomeId === 'volcano' && r < 0.25) {
-      this._acquire(this.rng() < 0.55 ? 'lava_pool' : 'geyser_vent', x, 0, spawnZ);
-      return;
-    }
-    if (this.biomeId === 'ice_age' && r < 0.25) {
-      this._acquire(this.rng() < 0.65 ? 'thin_ice' : 'falling_stalactite', x, 0, spawnZ);
-      return;
-    }
-    if ((this.biomeId === 'crystal_cavern' || this.biomeId === 'snowy_mountain') && r < 0.25) {
-      this._acquire(this.rng() < 0.62 ? 'falling_stalactite' : 'amber_crystal', x, 0, spawnZ);
-      return;
-    }
-    if ((this.biomeId === 'fossil_graveyard' || this.biomeId === 'ruined_city') && r < 0.25) {
-      this._acquire(this.rng() < 0.52 ? 'tar_pit' : (this.rng() < 0.5 ? 'amber_crystal' : 'spike_barricade'), x, 0, spawnZ);
-      return;
-    }
-    if ((this.biomeId === 'alien_planet' || this.biomeId === 'alien_factory' || this.biomeId === 'storm_desert') && r < 0.26) {
-      this._acquire(this.rng() < 0.55 ? 'alien_trap' : 'electric_pylon', x, 0, spawnZ);
+    // No início da corrida (< 320 pts), mantém pista clara e intuitiva com obstáculos clássicos puláveis/desviáveis
+    if (score < 320) {
+      if (r < 0.55) {
+        this._acquire('cactus_small', obsX, 0, spawnZ);
+      } else if (r < 0.85) {
+        const bird = this._acquire('bird', obsX, 1.62, spawnZ);
+        if (bird) {
+          bird.baseY = 1.62;
+          bird.minY = -0.34;
+          bird.maxY = 0.36;
+          bird.flapPhase = this.rng() * Math.PI * 2;
+          bird.group.position.y = this._getBaseY(bird.baseY);
+          if (bird.duckOverlay) bird.duckOverlay.visible = !!this.showRedHazardSignage;
+          this._setHint(bird, '⬇ ABAIXAR / PISAR', '#38bdf8');
+        }
+      } else {
+        this._acquire('cactus_tall', obsX, 0, spawnZ);
+      }
       return;
     }
 
-    if (score > 35 && r < 0.22) {
-      const bird = this._acquire('bird', x, 1.62, spawnZ);
+    if (this.habitatMode === 'land') {
+      if (this.biomeId === 'dark_swamp' && r < 0.2) {
+        this._acquire(this.rng() < 0.62 ? 'mud_pool' : 'toxic_pool', obsX, 0, spawnZ);
+        return;
+      }
+      if (this.biomeId === 'jurassic_forest' && r < 0.14) {
+        this._acquire('mud_pool', obsX, 0, spawnZ);
+        return;
+      }
+      if (this.biomeId === 'volcano' && r < 0.25) {
+        this._acquire(this.rng() < 0.55 ? 'lava_pool' : 'geyser_vent', obsX, 0, spawnZ);
+        return;
+      }
+      if (this.biomeId === 'ice_age' && r < 0.25) {
+        this._acquire(this.rng() < 0.65 ? 'thin_ice' : 'falling_stalactite', obsX, 0, spawnZ);
+        return;
+      }
+      if ((this.biomeId === 'crystal_cavern' || this.biomeId === 'snowy_mountain' || this.biomeId === 'hollow_earth') && r < 0.26) {
+        this._acquire(this.rng() < 0.62 ? 'falling_stalactite' : 'amber_crystal', obsX, 0, spawnZ);
+        return;
+      }
+      if ((this.biomeId === 'fossil_graveyard' || this.biomeId === 'ruined_city') && r < 0.25) {
+        this._acquire(this.rng() < 0.52 ? 'tar_pit' : (this.rng() < 0.5 ? 'amber_crystal' : 'spike_barricade'), obsX, 0, spawnZ);
+        return;
+      }
+      if ((this.biomeId === 'alien_planet' || this.biomeId === 'alien_factory' || this.biomeId === 'storm_desert' || this.biomeId === 'mecha_city') && r < 0.26) {
+        this._acquire(this.rng() < 0.55 ? 'alien_trap' : 'electric_pylon', obsX, 0, spawnZ);
+        return;
+      }
+    }
+
+    if (score > 180 && r < 0.23) {
+      const bird = this._acquire('bird', obsX, 1.62, spawnZ);
       if (bird) {
         const isHigh = this.rng() < 0.56;
         bird.baseY = isHigh ? 1.62 : 0.72;
-        bird.minY = isHigh ? 1.28 : 0.38;
-        bird.maxY = isHigh ? 1.98 : 1.08;
+        bird.minY = -0.34;
+        bird.maxY = 0.36;
         bird.flapPhase = this.rng() * Math.PI * 2;
-        bird.group.position.y = bird.baseY;
+        bird.group.position.y = this._getBaseY(bird.baseY);
+        if (bird.duckOverlay) bird.duckOverlay.visible = !!this.showRedHazardSignage && isHigh;
         this._setHint(bird, isHigh ? '⬇ ABAIXAR / PISAR' : '⬆ PULAR / PISAR', isHigh ? '#38bdf8' : '#fbbf24');
       }
       return;
     }
 
-    if (score > 75 && r < 0.33) {
-      this._acquire(this.rng() < 0.72 ? 'scorpion' : 'spike_barricade', x, 0, spawnZ);
+    if (score > 340 && r < 0.33) {
+      this._acquire(this.rng() < 0.72 ? 'scorpion' : 'spike_barricade', obsX, 0, spawnZ);
       return;
     }
 
-    if (score > 95 && r < 0.39) {
-      this._acquire(this.rng() < 0.55 ? 'amber_crystal' : 'tar_pit', x, 0, spawnZ);
+    if (score > 380 && r < 0.39) {
+      this._acquire(this.rng() < 0.55 ? 'amber_crystal' : (this.habitatMode === 'land' ? 'tar_pit' : 'toxic_pool'), obsX, 0, spawnZ);
       return;
     }
 
-    if (score > 130 && r < 0.44 && r >= 0.39) {
-      this._acquire(this.rng() < 0.65 ? 'cactus_shooter' : 'electric_pylon', x, 0, spawnZ);
+    if (score > 420 && r < 0.44 && r >= 0.39) {
+      this._acquire(this.rng() < 0.65 ? 'cactus_shooter' : 'electric_pylon', obsX, 0, spawnZ);
       return;
     }
 
-    if (score > 110 && r < 0.51) {
-      this._acquire(this.rng() < 0.68 ? 'rolling_log' : 'geyser_vent', x, 0, spawnZ);
+    if (score > 360 && r < 0.51) {
+      this._acquire(this.rng() < 0.68 ? 'rolling_log' : (this.habitatMode === 'land' ? 'geyser_vent' : 'amber_crystal'), obsX, 0, spawnZ);
       return;
     }
 
-    if (score > 135 && r < 0.56) {
-      this._acquire('ramp', x, 0, spawnZ);
+    if (score > 450 && r < 0.56 && this.habitatMode === 'land') {
+      this._acquire('ramp', obsX, 0, spawnZ);
       return;
     }
 
-    if (score > 170 && r < 0.62) {
-      this._acquire(this.rng() < 0.68 ? 'tall_rock' : 'falling_stalactite', x, 0, spawnZ);
+    if (score > 520 && r < 0.63) {
+      this._acquire(this.rng() < 0.72 ? 'tall_rock' : 'falling_stalactite', obsX, 0, spawnZ);
       return;
     }
 
     if (r < 0.78) {
-      this._acquire('cactus_small', x, 0, spawnZ);
+      this._acquire('cactus_small', obsX, 0, spawnZ);
     } else if (r < 0.91) {
-      this._acquire('cactus_tall', x, 0, spawnZ);
+      this._acquire('cactus_tall', obsX, 0, spawnZ);
     } else {
-      this._acquire('cactus_cluster', x, 0, spawnZ);
+      this._acquire('cactus_cluster', obsX, 0, spawnZ);
     }
 
-    if (score > 260 && !(this.difficultyId === 'easy' && score < 700) && this.rng() < 0.22) {
-      const thirdLane = [0, 1, 2].find((idx) => idx !== laneIdx && idx !== otherLane) ?? otherLane;
-      this._acquire('cactus_small', LANE_X[thirdLane], 0, spawnZ - 2.6);
+    // Segundo obstáculo na mesma onda apenas após 700 pts e SOMENTE se respeitar minSafePaths!
+    if (score > 700 && this.rng() < 0.24) {
+      const secLane = (targetLane + 1) % 3;
+      if (this._canBlockLane(secLane, spawnZ - 2.6)) {
+        this._acquire('cactus_small', this._getLaneX(secLane), 0, spawnZ - 2.6);
+      }
     }
   }
 
-  update(dt, speed, score, players = []) {
+  update(dt, speed, score, players = [], magneticActive = false) {
     this.elapsed += dt;
+    this.magneticStormActive = !!magneticActive;
     if (this.oasisReliefTimer > 0) {
       this.oasisReliefTimer = Math.max(0, this.oasisReliefTimer - dt);
     }
@@ -1028,23 +1201,24 @@ export class Spawner {
     if (this.collectibleCooldown > 0) this.collectibleCooldown = Math.max(0, this.collectibleCooldown - dt);
     if (!this.tutorialMode) {
       this.chunkCooldown -= dt;
-      if (score > 200 && this.chunkCooldown <= 0) {
+      if (score > 460 && this.habitatMode === 'land' && this.chunkCooldown <= 0) {
         const chunkKinds = ['oasis_zone', 'fragile_bridge', 'rescue_cross'];
         const ck = chunkKinds[Math.floor(this.rng() * chunkKinds.length)];
         this._acquire(ck, 0, 0, -96);
-        this.spawnTimer = Math.max(this.spawnTimer, 1.9);
-        this.chunkCooldown = 28 + this.rng() * 14;
+        this.spawnTimer = Math.max(this.spawnTimer, 2.2);
+        this.chunkCooldown = 34 + this.rng() * 14;
       }
 
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
         this._spawnOne(speed, score);
-        const easyRelief = (this.difficultyId === 'easy' && score < 600) ? 1.35 : 1.0;
+        const earlyRelief = score < 550 ? 1.45 : 1.0;
+        const easyRelief = (this.difficultyId === 'easy' && score < 900) ? 1.3 : 1.0;
         const oasisSlow = this.oasisReliefTimer > 0 ? 1.65 : 1.0;
-        const minReactionTime = Math.max(0.84, 21.5 / Math.max(16, speed));
-        const rawMinGap = ((1.36 - Math.max(0, speed - 18) * 0.014) / this.densityMult) * easyRelief * oasisSlow;
+        const minReactionTime = Math.max(0.95, 23.0 / Math.max(16, speed));
+        const rawMinGap = ((1.48 - Math.max(0, speed - 18) * 0.013) / this.densityMult) * earlyRelief * easyRelief * oasisSlow;
         const minGap = Math.max(minReactionTime, rawMinGap);
-        const maxGap = (minGap + (0.64 / this.densityMult) * easyRelief * oasisSlow);
+        const maxGap = (minGap + (0.68 / this.densityMult) * earlyRelief * easyRelief * oasisSlow);
         this.spawnTimer = minGap + this.rng() * (maxGap - minGap);
       }
     }
@@ -1061,15 +1235,15 @@ export class Spawner {
           const flap = Math.sin(obs.flapPhase) * 0.58;
           obs.wingL.rotation.z = flap;
           obs.wingR.rotation.z = -flap;
-          obs.group.position.y = obs.baseY + Math.sin(obs.flapPhase * 0.5) * 0.08;
+          obs.group.position.y = this._getBaseY(obs.baseY) + Math.sin(obs.flapPhase * 0.5) * 0.08;
         } else if (obs.kind === 'rolling_log') {
           obs.body.rotation.x += dt * 9;
         } else if (obs.kind === 'egg') {
           obs.group.rotation.y += dt * 3;
-          // Ímã de ovos
+          // Ímã de ovos (+ Tempestade Magnética)
           for (const p of players) {
             if (p.dead) continue;
-            const magnetRange = (p.magnetTimer > 0 ? 11.5 : 0) + (p.permanentMagnet || 0) + (p.id === 'ghostgold' ? 5 : 0);
+            const magnetRange = (p.magnetTimer > 0 ? 11.5 : 0) + (p.permanentMagnet || 0) + (p.id === 'ghostgold' ? 5 : 0) + (this.magneticStormActive ? 14 : 0);
             if (magnetRange > 0) {
               const dx = p.x - obs.group.position.x;
               const dz = p.z - obs.group.position.z;
@@ -1085,7 +1259,7 @@ export class Spawner {
           if (obs.cube && obs.crate?.visible) obs.cube.rotation.x += dt * 1.8;
         } else if (obs.kind === 'scorpion') {
           obs.walkPhase += dt * 10;
-          obs.group.position.y = Math.abs(Math.sin(obs.walkPhase)) * 0.06;
+          obs.group.position.y = this._getBaseY(Math.abs(Math.sin(obs.walkPhase)) * 0.06);
         } else if (obs.kind === 'cactus_shooter') {
           if (!obs.shot && obs.group.position.z > -42) {
             obs.shot = true;
@@ -1115,14 +1289,17 @@ export class Spawner {
   }
 
   reset() {
-    this.spawnTimer = 1.45;
+    this.spawnTimer = 1.65;
     this.elapsed = 0;
     this.oasisReliefTimer = 0;
-    this.chunkCooldown = 26;
-    this.powerupCooldown = 5;
-    this.featureCooldown = 4;
-    this.collectibleCooldown = 2.5;
+    this.chunkCooldown = 34;
+    this.powerupCooldown = 8;
+    this.featureCooldown = 7;
+    this.collectibleCooldown = 4.5;
     this.tutorialMode = false;
+    this.habitatMode = 'land';
+    this.isAquaticBiome = false;
+    this.magneticStormActive = false;
     for (const key of Object.keys(this.pools)) {
       this.pools[key].releaseAll();
     }

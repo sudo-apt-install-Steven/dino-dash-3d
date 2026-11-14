@@ -7,26 +7,32 @@ export const DIFFICULTY_PRESETS = {
     name: 'Fácil',
     scoreMult: 0.8,
     initialSpeed: 16,
-    maxSpeed: 30,
-    accel: 0.01,
-    density: 0.75,
-    eventFreq: 0.7,
+    maxSpeed: 29,
+    accel: 0.009,
+    density: 0.72,
+    eventFreq: 0.68,
     lives: 4,
     pvpDamage: 1,
-    allowCurses: false
+    allowCurses: false,
+    showRedHazardSignage: true,
+    minSafePaths: 2,
+    gachaMult: 0.85
   },
   normal: {
     id: 'normal',
     name: 'Normal',
     scoreMult: 1.0,
     initialSpeed: 18,
-    maxSpeed: 36,
-    accel: 0.014,
-    density: 1.0,
+    maxSpeed: 35,
+    accel: 0.013,
+    density: 0.96,
     eventFreq: 1.0,
     lives: 3,
     pvpDamage: 1,
-    allowCurses: false
+    allowCurses: false,
+    showRedHazardSignage: true,
+    minSafePaths: 2,
+    gachaMult: 1.0
   },
   hard: {
     id: 'hard',
@@ -39,7 +45,10 @@ export const DIFFICULTY_PRESETS = {
     eventFreq: 1.35,
     lives: 2,
     pvpDamage: 1,
-    allowCurses: true
+    allowCurses: true,
+    showRedHazardSignage: false,
+    minSafePaths: 1,
+    gachaMult: 1.45
   },
   insane: {
     id: 'insane',
@@ -52,7 +61,26 @@ export const DIFFICULTY_PRESETS = {
     eventFreq: 1.65,
     lives: 1,
     pvpDamage: 2,
-    allowCurses: true
+    allowCurses: true,
+    showRedHazardSignage: false,
+    minSafePaths: 1,
+    gachaMult: 1.9
+  },
+  supreme: {
+    id: 'supreme',
+    name: 'Supremo',
+    scoreMult: 3.4,
+    initialSpeed: 26,
+    maxSpeed: 54,
+    accel: 0.028,
+    density: 1.72,
+    eventFreq: 1.85,
+    lives: 1,
+    pvpDamage: 2,
+    allowCurses: true,
+    showRedHazardSignage: false,
+    minSafePaths: 1,
+    gachaMult: 2.6
   }
 };
 

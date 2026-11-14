@@ -31,12 +31,17 @@ export const EVENT_CATALOG = [
   { id: 'ruins_puzzle', label: 'Enigma das Ruínas', tier: 'bonus' },
   { id: 'toxic_fog', label: 'Nevoeiro Tóxico', tier: 'bonus' },
   { id: 'fruit_rain', label: 'Chuva de Frutas', tier: 'bonus' },
-  { id: 'npc_duel', label: 'Duelo com Dino NPC', tier: 'bonus' }
+  { id: 'npc_duel', label: 'Duelo com Dino NPC', tier: 'bonus' },
+  { id: 'magnetic_storm', label: 'Tempestade Magnética', tier: 'bonus' },
+  { id: 'pterosaur_swarm', label: 'Enxame Aéreo', tier: 'advanced' },
+  { id: 'crystal_shower', label: 'Chuva de Cristais', tier: 'bonus' },
+  { id: 'lunar_gravity', label: 'Gravidade Lunar', tier: 'bonus' }
 ];
 
 const TEACHER_FRIENDLY_EVENTS = new Set([
   'herd', 'egg_day', 'merchant', 'flight', 'aurora', 'rare_comet',
-  'bonus_portal', 'ptero_nest', 'ruins_puzzle', 'fruit_rain'
+  'bonus_portal', 'ptero_nest', 'ruins_puzzle', 'fruit_rain',
+  'magnetic_storm', 'crystal_shower', 'lunar_gravity'
 ]);
 
 export class EventManager {
@@ -94,9 +99,10 @@ export class EventManager {
         ctx.weather?.setWeather('wind');
         break;
       case 'earthquake':
-        ctx.showBanner?.('🌋 TERREMOTO! Cuidado com os tremores!', '#f97316');
+        ctx.showBanner?.('🌋 TERREMOTO! Pule as fissuras e entre no Portal da Terra Oca!', '#f97316');
         this.earthquakeTimer = 6;
         ctx.cameraRig?.triggerShake(0.6, 2.5);
+        this.world.spawnEarthquakeEffects(ctx?.world, ctx);
         break;
       case 'pteros':
         ctx.showBanner?.('🦅 BANDO DE PTERODÁCTILOS EM ATAQUE!', '#a855f7');
@@ -189,6 +195,22 @@ export class EventManager {
         ctx.showBanner?.('⚔️ DUELO COM DINO RIVAL! Ataque (Q) ou pule nele!', '#ec4899');
         this.world.spawnNpcDuel();
         break;
+      case 'magnetic_storm':
+        ctx.showBanner?.('🧲 TEMPESTADE MAGNÉTICA! Ovos são puxados até você por 9s!', '#38bdf8');
+        this.world.triggerMagneticStorm(9);
+        break;
+      case 'pterosaur_swarm':
+        ctx.showBanner?.('🦅 ENXAME AÉREO! Abaixe (↓) ou mude de faixa!', '#a855f7');
+        this.world.spawnPterosaurSwarm(ctx);
+        break;
+      case 'crystal_shower':
+        ctx.showBanner?.('💎 CHUVA DE CRISTAIS! Colete cristais para recarregar Estamina!', '#2dd4bf');
+        this.world.spawnCrystalShower(8);
+        break;
+      case 'lunar_gravity':
+        ctx.showBanner?.('🌙 GRAVIDADE LUNAR! Saltos mais altos e leves por 10s!', '#818cf8');
+        this.world.triggerLunarGravity(10);
+        break;
       default:
         return false;
     }
@@ -219,12 +241,16 @@ export class EventManager {
       (this.advanced?.lavaCorridorTimer || 0) > 0 ||
       this.core.meteors.length > 0 ||
       this.core.herd.length > 0 ||
-      this.core.pteroFlock.length > 0;
+      this.core.pteroFlock.length > 0 ||
+      this.world.magneticTimer > 0 ||
+      this.world.lunarTimer > 0 ||
+      this.world.skySwarm.length > 0 ||
+      !!this.world.hollowPortal;
 
-    if (score > 260 && !hasActiveMajorEvent) {
+    if (score > 520 && !hasActiveMajorEvent) {
       this.cooldown -= dt * this.frequencyMult;
       if (this.cooldown <= 0) {
-        this.cooldown = 25 + Math.random() * 13;
+        this.cooldown = 28 + Math.random() * 14;
         const allowed = EVENT_CATALOG.filter((e) =>
           this.enabledMap.has(e.id) && (!Save.data.teacherMode || TEACHER_FRIENDLY_EVENTS.has(e.id))
         );
@@ -243,8 +269,16 @@ export class EventManager {
     this.bosses.update(dt, speed, players, ctx);
   }
 
+  getGravityScale() {
+    return this.world?.lunarTimer > 0 ? 0.62 : 1.0;
+  }
+
+  isMagneticActive() {
+    return (this.world?.magneticTimer || 0) > 0;
+  }
+
   reset() {
-    this.cooldown = 26;
+    this.cooldown = 28;
     this.sandstormTimer = 0;
     this.earthquakeTimer = 0;
     this.eggDayTimer = 0;

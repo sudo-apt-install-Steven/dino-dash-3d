@@ -17,7 +17,14 @@ const OBSTACLE_ENTRIES = [
   { icon: '🛒', name: 'Trilho de Mina & Tronco no Rio', badge: 'Surf & Bônus', color: '#f59e0b', desc: 'Suba no trilho ou tronco para ganhar pontos contínuos e estabilidade em terrenos difíceis.' },
   { icon: '🔀', name: 'Bifurcação de Rota', badge: '⬅️ Seguro | Direita +Pts ➡️', color: '#ffd447', desc: 'Esquerda garante rota segura; direita entrega bônus de pontuação em troca de mais risco!' },
   { icon: '🔥', name: 'Lava, Gelo Frágil & Armadilha Alien', badge: '⬆ Pular / Escudo', color: '#ff5e00', desc: 'Perigos específicos de biomas: pule por cima da lava, não pise no gelo frágil nem nos lasers alien.' },
-  { icon: '💎', name: 'Fogueira, Fruta & Baú', badge: 'Coletáveis', color: '#4ade80', desc: 'Fogueira cura +1 vida e enche Fúria; Fruta carrega Fúria (+chance de cura); Baú dá ovos ao pular em cima!' }
+  { icon: '💎', name: 'Fogueira, Fruta & Baú', badge: 'Coletáveis', color: '#4ade80', desc: 'Fogueira cura +1 vida e enche Fúria; Fruta carrega Fúria (+chance de cura); Baú dá ovos ao pular em cima!' },
+  { icon: '🕳️', name: 'Portal da Terra Oca', badge: 'Queda Subterrânea', color: '#a855f7', desc: 'Surgem após terremotos e rachaduras: entre para cair no submundo da Terra Oca cheio de ovos raros por 16s!' },
+  { icon: '🛍️', name: '4ª Pista (Lojinha 30k pts)', badge: 'Desvio Lateral', color: '#10b981', desc: 'A cada 30.000 pts surge uma 4ª pista lateral (Esquerda ou Direita). Deslize até a faixa extrema para abrir o Mercador e depois retornar!' },
+  { icon: '🧲', name: 'Tempestade Magnética', badge: 'Evento Dinâmico', color: '#38bdf8', desc: 'Raios eletromagnéticos atraem automaticamente ovos próximos em direção ao seu dinossauro!' },
+  { icon: '🌙', name: 'Gravidade Lunar', badge: 'Salto Flutuante', color: '#818cf8', desc: 'Reduz temporariamente a gravidade em ~45%, permitindo saltos bem mais longos sobre abismos e obstáculos.' },
+  { icon: '🧬', name: 'Mutações DNA', badge: 'Customização', color: '#2dd4bf', desc: 'Encontre cápsulas de mutação em Personalização → Mutações DNA ou no Gacha 3D para ganhar bônus passivos únicos!' },
+  { icon: '🎲', name: 'Gacha 3D & Variantes', badge: 'Caixas Fósseis', color: '#f59e0b', desc: 'Ganhe Caixas Fósseis ao terminar partidas (escala com Dificuldade e Pontos) para desbloquear Dinos, Mecânicos, Shiny e Secretos!' },
+  { icon: '🌊', name: 'Habitats Aquático & Aéreo', badge: 'Rio & Céu', color: '#0ea5e9', desc: 'Em mapas terrestres, dinossauros Aquáticos nadam nas 3 pistas do rio lateral (x=+7.6..12.4) e Voadores voam no corredor aéreo!' }
 ];
 
 const ALCHEMY_REACTIONS = [

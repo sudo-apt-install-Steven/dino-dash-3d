@@ -258,8 +258,33 @@ export class RoomClient {
     this.activeTransport.send({ type: 'player_meta', ...meta });
   }
 
-  updateRoomSettings(patch) {
+  updateRoomSettings(patch = {}) {
+    if (this.room) {
+      if (patch.config && typeof patch.config === 'object') {
+        this.room.config = { ...(this.room.config || {}), ...patch.config };
+      }
+      const { config: _cfg, ...rest } = patch;
+      Object.assign(this.room, rest);
+      if (patch.mpMode !== undefined) {
+        this.room.elimination = patch.mpMode === 'elimination';
+      }
+      this._emit('room_state', this.room);
+    }
     this.activeTransport.send({ type: 'update_room', ...patch });
+  }
+
+  sendRoomVote({ difficulty = null, biomeId = null, mpMode = null } = {}) {
+    if (this.room) {
+      if (this.room.config?.allowVoting === false) return false;
+      this.room.votes = this.room.votes || {};
+      this.room.votes[this.peerId] = { difficulty, biomeId, mpMode };
+      this._emit('room_state', this.room);
+    }
+    return this.activeTransport.send({ type: 'room_vote', difficulty, biomeId, mpMode });
+  }
+
+  sendMpRevive({ reviverPeerId = this.peerId, targetPeerId = null, cost = 45 } = {}) {
+    return this.activeTransport.send({ type: 'mp_revive', reviverPeerId, targetPeerId, cost });
   }
 
   sendChat(text) {
@@ -317,6 +342,46 @@ export class RoomClient {
     }
     this.updateRoomSettings({ status: 'lobby', activeMatch: null });
     this.activeTransport.send({ type: 'end_match', summary });
+  }
+
+  resolveRoomConfig(room = this.room) {
+    const baseCfg = room?.config || {};
+    const allowVoting = baseCfg.allowVoting !== false;
+    const baseMode = room?.mpMode || (room?.elimination ? 'elimination' : 'race');
+    const baseDiff = baseCfg.difficulty || 'normal';
+    const baseBiome = baseCfg.biomeId || 'random_portal';
+
+    const tally = (values, fallback) => {
+      if (!values.length) return fallback;
+      const counts = new Map();
+      for (const v of values) {
+        if (v) counts.set(v, (counts.get(v) || 0) + 1);
+      }
+      if (counts.size === 0) return fallback;
+      let best = fallback;
+      let bestCount = 0;
+      for (const [k, c] of counts) {
+        if (c > bestCount || (c === bestCount && k === fallback)) {
+          best = k;
+          bestCount = c;
+        }
+      }
+      return best;
+    };
+
+    const votes = allowVoting && room?.votes ? Object.values(room.votes) : [];
+    const mpMode = allowVoting ? tally(votes.map((v) => v.mpMode), baseMode) : baseMode;
+    const difficulty = allowVoting ? tally(votes.map((v) => v.difficulty), baseDiff) : baseDiff;
+    const biomeId = allowVoting ? tally(votes.map((v) => v.biomeId), baseBiome) : baseBiome;
+
+    return {
+      allowVoting,
+      allowRevive: baseCfg.allowRevive !== false,
+      mpMode,
+      difficulty,
+      biomeId,
+      voteCount: votes.length
+    };
   }
 
   leaveRoom() {

@@ -4,16 +4,17 @@ import { Save } from '../systems/Save.js';
 import { InputSystem } from '../systems/Input.js';
 import { CameraRig } from '../systems/CameraRig.js';
 import { ParticleSystem } from '../systems/Particles.js';
-import { World, LANE_X } from '../world/World.js';
-import { BIOMES, getBiomeById } from '../world/Biomes.js';
+import { World, LANE_X, RIVER_LANE_X, SHOP_LANE_X, SKY_CORRIDOR_Y } from '../world/World.js';
+import { BIOMES, getBiomeById, getRandomNextBiome, isAquaticBiome } from '../world/Biomes.js';
 import { DayNightCycle } from '../world/DayNightCycle.js';
 import { WeatherSystem } from '../world/Weather.js';
 import { DinoFactory } from '../dinos/DinoFactory.js';
 import { buildVoxelGoldenEgg, buildVoxelDebris } from '../models/VoxelLibrary.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { DinoAbilities } from '../dinos/DinoAbilities.js';
-import { getDinoSpec } from '../dinos/DinoCatalog.js';
-import { getActivePreset, rollRandomMutation } from '../dinos/DinoCustomization.js';
+import { getDinoSpec, getDinoHabitat } from '../dinos/DinoCatalog.js';
+import { getActivePreset, rollRandomMutation, getMutationDef, getEquippedSkinVariant, applySkinVariantToColors } from '../dinos/DinoCustomization.js';
+import { GachaSystem } from '../systems/GachaSystem.js';
 import { CompanionManager } from '../dinos/Companion.js';
 import { Spawner } from '../systems/Spawner.js';
 import { PhysicsCollision } from '../systems/PhysicsCollision.js';
@@ -61,9 +62,11 @@ export class Game {
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(Save.data.settings.fov || 58, window.innerWidth / window.innerHeight, 0.1, 260);
+    this.cameraP2 = new THREE.PerspectiveCamera(Save.data.settings.fov || 58, window.innerWidth / window.innerHeight, 0.1, 260);
 
     this.input = new InputSystem();
     this.cameraRig = new CameraRig(this.camera);
+    this.cameraRigP2 = new CameraRig(this.cameraP2);
     this.world = new World(this.scene);
     this.dayNight = new DayNightCycle(this.scene, this.world);
     this.weather = new WeatherSystem(this.scene, this.world);
@@ -73,6 +76,7 @@ export class Game {
     this.companions = new CompanionManager(this.scene);
     this.events = new EventManager(this.scene);
     this.difficultyMgr = new DifficultyManager();
+    this.spawner.setBossManager(this.events.bosses);
 
     this.audio = new AudioEngine();
     this.sfx = new SoundEffects(this.audio);
@@ -110,6 +114,12 @@ export class Game {
     this.restartPrevState = 'playing';
     this.tutorialState = null;
     this.seenHints = new Set();
+    this.hollowEarthState = null;
+    this.shopDetour = null;
+    this.nextShopMilestone = 30000;
+    this._progressiveNotified = new Set();
+    this._portalBiomeAccum = 0;
+    this._mpReviveCount = 0;
 
     this.net = new RoomClient();
     this.perf = new PerfMonitor();
@@ -140,6 +150,8 @@ export class Game {
     this._onResize = () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
+      this.cameraP2.aspect = window.innerWidth / window.innerHeight;
+      this.cameraP2.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     };
     window.addEventListener('resize', this._onResize);
@@ -155,7 +167,7 @@ export class Game {
     this._onCanvasPointer = (e) => {
       if (this.state !== 'playing') return;
       if (this.events.predators?.state === 'intro') {
-        if (!isInteractiveTarget(e.target) && (this.events.predators.introElapsed || 0) > 0.35) {
+        if (!isInteractiveTarget(e.target) && (this.events.predators.introElapsed || 0) >= 1.0) {
           this.events.predators.skipIntro(this._eventContext());
           this._skipIntroGuardFrames = 3;
         }
@@ -260,7 +272,13 @@ export class Game {
     this.cameraRig.baseFov = s.fov || 58;
     this.camera.far = isLowSpec ? 125 : 260;
     this.camera.updateProjectionMatrix();
+    if (this.cameraRigP2 && this.cameraP2) {
+      this.cameraRigP2.baseFov = s.fov || 58;
+      this.cameraP2.far = isLowSpec ? 125 : 260;
+      this.cameraP2.updateProjectionMatrix();
+    }
     this.spawner.setObstacleHints(s.obstacleHints !== false);
+    this.spawner.setDifficultyConfig(this.difficultyMgr.getConfig());
     this.audio.applyVolumes();
     this.ui?.hud?.setDebugButtonVisible?.(!!Save.data.devMode);
     if (this.multiplayerSession?.active) {
@@ -365,6 +383,31 @@ export class Game {
         onMenu: () => this.openMainMenu()
       });
     });
+
+    this.net.on('mp_revive', (msg) => {
+      if (!this.multiplayerSession?.active) return;
+      if (this.multiplayerSession.isHost) {
+        if (this.multiplayerSession.allowRevive === false) return;
+        const payerIdx = Math.max(0, this.players.findIndex((p) => p.peerId === (msg.reviverPeerId || msg.peerId)));
+        const payer = this.players[payerIdx];
+        const ally = (msg.targetPeerId ? this.players.find((pl) => pl.peerId === msg.targetPeerId && pl.dead) : null)
+          || this.players.find((pl) => pl.dead && pl !== payer);
+        if (!payer || payer.dead || !ally) return;
+        this._revivePlayerEntity(ally, msg.cost || (45 + (this._mpReviveCount || 0) * 35), payer.name || 'Companheiro');
+        this.net.activeTransport?.send?.({
+          type: 'mp_revive',
+          approved: true,
+          allyName: ally.name || ally.spec?.name || 'Aliado',
+          reviverName: payer.name || 'Companheiro',
+          reviveCount: this._mpReviveCount
+        });
+      } else if (msg.approved) {
+        if (typeof msg.reviveCount === 'number') this._mpReviveCount = msg.reviveCount;
+        this.ui.hud.triggerEdgeFlash('green');
+        this.ui.hud.showBanner(`💖 ${msg.allyName || 'Aliado'} REVIVIDO por ${msg.reviverName || 'Companheiro'}!`, '#34d399', 3.0);
+        this.sfx.powerup?.();
+      }
+    });
   }
 
   _applySpectatorAction(action, actorName = 'Torcida') {
@@ -463,19 +506,27 @@ export class Game {
   }
 
   _performMeleeAttack(p) {
-    if (p.attackTimer > 0 || (p.attackCooldown || 0) > 0) return;
-    if (!this.isTestTrack && (p.stamina ?? 100) < 16) {
+    if (!p._unlockAll && !this.isTestTrack && this.score < 1800) {
       if (!p._lowStamToastCooldown) {
         p._lowStamToastCooldown = 0.8;
-        this.ui.hud.showFloatText('💨 Sem estamina para atacar (16)!', '#fbbf24');
+        this.ui.hud.showFloatText('🔒 Ataque [Q] libera aos 1.800 pts!', '#94a3b8');
+      }
+      return;
+    }
+    if (p.attackTimer > 0 || (p.attackCooldown || 0) > 0) return;
+    if (!this.isTestTrack && (p.stamina ?? 100) < 20) {
+      if (!p._lowStamToastCooldown) {
+        p._lowStamToastCooldown = 0.8;
+        this.ui.hud.showFloatText('💨 Sem estamina para atacar (20)!', '#fbbf24');
       }
       return;
     }
     if (!this.isTestTrack) {
-      p.stamina = Math.max(0, (p.stamina ?? 100) - 16);
+      p.stamina = Math.max(0, (p.stamina ?? 100) - 20);
+      p._staminaRegenDelay = 0.6;
     }
     p.attackTimer = 0.24;
-    p.attackCooldown = p.attackMaxCooldown || 1.25;
+    p.attackCooldown = (p.attackMaxCooldown || 1.25) * (p.attackCdMult || 1);
     p.animator.triggerRoar(0.25);
     this.sfx.melee();
     this.particles.emitDust(p.x, 0.8, p.z - 0.9, 6, '#ffd447', 2.4);
@@ -637,12 +688,16 @@ export class Game {
       const dinoId = slot.dinoId || 'trex';
       const spec = getDinoSpec(dinoId);
       const localCustom = (pKey === 'p1' || pKey === 'p2') ? getActivePreset(pKey) : {};
+      const eqSkinVariant = i === 0 ? getEquippedSkinVariant(dinoId) : (slot.skinVariant || localCustom.skinVariant || 'normal');
+      const eqMutationId = i === 0 ? (Save.data.equippedMutation || 'amber_core') : null;
       const modelCfg = {
         ...localCustom,
+        skinVariant: eqSkinVariant,
+        mutation: eqMutationId,
         ...(slot.color ? { useCustomColors: true, primary: slot.color } : {}),
         ...(i === 0 ? { hybrid: Save.data.hybrid, season: activeSeason, partyCrown: hasCrown } : { season: activeSeason })
       };
-      const model = DinoFactory.build(dinoId, modelCfg, { allowHybrid: i === 0 && !!Save.data.hybrid?.enabled });
+      const model = DinoFactory.build(dinoId, modelCfg, { allowHybrid: i === 0 && !!Save.data.hybrid?.enabled, skinVariant: eqSkinVariant });
       const startLane = count === 1 ? 1 : (i % 3);
       const laneOffset = count > 3 ? ((Math.floor(i / 3) - 0.5) * 0.45) : 0;
       model.root.position.set(LANE_X[startLane] + laneOffset, 0, Math.floor(i / 3) * 0.65);
@@ -736,8 +791,29 @@ export class Game {
         campfireSaved: false,
         captureEggTime: 0,
         holdingGoldenEgg: i === 0 && this.modeId === 'capture_egg',
-        smallHitbox: dinoId === 'compsognathus'
+        smallHitbox: dinoId === 'compsognathus',
+        habitat: getDinoHabitat(spec),
+        skinVariant: eqSkinVariant,
+        mutationId: eqMutationId,
+        mutationMods: (eqMutationId ? getMutationDef(eqMutationId)?.mods : null) || null,
+        inShopLane: null,
+        _staminaRegenDelay: 0,
+        _unlockAll: Boolean(this.isTestTrack || this.modeId === 'tutorial')
       });
+      const built = this.players[this.players.length - 1];
+      const mutMods = built?.mutationMods;
+      if (built && mutMods) {
+        if (mutMods.startShield) built.shields = (built.shields || 0) + mutMods.startShield;
+        if (mutMods.scoreMult) built.scoreMultBonus = (built.scoreMultBonus || 1) * (1 + mutMods.scoreMult);
+        if (mutMods.jumpMult) built.jumpMult = (built.jumpMult || 1) * (1 + mutMods.jumpMult);
+        if (mutMods.speedMult) built.speedBonus = (built.speedBonus || 1) * (1 + mutMods.speedMult);
+        if (mutMods.magnetBonus) built.permanentMagnet = (built.permanentMagnet || 0) + mutMods.magnetBonus;
+        if (mutMods.hitboxScale) built.hitboxScale = (built.hitboxScale || 1) * mutMods.hitboxScale;
+        if (mutMods.attackCdMult) built.attackCdMult = mutMods.attackCdMult;
+      }
+      if (built && (eqSkinVariant === 'shiny' || eqSkinVariant === 'secret')) {
+        built.scoreMultBonus = (built.scoreMultBonus || 1) * (eqSkinVariant === 'secret' ? 1.25 : 1.15);
+      }
     }
   }
 
@@ -799,9 +875,13 @@ export class Game {
       roster.push({ key: 'p1', dinoId: Save.data.selectedDino || 'trex', name: 'Host', peerId: this.net.peerId, color: null, isBot: false });
     }
 
+    const resolvedCfg = this.net.resolveRoomConfig(room);
     const matchSeed = this.customSeed || `MP-${room?.code || 'DINO'}-${Math.floor(Math.random() * 9999)}`;
-    const mpMode = room?.mpMode || (room?.elimination ? 'elimination' : 'race');
+    const mpMode = resolvedCfg.mpMode || room?.mpMode || (room?.elimination ? 'elimination' : 'race');
     const isElim = mpMode === 'elimination' || !!room?.elimination;
+    const matchDiffId = resolvedCfg.difficulty || Save.data.difficulty || 'normal';
+    const matchBiomeId = resolvedCfg.biomeId || this.startBiomeId || 'random_portal';
+    this.diffMgr.setPreset(matchDiffId);
     this.multiplayerSession = {
       active: true,
       isHost: this.net.isHost,
@@ -810,6 +890,8 @@ export class Game {
       botCount,
       seed: matchSeed,
       mpMode,
+      difficultyId: matchDiffId,
+      allowRevive: resolvedCfg.allowRevive !== false,
       elimination: isElim,
       elimTimer: isElim ? 30 : null,
       partyMode: room?.partyMode !== false,
@@ -827,11 +909,13 @@ export class Game {
       botCount,
       seed: matchSeed,
       mpMode,
+      difficultyId: matchDiffId,
+      allowRevive: this.multiplayerSession.allowRevive,
       elim: isElim,
       partyMode: this.multiplayerSession.partyMode,
-      biomeId: this.startBiomeId
+      biomeId: matchBiomeId
     });
-    this.startRun(false, { keepMultiplayerSession: true, roster, seed: matchSeed, biomeId: this.startBiomeId });
+    this.startRun(false, { keepMultiplayerSession: true, roster, seed: matchSeed, biomeId: matchBiomeId });
     this.tvHud.setVisible(this.players.length > 1, !!Save.data.network?.tvScale);
     const modeLabel = mpMode === 'duel' ? '⚔️ DUELO PvP' : (isElim ? '⏳ ELIMINAÇÃO 30s' : '🏁 CORRIDA');
     this.ui.hud.showBanner(`🌐 ${modeLabel} INICIADA (${this.players.length} DINOS)!`, '#58d63a', 3.4);
@@ -864,6 +948,9 @@ export class Game {
 
     const mpMode = payload.mpMode || room.mpMode || (payload.elim ? 'elimination' : 'race');
     const isElim = mpMode === 'elimination' || !!payload.elim;
+    if (payload.difficultyId) {
+      this.diffMgr.setPreset(payload.difficultyId);
+    }
     this.multiplayerSession = {
       active: true,
       isHost: false,
@@ -872,6 +959,8 @@ export class Game {
       botCount: payload.botCount || 0,
       seed: payload.seed || room.seed || `MP-${room.code || 'GUEST'}`,
       mpMode,
+      difficultyId: payload.difficultyId || 'normal',
+      allowRevive: payload.allowRevive !== false,
       elimination: isElim,
       elimTimer: isElim ? 30 : null,
       partyMode: payload.partyMode !== false,
@@ -1105,29 +1194,62 @@ export class Game {
     this.waveTimer = 18;
     this.captureMatchTimer = 30;
     this.wantedSpawnTimer = 6;
+    this.hollowEarthState = { active: false, savedBiomeId: null, timer: 0, portalZ: null };
+    this.shopDetour = { active: false, side: 'right', phase: 'none', timer: 0, visited: false };
+    this.nextShopMilestone = 30000;
+    this._progressiveNotified = new Set();
+    this._portalBiomeAccum = 0;
+    this._mpReviveCount = 0;
     this.hiScore = Save.getHighScore();
 
     // Seed determinística para Desafio Diário, Multiplayer ou Seed compartilhável
     const seed = opts.seed || this.activeCustomTrack?.seed || (this.modeId === 'daily_challenge' ? getTodaySeed() : this.customSeed);
     this.spawner.setSeed(seed);
     this.spawner.setDifficultyId(this.difficultyMgr.activeId);
+    this.spawner.setDifficultyConfig(diff);
+    this.spawner.setBossManager(this.events.bosses);
     this.spawner.setDensity(diff.density * (this.activeCustomTrack?.obstacleRate || 1.0));
     this.events.configure(diff.eventFreq, diff.enabledEvents);
 
-    // Bioma inicial (Modo História começa no capítulo 1)
-    const startId = opts.biomeId || (this.modeId === 'story' ? STORY_CHAPTERS[0].biome : this.startBiomeId);
+    // Bioma inicial (Modo História começa no capítulo 1; Modo Aleatório inicia via Portal Dinâmico)
+    const rawStartId = opts.biomeId || (this.modeId === 'story' ? STORY_CHAPTERS[0].biome : this.startBiomeId);
+    this.randomPortalMode = rawStartId === 'random_portal' || !!opts.randomPortal || !!this.sequenceBiomes;
+    const startId = rawStartId === 'random_portal' ? getRandomNextBiome(null).id : rawStartId;
     this.currentBiome = getBiomeById(startId);
     this.world.applyTheme(this.currentBiome.theme);
+    this.world.setHollowEarthVisuals(false);
+    this.world.setShopLane(null);
     this.spawner.setBiome(this.currentBiome.id);
     if (!isTestTrack) this._discoverCurrentBiomeFossil();
 
-    // Mutação aleatória divertida na partida (1 por corrida em modos normais)
+    const aquaBiome = isAquaticBiome(this.currentBiome.id);
+    const anyAquatic = this.players.some((p) => p.habitat === 'aquatic') || aquaBiome;
+    const anyFlying = this.players.some((p) => p.habitat === 'flying');
+    this.world.setAquaticChannelActive(anyAquatic);
+    this.world.setSkyCorridorActive(anyFlying);
+    this.spawner.setHabitatMode(this.players[0]?.habitat || 'land', aquaBiome);
+    for (const pl of this.players) {
+      if (pl.habitat === 'aquatic' && !aquaBiome) {
+        pl.x = RIVER_LANE_X[pl.lane] ?? RIVER_LANE_X[1];
+        pl.baseY = 0;
+      } else if (pl.habitat === 'flying') {
+        pl.x = LANE_X[pl.lane] ?? 0;
+        pl.baseY = SKY_CORRIDOR_Y - 1.15;
+      } else {
+        pl.x = LANE_X[pl.lane] ?? 0;
+        pl.baseY = 0;
+      }
+      pl.y = 0;
+      pl.model.root.position.x = pl.x;
+      pl.model.root.position.y = pl.baseY;
+    }
+
+    // Mutação Equipada (ou sorteada apenas se nenhuma estiver selecionada)
     if (!isTestTrack && this.players[0]) {
-      const mut = rollRandomMutation();
+      const mut = getMutationDef(Save.data.equippedMutation) || rollRandomMutation();
       this.activeMutation = mut;
-      if (mut.id === 'bouncy') this.players[0].jumpMult = 1.15;
-      if (mut.id === 'tiny_core') this.players[0].smallHitbox = true;
-      const mutText = `🧬 Mutação: ${mut.name} (${mut.desc})`;
+      if (mut.id === 'tiny_core' && !this.players[0].mutationMods) this.players[0].smallHitbox = true;
+      const mutText = `🧬 ${mut.badge || '🧬'} ${mut.name}: ${mut.desc}`;
       if (Save.data.perfectMode && this.modeId !== 'zen') {
         this._pendingStartBanners.push({
           text: `💎 MODO PERFEITO (1 Vida • Score 2.2x) • ${mutText}`,
@@ -1421,12 +1543,142 @@ export class Game {
     this.ui.hud.showFloatText(text, color);
   }
 
+  enterHollowEarth(duration = 14) {
+    if (this.hollowEarthState?.active) {
+      this.hollowEarthState.timer = Math.max(this.hollowEarthState.timer, duration);
+      return;
+    }
+    const savedBiomeId = this.currentBiome?.id || 'savannah';
+    this.hollowEarthState = { active: true, savedBiomeId, timer: duration, portalZ: 0 };
+    this.currentBiome = getBiomeById('hollow_earth');
+    this.world.applyTheme(this.currentBiome.theme);
+    this.world.setHollowEarthVisuals(true);
+    this.spawner.setBiome('hollow_earth');
+    const anyAqua = this.players.some((p) => p.habitat === 'aquatic');
+    this.world.setAquaticChannelActive(anyAqua);
+    this.spawner.setHabitatMode(this.players[0]?.habitat || 'land', false);
+    if (!this.isTestTrack) this._discoverCurrentBiomeFossil();
+    if (!Save.data.discoveredHollowEarth) {
+      Save.data.discoveredHollowEarth = true;
+      Save.save();
+    }
+    this.sfx.portal?.();
+    this.ui.hud.triggerEdgeFlash('mítica');
+    this.ui.hud.showBanner(`🕳️ TERRA OCA! Mundo subterrâneo revelado por ${Math.round(duration)}s!`, '#c084fc', 3.4);
+  }
+
+  exitHollowEarth() {
+    if (!this.hollowEarthState?.active) return;
+    const savedId = this.hollowEarthState.savedBiomeId || 'savannah';
+    this.hollowEarthState = { active: false, savedBiomeId: null, timer: 0, portalZ: null };
+    this.world.setHollowEarthVisuals(false);
+    this.currentBiome = getBiomeById(savedId);
+    this.world.applyTheme(this.currentBiome.theme);
+    this.spawner.setBiome(this.currentBiome.id);
+    const aqua = isAquaticBiome(this.currentBiome.id);
+    const anyAqua = this.players.some((p) => p.habitat === 'aquatic') || aqua;
+    this.world.setAquaticChannelActive(anyAqua);
+    this.spawner.setHabitatMode(this.players[0]?.habitat || 'land', aqua);
+    this.ui.hud.showBanner(`☀️ RETORNO À SUPERFÍCIE: ${this.currentBiome.name}!`, '#38bdf8', 2.6);
+  }
+
+  triggerRandomPortalTransition() {
+    if (this.hollowEarthState?.active) this.exitHollowEarth();
+    const nextBiome = getRandomNextBiome(this.currentBiome?.id);
+    this.currentBiome = nextBiome;
+    this.world.applyTheme(this.currentBiome.theme);
+    this.spawner.setBiome(this.currentBiome.id);
+    const aqua = isAquaticBiome(this.currentBiome.id);
+    const anyAqua = this.players.some((p) => p.habitat === 'aquatic') || aqua;
+    this.world.setAquaticChannelActive(anyAqua);
+    this.spawner.setHabitatMode(this.players[0]?.habitat || 'land', aqua);
+    for (const pl of this.players) {
+      if (pl.habitat === 'aquatic') {
+        const lanes = aqua ? LANE_X : RIVER_LANE_X;
+        pl.x = lanes[pl.lane] ?? lanes[1];
+        pl.model.root.position.x = pl.x;
+      }
+    }
+    if (!this.isTestTrack) this._discoverCurrentBiomeFossil();
+    this.sfx.portal?.();
+    this.ui.hud.triggerEdgeFlash('cyan');
+    this.ui.hud.showBanner(`🌀 PORTAL DE BIOMA → ${this.currentBiome.name}!`, '#38bdf8', 3.0);
+  }
+
+  _revivePlayerEntity(ally, paidCost = 45, reviverName = '') {
+    if (!ally) return;
+    ally.dead = false;
+    ally.hp = Math.max(1, Math.min(2, ally.maxHp || 2));
+    ally.shields = (ally.shields || 0) + 1;
+    ally.invulnTimer = 3.2;
+    ally.y = 0;
+    ally.vy = 4.5;
+    if (ally.model?.root) ally.model.root.visible = true;
+    this._mpReviveCount = (this._mpReviveCount || 0) + 1;
+    this.particles.emitDust(ally.x, 1, ally.model?.root?.position?.z || 0, 18, '#34d399', 4.5);
+    this.sfx.powerup?.();
+    this.ui.hud.triggerEdgeFlash('green');
+    const byStr = reviverName ? ` por ${reviverName}` : '';
+    this.ui.hud.showBanner(`💖 ${ally.name || 'Aliado'} REVIVIDO${byStr} (${paidCost} 🥚)!`, '#34d399', 3.2);
+  }
+
+  reviveFallenAlly(payerIdx = 0) {
+    if (this.state !== 'playing') return false;
+    if (this.multiplayerSession?.active && this.multiplayerSession.allowRevive === false) {
+      this.ui.hud.showBanner('🔒 Revive desativado pelo Dono da Sala!', '#f87171', 2.2);
+      return false;
+    }
+    const payer = (this.multiplayerSession?.active && this.net.peerId)
+      ? (this.players.find((pl) => pl.peerId === this.net.peerId) || this.players[payerIdx])
+      : this.players[payerIdx];
+    const ally = this.players.find((pl) => pl.dead && pl !== payer);
+    if (!payer || payer.dead || !ally) return false;
+
+    const cost = 45 + (this._mpReviveCount || 0) * 35;
+    const totalAvailable = (this.runEggs || 0) + (Save.data.eggs || 0);
+    if (totalAvailable < cost) {
+      this.ui.hud.showBanner(`🥚 Precisa de ${cost} ovos para reviver ${ally.name || 'aliado'}!`, '#f87171', 2.4);
+      return false;
+    }
+
+    let rem = cost;
+    const takeRun = Math.min(this.runEggs || 0, rem);
+    this.runEggs = Math.max(0, (this.runEggs || 0) - takeRun);
+    rem -= takeRun;
+    if (rem > 0) Save.addEggs(-rem);
+
+    if (this.multiplayerSession?.active && !this.multiplayerSession.isHost) {
+      this.net.sendMpRevive({
+        reviverPeerId: this.net.peerId,
+        targetPeerId: ally.peerId || null,
+        cost
+      });
+      this.ui.hud.showFloatText(`💖 Revivendo ${ally.name || 'Aliado'} (-${cost} 🥚)...`, '#34d399');
+      return true;
+    }
+
+    this._revivePlayerEntity(ally, cost, payer.name || '');
+    if (this.multiplayerSession?.active) {
+      this.net.activeTransport?.send?.({
+        type: 'mp_revive',
+        approved: true,
+        allyName: ally.name || ally.spec?.name || 'Aliado',
+        reviverName: payer.name || 'Host',
+        reviveCount: this._mpReviveCount
+      });
+    }
+    return true;
+  }
+
   _eventContext() {
     return {
       scene: this.scene,
+      world: this.world,
       spawner: this.spawner,
       cameraRig: this.cameraRig,
       currentBiome: this.currentBiome,
+      enterHollowEarth: (dur) => this.enterHollowEarth(dur),
+      openBiomePortal: () => this.triggerRandomPortalTransition(),
       isMultiplayer: Boolean(this.multiplayerSession?.active),
       headlessBot: Boolean(this.headlessBot),
       particles: this.particles,
@@ -1837,6 +2089,11 @@ export class Game {
       return;
     }
 
+    const gachaEligible = !this.isTestTrack && this.modeId !== 'zen' && this.modeId !== 'tutorial';
+    const gachaCrates = GachaSystem.computeRunCrates(finalScore, this.difficultyMgr.getConfig(), gachaEligible);
+    if (gachaCrates > 0) GachaSystem.addCrates(gachaCrates);
+    const totalCrates = GachaSystem.getCrateCount();
+
     const deathInfo = this._describeDeathCause(this.players[0]?._lastDeathCause);
     this.lastPodiumSummary = null;
     this.lastGameOverArgs = {
@@ -1849,7 +2106,9 @@ export class Game {
       maxCombo: this.maxCombo,
       dinoId: this.players[0]?.id || 'trex',
       causeLabel: deathInfo.label,
-      avoidTip: deathInfo.tip
+      avoidTip: deathInfo.tip,
+      gachaCrates,
+      totalCrates
     };
 
     this.ui.hud.showGameOver(this.lastGameOverArgs);
@@ -1968,32 +2227,66 @@ export class Game {
     const envWind = (this.weather.windForce || 0) + (this.currentBiome.windBias || 0) + (p.spec.dinoClass === 'aquatic' ? 0 : (this.currentBiome.currentForce || 0));
     if ((p._moveComboCd || 0) > 0) p._moveComboCd = Math.max(0, p._moveComboCd - dt);
 
-    if (leftJust && p.lane > 0) {
-      p.lane--;
-      p._lastLaneSwitchAt = this.runTime;
-      this.sfx.dash();
-      this.particles.emitDust(p.x, 0.2, p.z, 3, '#ffd447', 1.4);
-      if (this.tutorialState?.active && this.tutorialState.step === 0 && p.index === 0) {
-        this.tutorialState.progress++;
-        this._syncTutorialHud();
-        if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+    const progLocked = !p._unlockAll && Save.data.settings?.progressiveUnlocks !== false;
+    const abilityUnlocked = !progLocked || this.score >= 600;
+    const staminaUnlocked = !progLocked || this.score >= 1200;
+    const attackUnlocked = !progLocked || this.score >= 1800;
+    const furyUnlocked = !progLocked || this.score >= 2800;
+
+    const aquaBiome = isAquaticBiome(this.currentBiome?.id);
+    const laneArr = (p.habitat === 'aquatic' && !aquaBiome) ? RIVER_LANE_X : LANE_X;
+
+    if (leftJust) {
+      if (p.inShopLane === 'right') {
+        p.inShopLane = null;
+        p.lane = 2;
+        p._lastLaneSwitchAt = this.runTime;
+        this.sfx.dash();
+      } else if (this.shopDetour?.active && this.shopDetour.side === 'left' && p.lane === 0 && p.habitat !== 'flying') {
+        p.inShopLane = 'left';
+        p._lastLaneSwitchAt = this.runTime;
+        this.sfx.dash();
+        this.ui.hud.showFloatText('🛒 ENTRANDO NA LOJINHA!', '#34d399');
+      } else if (p.lane > 0) {
+        p.lane--;
+        p._lastLaneSwitchAt = this.runTime;
+        this.sfx.dash();
+        this.particles.emitDust(p.x, (p.baseY || 0) + 0.2, p.z, 3, '#ffd447', 1.4);
+        if (this.tutorialState?.active && this.tutorialState.step === 0 && p.index === 0) {
+          this.tutorialState.progress++;
+          this._syncTutorialHud();
+          if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+        }
       }
     }
-    if (rightJust && p.lane < 2) {
-      p.lane++;
-      p._lastLaneSwitchAt = this.runTime;
-      this.sfx.dash();
-      this.particles.emitDust(p.x, 0.2, p.z, 3, '#ffd447', 1.4);
-      if (this.tutorialState?.active && this.tutorialState.step === 0 && p.index === 0) {
-        this.tutorialState.progress++;
-        this._syncTutorialHud();
-        if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+    if (rightJust) {
+      if (p.inShopLane === 'left') {
+        p.inShopLane = null;
+        p.lane = 0;
+        p._lastLaneSwitchAt = this.runTime;
+        this.sfx.dash();
+      } else if (this.shopDetour?.active && this.shopDetour.side === 'right' && p.lane === 2 && p.habitat !== 'flying') {
+        p.inShopLane = 'right';
+        p._lastLaneSwitchAt = this.runTime;
+        this.sfx.dash();
+        this.ui.hud.showFloatText('🛒 ENTRANDO NA LOJINHA!', '#34d399');
+      } else if (p.lane < 2) {
+        p.lane++;
+        p._lastLaneSwitchAt = this.runTime;
+        this.sfx.dash();
+        this.particles.emitDust(p.x, (p.baseY || 0) + 0.2, p.z, 3, '#ffd447', 1.4);
+        if (this.tutorialState?.active && this.tutorialState.step === 0 && p.index === 0) {
+          this.tutorialState.progress++;
+          this._syncTutorialHud();
+          if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+        }
       }
     }
 
     const iceLaneMult = p.statuses?.ice ? 0.72 : 1;
     const laneSpeed = 16 * (p.laneSpeedMult || 1) * iceLaneMult;
-    const targetX = LANE_X[p.lane] + (p.xOffset || 0) + Math.sin(this.runTime * 2) * (Math.abs(envWind) > 0.2 ? envWind * 0.15 : 0);
+    const baseTargetX = p.inShopLane ? (SHOP_LANE_X[p.inShopLane] ?? laneArr[p.lane]) : (laneArr[p.lane] ?? 0);
+    const targetX = baseTargetX + (p.xOffset || 0) + Math.sin(this.runTime * 2) * (Math.abs(envWind) > 0.2 ? envWind * 0.15 : 0);
     const prevX = p.x;
     p.x += (targetX - p.x) * Math.min(1, dt * laneSpeed);
     const laneLean = (p.x - prevX) / Math.max(dt, 0.001) * 0.055;
@@ -2001,20 +2294,21 @@ export class Game {
     // Pulo + Salto Duplo Limitado + Pulo Carregado
     const jumpMult = (p.jumpMult || 1) * (p.spec.stats.jump >= 9 ? 1.1 : 1.0);
     const maxAirJumps = p.id === 'compsognathus' ? 2 : 1;
+    const airJumpCost = Math.round(58 * (1 - (p.mutationMods?.staminaSave || 0)));
     if (jumpJust) {
       if (this.events.ufo.active && this.events.ufo.mashBreak()) {
         // Quebrou o feixe do OVNI!
       } else if (p.grounded) {
-        p.vy = 13.6 * jumpMult;
+        p.vy = 13.4 * jumpMult;
         p.grounded = false;
         p.ducking = false;
         p.sliding = false;
-        p.jumpHoldTimer = 0.14;
+        p.jumpHoldTimer = 0.12;
         p.airJumpsUsed = 0;
         p._lastJumpAt = this.runTime;
         this.runJumps++;
         this.sfx.jump(false);
-        this.particles.emitDust(p.x, 0.12, p.z + 0.2, 6, '#f2c57c', 2.2);
+        this.particles.emitDust(p.x, (p.baseY || 0) + 0.12, p.z + 0.2, 6, '#f2c57c', 2.2);
         if ((this.runTime - (p._lastLaneSwitchAt ?? -99)) <= 0.65 && (p._moveComboCd || 0) <= 0) {
           p._moveCombo = Math.min(8, (p._moveCombo || 0) + 1);
           p._moveComboCd = 1.6;
@@ -2030,22 +2324,28 @@ export class Game {
         if (p.extraJumps > 0) {
           p.extraJumps--;
           p.airJumpsUsed = (p.airJumpsUsed || 0) + 1;
-          p.vy = 11.4 * jumpMult;
+          p.vy = 10.6 * jumpMult;
           p.jumpHoldTimer = 0;
           this.sfx.jump(true);
-          this.particles.emitDust(p.x, p.y, p.z, 8, '#90e0ef', 2.4);
-        } else if (this.isTestTrack || (p.stamina ?? 100) >= 55) {
+          this.particles.emitDust(p.x, (p.baseY || 0) + p.y, p.z, 8, '#90e0ef', 2.4);
+        } else if (!staminaUnlocked && p.index === 0) {
+          if (!p._lowStamToastCooldown) {
+            p._lowStamToastCooldown = 0.9;
+            this.ui.hud.showFloatText('🔒 Pulo Duplo & Estamina liberam aos 1.200 pts!', '#94a3b8');
+          }
+        } else if (this.isTestTrack || (p.stamina ?? 100) >= airJumpCost) {
           if (!this.isTestTrack) {
-            p.stamina = Math.max(0, (p.stamina ?? 100) - 55);
+            p.stamina = Math.max(0, (p.stamina ?? 100) - airJumpCost);
+            p._staminaRegenDelay = 0.75;
           }
           p.airJumpsUsed = (p.airJumpsUsed || 0) + 1;
-          p.vy = 10.8 * jumpMult;
+          p.vy = 10.1 * jumpMult;
           p.jumpHoldTimer = 0;
           this.sfx.jump(true);
-          this.particles.emitDust(p.x, p.y, p.z, 8, '#34d399', 2.4);
+          this.particles.emitDust(p.x, (p.baseY || 0) + p.y, p.z, 8, '#34d399', 2.4);
         } else if (!p._lowStamToastCooldown) {
           p._lowStamToastCooldown = 0.8;
-          this.ui.hud.showFloatText('💨 Estamina baixa (precisa 55)!', '#fbbf24');
+          this.ui.hud.showFloatText(`💨 Estamina baixa (precisa ${airJumpCost})!`, '#fbbf24');
         }
       } else if (!p._lowStamToastCooldown) {
         p._lowStamToastCooldown = 0.8;
@@ -2056,10 +2356,10 @@ export class Game {
     // Pulo carregado enquanto segura a tecla nos primeiros instantes da subida
     if (jumpHeld && p.jumpHoldTimer > 0 && p.vy > 0) {
       p.jumpHoldTimer -= dt;
-      p.vy += 14 * dt;
+      p.vy += 13 * dt;
     }
 
-    // Abaixar / Deslizar (abaixar no chão dá deslizada com impulso gastando pouca estamina)
+    // Abaixar / Deslizar (abaixar no chão dá deslizada com impulso gastando estamina após 1200 pts)
     if (duckHeld) {
       if (!p.grounded) {
         if (p.vy > -18 && (this.runTime - (p._lastJumpAt ?? -99)) <= 0.85 && (p._moveComboCd || 0) <= 0) {
@@ -2071,12 +2371,14 @@ export class Game {
         p.vy = Math.min(p.vy, -20);
         p.ducking = true;
       } else if (!p.sliding && !p.ducking) {
-        const hasSlideStam = this.isTestTrack || (p.stamina ?? 100) >= 10;
-        if (hasSlideStam && !this.isTestTrack) {
-          p.stamina = Math.max(0, (p.stamina ?? 100) - 10);
+        const slideCost = staminaUnlocked ? 14 : 0;
+        const hasSlideStam = this.isTestTrack || !staminaUnlocked || (p.stamina ?? 100) >= slideCost;
+        if (hasSlideStam && slideCost > 0 && !this.isTestTrack) {
+          p.stamina = Math.max(0, (p.stamina ?? 100) - slideCost);
+          p._staminaRegenDelay = 0.45;
         }
         p.sliding = hasSlideStam;
-        p.slideTimer = hasSlideStam ? 0.5 : 0;
+        p.slideTimer = hasSlideStam ? 0.48 : 0;
         this.sfx.slide();
       }
       p.ducking = true;
@@ -2091,13 +2393,25 @@ export class Game {
 
     // Ataque Básico / Mordida / Destruir Cactos (Q)
     if (attackJust) {
-      this._performMeleeAttack(p);
+      if (!attackUnlocked && p.index === 0) {
+        if (!p._lowStamToastCooldown) {
+          p._lowStamToastCooldown = 0.9;
+          this.ui.hud.showFloatText('🔒 Ataque [Q] libera aos 1.800 pts!', '#f97316');
+        }
+      } else {
+        this._performMeleeAttack(p);
+      }
     }
 
     // Habilidade Especial (também quebra o feixe do OVNI se capturado!)
     if (abilityJust) {
       if (this.events.ufo.active && this.events.ufo.mashBreak()) {
         // Escapando do feixe do OVNI!
+      } else if (!abilityUnlocked && p.index === 0) {
+        if (!p._lowStamToastCooldown) {
+          p._lowStamToastCooldown = 0.9;
+          this.ui.hud.showFloatText('🔒 Habilidade [Espaço] libera aos 600 pts!', '#38bdf8');
+        }
       } else {
         const activated = this.abilities.activate(p, this._eventContext());
         if (activated) {
@@ -2129,12 +2443,19 @@ export class Game {
     }
 
     // Fúria (F)
-    if (furyJust && p.fury >= 100 && p.furyTimer <= 0) {
-      p.fury = 0;
-      p.furyTimer = 6.0;
-      this.sfx.fury();
-      this.narrator.say('fury');
-      this.ui.hud.showBanner(`🔥 ${p.name}: MODO FÚRIA ATIVADO!`, '#ff5e1a', 2.5);
+    if (furyJust) {
+      if (!furyUnlocked && p.index === 0) {
+        if (!p._lowStamToastCooldown) {
+          p._lowStamToastCooldown = 0.9;
+          this.ui.hud.showFloatText('🔒 Fúria [F] libera aos 2.800 pts!', '#fbbf24');
+        }
+      } else if (p.fury >= 100 && p.furyTimer <= 0) {
+        p.fury = 0;
+        p.furyTimer = 6.0 * (p.mutationMods?.furyDurMult || 1);
+        this.sfx.fury();
+        this.narrator.say('fury');
+        this.ui.hud.showBanner(`🔥 ${p.name}: MODO FÚRIA ATIVADO!`, '#ff5e1a', 2.5);
+      }
     }
 
     // Mochila (E ou botão do controle remoto)
@@ -2147,9 +2468,10 @@ export class Game {
       p.grounded = false;
     }
 
-    // Gravidade (Planeta Alienígena, Modo Caos, Pista Customizada ou Zonas Gravitacionais + Planar)
+    // Gravidade (Planeta Alienígena, Modo Caos, Pista Customizada, Evento Baixa Gravidade + Planar)
     let gravMult = (this.activeChaosRule?.id === 'low_grav' ? 0.55 : (this.currentBiome.lowGravity || 1.0))
-      * (this.activeCustomTrack?.gravityScale || 1.0);
+      * (this.activeCustomTrack?.gravityScale || 1.0)
+      * (this.events.getGravityScale?.() ?? 1.0);
     if (p.gravityZoneTimer > 0) {
       p.gravityZoneTimer -= dt;
       gravMult *= (p.gravityZoneMode === 'low' ? 0.5 : 1.55);
@@ -2171,11 +2493,12 @@ export class Game {
       p.y += (0.55 - p.y) * Math.min(1, dt * 10);
       p.vy = 0;
     } else if (!p.grounded) {
-      p.vy -= 34.0 * gravMult * dt;
-      // Amortecimento curto de queda consome estamina rapidamente (impede voar)
-      if (jumpHeld && p.vy < -3.0 && (p.stamina ?? 0) > 4) {
-        p.stamina = Math.max(0, (p.stamina ?? 0) - 45 * dt);
-        p.vy = Math.max(p.vy, -9.2);
+      p.vy -= 35.0 * gravMult * dt;
+      // Planar breve consome estamina rapidamente (impede voar)
+      if (jumpHeld && staminaUnlocked && p.vy < -2.6 && (p.stamina ?? 0) > 4) {
+        p.stamina = Math.max(0, (p.stamina ?? 0) - 62 * dt);
+        p._staminaRegenDelay = 0.5;
+        p.vy = Math.max(p.vy, -10.5);
       }
       p.y += p.vy * dt;
       if (p.y <= 0) {
@@ -2189,11 +2512,11 @@ export class Game {
         this.sfx.land();
         const landFx = getActivePreset(p.key).landingEffect;
         if (landFx === 'sparks') {
-          this.particles.emitExplosion(p.x, 0.14, p.z, '#ff9a24', 10, false);
+          this.particles.emitExplosion(p.x, (p.baseY || 0) + 0.14, p.z, '#ff9a24', 10, false);
         } else if (landFx === 'shockwave') {
-          this.particles.emitExplosion(p.x, 0.14, p.z, '#ffd447', 12, true);
+          this.particles.emitExplosion(p.x, (p.baseY || 0) + 0.14, p.z, '#ffd447', 12, true);
         } else {
-          this.particles.emitDust(p.x, 0.12, p.z, 7, '#f2c57c', 2.5);
+          this.particles.emitDust(p.x, (p.baseY || 0) + 0.12, p.z, 7, '#f2c57c', 2.5);
         }
       }
     }
@@ -2208,14 +2531,16 @@ export class Game {
 
     // Temporizadores de buffs, estamina e recarga combinada
     if (p._lowStamToastCooldown > 0) p._lowStamToastCooldown = Math.max(0, p._lowStamToastCooldown - dt);
+    if (p._staminaRegenDelay > 0) p._staminaRegenDelay = Math.max(0, p._staminaRegenDelay - dt);
     if (p.invulnTimer > 0) p.invulnTimer = Math.max(0, p.invulnTimer - dt);
     if (p.abilityCooldown > 0) p.abilityCooldown = Math.max(0, p.abilityCooldown - dt);
     if (p.abilityDuration > 0) p.abilityDuration = Math.max(0, p.abilityDuration - dt);
     p.abilityCharge = this.isTestTrack
       ? 100
-      : Math.min(100, (p.abilityCharge ?? 100) + dt * 11);
+      : Math.min(100, (p.abilityCharge ?? 100) + dt * 10);
     const inOasis = !!this.currentOasis;
-    const stamRegen = inOasis ? 30 : (p.grounded ? 11 : 0);
+    const canRegenStam = (p._staminaRegenDelay || 0) <= 0 && (p.grounded || p.habitat === 'aquatic' || p.habitat === 'flying');
+    const stamRegen = inOasis ? 28 : (canRegenStam ? 8.5 * (p.mutationMods?.stamRegenMult || 1) : 0);
     p.stamina = Math.min(100, (p.stamina ?? 100) + stamRegen * dt);
     if (p.resonanceWindow > 0) p.resonanceWindow = Math.max(0, p.resonanceWindow - dt);
     if (p.ramTimer > 0) p.ramTimer = Math.max(0, p.ramTimer - dt);
@@ -2250,11 +2575,11 @@ export class Game {
           : custom.trail === 'stars' ? '#ffd447'
           : custom.trail === 'rainbow' ? ['#ff4757', '#ffa502', '#2ed573', '#1e90ff'][Math.floor(Math.random() * 4)]
           : '#e8bc79';
-        this.particles.emitDust(p.x, 0.08, p.z + 0.35, 1, trailColor, 0.9);
+        this.particles.emitDust(p.x, (p.baseY || 0) + 0.08, p.z + 0.35, 1, trailColor, 0.9);
       }
     }
 
-    p.model.root.position.set(p.x, p.y - (p.diveTimer > 0 ? 0.55 : 0), p.z);
+    p.model.root.position.set(p.x, (p.baseY || 0) + p.y - (p.diveTimer > 0 ? 0.55 : 0), p.z);
     if (p.model.nameTag) {
       p.model.nameTag.visible = !p.dead;
       if (p.model.nameTag.material) p.model.nameTag.material.opacity = p.dead ? 0 : 0.95;
@@ -2427,7 +2752,7 @@ export class Game {
         p.y = 0;
         p.grounded = true;
         p.sliding = false;
-        p.model.root.position.set(p.x, 0, p.z);
+        p.model.root.position.set(p.x, p.baseY || 0, p.z);
         p.animator.update(dt, { speed: 0, grounded: true, vy: 0, ducking: false });
       }
     }
@@ -2458,6 +2783,7 @@ export class Game {
     const chasePos = this.camera.position.clone();
     const chaseLook = this.cameraRig.currentLook.clone();
     const px = p0 ? p0.x : 0;
+    const py = p0 ? (p0.baseY || 0) : 0;
 
     const stillIntro = pred.updateIntro(dt, this.players, this._eventContext());
     if (stillIntro && pred.state === 'intro') {
@@ -2466,9 +2792,9 @@ export class Game {
         ? 1 - Math.max(0, pred.introTimer) / blendWindow
         : 0;
       const smooth = tOut * tOut * (3 - 2 * tOut);
-      const subtlePan = Math.sin(pred.introElapsed * 1.1) * 0.22;
-      const introPos = new THREE.Vector3(-3.85 + px * 0.4 + subtlePan, 2.58, -5.85);
-      const introLook = new THREE.Vector3(px + 0.32, 1.92, 2.25);
+      const subtlePan = Math.sin((pred.introElapsed || 0) * 1.15) * 0.32;
+      const introPos = new THREE.Vector3(px - 2.65 + subtlePan, py + 4.15, 11.4);
+      const introLook = new THREE.Vector3(px + 0.2, py + 1.35, -3.5);
 
       this.camera.position.lerpVectors(introPos, chasePos, smooth);
       introLook.lerp(chaseLook, smooth);
@@ -2506,13 +2832,15 @@ export class Game {
       return;
     }
 
-    // Bullet-Time / Foco com Estamina (ShiftLeft)
+    // Bullet-Time / Foco com Estamina (ShiftLeft) — libera aos 1.200 pts no modo progressivo
     const bulletHeld = this.input.isActionDown('p1', 'bullet', false);
     const p0 = this.players[0];
+    const p0StamOpen = !p0 || p0._unlockAll || Save.data.settings?.progressiveUnlocks === false || this.score >= 1200;
     let timeScale = 1.0;
-    if (bulletHeld && p0 && (p0.stamina ?? 0) > 2) {
+    if (bulletHeld && p0StamOpen && p0 && (p0.stamina ?? 0) > 2) {
       timeScale = 0.42;
-      p0.stamina = Math.max(0, (p0.stamina ?? 0) - dt * 50);
+      p0.stamina = Math.max(0, (p0.stamina ?? 0) - dt * 52);
+      p0._staminaRegenDelay = 0.55;
     }
     if (this.slowMoTimer > 0) {
       this.slowMoTimer -= dt;
@@ -2576,6 +2904,92 @@ export class Game {
     const perfectMult = Save.data.perfectMode ? 2.2 : 1;
     const scoreGain = this.speed * worldDt * 0.55 * (p0?.scoreCardMult || 1) * (p0?.scoreMultBonus || 1) * perfectMult;
     this.score += scoreGain;
+
+    // Desbloqueios Progressivos dentro da corrida (menos sobrecarga nos primeiros segundos!)
+    if (
+      p0 &&
+      !p0._unlockAll &&
+      !this.isTestTrack &&
+      !this.tutorialState?.active &&
+      !this.headlessBot &&
+      Save.data.settings?.progressiveUnlocks !== false
+    ) {
+      const stages = [
+        [600, 'abil', '⚡', 'Habilidade Especial [Espaço] Liberada!', 'Aperte [Espaço] (ou ⚡) para ativar o poder único do seu dino!', '#bar-ability', '#38bdf8'],
+        [1200, 'stam', '🏃', 'Estamina, Pulo Duplo & Foco [Shift]!', 'Agora você pode pular no ar (gasta estamina) e segurar [Shift] para desacelerar o tempo!', '#bar-bullet', '#34d399'],
+        [1800, 'atk', '⚔️', 'Ataque Rápido [Q] Liberado!', 'Aperte [Q] perto de cactos quebráveis, troncos e chefes para golpear!', '#btn-attack-melee', '#f97316'],
+        [2800, 'fury', '🔥', 'Modo Fúria [F] Liberado!', 'Encha a barra coletando ovos e pressione [F] para crescer invencível!', '#btn-fury-melee', '#fbbf24']
+      ];
+      for (const [req, sid, icon, title, desc, selector, accent] of stages) {
+        if (this.score >= req && !this._progressiveNotified.has(sid)) {
+          this._progressiveNotified.add(sid);
+          this.sfx.powerup?.();
+          this.ui.hud.showBanner(`${icon} ${title}`, accent, 2.8);
+          this._triggerFirstUseSpotlight(`prog_${sid}`, { icon, title, desc, selector, accent });
+          break;
+        }
+      }
+    }
+
+    // Terra Oca temporária
+    if (this.hollowEarthState?.active) {
+      this.hollowEarthState.timer -= worldDt;
+      if (this.hollowEarthState.timer <= 0) {
+        this.exitHollowEarth();
+      }
+    }
+
+    // Modo Aleatório / Portais dinâmicos a cada ~1050 pts
+    if (this.randomPortalMode && !this.hollowEarthState?.active && !this.shopDetour?.active && !this.events.bosses?.activeBoss) {
+      this._portalBiomeAccum = (this._portalBiomeAccum || 0) + scoreGain;
+      if (this._portalBiomeAccum >= 1050) {
+        this._portalBiomeAccum = 0;
+        this.triggerRandomPortalTransition();
+      }
+    }
+
+    // 4ª Pista Lateral da Lojinha a cada 30.000 pts (entra e sai pelo mesmo lado)
+    if (
+      !this.isTestTrack &&
+      !this.tutorialState?.active &&
+      !this.multiplayerSession?.active &&
+      !this.shopDetour?.active &&
+      !this.events.bosses?.activeBoss &&
+      this.score >= this.nextShopMilestone &&
+      p0?.habitat !== 'flying'
+    ) {
+      const side = Math.random() < 0.5 ? 'right' : 'left';
+      this.world.setShopLane(side);
+      this.spawner.spawnShopGate(side, -110);
+      this.shopDetour = { active: true, side, phase: 'entering', timer: 9.0, visited: false };
+      this.sfx.portal?.();
+      this.ui.hud.showBanner(
+        `🛒 LOJINHA NA 4ª PISTA (${side === 'right' ? 'DIREITA' : 'ESQUERDA'})! Desvie para a lateral para entrar!`,
+        '#34d399',
+        3.8
+      );
+    }
+
+    if (this.shopDetour?.active) {
+      this.shopDetour.timer -= worldDt;
+      if (this.shopDetour.timer <= 0) {
+        if (this.shopDetour.phase === 'entering') {
+          this.shopDetour.phase = 'exiting';
+          this.shopDetour.timer = 4.5;
+        } else if (this.shopDetour.phase === 'exiting') {
+          for (const pl of this.players) {
+            if (pl.inShopLane) {
+              pl.lane = this.shopDetour.side === 'right' ? 2 : 0;
+              pl.inShopLane = null;
+            }
+          }
+          this.world.setShopLane(null);
+          this.shopDetour = { active: false, side: 'right', phase: 'none', timer: 0, visited: false };
+          this.nextShopMilestone += 30000;
+          this.ui.hud.showFloatText('🛣️ Voltando à pista principal!', '#93c5fd');
+        }
+      }
+    }
     for (const p of this.players) {
       if (!p.dead) {
         p.score = (p.score || 0) + this.speed * worldDt * 0.55 * (p.scoreCardMult || 1) * (p.scoreMultBonus || 1) * perfectMult;
@@ -2901,7 +3315,7 @@ export class Game {
     this.world.update(worldDt, this.speed);
     this.dayNight.update(worldDt, this.currentBiome.theme);
     this.weather.update(worldDt, true);
-    this.spawner.update(worldDt, this.speed, this.score, this.players);
+    this.spawner.update(worldDt, this.speed, this.score, this.players, Boolean(this.events.isMagneticActive?.()));
     this.particles.update(worldDt, this.speed);
     this.events.update(worldDt, this.speed, this.score, this.players, this._eventContext());
     this.cameraRig.setPredatorFocus(null);
@@ -3242,6 +3656,18 @@ export class Game {
           continue;
         }
 
+        if (obs.kind === 'shop_gate') {
+          obs.hit = true;
+          obs.pool?.release(obs);
+          if (this.shopDetour?.active && !this.shopDetour.visited && !p.remote && !p.isBot) {
+            this.shopDetour.visited = true;
+            this.shopDetour.phase = 'exiting';
+            this.shopDetour.timer = 5.0;
+            this._eventContext().onMerchantEncounter?.();
+          }
+          continue;
+        }
+
         if (obs.kind === 'bifurcation') {
           obs.hit = true;
           this._hintOnce('bifurcation', '🔀 Esquerda dá Escudo seguro • Direita dá Ovos & Pontos!', '#ffd447');
@@ -3268,7 +3694,7 @@ export class Game {
         if (p.furyTimer > 0 || p.ramTimer > 0 || p.diveTimer > 0 || (p.attackTimer > 0 && obs.breakable)) {
           obs.hit = true;
           obs.pool?.release(obs);
-          this.particles.emitExplosion(obs.group.position.x, 0.8, obs.group.position.z, obs.color, 14, true);
+          this.particles.emitExplosion(obs.group.position.x, (obs.group.position.y || 0) + 0.8, obs.group.position.z, obs.color, 14, true);
           this._spawnImpactDebris(obs.group.position.x, obs.group.position.z, obs.color);
           this.sfx.stomp();
           p.wantedStars = Math.min(5, (p.wantedStars || 0) + 0.25);
@@ -3312,7 +3738,7 @@ export class Game {
       ? this.players.find((x) => x.peerId === this.net.peerId)
       : null) || this.players.find((x) => !x.dead) || p0;
     if (lead) {
-      this.world.updatePlayerFocus(lead.x, lead.y, lead.z, this.currentBiome?.theme?.edgeGlow || '#fde047');
+      this.world.updatePlayerFocus(lead.x, (lead.baseY || 0) + lead.y, lead.z, this.currentBiome?.theme?.edgeGlow || '#fde047');
       this.ui.hud.updatePlayStatus(
         lead,
         Save.data.eggs,
@@ -3330,6 +3756,24 @@ export class Game {
           `🏁 #${lead.rank || 1}/${this.players.length} • ${Math.floor(lead.score || 0)} pts (${modeTag})${sdTag}`,
           lead.rank === 1 ? '#fde047' : '#93c5fd'
         );
+        const myPlayer = this.players.find((pl) => pl.peerId === this.net.peerId) || lead;
+        const fallenAlly = this.players.find((pl) => pl !== myPlayer && pl.dead);
+        const revCost = 45 + (this._mpReviveCount || 0) * 35;
+        const totalAvailable = (this.runEggs || 0) + (Save.data.eggs || 0);
+        this.ui.hud.setMpReviveHud({
+          visible: Boolean(
+            this.multiplayerSession.allowRevive !== false &&
+            fallenAlly &&
+            myPlayer &&
+            !myPlayer.dead &&
+            this.players.length >= 2
+          ),
+          canAfford: totalAvailable >= revCost,
+          cost: revCost,
+          allyName: fallenAlly?.name || fallenAlly?.spec?.name || 'Aliado'
+        });
+      } else {
+        this.ui.hud.setMpReviveHud({ visible: false });
       }
     }
     this.ui.hud.updateScore(Math.max(this.hiScore, this.score), this.score, this.speed / this.baseSpeed);
@@ -3337,14 +3781,27 @@ export class Game {
     this.music.update(dt, this.speed, dangerLevel);
     this.narrator.update(dt);
     const camPlayers = this.players.filter((x) => !x.dead);
-    this.cameraRig.update(
-      dt,
-      camPlayers.length > 0 ? camPlayers : this.players,
-      this.speed,
-      Save.data.settings.accessibility.reduceShake,
-      this.photoMode,
-      this.spectatorMode
-    );
+    const camMode = Save.data.settings?.mpCameraMode || 'shared';
+    const useSplitCam = (camMode === 'split_h' || camMode === 'split_v') &&
+      this.players.length >= 2 &&
+      !this.multiplayerSession?.active &&
+      !this.photoMode &&
+      !this.spectatorMode;
+    if (useSplitCam && this.cameraRigP2) {
+      const p1 = this.players[0];
+      const p2 = this.players[1];
+      this.cameraRig.update(dt, [!p1.dead ? p1 : (camPlayers[0] || p1)], this.speed, Save.data.settings.accessibility.reduceShake, false, false);
+      this.cameraRigP2.update(dt, [!p2.dead ? p2 : (camPlayers[0] || p2)], this.speed, Save.data.settings.accessibility.reduceShake, false, false);
+    } else {
+      this.cameraRig.update(
+        dt,
+        camPlayers.length > 0 ? camPlayers : this.players,
+        this.speed,
+        Save.data.settings.accessibility.reduceShake,
+        this.photoMode,
+        this.spectatorMode
+      );
+    }
     if ((this._skipIntroGuardFrames || 0) > 0) this._skipIntroGuardFrames--;
 
     if (this.multiplayerSession?.active) {
@@ -3403,6 +3860,7 @@ export class Game {
     if (!this.spotlightActive) return;
     this.spotlightActive = false;
     this.ui.hud.hideSpotlight(false);
+    if (this.state === 'playing') this.music.setPlaying(true);
     this.lastTime = performance.now();
   }
 
@@ -3416,7 +3874,17 @@ export class Game {
     Save.data.seenElements.push(key);
     Save.save();
 
-    // Dica não-bloqueante em banner no topo para nunca congelar o jogo no meio da corrida
+    if (Save.data.settings?.discoveryPopups !== false) {
+      this.spotlightActive = true;
+      this.music.setPlaying(false);
+      this.ui.hud.showSpotlight({
+        ...cfg,
+        onDismiss: () => this._dismissSpotlight()
+      });
+      return;
+    }
+
+    // Dica não-bloqueante em banner no topo quando popups com desfoque estiverem desativados
     this.spotlightActive = false;
     this.ui.hud.showBanner(`${cfg.icon || '💡'} ${cfg.title}: ${cfg.desc}`, cfg.accent || '#38bdf8', 3.6);
   }
@@ -3568,10 +4036,11 @@ export class Game {
 
     if (this.state === 'playing' && this.events.predators?.state === 'intro') {
       if (
-        this.input.wasKeyJustPressed('Space') ||
-        this.input.wasKeyJustPressed('Enter') ||
-        this.input.wasKeyJustPressed('KeyW') ||
-        this.input.wasKeyJustPressed('ArrowUp')
+        (this.events.predators.introElapsed || 0) >= 1.0 &&
+        (this.input.wasKeyJustPressed('Space') ||
+          this.input.wasKeyJustPressed('Enter') ||
+          this.input.wasKeyJustPressed('KeyW') ||
+          this.input.wasKeyJustPressed('ArrowUp'))
       ) {
         this._skipIntroGuardFrames = 2;
         this.events.predators.skipIntro(this._eventContext());
@@ -3620,11 +4089,14 @@ export class Game {
         this.restartRun();
       }
     }
-    // Emotes rápidos (1, 2, 3)
+    // Emotes rápidos (1, 2, 3) & Reviver Aliado Multiplayer (V)
     if (this.state === 'playing') {
       if (this.input.wasKeyJustPressed('Digit1')) this.ui.hud.showFloatText('🎉 VAMOOO!', '#58d63a');
       if (this.input.wasKeyJustPressed('Digit2')) this.ui.hud.showFloatText('😜 HEHE!', '#ff9a24');
       if (this.input.wasKeyJustPressed('Digit3')) this.ui.hud.showFloatText('🆘 SOCORRO!', '#38bdf8');
+      if (this.input.wasKeyJustPressed('KeyV') && (this.multiplayerSession?.active || this.players.length >= 2)) {
+        this.reviveFallenAlly(0);
+      }
     }
   }
 
@@ -3708,7 +4180,71 @@ export class Game {
       this.cameraRig.update(dt, this.players[0]?.model.root.position, this.speed, true, true);
     }
 
-    this.renderer.render(this.scene, this.camera);
+    const camMode = Save.data.settings?.mpCameraMode || 'shared';
+    const useSplitRender = this.state === 'playing' &&
+      (camMode === 'split_h' || camMode === 'split_v') &&
+      this.players.length >= 2 &&
+      !this.multiplayerSession?.active &&
+      !this.photoMode &&
+      !this.spectatorMode &&
+      this.cameraP2;
+
+    if (useSplitRender) {
+      const w = window.innerWidth;
+      const h = Math.max(1, window.innerHeight);
+      this._wasSplitRender = true;
+      this.renderer.setScissorTest(true);
+      if (camMode === 'split_h') {
+        const hw = Math.floor(w / 2);
+        const asp = Math.max(0.2, hw / h);
+        if (Math.abs(this.camera.aspect - asp) > 0.01) {
+          this.camera.aspect = asp;
+          this.camera.updateProjectionMatrix();
+        }
+        if (Math.abs(this.cameraP2.aspect - asp) > 0.01) {
+          this.cameraP2.aspect = asp;
+          this.cameraP2.updateProjectionMatrix();
+        }
+        this.renderer.setViewport(0, 0, hw, h);
+        this.renderer.setScissor(0, 0, hw, h);
+        this.renderer.render(this.scene, this.camera);
+
+        this.renderer.setViewport(hw, 0, w - hw, h);
+        this.renderer.setScissor(hw, 0, w - hw, h);
+        this.renderer.render(this.scene, this.cameraP2);
+      } else {
+        const hh = Math.floor(h / 2);
+        const asp = Math.max(0.2, w / Math.max(1, hh));
+        if (Math.abs(this.camera.aspect - asp) > 0.01) {
+          this.camera.aspect = asp;
+          this.camera.updateProjectionMatrix();
+        }
+        if (Math.abs(this.cameraP2.aspect - asp) > 0.01) {
+          this.cameraP2.aspect = asp;
+          this.cameraP2.updateProjectionMatrix();
+        }
+        this.renderer.setViewport(0, h - hh, w, hh);
+        this.renderer.setScissor(0, h - hh, w, hh);
+        this.renderer.render(this.scene, this.camera);
+
+        this.renderer.setViewport(0, 0, w, h - hh);
+        this.renderer.setScissor(0, 0, w, h - hh);
+        this.renderer.render(this.scene, this.cameraP2);
+      }
+      this.renderer.setScissorTest(false);
+      this.renderer.setViewport(0, 0, w, h);
+    } else {
+      if (this._wasSplitRender) {
+        const w = window.innerWidth;
+        const h = Math.max(1, window.innerHeight);
+        this.camera.aspect = w / h;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setScissorTest(false);
+        this.renderer.setViewport(0, 0, w, h);
+        this._wasSplitRender = false;
+      }
+      this.renderer.render(this.scene, this.camera);
+    }
     this.input.endFrame();
   }
 

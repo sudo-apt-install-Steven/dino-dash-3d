@@ -1,8 +1,8 @@
 // Tela de Seleção 3D de Dinossauros: modelo girando (arrastar para rotacionar),
 // barras de atributos, passiva, habilidade, árvore de níveis 1-10 e botão "Testar".
 import * as THREE from 'three';
-import { DINO_CATALOG, DINO_CLASSES, getDinoSpec } from '../dinos/DinoCatalog.js';
-import { getDinoSkins } from '../dinos/DinoCustomization.js';
+import { DINO_CATALOG, DINO_CLASSES, getDinoSpec, getDinoHabitat } from '../dinos/DinoCatalog.js';
+import { getDinoSkins, getEquippedSkinVariant, SKIN_VARIANTS } from '../dinos/DinoCustomization.js';
 import { DinoFactory } from '../dinos/DinoFactory.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { Save } from '../systems/Save.js';
@@ -214,9 +214,27 @@ export class SelectionScreen {
               </div>
 
               <div style="display:flex; flex-direction:column; gap:10px;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
                   <h3 style="font-size:1.35rem; color:#ffd447;">${spec.name}</h3>
-                  <span class="hud-pill">${cls.name.pt} • Nv.${level}/10</span>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                    ${(() => {
+                      const hab = getDinoHabitat(spec);
+                      const habLabel = hab === 'aquatic'
+                        ? '🌊 Aquático (Rio)'
+                        : hab === 'amphibious'
+                          ? '🐊 Anfíbio (Rio/Terra)'
+                          : hab === 'flying'
+                            ? '🪽 Aéreo (Céu)'
+                            : '🌿 Terrestre';
+                      const eqVarId = getEquippedSkinVariant(currentId);
+                      const vDef = SKIN_VARIANTS.find((v) => v.id === eqVarId);
+                      const varPill = vDef && vDef.id !== 'normal'
+                        ? `<span class="hud-pill" style="border-color:${vDef.color}; color:${vDef.color};">${vDef.badge} ${vDef.name}</span>`
+                        : '';
+                      return `<span class="hud-pill">${habLabel}</span>${varPill}`;
+                    })()}
+                    <span class="hud-pill">${cls.name.pt} • Nv.${level}/10</span>
+                  </div>
                 </div>
                 <div style="font-size:0.84rem; color:#9ce6e0;">Passiva: ${cls.passive.pt}</div>
                 <div class="item-card" style="padding:10px;">
@@ -259,12 +277,12 @@ export class SelectionScreen {
               ${filteredDinos.map((d) => {
                 const owned = Save.data.unlockedDinos.includes(d.id) || (d.unlockCost || 0) === 0;
                 return `
-                  <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${d.id}" title="${d.name}">
+                  <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${d.id}" title="${d.name}" style="min-height:40px; width:100%;">
                     ${d.id === Save.data.selectedDino ? '★ ' : (!owned ? '🔒 ' : '')}${d.name}
                   </button>
                 `;
               }).join('')}
-              ${!hasSecret ? `<button class="tab-btn" id="sel-secret-locked" style="opacity:0.75;">🔒 ??? (Secreto)</button>` : ''}
+              ${!hasSecret ? `<button class="tab-btn" id="sel-secret-locked" style="opacity:0.75; min-height:40px; width:100%;">🔒 ??? (Secreto)</button>` : ''}
             </div>
           </div>
         </div>
@@ -272,7 +290,8 @@ export class SelectionScreen {
 
       const previewBox = container.querySelector('#sel-preview-box');
       if (preview) preview.destroy();
-      const custom = Save.data.customization.p1.presets[Save.data.customization.p1.activePreset];
+      const baseCustom = Save.data.customization.p1.presets[Save.data.customization.p1.activePreset];
+      const custom = { ...(baseCustom || {}), skinVariant: getEquippedSkinVariant(currentId) };
       preview = new DinoPreview3D(previewBox, currentId, custom);
 
       container.querySelectorAll('[data-cfilter]').forEach((btn) => {

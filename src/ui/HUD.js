@@ -121,6 +121,9 @@ export class HUD {
             <div class="meter-pill" id="hud-backpack" style="cursor:pointer; pointer-events:auto;" data-tip="Mochila (E): clique ou aperte E para usar o próximo item guardado.">
               🎒 <span class="kb-only">(E) </span><strong id="lbl-backpack">Vazia</strong>
             </div>
+            <div class="meter-pill hidden" id="btn-mp-revive" style="cursor:pointer; pointer-events:auto; border-color:#34d399; background:rgba(6, 78, 59, 0.85);" data-tip="Reviver amigo caído no Multiplayer (V): salva o grupo na pista!">
+              💖 <strong id="lbl-mp-revive">Reviver (V)</strong>
+            </div>
           </div>
         </div>
 
@@ -160,7 +163,11 @@ export class HUD {
           <div id="spotlight-icon" style="font-size:2.4rem;">⚡</div>
           <h3 id="spotlight-title" style="margin:0; color:#ffd447; font-size:1.18rem;">Novidade Desbloqueada!</h3>
           <p id="spotlight-desc" style="margin:0; color:#fef3c7; font-size:0.92rem; line-height:1.45;">Dica rápida do jogo.</p>
-          <button class="chunky-btn" id="spotlight-dismiss" style="margin-top:4px;">Entendi! (Espaço / Clique)</button>
+          <label style="display:flex; align-items:center; justify-content:center; gap:8px; margin-top:6px; font-size:0.8rem; color:#cbd5e1; cursor:pointer;">
+            <input type="checkbox" id="spotlight-dont-show" style="accent-color:#38bdf8;" />
+            <span>Não mostrar mais popups de descoberta</span>
+          </label>
+          <button class="chunky-btn" id="spotlight-dismiss" style="margin-top:6px;">Entendi! (Espaço / Clique)</button>
         </div>
       </div>
 
@@ -222,6 +229,13 @@ export class HUD {
             <div class="stat-tile"><span class="label">Recorde (HI)</span><span class="val" id="go-hi">00000</span></div>
             <div class="stat-tile"><span class="label">Distância</span><span class="val" id="go-dist">0 m</span></div>
             <div class="stat-tile"><span class="label">Ovos / Max Combo</span><span class="val" id="go-eggs">0 / x1</span></div>
+          </div>
+          <div id="go-gacha-box" class="item-card hidden" style="padding:10px 12px; border-color:#a855f7; background:rgba(46, 16, 101, 0.55); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <div style="text-align:left;">
+              <strong style="color:#f5d0fe; font-size:0.9rem;">🦴 Lootbox Fóssil Conquistada!</strong>
+              <div style="font-size:0.78rem; color:#ddd6fe;" id="go-gacha-text">+1 Caixa Fóssil pelo desempenho</div>
+            </div>
+            <button class="chunky-btn orange" id="btn-go-gacha" style="padding:7px 14px; font-size:0.84rem;">🎲 Abrir Agora</button>
           </div>
           <div id="go-record-badge" class="hud-pill hidden" style="margin:0 auto; color:#ffd447;">🏆 NOVO RECORDE!</div>
           <p id="go-fact" style="font-size:0.8rem; color:#d8c2a6; font-style:italic;"></p>
@@ -306,8 +320,17 @@ export class HUD {
     this.spotlightTitle = q('#spotlight-title');
     this.spotlightDesc = q('#spotlight-desc');
     this.spotlightDismiss = q('#spotlight-dismiss');
+    this.spotlightDontShow = q('#spotlight-dont-show');
     this._spotlightFocusEl = null;
     this._onSpotlightDismiss = null;
+    this.pillFury = q('#btn-fury-melee');
+    this.pillAbility = q('#lbl-ability')?.closest('.meter-pill') || null;
+    this.pillAttack = q('#btn-attack-melee');
+    this.pillBullet = q('#bar-bullet')?.closest('.meter-pill') || null;
+    this.mpReviveBtn = q('#btn-mp-revive');
+    this.mpReviveLbl = q('#lbl-mp-revive');
+    this.goGachaBox = q('#go-gacha-box');
+    this.goGachaText = q('#go-gacha-text');
     this.restartConfirmOverlay = q('#restart-confirm-overlay');
     this.merchantOverlay = q('#merchant-overlay');
     this.merchHealBtn = q('#merch-heal');
@@ -320,7 +343,9 @@ export class HUD {
     this.root.querySelector('#btn-restart').addEventListener('click', () => this.callbacks.onRestart?.());
     this.root.querySelector('#btn-replay').addEventListener('click', () => this.callbacks.onReplay?.());
     this.root.querySelector('#btn-go-dinos')?.addEventListener('click', () => this.callbacks.onGoDinos?.());
+    this.root.querySelector('#btn-go-gacha')?.addEventListener('click', () => this.callbacks.onOpenGacha?.());
     this.root.querySelector('#btn-go-menu').addEventListener('click', () => this.callbacks.onGoMenu?.());
+    this.root.querySelector('#btn-mp-revive')?.addEventListener('click', () => this.callbacks.onMpRevive?.());
     this.root.querySelector('#btn-pause').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-resume').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-pause-cam')?.addEventListener('click', () => this.callbacks.onCycleCamera?.());
@@ -487,6 +512,17 @@ export class HUD {
     });
   }
 
+  setMpReviveHud({ visible = false, canAfford = false, cost = 45, allyName = 'Aliado' } = {}) {
+    if (!this.mpReviveBtn) return;
+    this.mpReviveBtn.classList.toggle('hidden', !visible);
+    if (!visible) return;
+    this.mpReviveBtn.style.opacity = canAfford ? '1' : '0.68';
+    this.mpReviveBtn.style.borderColor = canAfford ? '#34d399' : '#f59e0b';
+    if (this.mpReviveLbl) {
+      this.mpReviveLbl.textContent = `Reviver ${allyName} (${cost} 🥚)`;
+    }
+  }
+
   updatePlayStatus(player, eggsTotal, biomeName, nextPortalDist, combo, score) {
     this.eggsEl.textContent = String(eggsTotal);
     const maxHp = Math.max(1, player.maxHp || 1);
@@ -499,14 +535,28 @@ export class HUD {
     this.dmgVignette.classList.toggle('hidden', !lowHpActive);
     this.dmgVignette.classList.toggle('low-hp-pulse', lowHpActive);
 
-    this.barFury.style.width = `${Math.min(100, player.fury || 0)}%`;
+    const prog = Save.data.settings?.progressiveUnlocks !== false && !player._unlockAll;
+    const abilityOpen = !prog || score >= 600;
+    const staminaOpen = !prog || score >= 1200;
+    const attackOpen = !prog || score >= 1800;
+    const furyOpen = !prog || score >= 2800;
+
+    if (this.pillAbility) this.pillAbility.style.opacity = abilityOpen ? '1' : '0.48';
+    if (this.pillBullet) this.pillBullet.style.opacity = staminaOpen ? '1' : '0.48';
+    if (this.pillAttack) this.pillAttack.style.opacity = attackOpen ? '1' : '0.48';
+    if (this.pillFury) this.pillFury.style.opacity = furyOpen ? '1' : '0.48';
+
+    this.barFury.style.width = furyOpen ? `${Math.min(100, player.fury || 0)}%` : '0%';
     const furyPill = this.root.querySelector('#btn-fury-melee');
     if (furyPill) {
-      furyPill.style.borderColor = (player.fury || 0) >= 100 ? '#ffd447' : '';
+      furyPill.style.borderColor = furyOpen && (player.fury || 0) >= 100 ? '#ffd447' : '';
     }
-    if (this.lblAbility && this._lastAbilityDinoId !== player.id) {
+    if (this.lblAbility && (this._lastAbilityDinoId !== player.id || this._lastAbilityLock !== abilityOpen)) {
       this._lastAbilityDinoId = player.id;
-      this.lblAbility.innerHTML = `${renderSkillSvg(player.id, 18)} <span class="btn-label">Habilidade</span> <span class="kb-only">(Espaço)</span>`;
+      this._lastAbilityLock = abilityOpen;
+      this.lblAbility.innerHTML = abilityOpen
+        ? `${renderSkillSvg(player.id, 18)} <span class="btn-label">Habilidade</span> <span class="kb-only">(Espaço)</span>`
+        : `🔒 <span class="btn-label">600 pts</span>`;
     }
     const cdPct = player.abilityMaxCooldown > 0
       ? Math.max(0, 100 * (1 - player.abilityCooldown / player.abilityMaxCooldown))
@@ -687,10 +737,23 @@ export class HUD {
     this.spotlightTitle.textContent = title;
     this.spotlightDesc.textContent = desc;
     this.spotlightCard.style.borderColor = accent;
+    if (this.spotlightDontShow) this.spotlightDontShow.checked = false;
     this._onSpotlightDismiss = onDismiss || null;
+    this.spotlightOverlay.style.backdropFilter = 'blur(8px)';
+    this.spotlightOverlay.style.webkitBackdropFilter = 'blur(8px)';
     this.spotlightOverlay.classList.remove('hidden');
 
-    const close = () => this.hideSpotlight(true);
+    const close = () => {
+      if (this.spotlightDontShow?.checked) {
+        if (!Save.data.settings) Save.data.settings = {};
+        Save.data.settings.discoveryPopups = false;
+        Save.save();
+      }
+      this.hideSpotlight(true);
+    };
+    if (this.spotlightCard) {
+      this.spotlightCard.onclick = (e) => e.stopPropagation();
+    }
     this.spotlightOverlay.onclick = close;
     this.spotlightDismiss.onclick = (e) => {
       e.stopPropagation();
@@ -728,7 +791,7 @@ export class HUD {
     return Boolean(this.merchantOverlay && !this.merchantOverlay.classList.contains('hidden'));
   }
 
-  showGameOver({ title = 'GAME OVER!', causeLabel = '', avoidTip = '', score, hiScore, isNewRecord, distance, eggs, maxCombo, dinoId }) {
+  showGameOver({ title = 'GAME OVER!', causeLabel = '', avoidTip = '', score, hiScore, isNewRecord, distance, eggs, maxCombo, dinoId, gachaCrates = 0, totalCrates = 0 }) {
     this.root.querySelector('#go-title').textContent = title;
     const causeBox = this.root.querySelector('#go-cause-box');
     const causeText = this.root.querySelector('#go-cause-text');
@@ -742,6 +805,15 @@ export class HUD {
     this.root.querySelector('#go-hi').textContent = formatScoreValue(hiScore);
     this.root.querySelector('#go-dist').textContent = `${Math.floor(distance)} m`;
     this.root.querySelector('#go-eggs').textContent = `${eggs} / x${maxCombo}`;
+    if (this.goGachaBox) {
+      const showCrates = gachaCrates > 0 || totalCrates > 0;
+      this.goGachaBox.classList.toggle('hidden', !showCrates);
+      if (showCrates && this.goGachaText) {
+        this.goGachaText.textContent = gachaCrates > 0
+          ? `+${gachaCrates} Caixa(s) Fóssil(is) nesta corrida! (${totalCrates} 📦 no cofre)`
+          : `Você possui ${totalCrates} Caixa(s) Fóssil(is) aguardando no cofre!`;
+      }
+    }
     this.root.querySelector('#go-record-badge').classList.toggle('hidden', !isNewRecord);
     const spec = getDinoSpec(dinoId);
     this.root.querySelector('#go-fact').textContent = `💡 Sabia? ${spec.fact.pt}`;

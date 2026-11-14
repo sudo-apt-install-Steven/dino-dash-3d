@@ -1,7 +1,7 @@
 // Telas de Menu Principal 3D, Seleção de Modos, Biomas, Dificuldade, Álbum, Casa do Dino,
 // Cidade Pré-Histórica (Hub), Missões, Conquistas, Passe de Temporada e Recordes.
 import { GAME_MODES, STORY_CHAPTERS } from '../game/Modes.js';
-import { BIOMES } from '../world/Biomes.js';
+import { BIOMES, getBiomePreviewMeta } from '../world/Biomes.js';
 import { DIFFICULTY_PRESETS } from '../game/Difficulty.js';
 import { EVENT_CATALOG } from '../events/EventManager.js';
 import { DINO_CATALOG } from '../dinos/DinoCatalog.js';
@@ -82,10 +82,22 @@ export class Menus {
             <button class="chunky-btn secondary" data-nav="custom" style="padding:11px 10px;">🎨 Personalização</button>
           </div>
 
-          <button class="chunky-btn secondary" data-nav="extras" style="padding:11px; display:flex; align-items:center; justify-content:center; gap:8px;">
-            <span>📦 Extras</span>
-            ${!state.tutorialDone ? '<span class="badge-start-here">Comece por aqui!</span>' : ''}
-          </button>
+          <div style="display:grid; grid-template-columns:1.15fr 0.85fr; gap:8px;">
+            <button class="chunky-btn secondary" data-nav="gacha" style="padding:10px; border-color:#f59e0b; color:#fde68a; display:flex; align-items:center; justify-content:center; gap:6px;">
+              <span>🎲 Gacha 3D</span>
+              ${(state.fossilCrates || 0) > 0 ? `<span class="badge-start-here" style="background:#f59e0b;color:#111827;">${state.fossilCrates}📦</span>` : ''}
+            </button>
+            <button class="chunky-btn secondary" data-nav="extras" style="padding:10px; display:flex; align-items:center; justify-content:center; gap:6px;">
+              <span>📦 Extras</span>
+              ${!state.tutorialDone ? '<span class="badge-start-here">Novo!</span>' : ''}
+            </button>
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; font-size:0.74rem; color:#d6d3d1;">
+            <button type="button" class="inline-change-btn" data-nav="custom" title="Desbloqueie e equipe cápsulas de DNA em Personalização">🧬 Mutações DNA</button>
+            <button type="button" class="inline-change-btn" data-nav="gacha" title="Desbloqueie Variantes Mecânicas, Shiny e Secretas">🤖 Mecânico & Shiny</button>
+            <button type="button" class="inline-change-btn" data-nav="guide" title="Lojinha especial na 4ª Pista a cada 30.000 pts">🛍️ Lojinha 30k</button>
+          </div>
         </div>
       </div>
     `;
@@ -294,36 +306,57 @@ export class Menus {
   }
 
   static renderMapsModal(container, selectedBiome, sequenceMode, onSelect, onClose) {
-    let tab = BIOMES.find((b) => b.id === selectedBiome)?.tier || 'essential';
+    let tab = selectedBiome === 'random_portal'
+      ? 'essential'
+      : (BIOMES.find((b) => b.id === selectedBiome)?.tier || 'essential');
+    const essCount = BIOMES.filter((b) => b.tier === 'essential').length;
+    const advCount = BIOMES.filter((b) => b.tier === 'advanced').length;
     const render = () => {
       const list = BIOMES.filter((b) => b.tier === tab);
       container.innerHTML = `
         <div class="overlay-center">
           <div class="chunky-panel modal-card">
             <div class="modal-header">
-              <h2>🗺️ Mapas & Biomas (15)</h2>
+              <h2>🗺️ Mapas & Biomas (${BIOMES.length})</h2>
               <button class="chunky-btn secondary" id="maps-close">Voltar</button>
             </div>
             <div class="field-row">
               <span>Transição Automática por Portal (~1000 pts)</span>
               <input type="checkbox" id="map-seq" ${sequenceMode ? 'checked' : ''} />
             </div>
+            <div class="item-card ${selectedBiome === 'random_portal' ? 'selected' : ''}" style="border-color:#a855f7; background:linear-gradient(135deg, rgba(30,27,75,0.75), rgba(88,28,135,0.45));">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div>
+                  <strong style="color:#e9d5ff;">🌀 Modo Aleatório (Portais Dinâmicos)</strong>
+                  <p style="font-size:0.8rem; color:#ddd6fe; margin:2px 0 0;">Sorteia o bioma inicial e abre portais aleatórios a cada ~1.050 pts (Terra, Água, Céu, Futuro & Terra Oca)!</p>
+                </div>
+                <button class="chunky-btn ${selectedBiome === 'random_portal' ? '' : 'secondary'}" data-pick-biome="random_portal">
+                  ${selectedBiome === 'random_portal' ? 'Ativo' : 'Ativar Portais'}
+                </button>
+              </div>
+            </div>
             <div class="tabs-row">
-              <button class="tab-btn ${tab === 'essential' ? 'active' : ''}" data-btab="essential">Essenciais (5)</button>
-              <button class="tab-btn ${tab === 'advanced' ? 'active' : ''}" data-btab="advanced">Avançados (10)</button>
+              <button class="tab-btn ${tab === 'essential' ? 'active' : ''}" data-btab="essential">Essenciais (${essCount})</button>
+              <button class="tab-btn ${tab === 'advanced' ? 'active' : ''}" data-btab="advanced">Avançados (${advCount})</button>
             </div>
             <div class="cards-grid">
-              ${list.map((b) => `
-                <div class="item-card ${b.id === selectedBiome ? 'selected' : ''}">
-                  <div style="height:14px; border-radius:6px; background:linear-gradient(90deg, ${b.theme.sky}, ${b.theme.track}, ${b.theme.river});"></div>
-                  <strong>${b.name}</strong>
-                  <p style="font-size:0.8rem; color:#d8c2a6; flex:1;">${b.ruleDesc}</p>
-                  <small style="color:#ffd447;">👑 Chefe: ${BOSS_DEFS[b.bossId]?.name || b.bossId}</small>
-                  <button class="chunky-btn ${b.id === selectedBiome ? '' : 'secondary'}" data-pick-biome="${b.id}">
-                    ${b.id === selectedBiome ? 'Ativo' : 'Selecionar'}
-                  </button>
-                </div>
-              `).join('')}
+              ${list.map((b) => {
+                const meta = getBiomePreviewMeta(b);
+                return `
+                  <div class="item-card ${b.id === selectedBiome ? 'selected' : ''}">
+                    <div style="height:36px; border-radius:8px; position:relative; overflow:hidden; border:1px solid ${b.theme?.edgeGlow || 'rgba(255,255,255,0.2)'}; background:linear-gradient(180deg, ${b.theme.sky} 0%, ${b.theme.track} 62%, ${b.theme.river} 100%); display:flex; align-items:center; justify-content:space-between; padding:0 8px;">
+                      <span style="font-size:0.72rem; font-weight:800; background:rgba(9,9,11,0.72); color:#fafaf9; padding:2px 7px; border-radius:999px;">${meta.icon} ${meta.tag}</span>
+                      <span style="width:12px; height:12px; border-radius:50%; background:${b.theme?.edgeGlow || '#ffd447'}; box-shadow:0 0 8px ${b.theme?.edgeGlow || '#ffd447'};"></span>
+                    </div>
+                    <strong>${b.name}</strong>
+                    <p style="font-size:0.8rem; color:#d8c2a6; flex:1;">${b.ruleDesc}</p>
+                    <small style="color:#ffd447;">👑 Chefe: ${BOSS_DEFS[b.bossId]?.name || b.bossId}</small>
+                    <button class="chunky-btn ${b.id === selectedBiome ? '' : 'secondary'}" data-pick-biome="${b.id}">
+                      ${b.id === selectedBiome ? 'Ativo' : 'Selecionar'}
+                    </button>
+                  </div>
+                `;
+              }).join('')}
             </div>
           </div>
         </div>

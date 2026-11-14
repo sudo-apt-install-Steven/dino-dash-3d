@@ -68,7 +68,7 @@ export class CameraRig {
 
       if (focused && !focused.dead) {
         fx = focused.x;
-        fy = focused.y;
+        fy = (focused.baseY || 0) + focused.y;
         fz = focused.z;
         highlightZoom = -1.35;
       } else {
@@ -78,7 +78,7 @@ export class CameraRig {
         let maxX = -99;
         for (const p of list) {
           fx += p.x;
-          fy += p.y;
+          fy += (p.baseY || 0) + p.y;
           fz += p.z;
           minX = Math.min(minX, p.x);
           maxX = Math.max(maxX, p.x);

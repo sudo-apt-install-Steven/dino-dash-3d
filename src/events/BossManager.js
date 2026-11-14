@@ -1,7 +1,7 @@
 // Bosses 3D Redesenhados com barra de vida estilizada, fases visuais, partes destrutíveis,
 // ataques animados (rugido + onda de choque, mordida, rabada, investida), intro e coop em equipe.
 import * as THREE from 'three';
-import { LANE_X } from '../world/World.js';
+import { LANE_X, RIVER_LANE_X, SKY_CORRIDOR_Y } from '../world/World.js';
 import { Save } from '../systems/Save.js';
 import { buildBossModel } from './BossModels.js';
 import { StatusSystem } from '../systems/StatusSystem.js';
@@ -20,7 +20,9 @@ export const BOSS_ATTACK_PROFILES = {
   plesiosaur: ['onda', 'poca'],
   amber_scarab: ['espinhos', 'rocha'],
   crystal_wyrm: ['gelo', 'raio'],
-  cyber_raptor: ['feixe', 'raio']
+  cyber_raptor: ['feixe', 'raio'],
+  leviathan_abyssal: ['onda', 'poca', 'gelo'],
+  mecha_titan: ['feixe', 'raio', 'rocha']
 };
 
 export const BOSS_OBS_CFG = {
@@ -144,6 +146,24 @@ export const BOSS_DEFS = {
     color: '#22d3ee',
     weakOrder: [0, 1, 2],
     rewardAccessory: 'visor_neon'
+  },
+  leviathan_abyssal: {
+    id: 'leviathan_abyssal',
+    name: 'Leviatã Abissal',
+    title: 'Soberano das Fossas',
+    hp: 6,
+    color: '#06b6d4',
+    weakOrder: [0, 2, 1],
+    rewardAccessory: 'diving_mask'
+  },
+  mecha_titan: {
+    id: 'mecha_titan',
+    name: 'Titã Mecânico Ω',
+    title: 'Colosso Cibernético',
+    hp: 7,
+    color: '#f43f5e',
+    weakOrder: [2, 0, 1],
+    rewardAccessory: 'mecha_wings'
   }
 };
 
@@ -223,7 +243,9 @@ export class BossManager {
   _spawnNextWeakOrb() {
     if (!this.activeBoss) return;
     const lane = this.activeBoss.weakOrder[this.activeBoss.stepIndex % this.activeBoss.weakOrder.length];
-    this.weakOrb.position.set(LANE_X[lane], 1.15, -72);
+    const laneXs = this.currentHabitatMode === 'aquatic' && !this.currentIsAquaticBiome ? RIVER_LANE_X : LANE_X;
+    const yPos = this.currentHabitatMode === 'flying' ? SKY_CORRIDOR_Y : 1.15;
+    this.weakOrb.position.set(laneXs[lane], yPos, -72);
     this.weakOrb.visible = true;
   }
 
@@ -231,6 +253,8 @@ export class BossManager {
     if (!this.activeBoss) return;
     const b = this.activeBoss;
     b.phaseTime += dt;
+    this.currentHabitatMode = ctx?.habitatMode || 'land';
+    this.currentIsAquaticBiome = !!ctx?.isAquaticBiome;
 
     // Introdução cinematográfica curta
     if (b.introTimer > 0) {
@@ -269,11 +293,17 @@ export class BossManager {
 
     // Dispara ataques variados por fase (rugido, mordida/investida, rabada dupla)
     this.obsWarnCooldown = Math.max(0, (this.obsWarnCooldown || 0) - dt);
+    this.currentHabitatMode = ctx?.habitatMode || 'land';
+    const laneXs = this.currentHabitatMode === 'aquatic' && !ctx?.isAquaticBiome ? RIVER_LANE_X : LANE_X;
+    const baseY = this.currentHabitatMode === 'flying' ? SKY_CORRIDOR_Y - 1.15 : 0;
+    const minSafePaths = Math.max(1, ctx?.difficulty?.minSafePaths ?? 1);
+    const showRedSign = ctx?.difficulty?.showRedHazardSignage ?? true;
+
     if (b.introTimer <= 0) {
       this.attackTimer -= dt;
       if (this.attackTimer <= 0) {
         const hpLost = b.maxHp - b.currentHp;
-        this.attackTimer = Math.max(0.72, 1.75 - hpLost * 0.13);
+        this.attackTimer = Math.max(0.85, 1.85 - hpLost * 0.12);
         const attackRoll = Math.floor(Math.random() * 3);
         const profile = BOSS_ATTACK_PROFILES[b.id] || ['rocha', 'onda'];
         const chosenObs = profile[Math.floor(Math.random() * profile.length)];
@@ -283,17 +313,27 @@ export class BossManager {
           this.animCycleTimer = 0.6;
           b.lungeZ = 4.2;
           const lane = Math.floor(Math.random() * 3);
-          this._spawnShot(LANE_X[lane], 0, -31, { obsType: chosenObs });
+          this._spawnShot(laneXs[lane], baseY, -31, { obsType: chosenObs, laneIdx: lane, laneY: baseY, showRedSign });
           this._announceObs(chosenObs, players, ctx, b);
         } else if (attackRoll === 1) {
           this.currentAnim = 'tail_sweep';
           this.animCycleTimer = 0.7;
-          // Fase 2+: dispara duas faixas deixando 1 livre!
           const safe = Math.floor(Math.random() * 3);
-          for (let l = 0; l < 3; l++) {
-            if (l === safe && b.phase < 3) continue;
-            if (l === safe && b.phase >= 3 && Math.random() < 0.75) continue;
-            this._spawnShot(LANE_X[l], 0, -32, { obsType: chosenObs });
+          if (minSafePaths >= 2) {
+            // Fácil / Normal: bloqueia 1 faixa inteira e no máximo 1 faixa pulável/abaixável, garantindo >= 2 rotas livres!
+            const jumpableObs = chosenObs === 'raio' || chosenObs === 'feixe' || chosenObs === 'gelo' ? 'onda' : chosenObs;
+            const secondLane = (safe + 1) % 3;
+            const solidLane = (safe + 2) % 3;
+            this._spawnShot(laneXs[solidLane], baseY, -32, { obsType: chosenObs, laneIdx: solidLane, laneY: baseY, showRedSign });
+            if (b.phase >= 2) {
+              this._spawnShot(laneXs[secondLane], baseY, -32, { obsType: jumpableObs, isHigh: true, laneIdx: secondLane, laneY: baseY, showRedSign });
+            }
+          } else {
+            // Difícil / Insano / Supremo: bloqueia até 2 faixas, mas SEMPRE deixa >= 1 faixa segura!
+            for (let l = 0; l < 3; l++) {
+              if (l === safe) continue;
+              this._spawnShot(laneXs[l], baseY, -32, { obsType: chosenObs, laneIdx: l, laneY: baseY, showRedSign });
+            }
           }
           this._announceObs(chosenObs, players, ctx, b);
         } else {
@@ -302,7 +342,7 @@ export class BossManager {
           ctx.cameraRig?.triggerShake(0.32, 0.25);
           this._triggerShockwave(this.group.position.x, -32, b.color);
           const lane = Math.floor(Math.random() * 3);
-          this._spawnShot(LANE_X[lane], 1.15, -32, { obsType: chosenObs, isHigh: true });
+          this._spawnShot(laneXs[lane], baseY, -32, { obsType: chosenObs, isHigh: true, laneIdx: lane, laneY: baseY, showRedSign });
           this._announceObs(chosenObs, players, ctx, b, true);
         }
       }
@@ -319,11 +359,12 @@ export class BossManager {
       if (!s.hit) {
         for (const p of players) {
           if (p.dead) continue;
-          const pTop = p.y + (p.ducking ? 0.95 : 1.85);
+          const py = (p.baseY || 0) + p.y;
+          const pTop = py + (p.ducking ? 0.95 : 1.85);
           if (
             Math.abs(p.x - s.mesh.position.x) < s.halfW &&
             Math.abs(p.z - s.mesh.position.z) < s.halfD &&
-            p.y < s.maxY &&
+            py < s.maxY &&
             pTop > s.minY
           ) {
             s.hit = true;
@@ -374,28 +415,32 @@ export class BossManager {
     const obsType = opts.obsType || 'rocha';
     const cfg = BOSS_OBS_CFG[obsType] || BOSS_OBS_CFG.rocha;
     const isHigh = !!opts.isHigh;
+    const laneIdx = opts.laneIdx ?? 1;
+    const yBase = typeof opts.laneY === 'number' ? opts.laneY : 0;
 
     // Ataques altos permitem passar abaixado (rocha/tronco arremessados ou cristal elevado)
     const buildType = isHigh && !['tronco', 'rocha', 'gelo'].includes(obsType) ? 'rocha' : obsType;
     const buildCfg = BOSS_OBS_CFG[buildType] || cfg;
+    const showRedSign = opts.showRedSign !== undefined ? !!opts.showRedSign : true;
     const shot = buildClaudeBossObstacle(buildType, {
-      withWarn: !isHigh,
+      withWarn: showRedSign && !isHigh,
       centeredBody: isHigh && buildType !== 'gelo' ? true : !!buildCfg.centeredBody
     });
 
     if (isHigh) {
       const isIceBarrier = buildType === 'gelo';
       shot.scale.setScalar(isIceBarrier ? 0.98 : 0.86);
-      shot.position.set(x, isIceBarrier ? 0.48 : 1.38, z);
+      shot.position.set(x, (yBase > 0 ? yBase : 0) + (isIceBarrier ? 0.48 : 1.38), z);
       this.scene.add(shot);
       this.hazardShots.push({
         mesh: shot,
         hit: false,
         obsType: buildType,
+        laneIdx,
         isHigh: true,
         spinX: !isIceBarrier,
-        minY: 1.05,
-        maxY: 2.38,
+        minY: (yBase > 0 ? yBase : 0) + 1.05,
+        maxY: (yBase > 0 ? yBase : 0) + 2.38,
         halfW: 0.78,
         halfD: 0.78,
         extraSpeed: 10,
@@ -404,22 +449,37 @@ export class BossManager {
       return;
     }
 
+    const groundY = y ?? buildCfg.yPos ?? 0;
     shot.scale.setScalar(buildCfg.scale || 1);
-    shot.position.set(x, buildCfg.yPos ?? y, z);
+    shot.position.set(x, groundY, z);
     this.scene.add(shot);
     this.hazardShots.push({
       mesh: shot,
       hit: false,
       obsType: buildType,
+      laneIdx,
       isHigh: false,
       spinX: !!buildCfg.spinX,
-      minY: buildCfg.minY,
-      maxY: buildCfg.maxY,
+      minY: groundY + buildCfg.minY,
+      maxY: groundY + buildCfg.maxY,
       halfW: buildCfg.halfW,
       halfD: buildCfg.halfD,
       extraSpeed: buildCfg.extraSpeed ?? 9,
       status: buildCfg.status || null
     });
+  }
+
+  getBlockedLanesNearZ(zMin, zMax) {
+    const blocked = new Set();
+    if (!this.activeBoss || !this.hazardShots.length) return blocked;
+    for (let i = 0; i < this.hazardShots.length; i++) {
+      const s = this.hazardShots[i];
+      const sz = s.mesh.position.z;
+      if (sz >= zMin && sz <= zMax && s.laneIdx >= 0 && s.laneIdx <= 2) {
+        blocked.add(s.laneIdx);
+      }
+    }
+    return blocked;
   }
 
   _hitBossWeakPoint(player, players, ctx) {

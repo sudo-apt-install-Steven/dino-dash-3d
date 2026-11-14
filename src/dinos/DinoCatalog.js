@@ -14,7 +14,12 @@ export const DINO_CLASSES = {
   aquatic: {
     id: 'aquatic',
     name: { pt: 'Aquático', en: 'Aquatic' },
-    passive: { pt: 'Corre na água/lama sem lentidão e ganha impulso no rio', en: 'No slowdown in water/mud & river speed boost' }
+    passive: { pt: 'Nada no rio lateral em mapas terrestres (+impulso e escudo na água)', en: 'Swims in side river on land tracks with speed & water shield' }
+  },
+  flying: {
+    id: 'flying',
+    name: { pt: 'Voador', en: 'Flying' },
+    passive: { pt: 'Voa no corredor aéreo acima da pista (+planagem leve e bônus em anéis)', en: 'Flies in sky corridor above tracks with aerial glide & ring bonus' }
   },
   mystic: {
     id: 'mystic',
@@ -402,9 +407,172 @@ export const DINO_CATALOG = [
       pt: 'Lenda secreta de Dino Dash 3D: combina a energia fóssil com o brilho estelar.',
       en: 'Secret legend of Dino Dash 3D: fuses ancient fossil power with stardust.'
     }
+  },
+  {
+    id: 'mosasaurus',
+    name: 'Mosasaurus',
+    dinoClass: 'aquatic',
+    habitat: 'aquatic',
+    unlockCost: 950,
+    stats: { speed: 9, jump: 6, hp: 4, defense: 7, attack: 9 },
+    ability: { name: 'Mordida Abissal', desc: 'Avança quebrando troncos/redemoinhos e cria onda maremoto.', cooldown: 8.5, duration: 2.0 },
+    colors: { primary: '#0f766e', secondary: '#99f6e4', eye: '#fde047', spots: '#134e4a', spikes: '#2dd4bf' },
+    roarPitch: 78,
+    fact: {
+      pt: 'Colosso dos mares pré-históricos, o Mosassauro tinha duas fileiras de dentes no céu da boca.',
+      en: 'Colossus of ancient oceans featuring double rows of recurved palatal teeth.'
+    }
+  },
+  {
+    id: 'elasmosaurus',
+    name: 'Elasmosaurus',
+    dinoClass: 'aquatic',
+    habitat: 'aquatic',
+    unlockCost: 1200,
+    stats: { speed: 8, jump: 7, hp: 3, defense: 7, attack: 7 },
+    ability: { name: 'Jato de Maré', desc: 'Surfa invulnerável em corrente rápida e atrai ovos fluviais.', cooldown: 8.0, duration: 2.2 },
+    colors: { primary: '#0284c7', secondary: '#e0f2fe', eye: '#fbbf24', spots: '#1e3a8a', spikes: '#38bdf8' },
+    roarPitch: 165,
+    fact: {
+      pt: 'Seu pescoço comprido possuía mais de 70 vértebras para caçar cardumes sem assustar as presas.',
+      en: 'Its ultra-long neck housed over 70 vertebrae to ambush fish schools silently.'
+    }
+  },
+  {
+    id: 'dunkleosteus',
+    name: 'Dunkleosteus',
+    dinoClass: 'aquatic',
+    habitat: 'aquatic',
+    unlockCost: 2200,
+    stats: { speed: 7, jump: 5, hp: 5, defense: 10, attack: 10 },
+    ability: { name: 'Mandíbula Blindada', desc: 'Escudo de placas ósseas estilhaça todos os obstáculos marinhos.', cooldown: 9.5, duration: 2.5 },
+    colors: { primary: '#7c2d12', secondary: '#fed7aa', eye: '#38bdf8', spots: '#431407', spikes: '#f59e0b' },
+    roarPitch: 66,
+    fact: {
+      pt: 'Peixe blindado devoniano com placas ósseas que funcionavam como tesouras hidráulicas.',
+      en: 'Devonian armored predator with self-sharpening bony jaw plates.'
+    }
+  },
+  {
+    id: 'liopleurodon',
+    name: 'Liopleurodon',
+    dinoClass: 'aquatic',
+    habitat: 'aquatic',
+    unlockCost: 3500,
+    stats: { speed: 9, jump: 7, hp: 4, defense: 8, attack: 9 },
+    ability: { name: 'Salto Oceânico', desc: 'Impulso sônico sob as ondas que atrai tesouros e limpa a pista.', cooldown: 8.5, duration: 2.1 },
+    colors: { primary: '#1e3a8a', secondary: '#bae6fd', eye: '#4ade80', spots: '#0f172a', spikes: '#72efdd' },
+    roarPitch: 84,
+    fact: {
+      pt: 'Quatro nadadeiras gigantes permitiam acelerações súbitas em mares profundos.',
+      en: 'Four colossal flippers allowed explosive underwater lunges.'
+    }
+  },
+  {
+    id: 'pteranodon',
+    name: 'Pteranodon',
+    dinoClass: 'flying',
+    habitat: 'flying',
+    unlockCost: 850,
+    stats: { speed: 9, jump: 9, hp: 3, defense: 5, attack: 7 },
+    ability: { name: 'Rasante Supersônico', desc: 'Voo invulnerável corta nuvens, raios e obstáculos aéreos.', cooldown: 8.0, duration: 2.0 },
+    colors: { primary: '#d97706', secondary: '#fef3c7', eye: '#38bdf8', spots: '#78350f', spikes: '#ef4444' },
+    roarPitch: 245,
+    fact: {
+      pt: 'Sua crista alongada funcionava como leme aerodinâmico em voos de mais de 70 km/h.',
+      en: 'Its cranial crest acted as a natural rudder while gliding across prehistoric seas.'
+    }
+  },
+  {
+    id: 'tapejara',
+    name: 'Tapejara',
+    dinoClass: 'flying',
+    habitat: 'flying',
+    unlockCost: 1600,
+    stats: { speed: 9, jump: 10, hp: 3, defense: 6, attack: 7 },
+    ability: { name: 'Correntes Termais', desc: 'Gera redemoinho protetor + atrai ovos e reduz queda por 2.8s.', cooldown: 8.5, duration: 2.8 },
+    colors: { primary: '#db2777', secondary: '#fce7f3', eye: '#facc15', spots: '#831843', spikes: '#38bdf8' },
+    roarPitch: 270,
+    fact: {
+      pt: 'Pterossauro brasileiro famoso pela crista colorida gigante que brilhava no sol.',
+      en: 'Brazilian pterosaur famous for its vibrant sail-like cranial crest.'
+    }
+  },
+  {
+    id: 'dimorphodon',
+    name: 'Dimorphodon',
+    dinoClass: 'flying',
+    habitat: 'flying',
+    unlockCost: 2400,
+    stats: { speed: 10, jump: 8, hp: 2, defense: 5, attack: 8 },
+    ability: { name: 'Bando Aéreo', desc: 'Dispara 3 investidas de vento e limpa perigos do corredor aéreo.', cooldown: 7.5, duration: 1.8 },
+    colors: { primary: '#4f46e5', secondary: '#e0e7ff', eye: '#f43f5e', spots: '#312e81', spikes: '#22d3ee' },
+    roarPitch: 300,
+    fact: {
+      pt: 'Possuía dois tipos diferentes de dentes no mesmo bico para agarrar presas no ar.',
+      en: 'Featured two distinct tooth shapes in its deep skull for aerial hunting.'
+    }
+  },
+  {
+    id: 'utahraptor',
+    name: 'Utahraptor',
+    dinoClass: 'carnivore',
+    habitat: 'land',
+    unlockCost: 1800,
+    stats: { speed: 10, jump: 9, hp: 3, defense: 6, attack: 9 },
+    ability: { name: 'Garra Foice Turbo', desc: 'Salto cortante em sequência destrói barreiras e gera combo x2.', cooldown: 8.0, duration: 2.0 },
+    colors: { primary: '#dc2626', secondary: '#fecaca', eye: '#fef08a', spots: '#7f1d1d', spikes: '#f8fafc' },
+    roarPitch: 210,
+    fact: {
+      pt: 'Maior dromeossaurídeo conhecido, armado com garras retráteis de até 24 centímetros.',
+      en: 'The largest known dromaeosaurid, sporting sickle claws nearly 24 cm long.'
+    }
+  },
+  {
+    id: 'mecha_rex',
+    name: 'Mecha-Rex Titan',
+    dinoClass: 'carnivore',
+    habitat: 'land',
+    mecha: true,
+    unlockCost: 12000,
+    stats: { speed: 9, jump: 8, hp: 4, defense: 10, attack: 10 },
+    ability: { name: 'Canhão de Plasma', desc: 'Dispara feixe laser orbital que vaporiza obstáculos + escudo cyber.', cooldown: 9.0, duration: 2.5 },
+    colors: { primary: '#475569', secondary: '#cbd5e1', eye: '#38bdf8', spots: '#0f172a', spikes: '#00f5d4' },
+    roarPitch: 132,
+    fact: {
+      pt: 'Colosso biomecânico inspirado nos grandes robôs gigantes, alimentado por núcleo fóssil.',
+      en: 'Biomechatronic apex predator powered by an orbital fossil arc-reactor.'
+    }
+  },
+  {
+    id: 'cyber_raptor',
+    name: 'Raptor Cibernético',
+    dinoClass: 'carnivore',
+    habitat: 'land',
+    mecha: true,
+    unlockCost: 6500,
+    stats: { speed: 10, jump: 9, hp: 3, defense: 7, attack: 9 },
+    ability: { name: 'Overclock Quântico', desc: 'Turbo invulnerável neon com imã automático e corte sônico.', cooldown: 7.5, duration: 2.2 },
+    colors: { primary: '#1e293b', secondary: '#7dd3fc', eye: '#f43f5e', spots: '#334155', spikes: '#facc15' },
+    roarPitch: 235,
+    fact: {
+      pt: 'Caçador futurista construído nos laboratórios da Metrópole Mecha.',
+      en: 'Futuristic interceptor engineered inside the Mecha Metropolis core.'
+    }
   }
 ];
 
 export function getDinoSpec(id) {
   return DINO_CATALOG.find((d) => d.id === id) || DINO_CATALOG[0];
+}
+
+export function getDinoHabitat(specOrId) {
+  const spec = typeof specOrId === 'string' ? getDinoSpec(specOrId) : (specOrId || getDinoSpec('trex'));
+  if (spec.habitat) return spec.habitat;
+  if (spec.id === 'quetzalcoatlus' || spec.dinoClass === 'flying') return 'flying';
+  if (spec.dinoClass === 'aquatic') {
+    if (spec.id === 'spinosaurus' || spec.id === 'baryonyx') return 'amphibious';
+    return 'aquatic';
+  }
+  return 'land';
 }

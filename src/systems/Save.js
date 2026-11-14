@@ -67,11 +67,19 @@ const DEFAULT_SAVE = {
   benchmarkFps: 0,
   benchmarkTier: '',
   benchmarkDone: false,
-  benchmarkVersion: 2,
+  benchmarkVersion: 3,
   benchmarkGpu: '',
   introModeCustom: false,
   devMode: false,
   crystals: 0,
+  fossilCrates: 2,
+  gachaPity: 0,
+  gachaStats: { pulls: 0, shinies: 0, mechas: 0, secrets: 0 },
+  discoveredHollowEarth: false,
+  unlockedMutations: ['amber_core'],
+  equippedMutation: null,
+  unlockedSkins: {},
+  equippedSkinVariants: {},
   shopRotation: { slotKey: '', offers: [], purchasedIds: [], rerolls: 0 },
   seenElements: [],
   pinnedPredator: null,
@@ -79,7 +87,7 @@ const DEFAULT_SAVE = {
   unlockedSpecialItems: [],
   discoveredFossils: {},
   perfectMode: false,
-  network: { nickname: '', lastRoom: '', tvScale: false },
+  network: { nickname: '', lastRoom: '', tvScale: false, mpCameraMode: 'shared' },
   settings: {
     quality: 'medium',
     shadows: true,
@@ -89,7 +97,10 @@ const DEFAULT_SAVE = {
     clearVision: false,
     lowHpPulse: false,
     disableIntro: false,
-    introMode: 'first_time',
+    introMode: 'always',
+    discoveryPopups: true,
+    progressiveUnlocks: true,
+    mpCameraMode: 'shared',
     fpsCap: 0,
     sensitivity: 1.0,
     lang: 'pt',
@@ -163,19 +174,21 @@ class SaveSystem {
     for (const id of freeStarters) {
       if (!loaded.unlockedDinos.includes(id)) loaded.unlockedDinos.push(id);
     }
-    // Revalida benchmark antigo (v1 media frames sem aquecimento de shader e falso-negava placas RTX/GTX)
-    if (prevBenchVer < 2) {
+    // Revalida benchmark antigo (v1/v2 mediam durante compilacao ou puniam drivers NVIDIA mascarados)
+    if (prevBenchVer < 3) {
       const wasLowTier = loaded.benchmarkTier === 'Baixo';
-      loaded.benchmarkVersion = 2;
+      loaded.benchmarkVersion = 3;
       loaded.benchmarkDone = false;
       loaded.benchmarkTier = '';
       loaded.benchmarkFps = 0;
       if (!loaded.lowSpecManual && loaded.lowSpecMode && wasLowTier) {
         loaded.lowSpecMode = false;
+        loaded.settings.quality = loaded.settings.quality === 'low' ? 'medium' : loaded.settings.quality;
+        loaded.settings.shadows = true;
       }
     }
-    if (!loaded.introModeCustom && loaded.settings?.introMode === 'always' && !loaded.settings.disableIntro) {
-      loaded.settings.introMode = 'first_time';
+    if (!loaded.introModeCustom && !loaded.settings?.disableIntro && loaded.settings?.introMode === 'first_time') {
+      loaded.settings.introMode = 'always';
     }
     return loaded;
   }

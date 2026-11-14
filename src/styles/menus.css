@@ -240,16 +240,20 @@
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.22s ease;
+  will-change: opacity;
   z-index: 16;
+  background: radial-gradient(circle at 50% 50%, transparent 48%, var(--flash-color, rgba(255, 45, 45, 0.72)) 100%);
 }
 .edge-flash-vignette.show { opacity: 1; }
-.edge-flash-vignette.flash-red { box-shadow: inset 0 0 120px rgba(255, 45, 45, 0.85); }
-.edge-flash-vignette.flash-blue { box-shadow: inset 0 0 120px rgba(56, 189, 248, 0.85); }
-.edge-flash-vignette.flash-heal { box-shadow: inset 0 0 110px rgba(74, 222, 128, 0.78); }
-.edge-flash-vignette.flash-comum { box-shadow: inset 0 0 65px rgba(226, 232, 240, 0.4); }
-.edge-flash-vignette.flash-rara { box-shadow: inset 0 0 85px rgba(56, 189, 248, 0.58); }
-.edge-flash-vignette.flash-épica { box-shadow: inset 0 0 100px rgba(192, 132, 252, 0.68); }
-.edge-flash-vignette.flash-lendária { box-shadow: inset 0 0 120px rgba(255, 212, 71, 0.82); }
+.edge-flash-vignette.flash-red { --flash-color: rgba(255, 45, 45, 0.72); }
+.edge-flash-vignette.flash-blue { --flash-color: rgba(56, 189, 248, 0.72); }
+.edge-flash-vignette.flash-heal { --flash-color: rgba(74, 222, 128, 0.65); }
+.edge-flash-vignette.flash-comum { --flash-color: rgba(226, 232, 240, 0.36); }
+.edge-flash-vignette.flash-rara { --flash-color: rgba(56, 189, 248, 0.52); }
+.edge-flash-vignette.flash-épica { --flash-color: rgba(192, 132, 252, 0.62); }
+.edge-flash-vignette.flash-lendária { --flash-color: rgba(255, 212, 71, 0.76); }
+.edge-flash-vignette.flash-mítica { --flash-color: rgba(239, 68, 68, 0.78); }
+.edge-flash-vignette.flash-secreta { --flash-color: rgba(192, 132, 252, 0.85); }
 
 .hp-shake { animation: hpShake 0.28s ease; color: #ff6b6b !important; }
 .hp-pop { animation: hpPop 0.3s ease; color: #4ade80 !important; }
@@ -453,6 +457,7 @@
 .dino-selector-row {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+  grid-auto-rows: minmax(40px, auto);
   gap: 7px;
   padding: 8px;
   margin-top: 2px;
@@ -466,6 +471,10 @@
 }
 
 .dino-selector-row .tab-btn {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
   text-align: left;
   white-space: nowrap;
   overflow: hidden;
@@ -680,9 +689,9 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(10, 6, 4, 0.58);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(9, 9, 11, 0.68);
+  backdrop-filter: blur(11px) saturate(1.15);
+  -webkit-backdrop-filter: blur(11px) saturate(1.15);
   pointer-events: auto;
 }
 
@@ -982,7 +991,9 @@
   }
   .main-menu-panel {
     width: min(390px, 95vw) !important;
-    max-height: 70dvh;
+    max-height: 76dvh;
+    overflow-y: auto;
+    scrollbar-width: thin;
     padding: 12px 14px !important;
     gap: 8px !important;
   }
@@ -992,6 +1003,18 @@
   .main-menu-panel #menu-play {
     font-size: 1.12rem !important;
     padding: 11px !important;
+  }
+  .dino-selector-row {
+    grid-auto-rows: minmax(38px, auto);
+  }
+  .dino-selector-row .tab-btn {
+    min-height: 38px;
+  }
+  .hud-bottom-bar {
+    max-width: min(260px, calc(100vw - 16px));
+  }
+  #hud-group-combat {
+    grid-template-columns: repeat(5, minmax(34px, 42px));
   }
 }
 

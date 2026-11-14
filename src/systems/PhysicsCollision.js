@@ -6,11 +6,12 @@ export class PhysicsCollision {
     const height = (player.ducking || player.sliding ? 0.96 : 1.85) * scale;
     const halfW = 0.38 * scale * (player.smallHitbox ? 0.75 : 1);
     const halfD = 0.44 * scale * (player.smallHitbox ? 0.75 : 1);
+    const wy = (player.baseY || 0) + player.y;
     return {
       minX: player.x - halfW,
       maxX: player.x + halfW,
-      minY: player.y + 0.05,
-      maxY: player.y + height,
+      minY: wy + 0.05,
+      maxY: wy + height,
       minZ: player.z - halfD,
       maxZ: player.z + halfD
     };

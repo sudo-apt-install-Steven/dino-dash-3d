@@ -13,6 +13,8 @@ import { MetagameModal } from './MetagameModal.js';
 import { DebugModal } from './DebugModal.js';
 import { PartyModals } from './PartyModals.js';
 import { GuideModal } from './GuideModal.js';
+import { GachaModal } from './GachaModal.js';
+import { GachaSystem } from '../systems/GachaSystem.js';
 import { PerfMonitor } from '../systems/PerfMonitor.js';
 import { getModeDef } from '../game/Modes.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
@@ -30,6 +32,8 @@ export class UIManager {
       onCancelRestart: () => this.game.cancelRestart(),
       onSkipTutorial: () => this.game.skipTutorial(),
       onOpenGuide: () => this.openSection('guide'),
+      onOpenGacha: () => this.openSection('gacha'),
+      onMpRevive: () => this.game.reviveFallenAlly(0),
       onReplay: () => this.game.startReplayPlayback(),
       onGoDinos: () => this.openSection('dinos'),
       onGoMenu: () => this.game.openMainMenu(),
@@ -73,6 +77,18 @@ export class UIManager {
     this.hud.applyTouchMode(s.touchMode || 'swipe');
   }
 
+  openGacha(afterClose = null) {
+    this._clearModal();
+    const modal = new GachaModal(this.hud.modalLayer, () => {
+      this.activeCleanup = null;
+      this.game.rebuildPlayers();
+      if (afterClose) afterClose();
+      else this.showMainMenu();
+    });
+    this.activeCleanup = () => modal.close(true);
+    modal.open();
+  }
+
   _clearModal() {
     if (this.activeCleanup) {
       this.activeCleanup();
@@ -90,9 +106,11 @@ export class UIManager {
     const modeDef = getModeDef(this.game.modeId);
     const diffCfg = this.game.difficultyMgr.getConfig();
     const dinoSpec = getDinoSpec(Save.data.selectedDino);
-    const biomeLabel = this.game.sequenceBiomes
-      ? `Sequência (${getBiomeById(this.game.startBiomeId).name})`
-      : getBiomeById(this.game.startBiomeId).name;
+    const biomeLabel = this.game.startBiomeId === 'random_portal'
+      ? 'Aleatório (Portais)'
+      : (this.game.sequenceBiomes
+        ? `Sequência (${getBiomeById(this.game.startBiomeId).name})`
+        : getBiomeById(this.game.startBiomeId).name);
     const isPerf = !!Save.data.perfectMode && modeDef.id !== 'zen';
     const effectiveLives = (isPerf || modeDef.id === 'hardcore')
       ? 1
@@ -106,6 +124,7 @@ export class UIManager {
         dinoName: dinoSpec.name,
         effectiveLives,
         biomeLabel,
+        fossilCrates: GachaSystem.getCrateCount(),
         lowSpec: !!Save.data.lowSpecMode,
         benchmarkFps: Save.data.benchmarkFps || 0,
         benchmarkTier: Save.data.benchmarkTier || '',
@@ -195,8 +214,12 @@ export class UIManager {
       case 'custom':
         this.activeCleanup = CustomizationScreen.renderInto(this.hud.modalLayer, {
           onClose: back,
-          onApplyCustom: () => this.game.rebuildPlayers()
+          onApplyCustom: () => this.game.rebuildPlayers(),
+          onOpenGacha: (afterGacha) => this.openGacha(afterGacha || (() => this.openSection('custom')))
         });
+        break;
+      case 'gacha':
+        this.openGacha(back);
         break;
       case 'maps':
         Menus.renderMapsModal(

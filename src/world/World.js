@@ -4,6 +4,9 @@ import * as THREE from 'three';
 import { SceneryInstancer } from './SceneryInstancer.js';
 
 export const LANE_X = [-2.4, 0, 2.4];
+export const RIVER_LANE_X = [7.6, 10.0, 12.4];
+export const SHOP_LANE_X = { left: -5.45, right: 5.45 };
+export const SKY_CORRIDOR_Y = 3.2;
 export const TRACK_WIDTH = 9.2;
 
 export class World {
@@ -13,9 +16,14 @@ export class World {
     this.time = 0;
     this.tideOffset = 0;
     this.riverY = -0.05;
+    this.shopLaneSide = null;
+    this.aquaticChannelActive = false;
+    this.skyCorridorActive = false;
+    this.hollowEarthActive = false;
 
     this._setupLightingAndSky();
     this._setupTrackAndRiver();
+    this._setupSpecialCorridorsAndFx();
     this.scenery = new SceneryInstancer(scene);
   }
 
@@ -229,6 +237,208 @@ export class World {
     this._dummy = new THREE.Object3D();
   }
 
+  _setupSpecialCorridorsAndFx() {
+    // 1. Guias luminosas das 3 raias aquáticas no rio lateral (x = 7.6, 10.0, 12.4)
+    this.waterLaneGroup = new THREE.Group();
+    this.waterLaneGroup.visible = false;
+    const wGuideMat = new THREE.MeshBasicMaterial({
+      color: '#38bdf8',
+      transparent: true,
+      opacity: 0.42
+    });
+    const dividerXs = [6.4, 8.8, 11.2, 13.6];
+    for (const gx of dividerXs) {
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 170), wGuideMat);
+      strip.position.set(gx, 0.02, -70);
+      this.waterLaneGroup.add(strip);
+    }
+    this.worldGroup.add(this.waterLaneGroup);
+
+    // 2. Guias de corredor aéreo no céu para dinossauros voadores (y ≈ 3.2)
+    this.skyCorridorGroup = new THREE.Group();
+    this.skyCorridorGroup.visible = false;
+    const skyRailMat = new THREE.MeshBasicMaterial({
+      color: '#bae6fd',
+      transparent: true,
+      opacity: 0.32
+    });
+    this.skyCorridorRings = [];
+    for (let i = 0; i < 12; i++) {
+      const band = new THREE.Group();
+      for (const lx of LANE_X) {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(0.78, 0.06, 6, 16),
+          skyRailMat
+        );
+        ring.position.set(lx, SKY_CORRIDOR_Y, 0);
+        band.add(ring);
+      }
+      band.position.z = -150 + i * 14;
+      this.skyCorridorGroup.add(band);
+      this.skyCorridorRings.push(band);
+    }
+    this.worldGroup.add(this.skyCorridorGroup);
+
+    // 3. 4ª Pista Lateral Dinâmica da Lojinha (a cada 30k pts, entra e sai pelo mesmo lado)
+    this.shopLaneGroup = new THREE.Group();
+    this.shopLaneGroup.visible = false;
+    const shopTrackMat = new THREE.MeshStandardMaterial({
+      color: '#1f3a2e',
+      roughness: 0.65,
+      emissive: '#065f46',
+      emissiveIntensity: 0.25
+    });
+    const shopBase = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.08, 180), shopTrackMat);
+    shopBase.position.set(0, 0.055, -72);
+    shopBase.receiveShadow = true;
+    const shopGoldMat = new THREE.MeshStandardMaterial({
+      color: '#facc15',
+      emissive: '#eab308',
+      emissiveIntensity: 0.72
+    });
+    const railInner = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 180), shopGoldMat);
+    railInner.position.set(-1.25, 0.09, -72);
+    const railOuter = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 180), shopGoldMat);
+    railOuter.position.set(1.25, 0.09, -72);
+    this.shopLaneGroup.add(shopBase, railInner, railOuter);
+    this.shopChevrons = [];
+    for (let i = 0; i < 20; i++) {
+      const chev = new THREE.Mesh(
+        new THREE.BoxGeometry(1.5, 0.03, 0.38),
+        new THREE.MeshBasicMaterial({ color: '#34d399', transparent: true, opacity: 0.8 })
+      );
+      chev.position.set(0, 0.1, -152 + i * 9);
+      this.shopLaneGroup.add(chev);
+      this.shopChevrons.push(chev);
+    }
+    this.worldGroup.add(this.shopLaneGroup);
+
+    // 4. Abóbada de Cristais da Terra Oca (bioma subterrâneo Hollow Earth)
+    this.hollowEarthGroup = new THREE.Group();
+    this.hollowEarthGroup.visible = false;
+    const archMat = new THREE.MeshStandardMaterial({ color: '#3b0764', roughness: 0.85, emissive: '#1e1b4b', emissiveIntensity: 0.35 });
+    const crystalMat = new THREE.MeshStandardMaterial({ color: '#2dd4bf', emissive: '#14b8a6', emissiveIntensity: 0.9, roughness: 0.25 });
+    this.hollowArches = [];
+    for (let i = 0; i < 8; i++) {
+      const arch = new THREE.Group();
+      const topBeam = new THREE.Mesh(new THREE.BoxGeometry(18, 1.4, 2.2), archMat);
+      topBeam.position.set(0, 15.5, 0);
+      const colL = new THREE.Mesh(new THREE.BoxGeometry(1.6, 15.5, 2.0), archMat);
+      colL.position.set(-8.2, 7.75, 0);
+      const colR = new THREE.Mesh(new THREE.BoxGeometry(1.6, 15.5, 2.0), archMat);
+      colR.position.set(8.2, 7.75, 0);
+      arch.add(topBeam, colL, colR);
+      for (let c = -2; c <= 2; c++) {
+        const crys = new THREE.Mesh(new THREE.OctahedronGeometry(0.65, 0), crystalMat);
+        crys.scale.set(0.7, 2.2, 0.7);
+        crys.position.set(c * 3.1, 14.2, 0);
+        crys.rotation.z = c * 0.14;
+        arch.add(crys);
+      }
+      arch.position.z = -150 + i * 22;
+      this.hollowEarthGroup.add(arch);
+      this.hollowArches.push(arch);
+    }
+    this.worldGroup.add(this.hollowEarthGroup);
+
+    // 5. Pool de Rachaduras de Terremoto no chão
+    this.earthquakeCracks = [];
+    const crackGroup = new THREE.Group();
+    this.worldGroup.add(crackGroup);
+    const crackOuterMat = new THREE.MeshBasicMaterial({ color: '#1c1917', transparent: true, opacity: 0.86 });
+    const crackMagmaMat = new THREE.MeshBasicMaterial({ color: '#f97316', transparent: true, opacity: 0.78 });
+    for (let i = 0; i < 14; i++) {
+      const c = new THREE.Group();
+      const mainSeg = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.03, 5.2), crackOuterMat);
+      const glowSeg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.04, 4.8), crackMagmaMat);
+      const branch = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.03, 0.25), crackOuterMat);
+      branch.position.set(0.6, 0.005, 0.8);
+      branch.rotation.y = 0.55;
+      c.add(mainSeg, glowSeg, branch);
+      c.visible = false;
+      crackGroup.add(c);
+      this.earthquakeCracks.push({ mesh: c, active: false, z: 0, x: 0 });
+    }
+  }
+
+  setAquaticChannelActive(active) {
+    this.aquaticChannelActive = !!active;
+    if (this.waterLaneGroup) this.waterLaneGroup.visible = this.aquaticChannelActive;
+  }
+
+  setSkyCorridorActive(active) {
+    this.skyCorridorActive = !!active;
+    if (this.skyCorridorGroup) this.skyCorridorGroup.visible = this.skyCorridorActive;
+  }
+
+  setShopLane(side = null) {
+    this.shopLaneSide = (side === 'left' || side === 'right') ? side : null;
+    if (!this.shopLaneGroup) return;
+    if (!this.shopLaneSide) {
+      this.shopLaneGroup.visible = false;
+      return;
+    }
+    this.shopLaneGroup.position.x = SHOP_LANE_X[this.shopLaneSide];
+    this.shopLaneGroup.visible = true;
+  }
+
+  setHollowEarthVisuals(active) {
+    this.hollowEarthActive = !!active;
+    if (this.hollowEarthGroup) this.hollowEarthGroup.visible = this.hollowEarthActive;
+  }
+
+  spawnEarthquakeCracks(count = 6) {
+    let spawned = 0;
+    for (let i = 0; i < this.earthquakeCracks.length && spawned < count; i++) {
+      const slot = this.earthquakeCracks[i];
+      if (!slot.active) {
+        slot.active = true;
+        slot.x = -3.6 + Math.random() * 7.2;
+        slot.z = -35 - spawned * 14 - Math.random() * 8;
+        slot.mesh.position.set(slot.x, 0.045, slot.z);
+        slot.mesh.rotation.y = (Math.random() - 0.5) * 0.45;
+        slot.mesh.visible = true;
+        spawned++;
+      }
+    }
+  }
+
+  _updateSpecialCorridorsAndFx(dt, speed) {
+    if (this.skyCorridorActive && this.skyCorridorRings) {
+      for (let i = 0; i < this.skyCorridorRings.length; i++) {
+        const b = this.skyCorridorRings[i];
+        b.position.z += speed * dt;
+        if (b.position.z > 18) b.position.z -= 168;
+      }
+    }
+    if (this.shopLaneSide && this.shopChevrons) {
+      for (let i = 0; i < this.shopChevrons.length; i++) {
+        const c = this.shopChevrons[i];
+        c.position.z += speed * dt;
+        if (c.position.z > 20) c.position.z -= 180;
+      }
+    }
+    if (this.hollowEarthActive && this.hollowArches) {
+      for (let i = 0; i < this.hollowArches.length; i++) {
+        const a = this.hollowArches[i];
+        a.position.z += speed * dt;
+        if (a.position.z > 22) a.position.z -= 176;
+      }
+    }
+    if (this.earthquakeCracks) {
+      for (let i = 0; i < this.earthquakeCracks.length; i++) {
+        const slot = this.earthquakeCracks[i];
+        if (!slot.active) continue;
+        slot.z += speed * dt;
+        slot.mesh.position.z = slot.z;
+        if (slot.z > 16) {
+          slot.active = false;
+          slot.mesh.visible = false;
+        }
+      }
+    }
+  }
+
   setShadowEnabled(enabled) {
     this.sunLight.castShadow = enabled;
   }
@@ -420,5 +630,6 @@ export class World {
     this.rippleMesh.instanceMatrix.needsUpdate = true;
 
     this.scenery.update(dt, speed);
+    this._updateSpecialCorridorsAndFx(dt, speed);
   }
 }

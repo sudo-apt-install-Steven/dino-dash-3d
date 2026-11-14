@@ -215,6 +215,48 @@ export const PREDATOR_CATALOG = [
     introDuration: 6.6,
     lore: 'Predador abissal de antena bioluminescente na fronte e bocarra desproporcional repleta de presas.',
     counterTip: 'Foque nos desvios limpos; cada 20m de vantagem despista Mawcrest!'
+  },
+  {
+    id: 'kraken_fossil',
+    name: 'Kraken Fóssil',
+    title: 'Guardião dos Recifes',
+    biome: 'ocean_surface',
+    archetype: 'Cefalópode Blindado',
+    color: '#0f766e',
+    accent: '#2dd4bf',
+    belly: '#99f6e4',
+    eyeColor: '#facc15',
+    introDuration: 6.5,
+    lore: 'Cefalópode pré-histórico que persegue quem ousa roubar seus ovos abissais luminosos.',
+    counterTip: 'Combine saltos curtos e Turbo para quebrar o alcance dos tentáculos.'
+  },
+  {
+    id: 'mecha_stalker',
+    name: 'Stalker Mecânico',
+    title: 'Sentinela Ômega',
+    biome: 'mecha_city',
+    archetype: 'Caçador Cibernético',
+    color: '#334155',
+    accent: '#f43f5e',
+    belly: '#64748b',
+    eyeColor: '#38bdf8',
+    introDuration: 6.5,
+    lore: 'Predador robótico com visor térmico e propulsores traseiros projetado para recuperar núcleos furtados.',
+    counterTip: 'Ataque [Q] ou use Bullet-Time [Shift] quando seu visor piscar em vermelho.'
+  },
+  {
+    id: 'sky_harpy',
+    name: 'Harpia Celeste',
+    title: 'Soberana das Nuvens',
+    biome: 'sky_canyon',
+    archetype: 'Rapina Colossal',
+    color: '#4338ca',
+    accent: '#f59e0b',
+    belly: '#e0e7ff',
+    eyeColor: '#fef08a',
+    introDuration: 6.4,
+    lore: 'Mergulha dos cânions celestes assim que sente seu ovo dourado deixar o ninho.',
+    counterTip: 'Mantenha velocidade alta e evite tropeçar para não dar janela de mergulho.'
   }
 ];
 
@@ -224,6 +266,37 @@ export function getPredatorSpec(id) {
 
 export function getPredatorForBiome(biomeId) {
   return PREDATOR_CATALOG.find((p) => p.biome === biomeId) || PREDATOR_CATALOG[0];
+}
+
+export function pickRandomPredator(excludeId = null) {
+  const pool = excludeId && PREDATOR_CATALOG.length > 1
+    ? PREDATOR_CATALOG.filter((p) => p.id !== excludeId)
+    : PREDATOR_CATALOG;
+  return pool[Math.floor(Math.random() * pool.length)] || PREDATOR_CATALOG[0];
+}
+
+export function buildPredatorEggProp(accentColor = '#facc15') {
+  const g = new THREE.Group();
+  const shellMat = new THREE.MeshStandardMaterial({
+    color: '#fffbeb',
+    roughness: 0.35,
+    emissive: new THREE.Color(accentColor),
+    emissiveIntensity: 0.55
+  });
+  const spotMat = new THREE.MeshStandardMaterial({
+    color: accentColor,
+    emissive: new THREE.Color(accentColor),
+    emissiveIntensity: 0.95
+  });
+  const core = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.58, 0.46), shellMat);
+  const top = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.14, 0.32), shellMat);
+  top.position.y = 0.32;
+  const spot1 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.5), spotMat);
+  spot1.position.y = 0.04;
+  const spot2 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.14, 0.14), spotMat);
+  spot2.position.y = -0.08;
+  g.add(core, top, spot1, spot2);
+  return g;
 }
 
 export function buildPredatorModel(id) {
@@ -285,19 +358,28 @@ export function buildPredatorModel(id) {
     vox(headPivot, 0.22, 0.72, 0.42, 0, 0.68, -0.45, accentMat);
     vox(headPivot, 0.16, 0.48, 0.24, -0.34, 0.56, -0.22, accentMat);
     vox(headPivot, 0.16, 0.48, 0.24, 0.34, 0.56, -0.22, accentMat);
-  } else if (spec.id === 'mawcrest') {
+  } else if (spec.id === 'mawcrest' || spec.id === 'kraken_fossil') {
     lure = pivotAt(headPivot, 0, 0.56, -0.6);
     vox(lure, 0.1, 0.5, 0.1, 0, 0.22, -0.22, bodyMat);
     vox(lure, 0.28, 0.28, 0.28, 0, 0.48, -0.5, eyeMat);
+    if (spec.id === 'kraken_fossil') {
+      for (let t = -1; t <= 1; t += 2) {
+        vox(body, 0.22, 0.22, 1.35, t * 0.72, -0.25, -0.9, accentMat);
+      }
+    }
+  } else if (spec.id === 'mecha_stalker') {
+    vox(headPivot, 1.05, 0.24, 0.65, 0, 0.34, -0.68, eyeMat);
+    vox(body, 0.45, 0.55, 0.85, -0.78, 0.42, 0.22, accentMat);
+    vox(body, 0.45, 0.55, 0.85, 0.78, 0.42, 0.22, accentMat);
   } else if (spec.id === 'gorgeraptor') {
     // Gola de leque no pescoço
     vox(headPivot, 1.48, 0.95, 0.14, 0, 0.25, 0.08, accentMat);
   }
 
-  // Braços/Garras (ou pinças no Dunescourge, asas duplas no Vexwing)
+  // Braços/Garras (ou pinças no Dunescourge, asas duplas no Vexwing / Harpia Celeste)
   let wingL = null;
   let wingR = null;
-  if (spec.id === 'vexwing') {
+  if (spec.id === 'vexwing' || spec.id === 'sky_harpy') {
     wingL = pivotAt(body, -0.62, 0.25, -0.1);
     vox(wingL, 1.85, 0.12, 0.85, -0.92, 0, 0.1, bodyMat);
     vox(wingL, 1.65, 0.08, 0.32, -0.85, 0.04, 0.45, accentMat);

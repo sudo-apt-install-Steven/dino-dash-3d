@@ -2,6 +2,7 @@
 // padrões de cores, acessórios cúbicos e evolução visual.
 import * as THREE from 'three';
 import { getDinoSpec } from './DinoCatalog.js';
+import { applySkinVariantToColors } from './DinoCustomization.js';
 import { buildClaudeAccessoryGroup } from '../models/ClaudeVoxelModels.js';
 
 const SHARED_BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -45,36 +46,55 @@ export class DinoFactory {
     const spec = getDinoSpec(bodyId === 'hybrid' ? 'trex' : bodyId);
     const headSpec = getDinoSpec(headId === 'hybrid' ? 'trex' : headId);
     const applyColors = customConfig && (customConfig.useCustomColors === undefined || customConfig.useCustomColors === true);
-    const colors = applyColors ? { ...spec.colors, ...customConfig } : { ...spec.colors };
-    const pattern = customConfig?.pattern || 'solid';
+    const skinVariant = customConfig?.skinVariant || options?.skinVariant || 'normal';
+    const basePalette = applyColors ? { ...spec.colors, ...customConfig } : { ...spec.colors };
+    const colors = applySkinVariantToColors(basePalette, skinVariant);
+    const pattern = colors?.pattern || customConfig?.pattern || 'solid';
     const accessory = customConfig?.accessory || 'none';
+    const mutationId = customConfig?.mutation || options?.mutation || null;
     const evolutionTier = options.evolutionTier || 0;
     const isGhost = dinoId === 'ghostgold' || options.ghost;
+    const isMecha = !!spec.mecha || skinVariant === 'mecha' || !!colors.isMecha;
+    const isShiny = skinVariant === 'shiny' || !!colors.isShiny;
+    const isSecret = skinVariant === 'secret' || !!colors.isSecret;
 
     const root = new THREE.Group();
     root.name = `dino_${dinoId}`;
 
-    // Paleta de materiais conforme padrão escolhido
-    const isNeon = pattern === 'neon';
-    const emissiveMain = isNeon ? new THREE.Color(colors.primary) : (isGhost ? new THREE.Color('#ffda6a') : new THREE.Color(0x000000));
-    const emissiveIntensity = isNeon ? 0.35 : (isGhost ? 0.25 : 0);
+    // Paleta de materiais conforme padrão e variante escolhida (Shiny / Mecânico / Secreto)
+    const isNeon = pattern === 'neon' || isMecha || isSecret;
+    const emissiveMain = isSecret
+      ? new THREE.Color('#a855f7')
+      : isShiny
+        ? new THREE.Color('#fde047')
+        : isMecha
+          ? new THREE.Color('#0ea5e9')
+          : isNeon
+            ? new THREE.Color(colors.primary)
+            : (isGhost ? new THREE.Color('#ffda6a') : new THREE.Color(0x000000));
+    const emissiveIntensity = isSecret ? 0.36 : isShiny ? 0.28 : isMecha ? 0.16 : isNeon ? 0.35 : (isGhost ? 0.25 : 0);
 
     const matPrimary = createMat(colors.primary, {
       emissive: emissiveMain,
       emissiveIntensity,
       transparent: isGhost,
       opacity: isGhost ? 0.84 : 1,
-      metalness: dinoId === 'ghostgold' ? 0.45 : 0.08
+      metalness: isMecha ? 0.78 : isShiny ? 0.58 : (dinoId === 'ghostgold' ? 0.45 : 0.08),
+      roughness: isMecha ? 0.26 : isShiny ? 0.22 : 0.65
     });
     const matPrimaryDark = createMat(darkenHex(colors.primary, 0.22), {
       emissive: emissiveMain,
       emissiveIntensity: emissiveIntensity * 0.5,
       transparent: isGhost,
-      opacity: isGhost ? 0.84 : 1
+      opacity: isGhost ? 0.84 : 1,
+      metalness: isMecha ? 0.82 : isShiny ? 0.5 : 0.08,
+      roughness: isMecha ? 0.28 : 0.65
     });
     const matSecondary = createMat(colors.secondary, {
       transparent: isGhost,
-      opacity: isGhost ? 0.86 : 1
+      opacity: isGhost ? 0.86 : 1,
+      metalness: isMecha ? 0.65 : isShiny ? 0.45 : 0.05,
+      roughness: isMecha ? 0.3 : 0.62
     });
     const matSpots = createMat(
       pattern === 'camo' ? darkenHex(colors.primary, 0.42) : colors.spots,
@@ -94,16 +114,18 @@ export class DinoFactory {
 
     // Proporções por espécie (suporta híbridos cabeça/corpo/cauda!)
     const isQuadruped = ['triceratops', 'styracosaurus', 'stegosaurus', 'ankylosaurus', 'brachiosaurus', 'kentrosaurus', 'diplodocus', 'argentinosaurus'].includes(bodyId);
-    const bodyScale = bodyId === 'compsognathus' ? 0.62
+    const isAquatic = ['mosasaurus', 'elasmosaurus', 'dunkleosteus', 'liopleurodon'].includes(bodyId);
+    const isFlying = ['quetzalcoatlus', 'pteranodon', 'tapejara', 'dimorphodon'].includes(bodyId);
+    const bodyScale = bodyId === 'compsognathus' || bodyId === 'dimorphodon' ? 0.68
       : bodyId === 'oviraptor' ? 0.8
-      : bodyId === 'gallimimus' ? 0.86
-      : bodyId === 'quetzalcoatlus' ? 0.92
+      : bodyId === 'gallimimus' || bodyId === 'tapejara' ? 0.86
+      : bodyId === 'quetzalcoatlus' || bodyId === 'pteranodon' ? 0.92
       : bodyId === 'brachiosaurus' ? 1.24
-      : bodyId === 'argentinosaurus' ? 1.32
-      : bodyId === 'diplodocus' ? 1.18
-      : bodyId === 'giganotosaurus' ? 1.14
-      : bodyId === 'raptor' || bodyId === 'dilophosaurus' || bodyId === 'deinonychus' ? 0.88
-      : bodyId === 'ankylosaurus' || bodyId === 'kentrosaurus' ? 1.05
+      : bodyId === 'argentinosaurus' || bodyId === 'mosasaurus' ? 1.26
+      : bodyId === 'diplodocus' || bodyId === 'mecha_rex' ? 1.16
+      : bodyId === 'giganotosaurus' || bodyId === 'liopleurodon' ? 1.14
+      : bodyId === 'raptor' || bodyId === 'dilophosaurus' || bodyId === 'deinonychus' || bodyId === 'utahraptor' || bodyId === 'cyber_raptor' ? 0.9
+      : bodyId === 'ankylosaurus' || bodyId === 'kentrosaurus' || bodyId === 'dunkleosteus' ? 1.06
       : 1.0;
 
     // Rig hierárquico para animações procedurais
@@ -112,7 +134,7 @@ export class DinoFactory {
     root.add(rig);
 
     const torso = new THREE.Group();
-    torso.position.set(0, isQuadruped ? 0.88 : 1.08, 0);
+    torso.position.set(0, isAquatic ? 0.72 : (isQuadruped ? 0.88 : 1.08), 0);
     rig.add(torso);
 
     // Corpo principal (vários blocos para textura voxel rica)
@@ -195,8 +217,8 @@ export class DinoFactory {
 
     // Pescoço e Cabeça articulados
     const neckPivot = new THREE.Group();
-    const neckLen = headId === 'brachiosaurus' || headId === 'argentinosaurus' ? 1.38
-      : (headId === 'diplodocus' ? 1.15 : (headId === 'gallimimus' ? 0.72 : (isQuadruped ? 0.34 : 0.48)));
+    const neckLen = headId === 'brachiosaurus' || headId === 'argentinosaurus' || headId === 'elasmosaurus' ? 1.32
+      : (headId === 'diplodocus' ? 1.15 : (headId === 'gallimimus' ? 0.72 : (isAquatic ? 0.34 : (isQuadruped ? 0.34 : 0.48))));
     neckPivot.position.set(0, torsoH * 0.25, -torsoD * 0.45);
     torso.add(neckPivot);
 
@@ -208,10 +230,10 @@ export class DinoFactory {
     neckPivot.add(headGroup);
 
     const headW = headId === 'triceratops' || headId === 'styracosaurus' ? 0.72
-      : (headId === 'pachycephalosaurus' ? 0.64 : (headId === 'quetzalcoatlus' ? 0.46 : 0.66));
-    const headH = headId === 'giganotosaurus' ? 0.58 : (headId === 'quetzalcoatlus' ? 0.4 : 0.52);
-    const headD = headId === 'spinosaurus' || headId === 'baryonyx' ? 0.96
-      : (headId === 'quetzalcoatlus' ? 1.08 : 0.78);
+      : (headId === 'pachycephalosaurus' || headId === 'dunkleosteus' ? 0.74 : (isFlying ? 0.44 : 0.66));
+    const headH = headId === 'giganotosaurus' || headId === 'dunkleosteus' ? 0.6 : (isFlying ? 0.38 : 0.52);
+    const headD = headId === 'spinosaurus' || headId === 'baryonyx' || headId === 'mosasaurus' ? 1.02
+      : (isFlying ? 1.08 : 0.78);
     addVoxel(headGroup, headW, headH, headD, 0, 0.16, -0.18, matPrimary);
     // Focinho
     addVoxel(headGroup, headW * 0.84, headH * 0.64, headD * 0.46, 0, 0.1, -headD * 0.58, matPrimary);
@@ -301,6 +323,44 @@ export class DinoFactory {
       addVoxel(headGroup, 0.16, 0.22, 0.34, 0, 0.42, 0.18, matSpikes);
     } else if (headId === 'iguanodon') {
       addVoxel(headGroup, 0.16, 0.18, 0.45, 0, 0.42, -0.18, matSpikes);
+    } else if (headId === 'pteranodon' || headId === 'dimorphodon') {
+      addVoxel(headGroup, 0.12, 0.28, 0.78, 0, 0.38, 0.22, matSpikes);
+    } else if (headId === 'tapejara') {
+      // Crista alta colorida de Tapejara
+      addVoxel(headGroup, 0.08, 0.76, 0.62, 0, 0.56, -0.06, matSpikes);
+      addVoxel(headGroup, 0.1, 0.44, 0.34, 0, 0.48, 0.18, matEyeIris);
+    } else if (headId === 'dunkleosteus') {
+      addVoxel(headGroup, headW + 0.16, 0.32, 0.64, 0, 0.34, -0.22, matPrimaryDark);
+      addVoxel(headGroup, 0.14, 0.22, 0.34, -0.26, -0.04, -0.44, matTooth);
+      addVoxel(headGroup, 0.14, 0.22, 0.34, 0.26, -0.04, -0.44, matTooth);
+    } else if (headId === 'utahraptor') {
+      addVoxel(headGroup, 0.16, 0.26, 0.48, 0, 0.45, 0.14, matSpikes);
+    }
+
+    // Visual Mecânico / Transformers / Mecha-Godzilla + Shiny / Secreto
+    if (isMecha) {
+      const armorMat = createMat('#94a3b8', { metalness: 0.85, roughness: 0.22 });
+      const glowReactor = createMat('#00f5d4', { emissive: '#06b6d4', emissiveIntensity: 1.05, roughness: 0.15 });
+      const visorLed = createMat(colors.eye || '#38bdf8', { emissive: colors.eye || '#38bdf8', emissiveIntensity: 1.0 });
+      // Visor cibernético + antenas de cabeça
+      addVoxel(headGroup, headW + 0.12, 0.16, 0.26, 0, eyeY + 0.02, eyeZ - 0.12, visorLed);
+      addVoxel(headGroup, 0.08, 0.34, 0.08, -headW * 0.42, 0.46, 0, armorMat);
+      addVoxel(headGroup, 0.08, 0.34, 0.08, headW * 0.42, 0.46, 0, armorMat);
+      // Núcleo reator no peito + ombreiras angulares + propulsores dorsais
+      addVoxel(torso, 0.34, 0.34, 0.16, 0, 0.08, -torsoD * 0.54, glowReactor);
+      addVoxel(torso, 0.3, 0.34, 0.38, -torsoW * 0.64, torsoH * 0.28, -0.2, armorMat);
+      addVoxel(torso, 0.3, 0.34, 0.38, torsoW * 0.64, torsoH * 0.28, -0.2, armorMat);
+      for (let m = 0; m < 3; m++) {
+        addVoxel(torso, 0.14, 0.32 + m * 0.06, 0.18, -0.14, torsoH * 0.64, -0.3 + m * 0.28, glowReactor);
+        addVoxel(torso, 0.14, 0.32 + m * 0.06, 0.18, 0.14, torsoH * 0.64, -0.3 + m * 0.28, glowReactor);
+      }
+    }
+    if (isShiny || isSecret) {
+      const auraCol = isSecret ? '#e879f9' : '#fde047';
+      const starMat = createMat(auraCol, { emissive: auraCol, emissiveIntensity: 0.95, roughness: 0.15 });
+      addVoxel(torso, 0.16, 0.16, 0.16, -0.68, torsoH * 0.55, -0.22, starMat);
+      addVoxel(torso, 0.16, 0.16, 0.16, 0.68, torsoH * 0.55, 0.22, starMat);
+      addVoxel(headGroup, 0.18, 0.18, 0.18, 0, 0.64, -0.18, starMat);
     }
 
     // Cauda segmentada (4 segmentos articulados)
@@ -324,6 +384,10 @@ export class DinoFactory {
         addVoxel(segPivot, 0.4, 0.12, 0.3, 0, 0.14, 0.34, matSecondary);
       } else if (tailId === 'diplodocus' && s === 3) {
         addVoxel(segPivot, 0.12, 0.12, 0.72, 0, 0, 0.42, matSpikes);
+      } else if (isAquatic && s === 3) {
+        // Barbatana caudal dupla aquática
+        addVoxel(segPivot, 0.68, 0.1, 0.44, 0, 0, 0.34, matSpikes);
+        addVoxel(segPivot, 0.1, 0.58, 0.36, 0, 0.04, 0.34, matSecondary);
       }
       tailSegments.push(segPivot);
       tailParent = segPivot;
@@ -363,22 +427,35 @@ export class DinoFactory {
     if (isQuadruped) {
       armL = buildLeg(-torsoW * 0.44, -0.44, true);
       armR = buildLeg(torsoW * 0.44, -0.44, true);
+    } else if (isAquatic) {
+      // Nadadeiras dianteiras para dinos aquáticos (Mosassauro, Elasmossauro, Dunkleosteus, Liopleurodon)
+      const buildFin = (sideX) => {
+        const shoulder = new THREE.Group();
+        shoulder.position.set(sideX, -torsoH * 0.25, -torsoD * 0.24);
+        torso.add(shoulder);
+        const dir = sideX < 0 ? -1 : 1;
+        addVoxel(shoulder, 0.66, 0.1, 0.38, dir * 0.38, -0.04, 0.04, matPrimaryDark);
+        addVoxel(shoulder, 0.42, 0.08, 0.26, dir * 0.72, -0.06, 0.12, matSpikes);
+        return { hip: shoulder };
+      };
+      armL = buildFin(-torsoW * 0.46);
+      armR = buildFin(torsoW * 0.46);
     } else {
       const buildArm = (sideX) => {
         const shoulder = new THREE.Group();
         shoulder.position.set(sideX, -0.1, -torsoD * 0.32);
         torso.add(shoulder);
         const dir = sideX < 0 ? -1 : 1;
-        if (bodyId === 'quetzalcoatlus') {
-          // Asas enormes de pterossauro
-          addVoxel(shoulder, 0.88, 0.1, 0.38, dir * 0.48, 0.06, 0.06, matPrimaryDark);
-          addVoxel(shoulder, 0.72, 0.06, 0.44, dir * 0.96, 0.02, 0.14, matSpikes);
+        if (isFlying) {
+          // Asas grandes de pterossauro
+          addVoxel(shoulder, 0.92, 0.1, 0.38, dir * 0.5, 0.06, 0.06, matPrimaryDark);
+          addVoxel(shoulder, 0.74, 0.06, 0.44, dir * 0.98, 0.02, 0.14, matSpikes);
           addVoxel(shoulder, 0.12, 0.08, 0.18, dir * 0.14, -0.1, -0.18, matTooth);
           return { hip: shoulder };
         }
         const armLen = bodyId === 'therizinosaurus' ? 0.46 : bodyId === 'baryonyx' ? 0.38 : 0.28;
         addVoxel(shoulder, 0.14, armLen, 0.16, 0, -armLen * 0.4, -0.06, matPrimaryDark);
-        if (bodyId === 'therizinosaurus') {
+        if (bodyId === 'therizinosaurus' || bodyId === 'utahraptor') {
           // Garras gigantes icônicas
           addVoxel(shoulder, 0.05, 0.08, 0.46, -0.04, -armLen * 0.85, -0.28, matTooth);
           addVoxel(shoulder, 0.05, 0.08, 0.46, 0.04, -armLen * 0.85, -0.28, matTooth);
@@ -405,8 +482,9 @@ export class DinoFactory {
       armR = buildArm(torsoW * 0.48);
     }
 
-    // Acessórios cúbicos + skins sazonais & comemorativas LAN
+    // Acessórios cúbicos + Mutações 3D + skins sazonais & comemorativas LAN
     DinoFactory._attachAccessory(accessory, headGroup, torso, torsoW, torsoH, torsoD);
+    DinoFactory._attachMutation(mutationId, headGroup, torso, torsoW, torsoH, torsoD);
     if (customConfig?.partyCrown && accessory !== 'crown') {
       DinoFactory._attachAccessory('crown', headGroup, torso, torsoW, torsoH, torsoD);
     }
@@ -669,8 +747,98 @@ export class DinoFactory {
         addVoxel(headGroup, 0.2, 0.26, 0.2, 0, 0.62, -0.18, auraMat);
         break;
       }
+      case 'diving_mask': {
+        const maskMat = createMat('#0ea5e9', { transparent: true, opacity: 0.72, emissive: '#0284c7', emissiveIntensity: 0.3 });
+        addVoxel(headGroup, 0.78, 0.24, 0.24, 0, 0.22, -0.26, matDark);
+        addVoxel(headGroup, 0.68, 0.18, 0.14, 0, 0.22, -0.35, maskMat);
+        addVoxel(headGroup, 0.11, 0.56, 0.11, 0.44, 0.48, -0.14, matGold);
+        break;
+      }
+      case 'sub_jetpack': {
+        const tankMat = createMat('#0284c7', { metalness: 0.65, roughness: 0.25 });
+        const glowCyan = createMat('#38bdf8', { emissive: '#00f5d4', emissiveIntensity: 0.95 });
+        addVoxel(torso, 0.24, 0.52, 0.24, -0.24, torsoH * 0.62, 0.2, tankMat);
+        addVoxel(torso, 0.24, 0.52, 0.24, 0.24, torsoH * 0.62, 0.2, tankMat);
+        addVoxel(torso, 0.2, 0.16, 0.2, -0.24, torsoH * 0.34, 0.32, glowCyan);
+        addVoxel(torso, 0.2, 0.16, 0.2, 0.24, torsoH * 0.34, 0.32, glowCyan);
+        break;
+      }
+      case 'star_cape': {
+        const velvet = createMat('#312e81', { roughness: 0.55 });
+        const starGold = createMat('#fde047', { emissive: '#f59e0b', emissiveIntensity: 0.85 });
+        addVoxel(torso, 0.96, 0.62, 0.12, 0, torsoH * 0.44, 0.56, velvet);
+        addVoxel(torso, 0.24, 0.24, 0.08, 0, torsoH * 0.52, 0.63, starGold);
+        addVoxel(torso, 0.16, 0.16, 0.08, -0.26, torsoH * 0.32, 0.63, starGold);
+        addVoxel(torso, 0.16, 0.16, 0.08, 0.26, torsoH * 0.32, 0.63, starGold);
+        break;
+      }
+      case 'cyber_armor': {
+        const alloy = createMat('#64748b', { metalness: 0.85, roughness: 0.2 });
+        const neonC = createMat('#00f5d4', { emissive: '#06b6d4', emissiveIntensity: 0.95 });
+        addVoxel(torso, torsoW + 0.18, 0.26, torsoD * 0.55, 0, torsoH * 0.45, -0.1, alloy);
+        addVoxel(torso, 0.34, 0.34, 0.38, -torsoW * 0.58, torsoH * 0.36, -0.15, alloy);
+        addVoxel(torso, 0.34, 0.34, 0.38, torsoW * 0.58, torsoH * 0.36, -0.15, alloy);
+        addVoxel(torso, 0.28, 0.28, 0.12, 0, 0.1, -torsoD * 0.52, neonC);
+        break;
+      }
+      case 'mecha_wings': {
+        const blade = createMat('#cbd5e1', { metalness: 0.82, roughness: 0.2 });
+        const jet = createMat('#38bdf8', { emissive: '#0284c7', emissiveIntensity: 0.95 });
+        for (const s of [-1, 1]) {
+          addVoxel(torso, 0.72, 0.12, 0.32, s * 0.64, torsoH * 0.52, 0.08, blade);
+          addVoxel(torso, 0.58, 0.09, 0.24, s * 1.16, torsoH * 0.6, 0.18, blade);
+          addVoxel(torso, 0.34, 0.08, 0.14, s * 0.88, torsoH * 0.52, 0.24, jet);
+        }
+        break;
+      }
+      case 'floating_crystal': {
+        const cMat = createMat('#2dd4bf', { emissive: '#14b8a6', emissiveIntensity: 0.95, roughness: 0.15 });
+        addVoxel(headGroup, 0.24, 0.42, 0.24, 0, 0.82, -0.14, cMat);
+        addVoxel(headGroup, 0.32, 0.2, 0.32, 0, 0.82, -0.14, cMat);
+        break;
+      }
+      case 'cosmic_horns': {
+        const gal = createMat('#a855f7', { emissive: '#7e22ce', emissiveIntensity: 0.85, metalness: 0.35 });
+        const tip = createMat('#f472b6', { emissive: '#ec4899', emissiveIntensity: 1.0 });
+        for (const s of [-1, 1]) {
+          addVoxel(headGroup, 0.16, 0.34, 0.16, s * 0.3, 0.52, -0.1, gal);
+          addVoxel(headGroup, 0.12, 0.34, 0.14, s * 0.42, 0.78, 0.04, tip);
+        }
+        break;
+      }
       default:
         break;
+    }
+  }
+
+  static _attachMutation(mutationId, headGroup, torso, torsoW, torsoH, torsoD = 1.08) {
+    if (!mutationId) return;
+    if (mutationId === 'glow' || mutationId === 'cosmic_dna') {
+      const col = mutationId === 'cosmic_dna' ? '#c084fc' : '#5eead4';
+      const glowM = createMat(col, { emissive: col, emissiveIntensity: 0.95 });
+      for (let i = -1; i <= 1; i++) {
+        addVoxel(torso, 0.14, 0.22, 0.18, 0, torsoH * 0.58, i * 0.28, glowM);
+      }
+      if (mutationId === 'cosmic_dna') {
+        addVoxel(headGroup, 0.16, 0.28, 0.16, 0, 0.54, -0.18, glowM);
+      }
+    } else if (mutationId === 'fire_trail') {
+      const fireM = createMat('#f97316', { emissive: '#ea580c', emissiveIntensity: 0.95 });
+      addVoxel(torso, 0.18, 0.22, 0.22, -torsoW * 0.52, 0.1, 0.22, fireM);
+      addVoxel(torso, 0.18, 0.22, 0.22, torsoW * 0.52, 0.1, 0.22, fireM);
+    } else if (mutationId === 'venom_spines') {
+      const toxM = createMat('#84cc16', { emissive: '#65a30d', emissiveIntensity: 0.85 });
+      for (let i = 0; i < 3; i++) {
+        addVoxel(torso, 0.12, 0.3, 0.12, -0.18, torsoH * 0.62, -0.32 + i * 0.3, toxM);
+        addVoxel(torso, 0.12, 0.3, 0.12, 0.18, torsoH * 0.62, -0.32 + i * 0.3, toxM);
+      }
+    } else if (mutationId === 'mecha_core') {
+      const mechM = createMat('#38bdf8', { emissive: '#0284c7', emissiveIntensity: 0.95 });
+      addVoxel(torso, 0.3, 0.3, 0.16, 0, 0.12, -torsoD * 0.53, mechM);
+    } else if (mutationId === 'turbo_tail' || mutationId === 'bouncy' || mutationId === 'amber_core' || mutationId === 'lucky_eggs') {
+      const c = mutationId === 'amber_core' ? '#f59e0b' : mutationId === 'lucky_eggs' ? '#fde047' : '#22d3ee';
+      const m = createMat(c, { emissive: c, emissiveIntensity: 0.78 });
+      addVoxel(torso, 0.2, 0.18, 0.2, 0, torsoH * 0.54, 0.42, m);
     }
   }
 }

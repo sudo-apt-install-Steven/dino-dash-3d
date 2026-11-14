@@ -61,6 +61,14 @@ function serializeRoom(room) {
     partyMode: room.partyMode,
     teacherMode: room.teacherMode,
     tvScale: room.tvScale,
+    config: room.config || {
+      allowVoting: true,
+      difficulty: 'normal',
+      biomeId: 'random_portal',
+      allowRevive: true,
+      allowPowerups: true
+    },
+    votes: room.votes || {},
     activeMatch: room.activeMatch || null,
     peers: Array.from(room.peers.values()).map((p) => ({
       peerId: p.peerId,
@@ -100,6 +108,7 @@ function cleanupPeer(ws) {
   if (!peer || peer.ws !== ws) return;
 
   room.peers.delete(ws._peerId);
+  if (room.votes) delete room.votes[ws._peerId];
   room.lastActivity = Date.now();
 
   if (room.peers.size === 0) {
@@ -246,6 +255,14 @@ wss.on('connection', (ws) => {
         partyMode: msg.partyMode !== false,
         teacherMode: !!msg.teacherMode,
         tvScale: !!msg.tvScale,
+        config: {
+          allowVoting: msg.config?.allowVoting !== false,
+          difficulty: msg.config?.difficulty || 'normal',
+          biomeId: msg.config?.biomeId || 'random_portal',
+          allowRevive: msg.config?.allowRevive !== false,
+          allowPowerups: msg.config?.allowPowerups !== false
+        },
+        votes: {},
         lastActivity: Date.now(),
         emptySince: null,
         peers: new Map()
@@ -327,6 +344,10 @@ wss.on('connection', (ws) => {
       case 'update_room':
         if (ws._peerId === room.hostPeerId) {
           if (msg.mode !== undefined) room.mode = msg.mode;
+          if (msg.mpMode !== undefined) {
+            room.mpMode = msg.mpMode;
+            room.elimination = msg.mpMode === 'elimination';
+          }
           if (msg.status !== undefined) room.status = msg.status;
           if (msg.seed !== undefined) room.seed = msg.seed;
           if (msg.elimination !== undefined) room.elimination = !!msg.elimination;
@@ -334,7 +355,24 @@ wss.on('connection', (ws) => {
           if (msg.teacherMode !== undefined) room.teacherMode = !!msg.teacherMode;
           if (msg.tvScale !== undefined) room.tvScale = !!msg.tvScale;
           if (msg.isPublic !== undefined) room.isPublic = !!msg.isPublic;
+          if (msg.config && typeof msg.config === 'object') {
+            room.config = { ...(room.config || {}), ...msg.config };
+          }
+          if (msg.resetVotes) {
+            room.votes = {};
+          }
           if (msg.activeMatch !== undefined) room.activeMatch = msg.activeMatch;
+          broadcast(room, { type: 'room_state', room: serializeRoom(room) });
+        }
+        break;
+      case 'room_vote':
+        if (room.config?.allowVoting !== false && peer) {
+          room.votes = room.votes || {};
+          room.votes[peer.peerId] = {
+            difficulty: msg.difficulty || null,
+            biomeId: msg.biomeId || null,
+            mpMode: msg.mpMode || null
+          };
           broadcast(room, { type: 'room_state', room: serializeRoom(room) });
         }
         break;

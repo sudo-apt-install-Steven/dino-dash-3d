@@ -3,6 +3,8 @@
 // Teste de Conexão, 2–8 jogadores, Chat/Emotes, Pronto, Eliminação 30s e Preview do Controle.
 import { renderQrToCanvas } from '../net/QrGenerator.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
+import { BIOMES, getBiomePreviewMeta } from '../world/Biomes.js';
+import { DIFFICULTY_PRESETS } from '../game/Difficulty.js';
 import { Save } from '../systems/Save.js';
 import { attachModalHelp } from './Menus.js';
 
@@ -15,6 +17,10 @@ export class MultiplayerLobby {
     let mpMode = 'race'; // 'race' | 'duel' | 'elimination'
     let elimination = false;
     let partyMode = true;
+    let hostDifficulty = Save.data.difficulty || 'normal';
+    let hostBiomeId = Save.data.startBiomeId || 'random_portal';
+    let allowVoting = true;
+    let allowRevive = true;
     let tvScale = !!Save.data.network?.tvScale;
     let teacherMode = !!Save.data.teacherMode;
     let botCount = 0;
@@ -88,6 +94,25 @@ export class MultiplayerLobby {
                       <option value="elimination" ${mpMode === 'elimination' ? 'selected' : ''}>⏳ Eliminação 30s (Último colocado sai!)</option>
                     </select>
                   </label>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                    <label style="font-size:0.8rem;">Dificuldade:
+                      <select class="select-input" id="mp-diff" style="width:100%; margin-top:3px;">
+                        ${Object.values(DIFFICULTY_PRESETS).map((d) => `<option value="${d.id}" ${hostDifficulty === d.id ? 'selected' : ''}>${d.name}</option>`).join('')}
+                      </select>
+                    </label>
+                    <label style="font-size:0.8rem;">Mapa Inicial:
+                      <select class="select-input" id="mp-biome" style="width:100%; margin-top:3px;">
+                        <option value="random_portal" ${hostBiomeId === 'random_portal' ? 'selected' : ''}>🌀 Aleatório (Portais)</option>
+                        ${BIOMES.map((b) => `<option value="${b.id}" ${hostBiomeId === b.id ? 'selected' : ''}>${getBiomePreviewMeta(b).icon} ${b.name}</option>`).join('')}
+                      </select>
+                    </label>
+                  </div>
+                  <label style="display:flex; gap:8px; align-items:center; font-size:0.82rem;">
+                    <input type="checkbox" id="mp-allow-vote" ${allowVoting ? 'checked' : ''} /> 🗳️ Permitir votação dos jogadores na sala
+                  </label>
+                  <label style="display:flex; gap:8px; align-items:center; font-size:0.82rem;">
+                    <input type="checkbox" id="mp-allow-revive" ${allowRevive ? 'checked' : ''} /> 💖 Permitir reviver aliado em jogo [V]
+                  </label>
                   <label style="display:flex; gap:8px; align-items:center; font-size:0.84rem;">
                     <input type="checkbox" id="mp-tv" ${tvScale ? 'checked' : ''} /> Modo "TV de Sala" (texto grande)
                   </label>
@@ -138,10 +163,17 @@ export class MultiplayerLobby {
                     const hostPeer = room.peers.find((p) => p.peerId === room.hostPeerId) || room.peers[0];
                     const readyCount = room.peers.filter((p) => p.ready).length;
                     const trLabel = net.transportType === 'supabase' ? '☁️ Online Global' : '📡 LAN Wi-Fi';
-                    const roomMpMode = room.mpMode || (room.elimination ? 'elimination' : 'race');
+                    const resolvedCfg = net.resolveRoomConfig(room);
+                    const roomMpMode = resolvedCfg.mpMode;
                     const modeLabel = roomMpMode === 'duel'
                       ? '⚔️ Duelo PvP (Ataque Q)'
                       : (roomMpMode === 'elimination' ? '⏳ Eliminação 30s' : '🏁 Corrida Competitiva');
+                    const diffLabel = DIFFICULTY_PRESETS[resolvedCfg.difficulty]?.name || 'Normal';
+                    const biomeObj = resolvedCfg.biomeId === 'random_portal'
+                      ? { id: 'random_portal', name: '🌀 Aleatório (Portais)' }
+                      : BIOMES.find((b) => b.id === resolvedCfg.biomeId);
+                    const biomeLabel = biomeObj?.name || 'Deserto Dourado';
+                    const selfVote = room.votes?.[net.peerId] || {};
                     return `
                   <div class="item-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
@@ -153,10 +185,54 @@ export class MultiplayerLobby {
                         </div>
                       ` : ''}
                     </div>
-                    <div style="margin-top:6px; padding:5px 10px; border-radius:8px; background:rgba(15,23,42,0.45); border:1px solid #f59e0b; font-size:0.78rem; color:#fde047; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
-                      <span>Modo: <strong>${modeLabel}</strong></span>
-                      <span>🏆 Pódio (2+ jogadores): 1º +12 🥚 • 2º +6 🥚 • 3º +3 🥚</span>
+                    <div style="margin-top:6px; padding:6px 10px; border-radius:8px; background:rgba(15,23,42,0.5); border:1px solid #f59e0b; font-size:0.78rem; color:#fde047; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                      <span><strong>${modeLabel}</strong> • Dif.: <strong>${diffLabel}</strong> • Mapa: <strong>${biomeLabel}</strong> • ${resolvedCfg.allowRevive ? '💖 Revive ON' : '🚫 Sem Revive'}</span>
+                      <span>${resolvedCfg.allowVoting ? `🗳️ Votação ativa (${resolvedCfg.voteCount} votos)` : '🔒 Somente Dono da Sala'} • 🏆 1º +12 🥚</span>
                     </div>
+
+                    ${net.isHost ? `
+                      <div style="margin-top:8px; padding:8px; border-radius:10px; background:rgba(24,24,27,0.72); border:1px solid rgba(255,212,71,0.3); display:flex; flex-direction:column; gap:6px;">
+                        <strong style="font-size:0.78rem; color:#ffd447;">👑 Painel do Dono da Sala (Regras & Permissões)</strong>
+                        <div style="display:grid; grid-template-columns:repeat(3, minmax(110px, 1fr)); gap:6px;">
+                          <select class="select-input" id="mp-cfg-mode" style="font-size:0.76rem;">
+                            <option value="race" ${(room.mpMode || 'race') === 'race' ? 'selected' : ''}>🏁 Corrida</option>
+                            <option value="duel" ${room.mpMode === 'duel' ? 'selected' : ''}>⚔️ Duelo PvP</option>
+                            <option value="elimination" ${(room.mpMode === 'elimination' || room.elimination) ? 'selected' : ''}>⏳ Eliminação</option>
+                          </select>
+                          <select class="select-input" id="mp-cfg-diff" style="font-size:0.76rem;">
+                            ${Object.values(DIFFICULTY_PRESETS).map((d) => `<option value="${d.id}" ${(room.config?.difficulty || 'normal') === d.id ? 'selected' : ''}>Dif: ${d.name}</option>`).join('')}
+                          </select>
+                          <select class="select-input" id="mp-cfg-biome" style="font-size:0.76rem;">
+                            <option value="random_portal" ${(room.config?.biomeId || 'random_portal') === 'random_portal' ? 'selected' : ''}>🌀 Aleatório</option>
+                            ${BIOMES.map((b) => `<option value="${b.id}" ${room.config?.biomeId === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}
+                          </select>
+                        </div>
+                        <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:0.76rem;">
+                          <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="mp-cfg-vote" ${room.config?.allowVoting !== false ? 'checked' : ''} /> Jogadores podem votar</label>
+                          <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="mp-cfg-revive" ${room.config?.allowRevive !== false ? 'checked' : ''} /> Permitir Reviver Aliado [V]</label>
+                        </div>
+                      </div>
+                    ` : ''}
+
+                    ${resolvedCfg.allowVoting ? `
+                      <div style="margin-top:6px; padding:8px; border-radius:10px; background:rgba(15,23,42,0.55); border:1px solid rgba(56,189,248,0.35); display:flex; flex-direction:column; gap:6px;">
+                        <strong style="font-size:0.78rem; color:#7dd3fc;">🗳️ Seu Voto (Maioria decide se empatar ganha o Dono!)</strong>
+                        <div style="display:grid; grid-template-columns:repeat(3, minmax(95px, 1fr)); gap:6px;">
+                          <select class="select-input" id="mp-vote-mode" style="font-size:0.76rem;">
+                            <option value="race" ${(selfVote.mpMode || roomMpMode) === 'race' ? 'selected' : ''}>🏁 Corrida</option>
+                            <option value="duel" ${(selfVote.mpMode || roomMpMode) === 'duel' ? 'selected' : ''}>⚔️ Duelo PvP</option>
+                            <option value="elimination" ${(selfVote.mpMode || roomMpMode) === 'elimination' ? 'selected' : ''}>⏳ Eliminação</option>
+                          </select>
+                          <select class="select-input" id="mp-vote-diff" style="font-size:0.76rem;">
+                            ${Object.values(DIFFICULTY_PRESETS).map((d) => `<option value="${d.id}" ${(selfVote.difficulty || resolvedCfg.difficulty) === d.id ? 'selected' : ''}>${d.name}</option>`).join('')}
+                          </select>
+                          <select class="select-input" id="mp-vote-biome" style="font-size:0.76rem;">
+                            <option value="random_portal" ${(selfVote.biomeId || resolvedCfg.biomeId) === 'random_portal' ? 'selected' : ''}>🌀 Aleatório</option>
+                            ${BIOMES.map((b) => `<option value="${b.id}" ${(selfVote.biomeId || resolvedCfg.biomeId) === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}
+                          </select>
+                        </div>
+                      </div>
+                    ` : ''}
                     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(175px, 1fr)); gap:6px; margin-top:6px;">
                       ${room.peers.map((p) => `
                         <div style="padding:6px 8px; border-radius:10px; background:rgba(0,0,0,0.35); border:1px solid ${p.color || '#ffd447'}; font-size:0.82rem;">
@@ -234,6 +310,10 @@ export class MultiplayerLobby {
           nickname = container.querySelector('#mp-nick').value.trim() || 'Host';
           isPublic = container.querySelector('#mp-pub').checked;
           mpMode = container.querySelector('#mp-mode')?.value || 'race';
+          hostDifficulty = container.querySelector('#mp-diff')?.value || hostDifficulty;
+          hostBiomeId = container.querySelector('#mp-biome')?.value || hostBiomeId;
+          allowVoting = container.querySelector('#mp-allow-vote')?.checked !== false;
+          allowRevive = container.querySelector('#mp-allow-revive')?.checked !== false;
           elimination = mpMode === 'elimination';
           tvScale = container.querySelector('#mp-tv').checked;
           teacherMode = container.querySelector('#mp-teacher').checked;
@@ -254,7 +334,13 @@ export class MultiplayerLobby {
             partyMode,
             tvScale,
             teacherMode,
-            role: 'screen'
+            role: 'screen',
+            config: {
+              allowVoting,
+              difficulty: hostDifficulty,
+              biomeId: hostBiomeId,
+              allowRevive
+            }
           });
           statusMsg = res.ok ? '' : res.message;
           render();
@@ -317,6 +403,31 @@ export class MultiplayerLobby {
           net.sendPlayerMeta({ ready: nextReady });
           render();
         });
+        container.querySelector('#mp-cfg-mode')?.addEventListener('change', (e) => {
+          net.updateRoomSettings({ mpMode: e.target.value, elimination: e.target.value === 'elimination' });
+        });
+        container.querySelector('#mp-cfg-diff')?.addEventListener('change', (e) => {
+          net.updateRoomSettings({ config: { difficulty: e.target.value } });
+        });
+        container.querySelector('#mp-cfg-biome')?.addEventListener('change', (e) => {
+          net.updateRoomSettings({ config: { biomeId: e.target.value } });
+        });
+        container.querySelector('#mp-cfg-vote')?.addEventListener('change', (e) => {
+          net.updateRoomSettings({ config: { allowVoting: e.target.checked } });
+        });
+        container.querySelector('#mp-cfg-revive')?.addEventListener('change', (e) => {
+          net.updateRoomSettings({ config: { allowRevive: e.target.checked } });
+        });
+        const emitVote = () => {
+          net.sendRoomVote({
+            mpMode: container.querySelector('#mp-vote-mode')?.value || null,
+            difficulty: container.querySelector('#mp-vote-diff')?.value || null,
+            biomeId: container.querySelector('#mp-vote-biome')?.value || null
+          });
+        };
+        container.querySelector('#mp-vote-mode')?.addEventListener('change', emitVote);
+        container.querySelector('#mp-vote-diff')?.addEventListener('change', emitVote);
+        container.querySelector('#mp-vote-biome')?.addEventListener('change', emitVote);
         container.querySelector('#mp-join-live')?.addEventListener('click', () => {
           if (room.activeMatch) {
             cleanupListeners();

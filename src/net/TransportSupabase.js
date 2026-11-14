@@ -64,6 +64,14 @@ export class TransportSupabase {
       partyMode: opts.partyMode !== false,
       teacherMode: !!opts.teacherMode,
       tvScale: !!opts.tvScale,
+      config: {
+        allowVoting: opts.config?.allowVoting !== false,
+        difficulty: opts.config?.difficulty || 'normal',
+        biomeId: opts.config?.biomeId || 'random_portal',
+        allowRevive: opts.config?.allowRevive !== false,
+        allowPowerups: opts.config?.allowPowerups !== false
+      },
+      votes: {},
       activeMatch: null,
       peers: []
     };
@@ -177,8 +185,25 @@ export class TransportSupabase {
         return;
       }
       if (payload.type === 'update_room') {
-        Object.assign(this.room, payload.patch || {});
+        const patch = payload.patch || {};
+        if (patch.config && typeof patch.config === 'object') {
+          this.room.config = { ...(this.room.config || {}), ...patch.config };
+        }
+        const { config: _cfg, ...rest } = patch;
+        Object.assign(this.room, rest);
         this._emit('message', { type: 'room_state', room: this.room });
+        return;
+      }
+      if (payload.type === 'room_vote' && payload.peerId) {
+        if (this.room.config?.allowVoting !== false) {
+          this.room.votes = this.room.votes || {};
+          this.room.votes[payload.peerId] = {
+            difficulty: payload.difficulty || null,
+            biomeId: payload.biomeId || null,
+            mpMode: payload.mpMode || null
+          };
+          this._emit('message', { type: 'room_state', room: this.room });
+        }
         return;
       }
       if (payload.type === 'start_match') {
@@ -264,6 +289,8 @@ export class TransportSupabase {
           partyMode: this.room.partyMode,
           teacherMode: this.room.teacherMode,
           tvScale: this.room.tvScale,
+          config: this.room.config || {},
+          votes: this.room.votes || {},
           activeMatch: this.room.activeMatch || null
         }
       }
@@ -316,8 +343,13 @@ export class TransportSupabase {
     }
     if (payload.type === 'update_room' && this.room) {
       const { type, ...patch } = payload;
-      Object.assign(this.room, patch);
-      this.channel.send({ type: 'broadcast', event: 'msg', payload: { type: 'update_room', patch } }).catch(() => {});
+      if (patch.config && typeof patch.config === 'object') {
+        this.room.config = { ...(this.room.config || {}), ...patch.config };
+      }
+      const { config: _cfg, ...rest } = patch;
+      Object.assign(this.room, rest);
+      const netPatch = { ...patch, config: this.room.config };
+      this.channel.send({ type: 'broadcast', event: 'msg', payload: { type: 'update_room', patch: netPatch } }).catch(() => {});
       if (this.room.hostPeerId === this.selfPeerId) {
         this._syncRoomDb(true).catch(() => {});
       }

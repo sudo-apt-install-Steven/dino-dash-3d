@@ -239,9 +239,102 @@ export const BIOMES = [
       river: '#c084fc', riverEmissive: '#9333ea', sun: '#38bdf8', sunGlow: '#c084fc',
       scenery: { pebble: '#94a3b8', rock: '#64748b', flora: '#38bdf8', flower: '#fb7185', mesa: '#4338ca', cloud: '#94a3b8', wood: '#475569' }
     }
+  },
+  {
+    id: 'ocean_surface',
+    tier: 'essential',
+    name: 'Recife Oceânico',
+    ruleDesc: 'Corrida sobre o mar cristalino! Ondas impulsionam saltos e dinos aquáticos ganham turbinamento.',
+    lore: 'Mar pré-histórico azul-turquesa repleto de corais vivos, cardumes brilhantes e predadores marinhos.',
+    fossil: { id: 'fossil_ocean', name: 'Concha de Mosassauro', icon: '🌊' },
+    bossId: 'leviathan_abyssal',
+    waterTrack: true,
+    oceanSurface: true,
+    currentForce: 1.5,
+    theme: {
+      sky: '#38bdf8', fog: '#7dd3fc', fogDensity: 0.0085,
+      ground: '#0ea5e9', track: '#22d3ee', stripe: '#f0f9ff', bank: '#0284c7', edgeGlow: '#67e8f9',
+      river: '#0369a1', riverEmissive: '#0ea5e9', sun: '#fef08a', sunGlow: '#fde047',
+      scenery: { pebble: '#f472b6', rock: '#0c4a6e', flora: '#2dd4bf', flower: '#fb7185', mesa: '#075985', cloud: '#ffffff', wood: '#78350f' }
+    }
+  },
+  {
+    id: 'abyss_submerged',
+    tier: 'advanced',
+    name: 'Abismo Submerso',
+    ruleDesc: 'Mapa totalmente subaquático com baixa gravidade marinha, bolhas e corais neon!',
+    lore: 'Fossa oceânica luminosa de águas profundas habitada por Dunkleosteus e pelo Leviatã Abissal.',
+    fossil: { id: 'fossil_abyss', name: 'Pérola Bioluminescente', icon: '🫧' },
+    bossId: 'leviathan_abyssal',
+    waterTrack: true,
+    submerged: true,
+    lowGravity: 0.72,
+    theme: {
+      sky: '#1d4ed8', fog: '#2563eb', fogDensity: 0.0115,
+      ground: '#1e3a8a', track: '#3b82f6', stripe: '#72efdd', bank: '#1e40af', edgeGlow: '#38bdf8',
+      river: '#0891b2', riverEmissive: '#06b6d4', sun: '#72efdd', sunGlow: '#38bdf8',
+      scenery: { pebble: '#38bdf8', rock: '#334155', flora: '#34d399', flower: '#f472b6', mesa: '#1e293b', cloud: '#67e8f9', wood: '#0f766e' }
+    }
+  },
+  {
+    id: 'hollow_earth',
+    tier: 'advanced',
+    name: 'Terra Oca',
+    ruleDesc: 'Subterrâneo cristalino acessível por portais no Terremoto (ou após descoberta)!',
+    lore: 'Mundo oculto sob a crosta terrestre iluminado por cristais gigantes e fungos luminescentes.',
+    fossil: { id: 'fossil_hollow', name: 'Núcleo Geotérmico', icon: '🕳️' },
+    bossId: 'crystal_wyrm',
+    subterranean: true,
+    lowGravity: 0.88,
+    theme: {
+      sky: '#2e1065', fog: '#4c1d95', fogDensity: 0.0105,
+      ground: '#4338ca', track: '#7c3aed', stripe: '#2dd4bf', bank: '#3730a3', edgeGlow: '#5eead4',
+      river: '#14b8a6', riverEmissive: '#0d9488', sun: '#2dd4bf', sunGlow: '#a855f7',
+      scenery: { pebble: '#a78bfa', rock: '#4c1d95', flora: '#2dd4bf', flower: '#f472b6', mesa: '#312e81', cloud: '#6d28d9', wood: '#5b21b6' }
+    }
+  },
+  {
+    id: 'mecha_city',
+    tier: 'advanced',
+    name: 'Metrópole Mecha',
+    ruleDesc: 'Rodovia cibernética futurista de alta velocidade sob comando do Mecha Titan.',
+    lore: 'Complexo neocretáceo onde placas de titânio e reatores sustentam dinossauros cibernéticos.',
+    fossil: { id: 'fossil_mecha', name: 'Engrenagem Alfa Cyber', icon: '⚙️' },
+    bossId: 'mecha_titan',
+    speedMod: 1.12,
+    theme: {
+      sky: '#1e293b', fog: '#334155', fogDensity: 0.0095,
+      ground: '#334155', track: '#64748b', stripe: '#38bdf8', bank: '#475569', edgeGlow: '#38bdf8',
+      river: '#06b6d4', riverEmissive: '#0284c7', sun: '#38bdf8', sunGlow: '#f43f5e',
+      scenery: { pebble: '#cbd5e1', rock: '#475569', flora: '#22d3ee', flower: '#fb7185', mesa: '#1e293b', cloud: '#64748b', wood: '#334155' }
+    }
   }
 ];
 
 export function getBiomeById(id) {
+  if (id === 'random_portal') {
+    return getRandomNextBiome();
+  }
   return BIOMES.find((b) => b.id === id) || BIOMES[0];
+}
+
+export function getRandomNextBiome(excludeId = null) {
+  const pool = BIOMES.filter((b) => b.id !== excludeId);
+  return pool[Math.floor(Math.random() * pool.length)] || BIOMES[0];
+}
+
+export function isAquaticBiome(biome) {
+  return Boolean(biome?.waterTrack || biome?.oceanSurface || biome?.submerged);
+}
+
+export function getBiomePreviewMeta(biome) {
+  if (!biome) return { tag: 'Terrestre', icon: '🏜️' };
+  if (biome.id === 'random_portal') return { tag: 'Aleatório (Portais)', icon: '🌀' };
+  if (biome.submerged) return { tag: 'Submerso', icon: '🫧' };
+  if (biome.oceanSurface || biome.waterTrack) return { tag: 'Sobre a Água', icon: '🌊' };
+  if (biome.subterranean) return { tag: 'Terra Oca', icon: '🕳️' };
+  if (biome.id === 'mecha_city' || biome.id === 'alien_factory') return { tag: 'Futurista', icon: '🤖' };
+  if (biome.lowGravity) return { tag: 'Baixa Gravidade', icon: '🪐' };
+  if (biome.slippery) return { tag: 'Gelo', icon: '❄️' };
+  return { tag: 'Terrestre', icon: biome.fossil?.icon || '🦖' };
 }

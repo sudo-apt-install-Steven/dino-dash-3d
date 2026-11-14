@@ -33,7 +33,9 @@ export const BOSS_AUDIT_REPORT = [
   { id: 'cave_spider', name: 'Aranha Cavernosa', title: 'Rainha das Sombras', status: 'Modelo Voxel Completo', details: '8 pernas articuladas, quelíceras venenosas, 6 olhos rubis e abdômen bioluminescente.' },
   { id: 'amber_scarab', name: 'Escaravelho de Âmbar', title: 'Guardião Dourado', status: 'Modelo Voxel Completo', details: 'Élitros articulados que abrem em voo, pinças frontais e gema solar incandescente.' },
   { id: 'crystal_wyrm', name: 'Serpe Cristalina', title: 'Dragão de Ametista', status: 'Modelo Voxel Completo', details: 'Asas prismáticas articuladas, crânio dracônico com chifres de quartzo e cauda espigada.' },
-  { id: 'cyber_raptor', name: 'Raptor Cibernético [Mini-Boss]', title: 'Unidade Alfa-X', status: 'Modelo Voxel Completo', details: 'Exoesqueleto cromado, visor laser neon, propulsores a jato duplos e lâmina caudal.' }
+  { id: 'cyber_raptor', name: 'Raptor Cibernético [Mini-Boss]', title: 'Unidade Alfa-X', status: 'Modelo Voxel Completo', details: 'Exoesqueleto cromado, visor laser neon, propulsores a jato duplos e lâmina caudal.' },
+  { id: 'leviathan_abyssal', name: 'Leviatã Abissal', title: 'Soberano das Fossas', status: 'Modelo Voxel Novo', details: 'Serpente abissal colossal, barbatanas peitorais gigantes, mandíbula luminosa e lanternas bioluminescentes.' },
+  { id: 'mecha_titan', name: 'Titã Mecânico Ω', title: 'Colosso Cibernético', status: 'Modelo Voxel Novo', details: 'Blindagem estilo Transformers/Mecha-Godzilla, placas dorsais neon, canhões nos ombros e núcleo de fusão.' }
 ];
 
 export function buildBossModel(bossId) {
@@ -62,6 +64,10 @@ export function buildBossModel(bossId) {
       return buildCrystalWyrm();
     case 'cyber_raptor':
       return buildCyberRaptor();
+    case 'leviathan_abyssal':
+      return buildLeviathanAbyssal();
+    case 'mecha_titan':
+      return buildMechaTitan();
     default:
       return buildAlphaTrex();
   }
@@ -897,6 +903,107 @@ function buildCyberRaptor() {
     legR.rotation.x = -stride * 0.48;
     tail.rotation.y = Math.sin(t * 6) * 0.25;
     if (auraMesh.visible) auraMesh.rotation.y += dt * 1.8;
+  };
+  return state;
+}
+
+function buildLeviathanAbyssal() {
+  const root = new THREE.Group();
+  const deepMat = new THREE.MeshStandardMaterial({ color: '#0f172a', roughness: 0.3, metalness: 0.45 });
+  const scaleMat = new THREE.MeshStandardMaterial({ color: '#0369a1', roughness: 0.25, metalness: 0.35 });
+  const bioMat = new THREE.MeshStandardMaterial({ color: '#22d3ee', emissive: '#06b6d4', emissiveIntensity: 1.25 });
+  const fangMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.2 });
+
+  const body = pivotAt(root, 0, 2.2, 0);
+  vox(body, 2.3, 1.5, 3.6, 0, 0, 0, deepMat);
+  vox(body, 1.8, 0.45, 3.0, 0, -0.78, 0, scaleMat);
+  for (let i = 0; i < 4; i++) {
+    vox(body, 0.24, 0.72 + (i % 2) * 0.28, 0.55, 0, 1.0, 1.2 - i * 0.85, bioMat);
+  }
+  const head = pivotAt(body, 0, 0.45, 1.9);
+  vox(head, 1.85, 1.05, 2.0, 0, 0.3, 0.65, deepMat);
+  const jaw = pivotAt(head, 0, -0.35, 0.5);
+  vox(jaw, 1.55, 0.38, 1.75, 0, -0.1, 0.65, scaleMat);
+  vox(jaw, 0.16, 0.32, 0.16, -0.48, 0.16, 1.35, fangMat);
+  vox(jaw, 0.16, 0.32, 0.16, 0.48, 0.16, 1.35, fangMat);
+  const lure = vox(head, 0.42, 0.42, 0.42, 0, 1.1, 1.55, bioMat);
+  vox(head, 0.26, 0.26, 0.26, -0.75, 0.42, 1.25, bioMat);
+  vox(head, 0.26, 0.26, 0.26, 0.75, 0.42, 1.25, bioMat);
+
+  const finL = pivotAt(body, -1.25, -0.25, 0.5);
+  vox(finL, 2.2, 0.18, 1.25, -1.1, 0, -0.15, scaleMat);
+  vox(finL, 1.8, 0.12, 0.35, -0.95, 0.08, 0.42, bioMat);
+  const finR = pivotAt(body, 1.25, -0.25, 0.5);
+  vox(finR, 2.2, 0.18, 1.25, 1.1, 0, -0.15, scaleMat);
+  vox(finR, 1.8, 0.12, 0.35, 0.95, 0.08, 0.42, bioMat);
+
+  const tail = pivotAt(body, 0, 0, -2.0);
+  vox(tail, 1.2, 1.0, 2.2, 0, 0, -1.0, deepMat);
+  const tailFluke = vox(tail, 2.1, 0.22, 1.1, 0, 0, -2.3, bioMat);
+
+  const auraMesh = makeStandardAura(root, '#06b6d4', 6.4, 4.2, 5.8);
+  const state = createCommonState(root, { body, head, jaw, finL, finR, tail, cracks: [] }, [lure, tailFluke], [bioMat], auraMesh);
+  state.updateAnimation = (t, dt, animName) => {
+    const flap = Math.sin(t * 4.5) * 0.38;
+    finL.rotation.z = flap;
+    finR.rotation.z = -flap;
+    jaw.rotation.x = animName === 'roar' || animName === 'bite' ? 0.55 : 0.12 + Math.sin(t * 3.5) * 0.06;
+    tail.rotation.y = Math.sin(t * 5.0) * 0.38;
+    body.position.y = 2.2 + Math.sin(t * 2.8) * 0.26;
+    if (auraMesh.visible) auraMesh.rotation.y += dt * 1.4;
+  };
+  return state;
+}
+
+function buildMechaTitan() {
+  const root = new THREE.Group();
+  const armorMat = new THREE.MeshStandardMaterial({ color: '#475569', metalness: 0.85, roughness: 0.22 });
+  const darkFrame = new THREE.MeshStandardMaterial({ color: '#0f172a', metalness: 0.72, roughness: 0.38 });
+  const plasmaMat = new THREE.MeshStandardMaterial({ color: '#f43f5e', emissive: '#e11d48', emissiveIntensity: 1.2 });
+  const coreMat = new THREE.MeshStandardMaterial({ color: '#38bdf8', emissive: '#0284c7', emissiveIntensity: 1.3 });
+
+  const body = pivotAt(root, 0, 2.55, 0);
+  vox(body, 2.45, 2.1, 2.25, 0, 0, 0, armorMat);
+  vox(body, 1.75, 1.15, 0.35, 0, 0.25, 1.18, darkFrame);
+  const core = vox(body, 0.92, 0.92, 0.42, 0, 0.25, 1.32, coreMat);
+  for (let i = 0; i < 4; i++) {
+    vox(body, 0.32, 0.85, 0.52, -0.52, 1.25 - i * 0.25, -0.95, plasmaMat);
+    vox(body, 0.32, 0.85, 0.52, 0.52, 1.25 - i * 0.25, -0.95, plasmaMat);
+  }
+  const head = pivotAt(body, 0, 1.45, 0.85);
+  vox(head, 1.35, 1.05, 1.55, 0, 0.2, 0.35, armorMat);
+  const visor = vox(head, 1.42, 0.28, 0.75, 0, 0.32, 0.85, plasmaMat);
+  vox(head, 0.24, 0.72, 0.28, -0.58, 0.78, 0.1, coreMat);
+  vox(head, 0.24, 0.72, 0.28, 0.58, 0.78, 0.1, coreMat);
+
+  const cannonL = pivotAt(body, -1.65, 0.85, 0.3);
+  vox(cannonL, 0.95, 0.95, 2.1, 0, 0, 0.55, darkFrame);
+  vox(cannonL, 0.55, 0.55, 0.45, 0, 0, 1.65, plasmaMat);
+  const cannonR = pivotAt(body, 1.65, 0.85, 0.3);
+  vox(cannonR, 0.95, 0.95, 2.1, 0, 0, 0.55, darkFrame);
+  vox(cannonR, 0.55, 0.55, 0.45, 0, 0, 1.65, plasmaMat);
+
+  const legL = pivotAt(body, -0.92, -1.05, 0);
+  vox(legL, 0.82, 1.65, 0.92, 0, -0.82, 0, armorMat);
+  vox(legL, 0.98, 0.38, 1.35, 0, -1.55, 0.28, darkFrame);
+  const legR = pivotAt(body, 0.92, -1.05, 0);
+  vox(legR, 0.82, 1.65, 0.92, 0, -0.82, 0, armorMat);
+  vox(legR, 0.98, 0.38, 1.35, 0, -1.55, 0.28, darkFrame);
+
+  const tail = pivotAt(body, 0, -0.55, -1.2);
+  vox(tail, 0.78, 0.72, 2.8, 0, 0, -1.25, armorMat);
+  vox(tail, 0.35, 0.55, 2.4, 0, 0.35, -1.25, coreMat);
+
+  const auraMesh = makeStandardAura(root, '#f43f5e', 5.8, 4.8, 5.4);
+  const state = createCommonState(root, { body, head, cannonL, cannonR, legL, legR, tail, cracks: [] }, [cannonL, cannonR, visor, core], [plasmaMat, coreMat], auraMesh);
+  state.updateAnimation = (t, dt) => {
+    const stride = Math.sin(t * 7.5);
+    legL.rotation.x = stride * 0.42;
+    legR.rotation.x = -stride * 0.42;
+    cannonL.rotation.x = Math.sin(t * 4.2) * 0.12;
+    cannonR.rotation.x = -Math.sin(t * 4.2) * 0.12;
+    tail.rotation.y = Math.sin(t * 5) * 0.25;
+    if (auraMesh.visible) auraMesh.rotation.y += dt * 2.0;
   };
   return state;
 }

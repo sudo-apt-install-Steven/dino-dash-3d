@@ -210,6 +210,57 @@ export class DinoAbilities {
         gameCtx.spawnEggRain?.(5);
         gameCtx.showFloatText?.(player, 'TRANSCENDÊNCIA!', '#ffd447');
         break;
+      case 'mosasaurus':
+      case 'liopleurodon':
+        player.ramTimer = player.abilityDuration;
+        player.invulnTimer = Math.max(player.invulnTimer, player.abilityDuration * 0.85);
+        this._spawnWave(player.x, player.z, '#2dd4bf', 20);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 22, true);
+        gameCtx.showFloatText?.(player, spec.id === 'mosasaurus' ? 'MORDIDA ABISSAL!' : 'SALTO OCEÂNICO!', '#38bdf8');
+        break;
+      case 'elasmosaurus':
+        player.invulnTimer = Math.max(player.invulnTimer, player.abilityDuration);
+        player.magnetTimer = Math.max(player.magnetTimer, 5.0);
+        gameCtx.showFloatText?.(player, 'JATO DE MARÉ!', '#38bdf8');
+        break;
+      case 'dunkleosteus':
+        player.shields = Math.min(5, (player.shields || 0) + 1);
+        player.ramTimer = player.abilityDuration;
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 18, false);
+        gameCtx.showFloatText?.(player, 'MANDÍBULA BLINDADA!', '#f59e0b');
+        break;
+      case 'pteranodon':
+      case 'tapejara':
+      case 'dimorphodon':
+        player.invulnTimer = Math.max(player.invulnTimer, player.abilityDuration * 0.8);
+        player.magnetTimer = Math.max(player.magnetTimer, spec.id === 'tapejara' ? 4.5 : 0);
+        for (let k = -1; k <= 1; k++) {
+          this._spawnProjectile(player.x + k * 0.8, 2.8, player.z - 0.8, k * 2, -46, this.plasmaMat);
+        }
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 20, true);
+        gameCtx.showFloatText?.(player, spec.ability.name.toUpperCase() + '!', '#38bdf8');
+        break;
+      case 'utahraptor':
+        player.ramTimer = player.abilityDuration;
+        player.speedBoostTimer = Math.max(player.speedBoostTimer, player.abilityDuration);
+        gameCtx.showFloatText?.(player, 'GARRA FOICE TURBO!', '#ef4444');
+        break;
+      case 'mecha_rex':
+        player.shields = Math.min(5, (player.shields || 0) + 1);
+        this._spawnWave(player.x, player.z, '#00f5d4', 28);
+        for (let i = 0; i < 4; i++) {
+          this._spawnProjectile(player.x + (i - 1.5) * 0.65, 1.1, player.z - 1.0, 0, -56, this.plasmaMat);
+        }
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 34, false);
+        gameCtx.showFloatText?.(player, 'CANHÃO DE PLASMA MECHA!', '#00f5d4');
+        break;
+      case 'cyber_raptor':
+        player.invulnTimer = Math.max(player.invulnTimer, player.abilityDuration);
+        player.speedBoostTimer = Math.max(player.speedBoostTimer, player.abilityDuration);
+        player.magnetTimer = Math.max(player.magnetTimer, 4.5);
+        this._spawnWave(player.x, player.z, '#38bdf8', 18);
+        gameCtx.showFloatText?.(player, 'OVERCLOCK QUÂNTICO!', '#00f5d4');
+        break;
       default:
         break;
     }

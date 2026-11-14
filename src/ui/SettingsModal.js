@@ -40,6 +40,22 @@ export class SettingsModal {
               <input type="checkbox" id="set-hints" ${s.obstacleHints !== false ? 'checked' : ''} />
             </div>
             <div class="field-row">
+              <span>✨ Popups de Descoberta (Elementos & Poderes)</span>
+              <input type="checkbox" id="set-discovery-popups" ${s.discoveryPopups !== false ? 'checked' : ''} />
+            </div>
+            <div class="field-row">
+              <span>🌱 Desbloqueio Progressivo na Corrida (menos poluição no início)</span>
+              <input type="checkbox" id="set-progressive" ${s.progressiveUnlocks !== false ? 'checked' : ''} />
+            </div>
+            <div class="field-row">
+              <span>👥 Câmera Multiplayer Local</span>
+              <select id="set-mp-cam">
+                <option value="shared" ${(s.mpCameraMode || 'shared') === 'shared' ? 'selected' : ''}>Câmera Única Compartilhada (Clássico)</option>
+                <option value="split_h" ${s.mpCameraMode === 'split_h' ? 'selected' : ''}>Tela Dividida Horizontal (Cima / Baixo)</option>
+                <option value="split_v" ${s.mpCameraMode === 'split_v' ? 'selected' : ''}>Tela Dividida Vertical (Lado a Lado)</option>
+              </select>
+            </div>
+            <div class="field-row">
               <span>Narrador Divertido (PT-BR)</span>
               <input type="checkbox" id="set-narrator" ${s.narrator ? 'checked' : ''} />
             </div>
@@ -246,6 +262,9 @@ export class SettingsModal {
       s.audio.sfx = Number(container.querySelector('#set-sfx').value) / 100;
       s.audio.muted = container.querySelector('#set-muted').checked;
       s.obstacleHints = container.querySelector('#set-hints').checked;
+      s.discoveryPopups = container.querySelector('#set-discovery-popups')?.checked !== false;
+      s.progressiveUnlocks = container.querySelector('#set-progressive')?.checked !== false;
+      s.mpCameraMode = container.querySelector('#set-mp-cam')?.value || 'shared';
       s.narrator = container.querySelector('#set-narrator').checked;
       s.touchMode = container.querySelector('#set-touchmode')?.value || 'swipe';
       s.introMode = container.querySelector('#set-intromode')?.value || 'first_time';

@@ -684,3 +684,121 @@ export function buildClaudeAccessoryGroup(id) {
   wrap.add(raw);
   return wrap;
 }
+
+// ================================================================
+// 4. SINALIZAÇÃO VISUAL DE PERIGO (FÁCIL / NORMAL) & ESTRUTURAS NOVAS
+// ================================================================
+export function buildHazardFloorSign() {
+  const g = getOrBuildTemplate('hazard_floor_x_v1', (c) => {
+    // Contorno quadrado vermelho luminoso + X central de proibição + setas laterais
+    c.B(-9, 0.3, -9, 18, 0.8, 1.4, 0xff3b30, { e: 0.9 });
+    c.B(-9, 0.3, 7.6, 18, 0.8, 1.4, 0xff3b30, { e: 0.9 });
+    c.B(-9, 0.3, -7.6, 1.4, 0.8, 15.2, 0xff3b30, { e: 0.9 });
+    c.B(7.6, 0.3, -7.6, 1.4, 0.8, 15.2, 0xff3b30, { e: 0.9 });
+    for (let i = -5; i <= 5; i++) {
+      c.B(i - 0.6, 0.45, i - 0.6, 1.4, 0.6, 1.4, 0xff4757, { e: 0.95 });
+      c.B(i - 0.6, 0.45, -i - 0.6, 1.4, 0.6, 1.4, 0xff4757, { e: 0.95 });
+    }
+    // Setas laterais vermelhas nas bordas externas
+    c.B(-11.5, 0.5, -1, 2, 0.8, 2, 0xff6b6b, { e: 0.85 });
+    c.B(9.5, 0.5, -1, 2, 0.8, 2, 0xff6b6b, { e: 0.85 });
+  });
+  return g;
+}
+
+export function buildTallProhibitionBarrier(withWarn = true) {
+  const key = withWarn ? 'tall_prohibit_warn_v1' : 'tall_prohibit_raw_v1';
+  const g = getOrBuildTemplate(key, (c) => {
+    // Barreira alta >= 2.5m (impossível de pular — exige troca de faixa!)
+    c.B(-9, 0, -3, 2, 26, 6, 0x334155, { m: 0.35 });
+    c.B(7, 0, -3, 2, 26, 6, 0x334155, { m: 0.35 });
+    c.B(-8, 12, -2.5, 16, 13, 5, 0x475569, { m: 0.25 });
+    c.B(-8, 1, -2.5, 16, 10, 5, 0x1e293b, { m: 0.25 });
+    if (withWarn) {
+      // Placa vermelha de impedimento vertical + X + setas laterais brilhantes
+      c.B(-7.5, 11.5, 2.7, 15, 1.6, 1.0, 0xff3b30, { e: 0.95 });
+      c.B(-7.5, 22.8, 2.7, 15, 1.6, 1.0, 0xff3b30, { e: 0.95 });
+      c.B(-7.5, 13, 2.7, 1.6, 9.8, 1.0, 0xff3b30, { e: 0.95 });
+      c.B(5.9, 13, 2.7, 1.6, 9.8, 1.0, 0xff3b30, { e: 0.95 });
+      for (let i = -3; i <= 3; i++) {
+        c.B(i - 0.6, 17.2 + i, 3.0, 1.5, 1.5, 0.9, 0xff4757, { e: 0.95 });
+        c.B(i - 0.6, 17.2 - i, 3.0, 1.5, 1.5, 0.9, 0xff4757, { e: 0.95 });
+      }
+      c.warn(11, 7, 0);
+    }
+  });
+  return g;
+}
+
+export function buildDuckSignOverlay() {
+  return getOrBuildTemplate('duck_arrow_overlay_v1', (c) => {
+    // Seta dupla vermelha/ciano apontando PARA BAIXO na placa suspensa
+    for (let y = 0; y <= 5; y++) {
+      c.B(-0.8, 1 + y, 0, 1.6, 1.2, 1.2, 0xff5a4d, { e: 0.95 });
+    }
+    c.B(-3.5, 1.5, 0, 7, 1.4, 1.2, 0xff5a4d, { e: 0.95 });
+    c.B(-2.2, 0.2, 0, 4.4, 1.4, 1.2, 0xff5a4d, { e: 0.95 });
+    c.B(-1.0, -1.0, 0, 2.0, 1.4, 1.2, 0xff5a4d, { e: 0.95 });
+  });
+}
+
+export function buildHollowEarthPortalGroup() {
+  return getOrBuildTemplate('hollow_earth_portal_v1', (c) => {
+    c.disc(0, 0, 0.2, 9.5, 0x312e81);
+    c.disc(0, 0, 0.4, 7.2, 0x7c3aed, { e: 0.55 });
+    c.disc(0, 0, 0.6, 4.8, 0x2dd4bf, { e: 0.95 });
+    // Arco de cristais ao redor do portal
+    for (let a = 0; a <= Math.PI; a += Math.PI / 8) {
+      const px = Math.round(Math.cos(a) * 9.5);
+      const py = Math.round(Math.sin(a) * 14 + 2);
+      c.B(px - 1, py, -1.5, 2.4, 3.2, 3, a % 2 === 0 ? 0x2dd4bf : 0xa855f7, { e: 0.85 });
+    }
+    // Fissuras luminosas no chão
+    c.B(-11, 0.3, -4, 4, 0.6, 1.2, 0x2dd4bf, { e: 0.9 });
+    c.B(7, 0.3, 3, 4.5, 0.6, 1.2, 0xa855f7, { e: 0.9 });
+  });
+}
+
+export function buildEarthquakeCrackGroup() {
+  return getOrBuildTemplate('quake_crack_v1', (c) => {
+    c.B(-8, 0.1, -6, 16, 0.4, 3, 0x1c1917);
+    c.B(-6, 0.18, -5.2, 12, 0.35, 1.4, 0xf97316, { e: 0.85 });
+    c.B(-3, 0.18, -3, 2, 0.35, 8, 0x2dd4bf, { e: 0.85 });
+    c.B(2, 0.18, -7, 2, 0.35, 6, 0xf97316, { e: 0.85 });
+  });
+}
+
+export function buildShopLaneGateGroup() {
+  return getOrBuildTemplate('shop_lane_gate_v1', (c) => {
+    // Quiosque pré-histórico dourado da Lojinha da 4ª Pista
+    c.B(-11, 0, -6, 2.5, 22, 3, 0x78350f);
+    c.B(8.5, 0, -6, 2.5, 22, 3, 0x78350f);
+    c.B(-12, 20, -7.5, 24, 5, 6, 0xd97706, { m: 0.25 });
+    c.B(-10, 21, -7.8, 20, 3, 6.6, 0xfacc15, { e: 0.85 });
+    c.B(-9.5, 0.2, -5, 19, 1.2, 10, 0x22c55e, { e: 0.45 });
+    c.B(-3, 25, -6, 6, 4, 3, 0x38bdf8, { e: 0.9 });
+  });
+}
+
+export function buildMutationCapsuleGroup(hexColor = 0x2dd4bf) {
+  const g = new THREE.Group();
+  const frameMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.72, roughness: 0.24 });
+  const glassMat = new THREE.MeshStandardMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.32, roughness: 0.15 });
+  const helixMat = new THREE.MeshStandardMaterial({ color: hexColor, emissive: hexColor, emissiveIntensity: 0.85, roughness: 0.2 });
+  const capGeo = new THREE.BoxGeometry(0.95, 0.18, 0.95);
+  const topCap = new THREE.Mesh(capGeo, frameMat);
+  topCap.position.y = 0.72;
+  const botCap = new THREE.Mesh(capGeo, frameMat);
+  botCap.position.y = -0.68;
+  const tube = new THREE.Mesh(new THREE.BoxGeometry(0.76, 1.28, 0.76), glassMat);
+  g.add(topCap, botCap, tube);
+  for (let i = 0; i < 6; i++) {
+    const a = i * 0.95;
+    const node = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.24), helixMat);
+    node.position.set(Math.cos(a) * 0.2, -0.45 + i * 0.18, Math.sin(a) * 0.2);
+    const node2 = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.16, 0.24), helixMat);
+    node2.position.set(-Math.cos(a) * 0.2, -0.45 + i * 0.18, -Math.sin(a) * 0.2);
+    g.add(node, node2);
+  }
+  return g;
+}
