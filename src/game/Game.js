@@ -122,6 +122,8 @@ export class Game {
     this._lastFrameRenderAt = 0;
     this.pendingRestart = false;
     this.restartPrevState = 'playing';
+    this.radialWheelOpen = false;
+    this.radialCooldown = 0;
     this.tutorialState = null;
     this.seenHints = new Set();
     this.hollowEarthState = null;
@@ -172,7 +174,7 @@ export class Game {
     this._swipeSurface = document.getElementById('app') || this.canvas;
     const isInteractiveTarget = (t) => {
       if (!t || !t.closest) return false;
-      return !!t.closest('button, a, input, select, textarea, [data-tact], #btn-fury-melee, #btn-attack-melee, #hud-backpack, #hud-camera, .chunky-panel, .modal-card, .overlay-center');
+      return !!t.closest('button, a, input, select, textarea, [data-tact], #btn-fury-melee, #btn-attack-melee, #hud-backpack, #hud-camera, #btn-radial-wheel, #btn-transmute-mode, #touch-radial-btn, #hud-radial-wheel, .chunky-panel, .modal-card, .overlay-center');
     };
     this._onCanvasPointer = (e) => {
       if (this.state !== 'playing') return;
@@ -824,6 +826,11 @@ export class Game {
         diveDepth: 0,
         inWater: false,
         inSubmerged: false,
+        oxygen: 100,
+        _oxygenDmgTimer: 0,
+        _oxygenWarnCd: 0,
+        equippedAccessory: localCustom?.accessory || 'none',
+        isAquaticNative: habInfo.primary === 'aquatic' || habInfo.primary === 'amphibious',
         skinVariant: eqSkinVariant,
         mutationId: eqMutationId,
         mutationTier: eqMutationTier,
@@ -860,6 +867,9 @@ export class Game {
     this.photoMode = false;
     this.spectatorMode = false;
     this.pendingRestart = false;
+    this.radialWheelOpen = false;
+    this.radialCooldown = 0;
+    this.ui.hud.hideRadialWheel?.();
     this._dismissSpotlight();
     this.tutorialState = null;
     this.multiplayerSession = null;
@@ -1224,6 +1234,9 @@ export class Game {
     this.evolutionTier = 0;
     this.hitStopTimer = 0;
     this.slowMoTimer = 0;
+    this.radialWheelOpen = false;
+    this.radialCooldown = 0;
+    this.ui.hud.hideRadialWheel?.();
     this.decoyTimer = 0;
     this._pendingStartBanners = [];
     this._skipIntroGuardFrames = 0;
@@ -1260,7 +1273,7 @@ export class Game {
 
     // Bioma inicial (Modo História começa no capítulo 1; Modo Aleatório inicia via Portal Dinâmico)
     const rawStartId = opts.biomeId || (this.modeId === 'story' ? STORY_CHAPTERS[0].biome : this.startBiomeId);
-    this.randomPortalMode = rawStartId === 'random_portal' || !!opts.randomPortal || !!this.sequenceBiomes;
+    this.randomPortalMode = rawStartId === 'random_portal' || !!opts.randomPortal;
     const startId = rawStartId === 'random_portal' ? getRandomNextBiome(null).id : rawStartId;
     this.currentBiome = getBiomeById(startId);
     this.world.applyTheme(this.currentBiome.theme);
@@ -1674,6 +1687,85 @@ export class Game {
     return true;
   }
 
+  toggleRadialWheel(force = null) {
+    if (this.state !== 'playing') return;
+    if (this.events.predators?.state === 'intro' || this.spotlightActive || this.pendingRestart) return;
+    const next = force === null ? !this.radialWheelOpen : !!force;
+    if (next && this.radialCooldown > 0.05) {
+      this.ui.hud.showFloatText(`🧭 Roda recarregando (${this.radialCooldown.toFixed(1)}s)!`, '#94a3b8');
+      return;
+    }
+    this.radialWheelOpen = next;
+    if (next) {
+      const p0 = this.players[0];
+      this.ui.hud.showRadialWheel({
+        player: p0,
+        companionStatus: this.companions?.getHudStatus?.() || null
+      });
+    } else {
+      this.ui.hud.hideRadialWheel();
+    }
+  }
+
+  executeRadialAction(slot) {
+    const p0 = this.players[0];
+    if (!p0 || p0.dead || this.state !== 'playing') {
+      this.toggleRadialWheel(false);
+      return;
+    }
+    let applied = false;
+    if (slot === 'habitat') {
+      if (Array.isArray(p0.availableHabitats) && p0.availableHabitats.length > 1) {
+        applied = this._transmutePlayerHabitat(p0);
+      } else if (p0.inWater || p0.inSubmerged) {
+        p0.diveDepth = 0;
+        p0.vy = Math.max(p0.vy || 0, 11.4);
+        p0.grounded = false;
+        p0.oxygen = Math.min(100, (p0.oxygen ?? 100) + 28);
+        this.sfx.jump(true);
+        this.ui.hud.showFloatText('🫧 IMPULSO ABISSAL (+28% O₂)!', '#38bdf8');
+        applied = true;
+      } else {
+        this.ui.hud.showFloatText('🧬 Apenas Híbridos, Anfíbios ou Aquáticos (+Patas) trocam habitat!', '#c084fc');
+      }
+    } else if (slot === 'backpack') {
+      if (p0.backpack?.slots?.length > 0) {
+        this.usePlayerItem(0);
+        applied = true;
+      } else {
+        this.ui.hud.showFloatText('🎒 Mochila vazia!', '#94a3b8');
+      }
+    } else if (slot === 'companion') {
+      const res = this.companions?.triggerActiveCommand?.(p0, this.spawner, () => this.addScore(45 * this.combo, p0));
+      if (res?.ok) {
+        this.sfx.powerup?.();
+        this.ui.hud.showFloatText(res.msg, '#4ade80');
+        applied = true;
+      } else {
+        this.ui.hud.showFloatText(res?.reason || '🐾 Sem Mascote ativo!', '#fbbf24');
+      }
+    } else if (slot === 'focus') {
+      if ((p0.stamina ?? 0) >= 25) {
+        p0.stamina = Math.max(0, (p0.stamina ?? 100) - 25);
+        p0.abilityCharge = Math.min(100, (p0.abilityCharge ?? 100) + 28);
+        p0.oxygen = Math.min(100, (p0.oxygen ?? 100) + 45);
+        if (p0.statuses) {
+          delete p0.statuses.mud;
+          delete p0.statuses.poison;
+        }
+        this.sfx.powerup?.();
+        this.ui.hud.showFloatText('⚡ FOCO TÁTICO (+28% Hab / +45 O₂)!', '#fde047');
+        applied = true;
+      } else {
+        this.ui.hud.showFloatText('💨 Estamina insuficiente (precisa 25)!', '#fbbf24');
+      }
+    }
+    if (applied) {
+      this.radialCooldown = 4.5;
+    }
+    this.toggleRadialWheel(false);
+  }
+
   enterHollowEarth(duration = 14) {
     if (this.hollowEarthState?.active) {
       this.hollowEarthState.timer = Math.max(this.hollowEarthState.timer, duration);
@@ -1946,6 +2038,11 @@ export class Game {
       falling_stalactite: { label: '🪨 Estalactite Cristalina', tip: 'Destrua com [Q] ou desvie de faixa antes do impacto.' },
       electric_pylon: { label: '⚡ Bobina Elétrica', tip: 'Desvie da faixa energizada usando [A/D]!' },
       spike_barricade: { label: '🪵 Barricada de Espinhos', tip: 'Pule com [W/↑] ou quebre com [Q] / Fúria!' },
+      coral_reef: { label: '🪸 Recife de Coral', tip: 'Pule sobre os corais ou corte com Ataque [Q]!' },
+      abyss_mine: { label: '💣 Mina Abissal', tip: 'Desvie de faixa [A/D] ou mergulhe fundo com [S/↓]!' },
+      jellyfish_swarm: { label: '🪼 Água-Viva Elétrica', tip: 'Mergulhe com [S/↓] por baixo ou corte com [Q]!' },
+      whirlpool_vortex: { label: '🌀 Redemoinho Abissal', tip: 'Mude de faixa com [A/D] antes que o vórtice sugue seu O₂!' },
+      oxygen: { label: '🫧 Falta de Oxigênio (O₂)', tip: 'Colete Bolhas 🫧, suba à tona ou equipe Máscara Abissal!' },
       pvp: { label: '⚔️ Ataque de Rival', tip: 'Contra-ataque com [Q] ou mantenha escudos ativos nos Duelos.' }
     };
     const found = map[cause];
@@ -1961,7 +2058,7 @@ export class Game {
       return;
     }
     if (!p || p.dead || this.godMode || this.modeId === 'zen' || this.isTestTrack) return;
-    if (p.invulnTimer > 0 || p.furyTimer > 0 || p.ramTimer > 0 || p.diveTimer > 0 || p.rocketTimer > 0) return;
+    if (p.invulnTimer > 0 || p.furyTimer > 0 || p.ramTimer > 0 || p.rocketTimer > 0) return;
 
     // Filhote companheiro pode bloquear 1 dano!
     if (p.index === 0 && this.companions.tryBlockDamage()) {
@@ -2556,6 +2653,33 @@ export class Game {
       }
     }
 
+    // Controle real de Oxigênio (O2) para mergulho / bioma submerso
+    if (p._oxygenWarnCd > 0) p._oxygenWarnCd = Math.max(0, p._oxygenWarnCd - dt);
+    const isSubmergedDepth = Boolean(p.inSubmerged || (inWater && (p.diveDepth || 0) > 0.32));
+    if (p.isAquaticNative) {
+      p.oxygen = Math.min(100, (p.oxygen ?? 100) + 38 * dt);
+      p._oxygenDmgTimer = 0;
+    } else if (isSubmergedDepth && !this.isTestTrack && this.modeId !== 'zen') {
+      const hasDiveGear = p.equippedAccessory === 'diving_mask' || p.equippedAccessory === 'snorkel' || p.equippedAccessory === 'steam_goggles';
+      const drainRate = (p.inSubmerged ? 5.2 : 10.5) * (hasDiveGear ? 0.35 : 1.0);
+      p.oxygen = Math.max(0, (p.oxygen ?? 100) - drainRate * dt);
+      if (p.oxygen <= 30 && p.oxygen > 0 && p.index === 0 && (p._oxygenWarnCd || 0) <= 0) {
+        p._oxygenWarnCd = 2.8;
+        this.ui.hud.showFloatText('🫧 OXIGÊNIO BAIXO! Suba ou pegue Bolha 🫧!', '#38bdf8');
+      }
+      if (p.oxygen <= 0) {
+        p._oxygenDmgTimer = (p._oxygenDmgTimer || 0) + dt;
+        if (p._oxygenDmgTimer >= 2.2) {
+          p._oxygenDmgTimer = 0;
+          p.oxygen = 22;
+          this._damagePlayer(p, 'oxygen');
+        }
+      }
+    } else {
+      p.oxygen = Math.min(100, (p.oxygen ?? 100) + 28 * dt);
+      p._oxygenDmgTimer = 0;
+    }
+
     if (p.sliding) {
       p.slideTimer -= dt;
       if (p.slideTimer <= 0 || !duckHeld) p.sliding = false;
@@ -2880,7 +3004,11 @@ export class Game {
         this.currentBiome.name,
         Math.ceil((this.score + 1) / 1000) * 1000,
         this.combo,
-        this.score
+        this.score,
+        {
+          companionStatus: this.companions?.getHudStatus?.() || null,
+          radialCooldown: this.radialCooldown || 0,
+        }
       );
       const modeTag = this.multiplayerSession.mpMode === 'duel'
         ? 'DUELO PvP'
@@ -2995,6 +3123,21 @@ export class Game {
       return;
     }
 
+    if (this.radialWheelOpen) {
+      const camPlayers = this.players.filter((x) => !x.dead);
+      const radOpts = this._buildCameraEnvOpts(camPlayers[0] || this.players[0]);
+      this.cameraRig.update(
+        dt,
+        camPlayers.length > 0 ? camPlayers : this.players,
+        0,
+        Save.data.settings.accessibility.reduceShake,
+        this.photoMode,
+        this.spectatorMode,
+        radOpts
+      );
+      return;
+    }
+
     if (this.hitStopTimer > 0) {
       this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
       const camPlayers = this.players.filter((x) => !x.dead);
@@ -3073,15 +3216,19 @@ export class Game {
       speedMult = 1.32 + Math.min(0.14, (speedMult - 1.32) * 0.35);
     }
 
-    // Curva de velocidade não-linear por fases & teto rígido jogável
-    const phase = Math.floor(this.score / 850);
-    const phaseProgress = (this.score % 850) / 850;
-    const phaseCurve = Math.log1p(phase * 0.85) * 3.8 + this.score * (this.speedAccel * 0.58);
-    const waveRelief = phaseProgress < 0.16 ? 0.90 : (0.98 + Math.sin(phaseProgress * Math.PI) * 0.06);
+    // Curva de velocidade calibrada por Tempo (62%) + Score amortecido (38%), com aquecimento 0-18s
+    const timeSec = Math.max(0, this.runTime || 0);
+    const warmupFactor = Math.min(1, timeSec / 18);
+    const timeRamp = Math.log1p(timeSec / 26) * 5.2 + Math.min(12.5, timeSec * 0.055);
+    const scoreDamped = Math.log1p(Math.max(0, this.score) / 1400) * 3.4 + Math.min(9.5, this.score * (this.speedAccel * 0.28));
+    const curveDelta = (timeRamp * 0.62 + scoreDamped * 0.38) * (0.25 + 0.75 * warmupFactor);
+    const wavePhase = (timeSec % 32) / 32;
+    const waveRelief = wavePhase < 0.14 ? 0.92 : (0.98 + Math.sin(wavePhase * Math.PI) * 0.05);
     const bossRelief = this.events.bosses.activeBoss ? 0.94 : 1.0;
-    const rawSpeed = Math.min(this.maxSpeed, this.baseSpeed + phaseCurve) * waveRelief * bossRelief * speedMult;
-    const hardSpeedCeiling = this.maxSpeed * (hasBoost ? 1.22 : 1.08);
-    this.speed = Math.max(this.baseSpeed * 0.65, Math.min(hardSpeedCeiling, rawSpeed));
+    const rawSpeed = Math.min(this.maxSpeed, this.baseSpeed * (0.92 + 0.08 * warmupFactor) + curveDelta) * waveRelief * bossRelief * speedMult;
+    const hardSpeedCeiling = this.maxSpeed * (hasBoost ? 1.18 : 1.06);
+    const targetSpeed = Math.max(this.baseSpeed * 0.65, Math.min(hardSpeedCeiling, rawSpeed));
+    this.speed += (targetSpeed - this.speed) * Math.min(1, dt * 3.5);
     this.distance += this.speed * worldDt;
     const perfectMult = Save.data.perfectMode ? 2.2 : 1;
     const scoreGain = this.speed * worldDt * 0.55 * (p0?.scoreCardMult || 1) * (p0?.scoreMultBonus || 1) * perfectMult;
@@ -3210,9 +3357,10 @@ export class Game {
     }
     if (this.decoyTimer > 0) this.decoyTimer -= dt;
 
-    // Transição de bioma por portal a cada ~1000 pontos (ou Modo História)
-    if (this.sequenceBiomes && this.modeId !== 'story') {
-      const targetIdx = Math.floor(this.score / 1000) % BIOMES.length;
+    // Transição de bioma por portal a cada ~1000 pontos respeitando o bioma inicial escolhido (ou Modo História)
+    if (this.sequenceBiomes && !this.randomPortalMode && !this.hollowEarthState?.active && this.modeId !== 'story' && this.startBiomeId !== 'random_portal') {
+      const startIdx = Math.max(0, BIOMES.findIndex((b) => b.id === this.startBiomeId));
+      const targetIdx = (startIdx + Math.floor(this.score / 1000)) % BIOMES.length;
       const targetBiome = BIOMES[targetIdx];
       if (targetBiome && targetBiome.id !== this.currentBiome.id) {
         this.currentBiome = targetBiome;
@@ -3512,7 +3660,14 @@ export class Game {
       this.addScore(45 * this.combo);
     });
 
-    this.companions.update(dt, p0, this.spawner, () => this._collectEgg(p0, false));
+    this.companions.update(dt, p0, this.spawner, () => this._collectEgg(p0, false), {
+      onNotify: (msg, color) => this.ui.hud.showFloatText(msg, color),
+      onBreakHazard: (obs) => {
+        this.particles.emitExplosion(obs.group.position.x, (obs.group.position.y || 0) + 0.7, obs.group.position.z, obs.color, 10, true);
+        this.sfx.stomp?.();
+        this.addScore(45 * this.combo, p0);
+      }
+    });
 
     // Cubos de impacto quicantes atingem outros inimigos
     for (let i = this.impactDebris.length - 1; i >= 0; i--) {
@@ -3571,6 +3726,28 @@ export class Game {
           obs.hit = true;
           obs.pool?.release(obs);
           this._collectEgg(p, obs.eggTier || (obs.isGold ? 5 : 1), !!obs.isMystery);
+          continue;
+        }
+
+        if (obs.kind === 'oxygen_bubble') {
+          obs.hit = true;
+          obs.pool?.release(obs);
+          p.oxygen = Math.min(100, (p.oxygen ?? 100) + 38);
+          p.stamina = Math.min(100, (p.stamina ?? 100) + 12);
+          this.sfx.heal?.();
+          this.particles.emitExplosion(obs.group.position.x, (obs.group.position.y || 0) + 0.5, obs.group.position.z, '#38bdf8', 10, false);
+          this.addScore(40 * this.combo, p);
+          this.ui.hud.showFloatText('🫧 +38% OXIGÊNIO & ESTAMINA!', '#67e8f9');
+          continue;
+        }
+
+        if (obs.kind === 'whirlpool_vortex') {
+          if (p.y > 1.15) continue;
+          obs.hit = true;
+          p.stamina = Math.max(0, (p.stamina ?? 100) - 18);
+          p.oxygen = Math.max(0, (p.oxygen ?? 100) - 16);
+          StatusSystem.apply(p, 'mud', 2.2, this);
+          this._damagePlayer(p, 'whirlpool_vortex');
           continue;
         }
 
@@ -3879,8 +4056,8 @@ export class Game {
           continue;
         }
 
-        // Fúria / Carga / Mergulho / Ataque Básico destroem o obstáculo!
-        if (p.furyTimer > 0 || p.ramTimer > 0 || p.diveTimer > 0 || (p.attackTimer > 0 && obs.breakable)) {
+        // Fúria / Carga / Ataque Básico destroem o obstáculo! (Mergulho desvia por baixo, sem invencibilidade gratuita)
+        if (p.furyTimer > 0 || p.ramTimer > 0 || (p.attackTimer > 0 && obs.breakable)) {
           obs.hit = true;
           obs.pool?.release(obs);
           this.particles.emitExplosion(obs.group.position.x, (obs.group.position.y || 0) + 0.8, obs.group.position.z, obs.color, 14, true);
@@ -3934,7 +4111,11 @@ export class Game {
         this.currentBiome.name,
         Math.ceil((this.score + 1) / 1000) * 1000,
         this.combo,
-        this.score
+        this.score,
+        {
+          companionStatus: this.companions?.getHudStatus?.() || null,
+          radialCooldown: this.radialCooldown || 0,
+        }
       );
       if (this.multiplayerSession?.active) {
         const modeTag = this.multiplayerSession.mpMode === 'duel'
@@ -4250,6 +4431,21 @@ export class Game {
       return;
     }
 
+    if (this.radialWheelOpen) {
+      if (this.input.wasKeyJustPressed('Escape') || this.input.wasKeyJustPressed('KeyX')) {
+        this.toggleRadialWheel(false);
+      } else if (this.input.wasKeyJustPressed('Digit1') || this.input.wasKeyJustPressed('KeyW') || this.input.wasKeyJustPressed('ArrowUp')) {
+        this.executeRadialAction('habitat');
+      } else if (this.input.wasKeyJustPressed('Digit2') || this.input.wasKeyJustPressed('KeyD') || this.input.wasKeyJustPressed('ArrowRight')) {
+        this.executeRadialAction('backpack');
+      } else if (this.input.wasKeyJustPressed('Digit3') || this.input.wasKeyJustPressed('KeyS') || this.input.wasKeyJustPressed('ArrowDown')) {
+        this.executeRadialAction('companion');
+      } else if (this.input.wasKeyJustPressed('Digit4') || this.input.wasKeyJustPressed('KeyA') || this.input.wasKeyJustPressed('ArrowLeft')) {
+        this.executeRadialAction('focus');
+      }
+      return;
+    }
+
     if (import.meta.env.DEV && this.input.wasKeyJustPressed('F9')) {
       if (!Save.data.devMode) {
         Save.data.devMode = true;
@@ -4282,8 +4478,12 @@ export class Game {
         this.restartRun();
       }
     }
-    // Emotes rápidos (1, 2, 3) & Reviver Aliado Multiplayer (V)
+    // Roda Tática [X], Emotes rápidos (1, 2, 3) & Reviver Aliado Multiplayer (V)
     if (this.state === 'playing') {
+      if (this.input.wasKeyJustPressed('KeyX')) {
+        this.toggleRadialWheel();
+        return;
+      }
       if (this.input.wasKeyJustPressed('Digit1')) this.ui.hud.showFloatText('🎉 VAMOOO!', '#58d63a');
       if (this.input.wasKeyJustPressed('Digit2')) this.ui.hud.showFloatText('😜 HEHE!', '#ff9a24');
       if (this.input.wasKeyJustPressed('Digit3')) this.ui.hud.showFloatText('🆘 SOCORRO!', '#38bdf8');
@@ -4310,6 +4510,9 @@ export class Game {
     this.input.beginFrame();
     this._updateGlobalKeys();
     this.ui.hud.tickTimers(dt);
+    if (this.state === 'playing' && !this.radialWheelOpen && !this.spotlightActive && this.radialCooldown > 0) {
+      this.radialCooldown = Math.max(0, this.radialCooldown - dt);
+    }
 
     if (this.spotlightActive) {
       this.renderer.render(this.scene, this.camera);

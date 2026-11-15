@@ -45,7 +45,7 @@ function runBackgroundWarmup(game, onStep = null) {
       fn: () => {
         if (!Save.data.benchmarkDone || (Save.data.benchmarkVersion || 1) < 3) {
           PerfMonitor.runTimedBenchmark(game, 950).then((res) => {
-            if (game.state === 'menu') game.ui.showMainMenu();
+            game.ui?.refreshMainMenuIfIdle?.();
             if (res.lowSpecSuggested && !Save.data.lowSpecMode) {
               game.ui.hud.showBanner(`⚠️ ${res.estFps} FPS (${res.tier}) — Modo "Meu PC é Fraco" sugerido!`, '#f59e0b', 4.5);
             }
@@ -125,7 +125,7 @@ function showSplashAndBoot() {
       if (restored && game.state === 'menu') {
         game.rebuildPlayers?.();
         game.ui?.applyVisualSettings?.();
-        game.ui?.showMainMenu?.();
+        game.ui?.refreshMainMenuIfIdle?.();
       }
     }).catch(() => {});
 

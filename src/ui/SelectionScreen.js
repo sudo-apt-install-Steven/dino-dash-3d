@@ -178,39 +178,42 @@ export class SelectionScreen {
             </div>
           </div>
 
-          <div class="hud-pill" id="sel-notice" style="color:#ffd447; text-align:center; padding:6px 12px; font-size:0.82rem; display:none;"></div>
-
-          <div class="tabs-row" id="sel-filter-tabs" style="margin-bottom:6px;">
-            <button class="tab-btn active" data-cfilter="all">Todos (${allNonSecret.length})</button>
-            ${Object.entries(DINO_CLASSES).map(([k, info]) => `
-              <button class="tab-btn" data-cfilter="${k}">${info.name.pt}</button>
-            `).join('')}
-          </div>
-
           <div class="preview-split">
-            <div>
+            <div class="sel-stage-col" id="sel-stage-col">
               <div class="preview-canvas-box" id="sel-preview-box"></div>
-              <p id="sel-lock-hint" style="font-size:0.75rem; color:#d8c2a6; text-align:center; margin-top:6px;"></p>
-              <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-                <button class="chunky-btn" id="sel-confirm" style="flex:1 1 150px; white-space:nowrap; font-size:0.86rem; padding:9px 12px;"></button>
+              <p id="sel-lock-hint" style="font-size:0.75rem; color:#d8c2a6; text-align:center; margin-top:4px;"></p>
+              <div class="sel-action-bar">
+                <button class="chunky-btn" id="sel-confirm" style="flex:1 1 135px; white-space:nowrap; font-size:0.86rem; padding:9px 12px;"></button>
                 <button class="chunky-btn secondary" id="sel-test" style="padding:9px 12px; font-size:0.86rem;">Testar</button>
                 <button class="chunky-btn secondary" id="sel-roar" style="padding:9px 12px; font-size:0.86rem;">🔊 Rugido</button>
               </div>
-              <div style="margin-top:8px;">
-                <div style="font-size:0.74rem; color:#ffd447; margin-bottom:4px;">🎨 Skins Fixas da Espécie:</div>
-                <div class="tabs-row" id="sel-skins-row" style="gap:6px;"></div>
+              <div class="sel-skins-wrap">
+                <div style="font-size:0.72rem; color:#ffd447; margin-bottom:3px;">🎨 Skins Fixas:</div>
+                <div class="tabs-row" id="sel-skins-row" style="gap:5px;"></div>
               </div>
             </div>
 
-            <div id="sel-details" style="display:flex; flex-direction:column; gap:10px;"></div>
+            <div class="sel-details-col" id="sel-details-col">
+              <div class="hud-pill" id="sel-notice" style="color:#ffd447; text-align:center; padding:6px 12px; font-size:0.82rem; display:none;"></div>
+              <div id="sel-details" style="display:flex; flex-direction:column; gap:9px;"></div>
+            </div>
           </div>
 
-          <div class="dino-selector-row" id="sel-dino-list"></div>
+          <div class="sel-bottom-dock" id="sel-bottom-dock">
+            <div class="tabs-row sel-filter-tabs" id="sel-filter-tabs">
+              <button class="tab-btn active" data-cfilter="all">Todos (${allNonSecret.length})</button>
+              ${Object.entries(DINO_CLASSES).map(([k, info]) => `
+                <button class="tab-btn" data-cfilter="${k}">${info.name.pt}</button>
+              `).join('')}
+            </div>
+            <div class="dino-selector-row" id="sel-dino-list"></div>
+          </div>
         </div>
       </div>
     `;
 
     const modalCard = container.querySelector('#sel-modal-card');
+    const detailsCol = container.querySelector('#sel-details-col');
     const previewBox = container.querySelector('#sel-preview-box');
     const getCustomFor = (id) => {
       const baseCustom = Save.data.customization.p1.presets[Save.data.customization.p1.activePreset];
@@ -261,7 +264,7 @@ export class SelectionScreen {
           noticeMsg = '';
           currentId = btn.getAttribute('data-dino-id');
           if (onPlayRoar) onPlayRoar(currentId);
-          updateContent({ updatePreview: true });
+          updateContent({ updatePreview: true, resetDetailsScroll: true });
         });
       });
 
@@ -271,9 +274,10 @@ export class SelectionScreen {
       });
     };
 
-    const updateContent = ({ updatePreview = false, rebuildList = false } = {}) => {
-      // Preserva scroll vertical exato no celular ao trocar dinossauro ou skin (sem rolar pro topo!)
+    const updateContent = ({ updatePreview = false, rebuildList = false, resetDetailsScroll = false } = {}) => {
+      // Preserva scroll vertical exato no modal e na grade sem rolar a tela inteira
       const savedCardScroll = modalCard ? modalCard.scrollTop : 0;
+      const savedDetailsScroll = detailsCol ? detailsCol.scrollTop : 0;
       const spec = getDinoSpec(currentId);
       const cls = DINO_CLASSES[spec.dinoClass] || DINO_CLASSES.carnivore;
       const level = Save.data.dinoLevels[currentId] || 1;
@@ -403,6 +407,7 @@ export class SelectionScreen {
       if (rebuildList) rebuildDinoList();
       else syncListSelection();
 
+      if (detailsCol) detailsCol.scrollTop = resetDetailsScroll ? 0 : savedDetailsScroll;
       if (modalCard) modalCard.scrollTop = savedCardScroll;
     };
 

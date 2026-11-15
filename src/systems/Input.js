@@ -150,7 +150,6 @@ export class InputSystem {
     const bind = this.getBindings(playerKey)?.[action];
     if (bind && this.keysDown.has(bind)) return true;
     if (playerKey === 'p1' && action === 'attack' && this.keysDown.has('KeyQ')) return true;
-    if (playerKey === 'p1' && action === 'transmute' && this.keysDown.has('KeyX')) return true;
     if (playerKey === 'p2' && action === 'transmute' && this.keysDown.has('Slash')) return true;
 
     if (playerKey === 'p1' && allowClassicAliases) {
@@ -175,7 +174,6 @@ export class InputSystem {
     const bind = this.getBindings(playerKey)?.[action];
     if (bind && this.justPressed.has(bind)) return true;
     if (playerKey === 'p1' && action === 'attack' && this.justPressed.has('KeyQ')) return true;
-    if (playerKey === 'p1' && action === 'transmute' && this.justPressed.has('KeyX')) return true;
     if (playerKey === 'p2' && action === 'transmute' && this.justPressed.has('Slash')) return true;
 
     if (playerKey === 'p1' && allowClassicAliases) {

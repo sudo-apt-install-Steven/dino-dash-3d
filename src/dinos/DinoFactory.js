@@ -888,6 +888,64 @@ export class DinoFactory {
         }
         break;
       }
+      case 'steam_goggles': {
+        const brass = createMat('#d97706', { metalness: 0.72, roughness: 0.28 });
+        const lens = createMat('#38bdf8', { emissive: '#0284c7', emissiveIntensity: 0.72, roughness: 0.15 });
+        addVoxel(headGroup, 0.82, 0.14, 0.62, 0, 0.25, -0.16, matDark);
+        for (const s of [-1, 1]) {
+          addVoxel(headGroup, 0.26, 0.26, 0.2, s * 0.24, 0.26, -0.34, brass);
+          addVoxel(headGroup, 0.18, 0.18, 0.12, s * 0.24, 0.26, -0.4, lens);
+        }
+        addVoxel(headGroup, 0.12, 0.22, 0.12, 0.44, 0.3, -0.18, createMat('#22d3ee', { emissive: '#06b6d4', emissiveIntensity: 0.85 }));
+        break;
+      }
+      case 'samurai_kabuto': {
+        const lacquer = createMat('#991b1b', { roughness: 0.32, metalness: 0.25 });
+        addVoxel(headGroup, 0.82, 0.26, 0.72, 0, 0.48, -0.12, lacquer);
+        addVoxel(headGroup, 0.94, 0.1, 0.78, 0, 0.36, -0.06, matDark);
+        addVoxel(headGroup, 0.14, 0.34, 0.1, -0.18, 0.68, -0.36, matGold);
+        addVoxel(headGroup, 0.14, 0.34, 0.1, 0.18, 0.68, -0.36, matGold);
+        addVoxel(headGroup, 0.28, 0.14, 0.1, 0, 0.58, -0.37, matGold);
+        break;
+      }
+      case 'dino_backpack_plush': {
+        const plushGreen = createMat('#4ade80', { roughness: 0.6 });
+        const belly = createMat('#fef08a', { roughness: 0.65 });
+        addVoxel(torso, 0.42, 0.48, 0.38, 0, torsoH * 0.66, 0.18, plushGreen);
+        addVoxel(torso, 0.24, 0.28, 0.14, 0, torsoH * 0.6, 0.35, belly);
+        addVoxel(torso, 0.32, 0.28, 0.34, 0, torsoH * 1.0, 0.1, plushGreen);
+        addVoxel(torso, 0.1, 0.08, 0.1, -0.14, torsoH * 1.06, 0.05, matGold);
+        addVoxel(torso, 0.1, 0.08, 0.1, 0.14, torsoH * 1.06, 0.05, matGold);
+        break;
+      }
+      case 'royal_trident': {
+        const shaft = createMat('#0f766e', { metalness: 0.55, roughness: 0.3 });
+        const prong = createMat('#2dd4bf', { emissive: '#14b8a6', emissiveIntensity: 0.85 });
+        addVoxel(torso, 0.12, 1.08, 0.12, 0.28, torsoH * 0.85, 0.16, shaft);
+        addVoxel(torso, 0.52, 0.12, 0.12, 0.28, torsoH * 1.36, 0.16, matGold);
+        addVoxel(torso, 0.1, 0.36, 0.1, 0.06, torsoH * 1.54, 0.16, prong);
+        addVoxel(torso, 0.12, 0.46, 0.12, 0.28, torsoH * 1.58, 0.16, prong);
+        addVoxel(torso, 0.1, 0.36, 0.1, 0.5, torsoH * 1.54, 0.16, prong);
+        break;
+      }
+      case 'plasma_halo': {
+        const plasmaA = createMat('#00f5d4', { emissive: '#06b6d4', emissiveIntensity: 0.98 });
+        const plasmaB = createMat('#c084fc', { emissive: '#a855f7', emissiveIntensity: 0.95 });
+        addVoxel(headGroup, 0.84, 0.09, 0.84, 0, 0.74, -0.14, plasmaA);
+        addVoxel(headGroup, 0.24, 0.24, 0.24, -0.44, 0.76, -0.14, plasmaB);
+        addVoxel(headGroup, 0.24, 0.24, 0.24, 0.44, 0.76, -0.14, plasmaB);
+        addVoxel(headGroup, 0.22, 0.22, 0.22, 0, 0.82, -0.48, plasmaA);
+        break;
+      }
+      case 'comet_tail_rig': {
+        const hull = createMat('#312e81', { metalness: 0.65, roughness: 0.22 });
+        const ember = createMat('#fbbf24', { emissive: '#f59e0b', emissiveIntensity: 0.98 });
+        addVoxel(torso, 0.56, 0.28, 0.54, 0, torsoH * 0.66, 0.22, hull);
+        addVoxel(torso, 0.22, 0.22, 0.44, -0.34, torsoH * 0.62, 0.42, ember);
+        addVoxel(torso, 0.22, 0.22, 0.44, 0.34, torsoH * 0.62, 0.42, ember);
+        addVoxel(torso, 0.18, 0.52, 0.14, 0, torsoH * 0.94, 0.26, ember);
+        break;
+      }
       default:
         break;
     }

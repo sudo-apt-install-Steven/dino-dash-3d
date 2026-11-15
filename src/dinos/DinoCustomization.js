@@ -68,7 +68,14 @@ export const ACCESSORIES_SHOP = [
   { id: 'cyber_armor', name: 'Blindagem Cyber', price: 4200, rarity: 'Épica', category: 'accessory' },
   { id: 'mecha_wings', name: 'Asas Propulsoras Mecha', price: 8500, rarity: 'Lendária', category: 'accessory' },
   { id: 'floating_crystal', name: 'Cristal Terra Oca', price: 9500, rarity: 'Lendária', category: 'accessory' },
-  { id: 'cosmic_horns', name: 'Chifres Cósmicos Alfa', price: 12000, rarity: 'Mítica', category: 'accessory' }
+  { id: 'cosmic_horns', name: 'Chifres Cósmicos Alfa', price: 12000, rarity: 'Mítica', category: 'accessory' },
+  // Linha Expansão Tática 3D
+  { id: 'steam_goggles', name: 'Óculos Steampunk', price: 800, rarity: 'Rara', category: 'accessory' },
+  { id: 'samurai_kabuto', name: 'Elmo Samurai', price: 950, rarity: 'Rara', category: 'accessory' },
+  { id: 'dino_backpack_plush', name: 'Mochila T-Rex Bebê', price: 2200, rarity: 'Épica', category: 'accessory' },
+  { id: 'royal_trident', name: 'Tridente Abissal', price: 3200, rarity: 'Épica', category: 'accessory' },
+  { id: 'plasma_halo', name: 'Anel de Plasma', price: 7800, rarity: 'Lendária', category: 'accessory' },
+  { id: 'comet_tail_rig', name: 'Propulsor Cometa', price: 11500, rarity: 'Mítica', category: 'accessory' }
 ];
 
 export const TRAILS_SHOP = [

@@ -49,6 +49,8 @@ export class UIManager {
       onBasicAttack: () => this.game.triggerManualAttack(0),
       onTriggerFury: () => this.game.input.triggerVirtualPulse('p1', 'fury', 100),
       onTransmute: () => this.game.input.triggerVirtualPulse('p1', 'transmute', 100),
+      onToggleRadialWheel: (force) => this.game.toggleRadialWheel?.(force),
+      onSelectRadialAction: (slot) => this.game.executeRadialAction?.(slot),
       onTouchAction: (act, active) => this.game.input.setVirtualAction('p1', act, active)
     });
 
@@ -97,6 +99,16 @@ export class UIManager {
       this.activeCleanup = null;
     }
     this.hud.modalLayer.innerHTML = '';
+  }
+
+  refreshMainMenuIfIdle() {
+    if (this.game?.state !== 'menu') return false;
+    const ml = this.hud?.modalLayer;
+    if (ml && ml.children.length > 0 && !ml.querySelector('#menu-play')) {
+      return false;
+    }
+    this.showMainMenu();
+    return true;
   }
 
   showMainMenu() {

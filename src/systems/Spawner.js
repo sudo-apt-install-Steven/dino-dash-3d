@@ -199,6 +199,13 @@ export class Spawner {
     this.alienMat = new THREE.MeshStandardMaterial({ color: '#7209b7', roughness: 0.35, emissive: '#b5179e', emissiveIntensity: 0.45 });
     this.fireMat = new THREE.MeshBasicMaterial({ color: '#ff7b00' });
     this.portalMat = new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.82, side: THREE.DoubleSide });
+    this.coralMat = new THREE.MeshStandardMaterial({ color: '#fb7185', emissive: '#e11d48', emissiveIntensity: 0.45, roughness: 0.45 });
+    this.coralAltMat = new THREE.MeshStandardMaterial({ color: '#f97316', emissive: '#ea580c', emissiveIntensity: 0.35, roughness: 0.5 });
+    this.mineMat = new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.72, roughness: 0.25 });
+    this.mineGlowMat = new THREE.MeshBasicMaterial({ color: '#ef4444' });
+    this.jellyMat = new THREE.MeshStandardMaterial({ color: '#a855f7', emissive: '#9333ea', emissiveIntensity: 0.65, transparent: true, opacity: 0.84 });
+    this.vortexMat = new THREE.MeshBasicMaterial({ color: '#06b6d4', transparent: true, opacity: 0.72 });
+    this.bubbleMat = new THREE.MeshStandardMaterial({ color: '#67e8f9', emissive: '#22d3ee', emissiveIntensity: 0.85, transparent: true, opacity: 0.82, roughness: 0.15 });
   }
 
   _initPools() {
@@ -251,7 +258,12 @@ export class Spawner {
       oasis_zone: new ObjectPool(() => this._makeOasisZone(), resetBase, 2),
       fragile_bridge: new ObjectPool(() => this._makeFragileBridge(), resetBase, 2),
       rescue_cross: new ObjectPool(() => this._makeRescueCross(), resetBase, 2),
-      shop_gate: new ObjectPool(() => this._makeShopGate(), resetBase, 2)
+      shop_gate: new ObjectPool(() => this._makeShopGate(), resetBase, 2),
+      coral_reef: new ObjectPool(() => this._makeCoralReef(), resetBase, 8),
+      abyss_mine: new ObjectPool(() => this._makeAbyssMine(), (o) => { resetBase(o); o.bobPhase = 0; }, 7),
+      jellyfish_swarm: new ObjectPool(() => this._makeJellyfishSwarm(), (o) => { resetBase(o); o.bobPhase = 0; }, 7),
+      whirlpool_vortex: new ObjectPool(() => this._makeWhirlpoolVortex(), resetBase, 5),
+      oxygen_bubble: new ObjectPool(() => this._makeOxygenBubble(), resetBase, 8)
     };
   }
 
@@ -709,6 +721,68 @@ export class Spawner {
     return this._reg('rescue_cross', g, { halfW: 2.85, minY: 0, maxY: 0.65, halfD: 0.85, nonHazard: true, color: '#38bdf8' }, { y: 2.6, label: '🚨 RESGATE TÁTICO (+REVIVE / +ESCUDO)', color: '#38bdf8', scaleX: 4.3 });
   }
 
+  _makeCoralReef() {
+    const g = new THREE.Group();
+    makeBox(g, 0.92, 0.24, 0.72, 0, 0.12, 0, this.stoneMat);
+    makeBox(g, 0.28, 1.15, 0.28, -0.26, 0.65, 0.04, this.coralMat);
+    makeBox(g, 0.3, 1.32, 0.28, 0.06, 0.74, -0.06, this.coralAltMat);
+    makeBox(g, 0.24, 0.88, 0.24, 0.34, 0.52, 0.08, this.coralMat);
+    const trim = addDangerTrim(g, 1.05, 0.78);
+    return this._reg('coral_reef', g, {
+      halfW: 0.54, minY: 0, maxY: 1.34, halfD: 0.44, breakable: true, dangerVisuals: [trim], color: '#fb7185'
+    }, { y: 1.85, label: '🪸 CORAL [W / Q]', color: '#fb7185' });
+  }
+
+  _makeAbyssMine() {
+    const g = new THREE.Group();
+    makeBox(g, 0.68, 0.68, 0.68, 0, 0.85, 0, this.mineMat);
+    makeBox(g, 0.96, 0.16, 0.16, 0, 0.85, 0, this.mineGlowMat);
+    makeBox(g, 0.16, 0.96, 0.16, 0, 0.85, 0, this.mineGlowMat);
+    makeBox(g, 0.16, 0.16, 0.96, 0, 0.85, 0, this.mineGlowMat);
+    makeBox(g, 0.1, 0.52, 0.1, 0, 0.26, 0, this.stoneMat);
+    const trim = addDangerTrim(g, 0.95, 0.78);
+    return this._reg('abyss_mine', g, {
+      bobPhase: 0, baseY: 0.22, halfW: 0.52, minY: 0.42, maxY: 1.48, halfD: 0.48, dangerVisuals: [trim], color: '#ef4444'
+    }, { y: 1.88, label: '💣 MINA ⬅➡ / MERGULHE', color: '#f87171' });
+  }
+
+  _makeJellyfishSwarm() {
+    const g = new THREE.Group();
+    makeBox(g, 0.82, 0.42, 0.82, 0, 0.28, 0, this.jellyMat);
+    makeBox(g, 0.56, 0.2, 0.56, 0, 0.54, 0, this.bubbleMat);
+    makeBox(g, 0.12, 0.78, 0.12, -0.26, -0.28, 0, this.jellyMat);
+    makeBox(g, 0.12, 0.86, 0.12, 0, -0.32, 0, this.bubbleMat);
+    makeBox(g, 0.12, 0.78, 0.12, 0.26, -0.28, 0, this.jellyMat);
+    return this._reg('jellyfish_swarm', g, {
+      bobPhase: 0, baseY: 1.52, halfW: 0.48, minY: -0.36, maxY: 0.42, halfD: 0.46, breakable: true, color: '#c084fc'
+    }, { y: 0.85, label: '🪼 ÁGUA-VIVA ⬇ / [Q]', color: '#e879f9' });
+  }
+
+  _makeWhirlpoolVortex() {
+    const g = new THREE.Group();
+    const spin = new THREE.Group();
+    makeBox(g, 1.38, 0.16, 1.38, 0, 0.08, 0, this.vortexMat);
+    makeBox(spin, 1.05, 0.35, 0.22, 0, 0.45, 0, this.bubbleMat);
+    makeBox(spin, 0.22, 0.35, 1.05, 0, 0.45, 0, this.vortexMat);
+    makeBox(spin, 0.58, 0.75, 0.58, 0, 0.55, 0, this.vortexMat);
+    g.add(spin);
+    const trim = addDangerTrim(g, 1.48, 1.48);
+    return this._reg('whirlpool_vortex', g, {
+      spin, halfW: 0.82, minY: 0, maxY: 1.15, halfD: 0.82, dangerVisuals: [trim], color: '#22d3ee'
+    }, { y: 1.65, label: '🌀 REDEMOINHO ⬅➡', color: '#22d3ee' });
+  }
+
+  _makeOxygenBubble() {
+    const g = new THREE.Group();
+    const core = new THREE.Group();
+    makeBox(core, 0.66, 0.66, 0.66, 0, 0.55, 0, this.bubbleMat);
+    makeBox(core, 0.36, 0.84, 0.36, 0, 0.55, 0, this.iceCrackMat);
+    g.add(core);
+    return this._reg('oxygen_bubble', g, {
+      core, halfW: 0.68, minY: 0.05, maxY: 1.55, halfD: 0.68, nonHazard: true, color: '#38bdf8'
+    }, { y: 1.45, label: '🫧 +OXIGÊNIO (O2)', color: '#67e8f9' });
+  }
+
   setSeed(seed) {
     this.rng = seed ? createSeededRng(seed) : Math.random;
   }
@@ -774,7 +848,7 @@ export class Spawner {
       'egg', 'powerup', 'fruit', 'elemental_egg', 'treasure', 'speed_pad',
       'trampoline', 'ramp', 'campfire', 'shortcut', 'grapple_point',
       'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation',
-      'oasis_zone', 'fragile_bridge', 'rescue_cross', 'shop_gate'
+      'oasis_zone', 'fragile_bridge', 'rescue_cross', 'shop_gate', 'oxygen_bubble'
     ]);
     for (const key of Object.keys(this.pools)) {
       if (skipKinds.has(key)) continue;
@@ -811,7 +885,7 @@ export class Spawner {
     if (!pool) return null;
     const item = pool.acquire();
     item.pool = pool;
-    item.breakable = kind === 'cactus_small' || kind === 'scorpion' || kind === 'rolling_log' || kind === 'cactus_shooter' || kind === 'cactus_spine' || kind === 'amber_crystal' || kind === 'falling_stalactite' || kind === 'spike_barricade';
+    item.breakable = kind === 'cactus_small' || kind === 'scorpion' || kind === 'rolling_log' || kind === 'cactus_shooter' || kind === 'cactus_spine' || kind === 'amber_crystal' || kind === 'falling_stalactite' || kind === 'spike_barricade' || kind === 'coral_reef' || kind === 'jellyfish_swarm';
     const baseY = opts.rawY ? y : this._getBaseY(y);
     item.group.position.set(x, baseY, z);
     item.group.visible = true;
@@ -1097,6 +1171,34 @@ export class Spawner {
       return;
     }
 
+    const isWaterTrack = this.habitatMode === 'aquatic' || this.biomeId === 'abyss_submerged' || this.biomeId === 'jurassic_river' || this.biomeId === 'frozen_ocean';
+    if (isWaterTrack) {
+      if (waveRoll < 0.22 || (this.biomeId === 'abyss_submerged' && r < 0.22)) {
+        this._acquire('oxygen_bubble', obsX, 0.1, spawnZ - 1);
+        if (this.rng() < 0.55) this.spawnEggArc(otherLane, 3, null, spawnZ - 1);
+        return;
+      }
+      if (r < 0.34) {
+        this._acquire('coral_reef', obsX, 0, spawnZ);
+        return;
+      }
+      if (score > 220 && r < 0.6) {
+        const jf = this._acquire('jellyfish_swarm', obsX, 1.52, spawnZ);
+        if (jf) {
+          jf.bobPhase = this.rng() * Math.PI * 2;
+          jf.group.position.y = this._getBaseY(1.52);
+        }
+        return;
+      }
+      if (score > 300 && r < 0.84) {
+        const mine = this._acquire('abyss_mine', obsX, 0.22, spawnZ);
+        if (mine) mine.bobPhase = this.rng() * Math.PI * 2;
+        return;
+      }
+      this._acquire('whirlpool_vortex', obsX, 0, spawnZ);
+      return;
+    }
+
     if (this.habitatMode === 'land') {
       if (this.biomeId === 'dark_swamp' && r < 0.2) {
         this._acquire(this.rng() < 0.62 ? 'mud_pool' : 'toxic_pool', obsX, 0, spawnZ);
@@ -1279,6 +1381,18 @@ export class Spawner {
         } else if (obs.kind === 'toxic_pool') {
           if (obs.poolModel) obs.poolModel.scale.y = 1.05 + Math.sin(this.elapsed * 7) * 0.16;
           else if (obs.b1) obs.b1.scale.setScalar(0.85 + Math.sin(this.elapsed * 7) * 0.28);
+        } else if (obs.kind === 'abyss_mine') {
+          obs.bobPhase = (obs.bobPhase || 0) + dt * 3.8;
+          obs.group.position.y = this._getBaseY((obs.baseY || 0.22) + Math.sin(obs.bobPhase) * 0.22);
+          obs.group.rotation.y += dt * 1.4;
+        } else if (obs.kind === 'jellyfish_swarm') {
+          obs.bobPhase = (obs.bobPhase || 0) + dt * 4.2;
+          obs.group.position.y = this._getBaseY((obs.baseY || 1.52) + Math.sin(obs.bobPhase) * 0.18);
+        } else if (obs.kind === 'whirlpool_vortex' && obs.spin) {
+          obs.spin.rotation.y += dt * 6.5;
+        } else if (obs.kind === 'oxygen_bubble' && obs.core) {
+          obs.core.position.y = Math.sin(this.elapsed * 5 + obs.group.position.x) * 0.16;
+          obs.core.rotation.y += dt * 2.4;
         }
 
         if (obs.group.position.z > 18) {

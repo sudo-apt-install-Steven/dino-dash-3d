@@ -6,7 +6,7 @@ export class PhysicsCollision {
     const height = (player.ducking || player.sliding ? 0.96 : 1.85) * scale;
     const halfW = 0.38 * scale * (player.smallHitbox ? 0.75 : 1);
     const halfD = 0.44 * scale * (player.smallHitbox ? 0.75 : 1);
-    const diveOffset = (player.diveDepth || 0) * 1.45;
+    const diveOffset = player.inSubmerged ? 0.32 : (player.diveDepth || 0) * 1.45;
     const wy = (player.baseY || 0) + player.y - diveOffset;
     return {
       minX: player.x - halfW,
@@ -48,7 +48,7 @@ export class PhysicsCollision {
 
   static checkNearMiss(pBox, obs) {
     if (obs.nearMissed || obs.hit || obs.nonHazard) return false;
-    if (['egg', 'powerup', 'ramp', 'speed_pad', 'trampoline', 'mud_pool', 'toxic_pool', 'tar_pit', 'campfire', 'shortcut', 'fruit', 'elemental_egg', 'treasure', 'grapple_point', 'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation', 'oasis_zone', 'fragile_bridge', 'rescue_cross'].includes(obs.kind)) return false;
+    if (['egg', 'powerup', 'ramp', 'speed_pad', 'trampoline', 'mud_pool', 'toxic_pool', 'tar_pit', 'campfire', 'shortcut', 'fruit', 'elemental_egg', 'treasure', 'grapple_point', 'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation', 'oasis_zone', 'fragile_bridge', 'rescue_cross', 'oxygen_bubble'].includes(obs.kind)) return false;
     const oz = obs.group.position.z;
     if (oz < pBox.maxZ || oz > pBox.maxZ + 1.15) return false;
     const ox = obs.group.position.x;

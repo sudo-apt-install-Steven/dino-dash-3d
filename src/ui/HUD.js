@@ -98,6 +98,13 @@ export class HUD {
             <div class="meter-pill" data-tip="Corações de vida e Escudos absorvem impactos.">
               <div id="hud-hp-text">❤️ 3/3 • 🛡️ 0</div>
             </div>
+            <div class="meter-pill hidden" id="hud-oxygen-pill" data-tip="Oxigênio submerso: suba à tona ou pegue Bolhas 🫧 / Máscara Abissal!">
+              <span>🫧 <span class="btn-label">O₂</span> <strong id="lbl-oxygen">100%</strong></span>
+              <div class="meter-bar"><div class="meter-fill" id="bar-oxygen" style="width:100%; background:#38bdf8;"></div></div>
+            </div>
+            <div class="meter-pill hidden" id="hud-companion-pill" data-tip="Filhote Companheiro ativo: coleta ovos/bolhas e dispara bônus na corrida e via Roda [X].">
+              <span id="lbl-companion">🐾 Pet</span>
+            </div>
             <div class="hud-status-row" id="hud-status-pills"></div>
           </div>
 
@@ -111,19 +118,22 @@ export class HUD {
               <span id="lbl-ability">⚡ <span class="btn-label">Habilidade</span> <span class="kb-only">(Espaço)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-ability" style="width:100%; background:#58d63a;"></div></div>
             </div>
-            <div class="meter-pill" id="btn-attack-melee" style="cursor:pointer; pointer-events:auto;" data-tip="Ataque rápido (Q): corta cactos, espinhos e acerta chefes!">
+            <div class="meter-pill" id="btn-attack-melee" style="cursor:pointer; pointer-events:auto;" data-tip="Ataque rápido (Q): corta cactos, corais, espinhos e acerta chefes!">
               <span>⚔️ <span class="btn-label">Ataque</span> <span class="kb-only">(Q)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-attack" style="width:100%; background:#f97316;"></div></div>
             </div>
-            <div class="meter-pill" data-tip="Estamina Física (Shift=Foco / Pulo no ar=55 / Ataque Q=16): recarrega só no chão e com itens!">
+            <div class="meter-pill" data-tip="Estamina Física (Shift=Foco / Pulo no ar=58 / Ataque Q=20): recarrega no chão.">
               <span>🏃 <span class="btn-label">Estamina</span> <span class="kb-only">(Shift/2x⬆)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-bullet" style="width:100%; background:#34d399;"></div></div>
             </div>
             <div class="meter-pill" id="hud-backpack" style="cursor:pointer; pointer-events:auto;" data-tip="Mochila (E): clique ou aperte E para usar o próximo item guardado.">
               🎒 <span class="kb-only">(E) </span><strong id="lbl-backpack">Vazia</strong>
             </div>
-            <div class="meter-pill hidden" id="btn-transmute-mode" style="cursor:pointer; pointer-events:auto;" data-tip="Transmutação Adaptativa (X): alterna entre Terra, Água e Céu em Híbridos!">
-              🔄 <span id="lbl-transmute-mode">Terra</span> <span class="kb-only">(X)</span>
+            <div class="meter-pill radial-pill-btn" id="btn-radial-wheel" data-tip="Roda Tática (X): pausa rapidamente a corrida para acionar Habitat, Mochila, Mascote ou Foco!">
+              🧭 <span class="btn-label">Roda</span> <strong id="lbl-radial-cd">(X)</strong>
+            </div>
+            <div class="meter-pill hidden transmute-pill" id="btn-transmute-mode" data-tip="Troca rápida de Habitat em Híbridos & Anfíbios!">
+              🔄 <span id="lbl-transmute-mode">Terra</span>
             </div>
             <div class="meter-pill hidden" id="btn-mp-revive" style="cursor:pointer; pointer-events:auto; border-color:#34d399; background:rgba(6, 78, 59, 0.85);" data-tip="Reviver amigo caído no Multiplayer (V): salva o grupo na pista!">
               💖 <strong id="lbl-mp-revive">Reviver (V)</strong>
@@ -132,11 +142,11 @@ export class HUD {
         </div>
 
         <div class="controls-hint" id="hud-controls-hint">
-          <kbd>W</kbd>/<kbd>↑</kbd> Pular (segure=alto) • <kbd>S</kbd>/<kbd>↓</kbd> Abaixar/Mergulhar • <kbd>A</kbd>/<kbd>D</kbd> Faixas • <kbd>Q</kbd> Ataque • <kbd>Espaço</kbd> Habilidade • <kbd>F</kbd> Fúria • <kbd>X</kbd> Transmutar • <kbd>C</kbd> Câmera
+          <kbd>W</kbd>/<kbd>↑</kbd> Pular (segure=alto) • <kbd>S</kbd>/<kbd>↓</kbd> Abaixar/Mergulhar • <kbd>A</kbd>/<kbd>D</kbd> Faixas • <kbd>Q</kbd> Ataque • <kbd>Espaço</kbd> Habilidade • <kbd>F</kbd> Fúria • <kbd>X</kbd> Roda Tática • <kbd>C</kbd> Câmera
         </div>
       </div>
 
-      <!-- Controles touch para celular (Swipe livre por padrão + botões ⚔️/⚡; setas opcionais em Config) -->
+      <!-- Controles touch para celular (Swipe livre por padrão + botões ⚔️/⚡/🧭; setas opcionais em Config) -->
       <div class="touch-controls" id="touch-controls">
         <div class="touch-cluster touch-cluster-left touch-dpad-only">
           <button class="touch-btn" data-tact="left" aria-label="Faixa Esquerda">◀</button>
@@ -144,10 +154,41 @@ export class HUD {
         </div>
         <div class="touch-cluster touch-cluster-right">
           <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar">▼</button>
-          <button class="touch-btn touch-btn-action hidden" id="touch-transmute-btn" data-tact="transmute" aria-label="Transmutação Adaptativa" style="border-color:#c084fc;">🔄</button>
+          <button class="touch-btn touch-btn-action" id="touch-radial-btn" aria-label="Roda Tática X" style="border-color:#c084fc;">🧭</button>
+          <button class="touch-btn touch-btn-action hidden" id="touch-transmute-btn" data-tact="transmute" aria-label="Trocar Habitat" style="border-color:#38bdf8;">🔄</button>
           <button class="touch-btn touch-btn-action" data-tact="attack" aria-label="Ataque">⚔️</button>
           <button class="touch-btn touch-btn-action" data-tact="ability" aria-label="Habilidade">⚡</button>
           <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular">▲</button>
+        </div>
+      </div>
+
+      <!-- Roda Tática [X] (Pause-on-Open Radial Action Wheel) -->
+      <div class="radial-wheel-overlay hidden" id="hud-radial-wheel">
+        <div class="radial-wheel-stage" id="radial-wheel-stage">
+          <button class="radial-sector radial-north" data-rslot="habitat" id="rad-opt-habitat">
+            <span>🔄 Habitat</span>
+            <small id="rad-sub-habitat">Híbrido/Mergulho</small>
+            <span class="radial-sector-key">[1 / ↑]</span>
+          </button>
+          <button class="radial-sector radial-east" data-rslot="backpack" id="rad-opt-backpack">
+            <span>🎒 Mochila</span>
+            <small id="rad-sub-backpack">Vazia</small>
+            <span class="radial-sector-key">[2 / →]</span>
+          </button>
+          <button class="radial-sector radial-south" data-rslot="companion" id="rad-opt-companion">
+            <span>🐾 Mascote</span>
+            <small id="rad-sub-companion">Sem Pet</small>
+            <span class="radial-sector-key">[3 / ↓]</span>
+          </button>
+          <button class="radial-sector radial-west" data-rslot="focus" id="rad-opt-focus">
+            <span>⚡ Foco Tático</span>
+            <small id="rad-sub-focus">+Carga / +O₂</small>
+            <span class="radial-sector-key">[4 / ←]</span>
+          </button>
+          <button class="radial-center-btn" id="radial-cancel">
+            <span>⏸ RODA [X]</span>
+            <small style="color:#d8c2a6;">Esc = Voltar</small>
+          </button>
         </div>
       </div>
 
@@ -336,6 +377,15 @@ export class HUD {
     this.pillBullet = q('#bar-bullet')?.closest('.meter-pill') || null;
     this.mpReviveBtn = q('#btn-mp-revive');
     this.mpReviveLbl = q('#lbl-mp-revive');
+    this.oxygenPill = q('#hud-oxygen-pill');
+    this.oxygenLbl = q('#lbl-oxygen');
+    this.oxygenBar = q('#bar-oxygen');
+    this.companionPill = q('#hud-companion-pill');
+    this.companionLbl = q('#lbl-companion');
+    this.radialPillBtn = q('#btn-radial-wheel');
+    this.radialCdLbl = q('#lbl-radial-cd');
+    this.touchRadialBtn = q('#touch-radial-btn');
+    this.radialOverlay = q('#hud-radial-wheel');
     this.transmuteBtn = q('#btn-transmute-mode');
     this.transmuteLbl = q('#lbl-transmute-mode');
     this.touchTransmuteBtn = q('#touch-transmute-btn');
@@ -357,6 +407,18 @@ export class HUD {
     this.root.querySelector('#btn-go-menu').addEventListener('click', () => this.callbacks.onGoMenu?.());
     this.root.querySelector('#btn-mp-revive')?.addEventListener('click', () => this.callbacks.onMpRevive?.());
     this.root.querySelector('#btn-transmute-mode')?.addEventListener('click', () => this.callbacks.onTransmute?.());
+    this.root.querySelector('#btn-radial-wheel')?.addEventListener('click', () => this.callbacks.onToggleRadialWheel?.());
+    this.root.querySelector('#touch-radial-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.callbacks.onToggleRadialWheel?.();
+    });
+    this.root.querySelector('#radial-cancel')?.addEventListener('click', () => this.callbacks.onToggleRadialWheel?.(false));
+    this.root.querySelector('#hud-radial-wheel')?.addEventListener('click', (e) => {
+      if (e.target.id === 'hud-radial-wheel') this.callbacks.onToggleRadialWheel?.(false);
+    });
+    this.root.querySelectorAll('[data-rslot]').forEach((btn) => {
+      btn.addEventListener('click', () => this.callbacks.onSelectRadialAction?.(btn.getAttribute('data-rslot')));
+    });
     this.root.querySelector('#btn-pause').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-resume').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-pause-cam')?.addEventListener('click', () => this.callbacks.onCycleCamera?.());
@@ -450,6 +512,9 @@ export class HUD {
     this.setMpRankHud('');
     this.dmgVignette.classList.add('hidden');
     this.submergedTint?.classList.add('hidden');
+    this.oxygenPill?.classList.add('hidden');
+    this.companionPill?.classList.add('hidden');
+    this.radialOverlay?.classList.add('hidden');
     this.transmuteBtn?.classList.add('hidden');
     this.touchTransmuteBtn?.classList.add('hidden');
     this.bannerEl.classList.add('hidden');
@@ -538,7 +603,7 @@ export class HUD {
     }
   }
 
-  updatePlayStatus(player, eggsTotal, biomeName, nextPortalDist, combo, score) {
+  updatePlayStatus(player, eggsTotal, biomeName, nextPortalDist, combo, score, extra = {}) {
     this.eggsEl.textContent = String(eggsTotal);
     const maxHp = Math.max(1, player.maxHp || 1);
     const hp = Math.max(0, Math.min(maxHp, Math.round(player.hp ?? 0)));
@@ -624,6 +689,42 @@ export class HUD {
     const submergedNow = !!(player.inSubmerged || (player.diveDepth || 0) > 0.25);
     this.submergedTint?.classList.toggle('hidden', !submergedNow);
 
+    const showO2 = !!(player.inWater || submergedNow || (player.oxygen ?? 100) < 99);
+    if (this.oxygenPill) {
+      this.oxygenPill.classList.toggle('hidden', !showO2);
+      if (showO2) {
+        const o2 = Math.max(0, Math.min(100, Math.round(player.oxygen ?? 100)));
+        if (this.oxygenLbl) {
+          this.oxygenLbl.textContent = player.isAquaticNative ? 'Brânquias' : `${o2}%`;
+        }
+        if (this.oxygenBar) {
+          this.oxygenBar.style.width = `${player.isAquaticNative ? 100 : o2}%`;
+          this.oxygenBar.style.background = o2 < 28 ? '#ef4444' : (o2 < 55 ? '#f59e0b' : '#38bdf8');
+        }
+      }
+    }
+
+    const petStatus = extra?.companionStatus || null;
+    if (this.companionPill) {
+      this.companionPill.classList.toggle('hidden', !petStatus);
+      if (petStatus && this.companionLbl) {
+        const cdStr = petStatus.commandCd > 0.1
+          ? `${petStatus.commandCd.toFixed(0)}s`
+          : (petStatus.shieldCd > 0.1 ? `🛡️${petStatus.shieldCd.toFixed(0)}s` : 'Pronto!');
+        this.companionLbl.textContent = `${petStatus.role.icon} ${petStatus.name} • ${cdStr}`;
+        this.companionPill.style.borderColor = petStatus.role.color || '';
+      }
+    }
+
+    const rCd = Math.max(0, extra?.radialCooldown || 0);
+    if (this.radialPillBtn && this.radialCdLbl) {
+      this.radialPillBtn.classList.toggle('cooldown', rCd > 0.05);
+      this.radialCdLbl.textContent = rCd > 0.05 ? `${rCd.toFixed(1)}s` : '(X)';
+    }
+    if (this.touchRadialBtn) {
+      this.touchRadialBtn.style.opacity = rCd > 0.05 ? '0.62' : '1';
+    }
+
     if (player.backpack?.slots?.length > 0) {
       this.lblBackpack.textContent = player.backpack.slots.map((id) => BACKPACK_ITEMS[id]?.icon || '📦').join(' ');
     } else {
@@ -642,6 +743,51 @@ export class HUD {
 
   setCameraLabel(label) {
     this.cameraEl.textContent = label;
+  }
+
+  showRadialWheel({ player, companionStatus = null } = {}) {
+    if (!this.radialOverlay) return;
+    const habSub = this.root.querySelector('#rad-sub-habitat');
+    const bagSub = this.root.querySelector('#rad-sub-backpack');
+    const petSub = this.root.querySelector('#rad-sub-companion');
+    const focusSub = this.root.querySelector('#rad-sub-focus');
+    const bagBtn = this.root.querySelector('#rad-opt-backpack');
+    const petBtn = this.root.querySelector('#rad-opt-companion');
+
+    const canHybrid = Array.isArray(player?.availableHabitats) && player.availableHabitats.length > 1;
+    if (habSub) {
+      if (canHybrid) {
+        const cur = player.habitatMode || 'land';
+        habSub.textContent = `Atual: ${cur === 'aquatic' ? 'Água' : (cur === 'flying' ? 'Céu' : 'Terra')}`;
+      } else if (player?.inWater) {
+        habSub.textContent = 'Impulso Submerso';
+      } else {
+        habSub.textContent = 'Regra Híbrido';
+      }
+    }
+    const bagSlots = player?.backpack?.slots || [];
+    if (bagSub) {
+      bagSub.textContent = bagSlots.length > 0
+        ? (BACKPACK_ITEMS[bagSlots[0]]?.name || `${bagSlots.length} item(s)`)
+        : 'Vazia';
+    }
+    bagBtn?.classList.toggle('radial-disabled', bagSlots.length === 0);
+
+    if (petSub) {
+      if (!companionStatus) petSub.textContent = 'Sem Mascote';
+      else if (companionStatus.commandCd > 0.1) petSub.textContent = `Recarga ${companionStatus.commandCd.toFixed(1)}s`;
+      else petSub.textContent = `${companionStatus.role.icon} ${companionStatus.role.label}`;
+    }
+    petBtn?.classList.toggle('radial-disabled', !companionStatus || companionStatus.commandCd > 0.1);
+
+    if (focusSub) {
+      focusSub.textContent = (player?.stamina ?? 0) >= 25 ? '+28% Hab / +45 O₂' : 'Sem Estamina (25)';
+    }
+    this.radialOverlay.classList.remove('hidden');
+  }
+
+  hideRadialWheel() {
+    this.radialOverlay?.classList.add('hidden');
   }
 
   showBanner(text, color = '#ff9a24', duration = 3.2) {
