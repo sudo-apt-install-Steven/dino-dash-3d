@@ -1299,20 +1299,10 @@ export class Game {
     // Bioma inicial (Modo História começa no capítulo 1; Modo Aleatório inicia via Portal Dinâmico)
     const rawStartId = opts.biomeId || (this.modeId === 'story' ? STORY_CHAPTERS[0].biome : this.startBiomeId);
     this.randomPortalMode = rawStartId === 'random_portal' || !!opts.randomPortal;
-    const allPureAqua = this.players.length > 0 && this.players.every((pl) => this._isPureAquaticPlayer(pl));
-    const aquaBiomes = BIOMES.filter((b) => isAquaticBiome(b));
     let startId = rawStartId === 'random_portal'
-      ? (allPureAqua ? aquaBiomes[Math.floor(Math.random() * aquaBiomes.length)]?.id || 'ocean_surface' : getRandomNextBiome(null).id)
+      ? getRandomNextBiome(null).id
       : rawStartId;
     let chosenBiome = getBiomeById(startId);
-    if (allPureAqua && !isAquaticBiome(chosenBiome)) {
-      chosenBiome = getBiomeById('ocean_surface');
-      this._pendingStartBanners.push({
-        text: `🌊 Espécie Aquática: iniciando em ${chosenBiome.name} (espécies sem patas não andam em terra)!`,
-        color: '#38bdf8',
-        dur: 3.8
-      });
-    }
     this.currentBiome = chosenBiome;
     this._lastSeqBiomeStep = 0;
     this.world.applyTheme(this.currentBiome.theme);
@@ -1321,20 +1311,17 @@ export class Game {
     this.spawner.setBiome(this.currentBiome.id);
     if (!isTestTrack) this._discoverCurrentBiomeFossil();
 
-    const aquaBiome = isAquaticBiome(this.currentBiome);
     const isSubmergedStart = Boolean(this.currentBiome?.submerged);
     this._syncEnvironmentHabitat(this.players[0]);
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat;
       const isFly = mode === 'flying' && !isSubmergedStart;
-      const purePlAqua = this._isPureAquaticPlayer(pl);
-      const fullWaterPl = Boolean(aquaBiome || allPureAqua || (this.players.length === 1 && purePlAqua));
       pl.diveDepth = isSubmergedStart ? 1 : 0;
       pl.diveTarget = isSubmergedStart ? 1 : 0;
-      pl.inWater = !isFly && Boolean(fullWaterPl || mode === 'aquatic');
+      pl.inWater = !isFly && Boolean(isSubmergedStart || mode === 'aquatic');
       pl.inSubmerged = isSubmergedStart;
       pl.grounded = !isFly;
-      if (mode === 'aquatic' && !fullWaterPl) {
+      if (mode === 'aquatic' && !isSubmergedStart) {
         pl.x = RIVER_LANE_X[pl.lane] ?? RIVER_LANE_X[1];
         pl.baseY = 0;
       } else if (isFly) {
@@ -1662,30 +1649,24 @@ export class Game {
 
   _syncMenuEnvironment() {
     const p0 = this.players[0];
-    const desiredBiome = getBiomeById(this.startBiomeId);
-    const pureAqua = this._isPureAquaticPlayer(p0);
-    const targetBiome = (pureAqua && !isAquaticBiome(desiredBiome))
-      ? getBiomeById('ocean_surface')
-      : desiredBiome;
+    const targetBiome = getBiomeById(this.startBiomeId);
     this.currentBiome = targetBiome;
     this.world.applyTheme(targetBiome.theme);
     this.world.setHollowEarthVisuals(false);
     this.world.setShopLane(null);
     this.spawner.setBiome(targetBiome.id);
     this._syncEnvironmentHabitat(p0);
-    const aquaBiome = isAquaticBiome(targetBiome);
     const isSubmergedBiome = Boolean(targetBiome?.submerged);
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat;
       const isFly = mode === 'flying' && !isSubmergedBiome;
-      const purePlAqua = this._isPureAquaticPlayer(pl);
-      pl.inWater = !isFly && Boolean(aquaBiome || mode === 'aquatic');
+      pl.inWater = !isFly && Boolean(isSubmergedBiome || mode === 'aquatic');
       pl.inSubmerged = isSubmergedBiome;
       pl.diveTarget = isSubmergedBiome ? 1 : 0;
       pl.diveDepth = isSubmergedBiome ? 1 : 0;
       pl.grounded = !isFly;
       if (mode === 'aquatic') {
-        const lanes = (aquaBiome || pureAqua || purePlAqua) ? LANE_X : RIVER_LANE_X;
+        const lanes = isSubmergedBiome ? LANE_X : RIVER_LANE_X;
         pl.x = (lanes[pl.lane] ?? lanes[1]) + (pl.xOffset || 0);
         pl.baseY = 0;
       } else if (isFly) {
@@ -1702,32 +1683,25 @@ export class Game {
 
   _syncEnvironmentHabitat(leadPlayer = this.players[0]) {
     const biome = this.currentBiome;
-    const aquaBiome = isAquaticBiome(biome);
-    const pureAquaticLead = this._isPureAquaticPlayer(leadPlayer);
-    const fullWater = Boolean(aquaBiome || pureAquaticLead);
-    const anyAquatic = this.players.some((p) => (p.habitatMode || p.habitat) === 'aquatic') || fullWater;
-    const anyFlying = this.players.some((p) => (p.habitatMode || p.habitat) === 'flying') && !biome?.submerged;
-    const leadMode = leadPlayer ? (leadPlayer.habitatMode || leadPlayer.habitat) : 'land';
     const isSubmergedBiome = !!biome?.submerged;
-    const isWaterSurfaceTrack = Boolean(fullWater && !isSubmergedBiome);
-    const leadInWater = Boolean(isSubmergedBiome || leadMode === 'aquatic' || pureAquaticLead || (aquaBiome && leadMode !== 'flying'));
+    const anyAquatic = !isSubmergedBiome && this.players.some((p) => (p.habitatMode || p.habitat) === 'aquatic');
+    const anyFlying = !isSubmergedBiome && this.players.some((p) => (p.habitatMode || p.habitat) === 'flying');
+    const leadMode = leadPlayer ? (leadPlayer.habitatMode || leadPlayer.habitat) : 'land';
+    const leadInWater = Boolean(isSubmergedBiome || leadMode === 'aquatic');
     const leadDive = leadPlayer?.diveDepth || 0;
     this.world.setAquaticChannelActive(anyAquatic);
     this.world.setSkyCorridorActive(anyFlying);
-    this.world.setFullWaterTrack(fullWater);
-    this.world.setWaterTrackVisuals(isWaterSurfaceTrack);
+    this.world.setFullWaterTrack(false);
+    this.world.setWaterTrackVisuals(anyAquatic);
     this.world.setSubmergedVisuals(isSubmergedBiome || (leadInWater && leadDive > 0.25), isSubmergedBiome);
-    this.spawner.setHabitatMode(leadMode, fullWater);
+    this.spawner.setHabitatMode(leadMode, isSubmergedBiome);
   }
 
   _buildCameraEnvOpts(lead = this.players[0]) {
-    const aquaBiome = isAquaticBiome(this.currentBiome);
-    const pureAquatic = this._isPureAquaticPlayer(lead);
-    const fullWater = Boolean(aquaBiome || pureAquatic);
-    const leadMode = lead ? (lead.habitatMode || lead.habitat) : 'land';
-    const trackCenterX = (!fullWater && leadMode === 'aquatic') ? (RIVER_LANE_X[1] ?? 10) : 0;
     const isSubmergedBiome = !!this.currentBiome?.submerged;
-    const inWater = Boolean(isSubmergedBiome || leadMode === 'aquatic' || pureAquatic || (aquaBiome && leadMode !== 'flying'));
+    const leadMode = lead ? (lead.habitatMode || lead.habitat) : 'land';
+    const trackCenterX = (!isSubmergedBiome && leadMode === 'aquatic') ? (RIVER_LANE_X[1] ?? 10) : 0;
+    const inWater = Boolean(isSubmergedBiome || leadMode === 'aquatic');
     const diveDepth = lead?.diveDepth || 0;
     const isSubmerged = Boolean(isSubmergedBiome || (inWater && diveDepth > 0.25));
     const isWaterSurface = Boolean(inWater && !isSubmerged);
@@ -1741,24 +1715,25 @@ export class Game {
     const nextMode = p.availableHabitats[(idx + 1) % p.availableHabitats.length];
     if (nextMode === cur) return false;
 
-    const aquaBiome = isAquaticBiome(this.currentBiome);
+    const isSub = Boolean(this.currentBiome?.submerged);
     const oldX = p.x;
     const oldY = (p.baseY || 0) + p.y;
     p.habitatMode = nextMode;
     p.habitat = nextMode;
-    p.diveDepth = this.currentBiome?.submerged ? 1 : 0;
+    p.diveDepth = isSub ? 1 : 0;
+    p.diveTarget = isSub ? 1 : 0;
     p.inShopLane = null;
     p.sliding = false;
     p.ducking = false;
-    p.grounded = nextMode !== 'flying';
+    p.grounded = nextMode !== 'flying' || isSub;
 
     if (nextMode === 'aquatic') {
-      const lanes = aquaBiome ? LANE_X : RIVER_LANE_X;
+      const lanes = isSub ? LANE_X : RIVER_LANE_X;
       p.baseY = 0;
       p.y = 0;
       p.vy = 0;
       p.x = lanes[p.lane] ?? lanes[1];
-    } else if (nextMode === 'flying') {
+    } else if (nextMode === 'flying' && !isSub) {
       p.baseY = SKY_CORRIDOR_Y - 1.15;
       p.y = 0;
       p.vy = 2.2;
@@ -1769,7 +1744,7 @@ export class Game {
       p.vy = 0;
       p.x = LANE_X[p.lane] ?? 0;
     }
-    p.inWater = Boolean(aquaBiome || nextMode === 'aquatic');
+    p.inWater = Boolean(isSub || nextMode === 'aquatic');
     p.model.root.position.set(p.x, (p.baseY || 0) + p.y, p.z);
 
     if (p.index === 0) {
@@ -1899,23 +1874,23 @@ export class Game {
   }
 
   _applyBiomePlayersState(targetBiome) {
-    const allPureAqua = this.players.length > 0 && this.players.every((pl) => this._isPureAquaticPlayer(pl));
-    const aqua = isAquaticBiome(targetBiome);
     const isSub = Boolean(targetBiome?.submerged);
     this._syncEnvironmentHabitat(this.players[0]);
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat || 'land';
       const isFly = mode === 'flying' && !isSub;
-      const purePl = this._isPureAquaticPlayer(pl);
       pl.inSubmerged = isSub;
-      pl.inWater = !isFly && Boolean(aqua || allPureAqua || purePl || mode === 'aquatic');
+      pl.inWater = !isFly && Boolean(isSub || mode === 'aquatic');
       pl.diveTarget = isSub ? 1 : 0;
       pl.diveDepth = isSub ? 1 : 0;
       pl.grounded = !isFly;
       pl.baseY = isFly ? (SKY_CORRIDOR_Y - 1.15) : 0;
       if (mode === 'aquatic') {
-        const lanes = (aqua || allPureAqua || purePl) ? LANE_X : RIVER_LANE_X;
+        const lanes = isSub ? LANE_X : RIVER_LANE_X;
         pl.x = lanes[pl.lane] ?? lanes[1];
+        pl.model.root.position.x = pl.x;
+      } else {
+        pl.x = LANE_X[pl.lane] ?? 0;
         pl.model.root.position.x = pl.x;
       }
       pl.model.root.position.y = (pl.baseY || 0) + (pl.y || 0);
@@ -2022,6 +1997,7 @@ export class Game {
       narrator: this.narrator,
       habitatMode: this.players[0]?.habitatMode || this.players[0]?.habitat || 'land',
       playerHabitat: this.players[0]?.baseHabitat || this.players[0]?.habitat || 'land',
+      isAquaticBiome: Boolean(this.currentBiome?.submerged),
       trackCenterX: this._buildCameraEnvOpts(this.players[0]).trackCenterX,
       leadX: this.players[0]?.x || 0,
       leadY: (this.players[0]?.baseY || 0) + (this.players[0]?.y || 0),
@@ -2642,13 +2618,11 @@ export class Game {
     const attackUnlocked = !progLocked || this.score >= 1800;
     const furyUnlocked = !progLocked || this.score >= 2800;
 
-    const aquaBiome = isAquaticBiome(this.currentBiome);
     const isSubmergedBiome = Boolean(this.currentBiome?.submerged);
     const curHabitat = p.habitatMode || p.habitat || 'land';
     const isFlyingFlight = curHabitat === 'flying' && !isSubmergedBiome;
-    const fullWater = Boolean(aquaBiome || this._isPureAquaticPlayer(p));
-    const laneArr = (curHabitat === 'aquatic' && !fullWater) ? RIVER_LANE_X : LANE_X;
-    const inWater = !isFlyingFlight && Boolean(fullWater || curHabitat === 'aquatic');
+    const laneArr = (curHabitat === 'aquatic' && !isSubmergedBiome) ? RIVER_LANE_X : LANE_X;
+    const inWater = !isFlyingFlight && Boolean(isSubmergedBiome || curHabitat === 'aquatic');
     p.inWater = inWater;
     p.inSubmerged = isSubmergedBiome;
     p.baseY = isFlyingFlight ? (SKY_CORRIDOR_Y - 1.15) : 0;
@@ -2894,19 +2868,17 @@ export class Game {
       }
     }
 
-    // Controle real de Oxigênio (O2) para mergulho / bioma submerso
+    // Controle real de Oxigênio (O2 / Brânquias) para mergulho / bioma submerso
     if (p._oxygenWarnCd > 0) p._oxygenWarnCd = Math.max(0, p._oxygenWarnCd - dt);
     const isSubmergedDepth = Boolean(p.inSubmerged || (inWater && (p.diveDepth || 0) > 0.32));
-    if (p.isAquaticNative) {
-      p.oxygen = Math.min(100, (p.oxygen ?? 100) + 38 * dt);
-      p._oxygenDmgTimer = 0;
-    } else if (isSubmergedDepth && !this.isTestTrack && this.modeId !== 'zen') {
+    if (isSubmergedDepth && !this.isTestTrack && this.modeId !== 'zen') {
       const hasDiveGear = p.equippedAccessory === 'diving_mask' || p.equippedAccessory === 'snorkel' || p.equippedAccessory === 'steam_goggles';
-      const drainRate = (p.inSubmerged ? 5.2 : 10.5) * (hasDiveGear ? 0.35 : 1.0);
+      const baseDrain = p.isAquaticNative ? (p.inSubmerged ? 6.5 : 8.5) : (p.inSubmerged ? 8.5 : 12.0);
+      const drainRate = baseDrain * (hasDiveGear ? 0.45 : 1.0);
       p.oxygen = Math.max(0, (p.oxygen ?? 100) - drainRate * dt);
       if (p.oxygen <= 30 && p.oxygen > 0 && p.index === 0 && (p._oxygenWarnCd || 0) <= 0) {
         p._oxygenWarnCd = 2.8;
-        this.ui.hud.showFloatText('🫧 OXIGÊNIO BAIXO! Suba ou pegue Bolha 🫧!', '#38bdf8');
+        this.ui.hud.showFloatText('🫧 OXIGÊNIO BAIXO! Suba (W/↑) ou pegue Bolha 🫧!', '#38bdf8');
       }
       if (p.oxygen <= 0) {
         p._oxygenDmgTimer = (p._oxygenDmgTimer || 0) + dt;
@@ -2918,7 +2890,8 @@ export class Game {
         }
       }
     } else {
-      p.oxygen = Math.min(100, (p.oxygen ?? 100) + 28 * dt);
+      const refillRate = p.isAquaticNative ? 36 : 28;
+      p.oxygen = Math.min(100, (p.oxygen ?? 100) + refillRate * dt);
       p._oxygenDmgTimer = 0;
     }
 
@@ -3139,7 +3112,7 @@ export class Game {
       vy: p.vy,
       ducking: p.ducking,
       sliding: p.sliding,
-      swimming: curHabitat === 'aquatic' || aquaBiome,
+      swimming: inWater,
       locomotion: curHabitat,
       diveDepth: p.inSubmerged ? 1 : (p.diveDepth || 0),
       forceLand: curHabitat === 'land',
@@ -3276,13 +3249,15 @@ export class Game {
     this.ui.hud.updateScore(Math.max(this.hiScore, this.score), this.score, this.speed / Math.max(1, this.baseSpeed));
     this.music.update(dt, this.speed, myDino && myDino.hp <= 1 ? 1 : 0);
     const camPlayers = myDino && !myDino.dead ? [myDino] : this.players.filter((x) => !x.dead);
+    const camLead = camPlayers[0] || this.players[0];
     this.cameraRig.update(
       dt,
       camPlayers.length > 0 ? camPlayers : this.players,
       this.speed,
       Save.data.settings.accessibility.reduceShake,
       this.photoMode,
-      this.spectatorMode
+      this.spectatorMode,
+      this._buildCameraEnvOpts(camLead)
     );
     this.tvHud.updatePlayers(this.players, this.multiplayerSession.elimTimer, this.spectatorMode);
   }
@@ -4863,7 +4838,7 @@ export class Game {
       this.world.update(dt, 14);
       this.dayNight.update(dt, this.currentBiome.theme);
       this.particles.update(dt, 14);
-      const aquaBiomeMenu = isAquaticBiome(this.currentBiome);
+      const aquaBiomeMenu = Boolean(this.currentBiome?.submerged);
       for (const p of this.players) {
         const curMode = p.habitatMode || p.habitat || 'land';
         p.animator.update(dt, {
@@ -4890,7 +4865,7 @@ export class Game {
         if (p.dead) p.animator.update(dt, { dead: true });
       }
       this.particles.update(dt, 4);
-      this.cameraRig.update(dt, this.players[0]?.model.root.position, this.baseSpeed, false, false);
+      this.cameraRig.update(dt, this.players[0]?.model.root.position, this.baseSpeed, false, false, false, this._buildCameraEnvOpts(this.players[0]));
     } else if (this.state === 'replay') {
       this.replayTime += dt;
       const maxReplayTime = Math.max(0.6, (this.replay.frames.length - 1) * 0.05);
@@ -4902,7 +4877,7 @@ export class Game {
         p0.animator.update(dt, { speed: 22, grounded: frame.y <= 0.05, ducking: Boolean(frame.duck) });
         this.world.update(dt, 22);
         this.particles.update(dt, 22);
-        this.cameraRig.update(dt, p0.model.root.position, 22, true, false);
+        this.cameraRig.update(dt, p0.model.root.position, 22, true, false, false, this._buildCameraEnvOpts(p0));
       } else {
         if (this.lastPodiumSummary) {
           this.state = 'gameover';
@@ -4920,7 +4895,7 @@ export class Game {
         }
       }
     } else if (this.photoMode) {
-      this.cameraRig.update(dt, this.players[0]?.model.root.position, this.speed, true, true);
+      this.cameraRig.update(dt, this.players[0]?.model.root.position, this.speed, true, true, false, this._buildCameraEnvOpts(this.players[0]));
     }
 
     const camMode = Save.data.settings?.mpCameraMode || 'shared';

@@ -725,15 +725,13 @@ export class HUD {
     const showO2 = !!(player.inWater || submergedNow || (player.oxygen ?? 100) < 99);
     if (this.oxygenPill) {
       this.oxygenPill.classList.toggle('hidden', !showO2);
-      if (showO2) {
-        const o2 = Math.max(0, Math.min(100, Math.round(player.oxygen ?? 100)));
-        if (this.oxygenLbl) {
-          this.oxygenLbl.textContent = player.isAquaticNative ? 'Brânquias' : `${o2}%`;
-        }
-        if (this.oxygenBar) {
-          this.oxygenBar.style.width = `${player.isAquaticNative ? 100 : o2}%`;
-          this.oxygenBar.style.background = o2 < 28 ? '#ef4444' : (o2 < 55 ? '#f59e0b' : '#38bdf8');
-        }
+      const o2 = Math.max(0, Math.min(100, Math.round(player.oxygen ?? 100)));
+      if (this.oxygenLbl) {
+        this.oxygenLbl.textContent = player.isAquaticNative ? `Brânquias ${o2}%` : `${o2}%`;
+      }
+      if (this.oxygenBar) {
+        this.oxygenBar.style.width = `${o2}%`;
+        this.oxygenBar.style.background = o2 < 28 ? '#ef4444' : (o2 < 55 ? '#f59e0b' : '#38bdf8');
       }
     }
 

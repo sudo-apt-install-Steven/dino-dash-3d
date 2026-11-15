@@ -667,8 +667,8 @@ export function getDinoSwimCapabilities(specOrId, { hybrid = null, mutationId = 
         ? 'Anfíbio (Terra ↔ Água + Mergulho)'
         : (deepSpecialist ? 'Mergulho Abissal (Brânquias)' : 'Aquático Ágil (Superfície ↔ Submerso)'),
       swimModeDescription: isAmphibious
-        ? 'Alterna Terra ↔ Água (R / 🔄). Na água, aperte S/↓ para alternar Superfície ↔ Submerso!'
-        : 'Exclusivo da água (zero gasto de O₂). Aperte S/↓ para alternar Superfície ↔ Submerso e W/↑ para emergir!'
+        ? 'Alterna Terra ↔ Rio lateral (T / X / 🔄). Na água, aperte S/↓ para alternar Superfície ↔ Submerso!'
+        : 'Exclusivo do rio/mar lateral. Aperte S/↓ para alternar Superfície ↔ Submerso (gerencie o O₂ nas profundezas) e W/↑ para emergir!'
     };
   }
   return {

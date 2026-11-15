@@ -398,8 +398,9 @@ export class World {
       this.earthquakeCracks.push({ mesh: c, active: false, z: 0, x: 0 });
     }
 
-    // 6. Cristas de onda e espuma translúcida na superfície do oceano/água ("Sobre a Água")
+    // 6. Cristas de onda e espuma translúcida na superfície do rio lateral ("Sobre a Água", x = 10)
     this.waterSurfaceGroup = new THREE.Group();
+    this.waterSurfaceGroup.position.x = 10.0;
     this.waterSurfaceGroup.visible = false;
     const crestMat = new THREE.MeshBasicMaterial({
       color: '#bae6fd',
@@ -544,12 +545,29 @@ export class World {
   _syncUnderwaterGeometry() {
     const sub = !!this.submergedActive;
     const isSubBiome = !!this._isSubmergedBiome;
-    const fullWater = Boolean(this.fullWaterTrack || this.waterSurfaceActive);
-    const surfaceWaveOn = Boolean((this.waterSurfaceActive || this.fullWaterTrack) && !isSubBiome);
 
-    if (this.waterSurfaceGroup) this.waterSurfaceGroup.visible = surfaceWaveOn;
-    if (this.underwaterEnvGroup) this.underwaterEnvGroup.visible = sub;
-    if (this.seabedGroup) this.seabedGroup.visible = Boolean((fullWater || sub) && !isSubBiome);
+    // No Fundo Abissal (isSubBiome), todo o mapa já é o fundo do mar: não há rio azul na lateral!
+    if (this.riverMesh) this.riverMesh.visible = !isSubBiome;
+    if (this.rippleMesh) this.rippleMesh.visible = !isSubBiome;
+    if (this.waterLaneGroup) {
+      this.waterLaneGroup.visible = Boolean(this.aquaticChannelActive && !isSubBiome);
+    }
+    if (this.waterSurfaceGroup) {
+      this.waterSurfaceGroup.visible = Boolean(this.waterSurfaceActive && !isSubBiome && !sub);
+    }
+    if (this.underwaterEnvGroup) {
+      this.underwaterEnvGroup.visible = sub;
+      this.underwaterEnvGroup.position.x = isSubBiome ? 0 : 7.6;
+    }
+    if (this.surfaceCeiling) {
+      this.surfaceCeiling.visible = !isSubBiome;
+    }
+    for (let i = 0; i < (this.ceilingWaveSlats?.length || 0); i++) {
+      this.ceilingWaveSlats[i].visible = !isSubBiome;
+    }
+    if (this.seabedGroup) {
+      this.seabedGroup.visible = Boolean(sub && !isSubBiome);
+    }
 
     const floorY = isSubBiome ? -0.1 : -4.6;
     const ceilY = isSubBiome ? 9.8 : 0.0;
@@ -566,60 +584,57 @@ export class World {
       this.kelpColumns[i].position.y = floorY;
     }
 
-    // Submergindo abaixo da superfície y=0: pista d'água fica translúcida para revelar o mundo submerso e o teto oceânico!
-    const waterLookOn = fullWater && !isSubBiome;
+    // A pista central nunca vira "pista azul" de água: dinossauros aquáticos nadam no rio azul ao lado (ou no leito abissal)
     if (this.track) {
-      this.track.position.y = waterLookOn ? -0.02 : -0.06;
+      this.track.position.y = -0.06;
     }
     if (this.trackMat) {
-      if (waterLookOn) {
-        this.trackMat.color.set(sub ? '#0284c7' : '#0ea5e9');
-        this.trackMat.emissive.set('#0369a1');
-        this.trackMat.emissiveIntensity = sub ? 0.34 : 0.42;
-        this.trackMat.roughness = 0.16;
-        this.trackMat.transparent = true;
-        this.trackMat.opacity = sub ? 0.46 : 0.78;
-        this.trackMat.depthWrite = !sub;
-        this.trackMat.side = THREE.DoubleSide;
-      } else {
-        this.trackMat.roughness = 0.82;
-        this.trackMat.transparent = false;
-        this.trackMat.opacity = 1;
-        this.trackMat.depthWrite = true;
-        this.trackMat.side = THREE.FrontSide;
+      if (this._toThemeColors?.track) {
+        this.trackMat.color.copy(this._toThemeColors.track);
+        this.trackMat.emissive.copy(this.trackMat.color).multiplyScalar(0.18);
       }
+      this.trackMat.roughness = 0.82;
+      this.trackMat.transparent = false;
+      this.trackMat.opacity = 1;
+      this.trackMat.depthWrite = true;
+      this.trackMat.side = THREE.FrontSide;
       this.trackMat.needsUpdate = true;
     }
     if (this.riverMat) {
-      this.riverMat.transparent = sub;
-      this.riverMat.opacity = sub ? 0.46 : 1;
-      this.riverMat.depthWrite = !sub;
+      const subRiver = Boolean(sub && !isSubBiome);
+      this.riverMat.transparent = subRiver;
+      this.riverMat.opacity = subRiver ? 0.46 : 1;
+      this.riverMat.depthWrite = !subRiver;
+      this.riverMat.side = subRiver ? THREE.DoubleSide : THREE.FrontSide;
       this.riverMat.needsUpdate = true;
     }
 
-    // Esconde faixas secas / margens terrestres / cactos opacos quando em corrida aquática ou abaixo d'água!
-    const hideSideLand = Boolean((fullWater || sub) && !isSubBiome);
-    if (this.groundLeft) this.groundLeft.position.y = hideSideLand ? -5.15 : -0.52;
-    if (this.groundRight) this.groundRight.position.y = (sub || this.aquaticChannelActive || hideSideLand) ? -5.15 : -0.52;
-    if (this.bankLeft) this.bankLeft.visible = !hideSideLand;
-    if (this.bankRight) this.bankRight.visible = !hideSideLand;
+    if (this.groundLeft) this.groundLeft.position.y = -0.52;
+    if (this.groundRight) {
+      this.groundRight.position.y = isSubBiome ? -0.52 : ((sub || this.aquaticChannelActive) ? -5.15 : -0.52);
+    }
+    if (this.bankLeft) this.bankLeft.visible = true;
+    if (this.bankRight) this.bankRight.visible = true;
     for (let i = 0; i < (this.trackLanterns?.length || 0); i++) {
       this.trackLanterns[i].visible = !this.lowSpec && !sub;
     }
     if (this.trackStripes) {
-      this.trackStripes.visible = !(sub && !isSubBiome);
+      this.trackStripes.visible = true;
     }
 
     this.scenery?.setWaterState?.({
       submerged: sub,
-      fullWater: waterLookOn,
+      fullWater: false,
       floorY: isSubBiome ? 0 : -4.6
     });
   }
 
   setAquaticChannelActive(active) {
     this.aquaticChannelActive = !!active;
-    if (this.waterLaneGroup) this.waterLaneGroup.visible = this.aquaticChannelActive;
+    if (this.waterLaneGroup) {
+      this.waterLaneGroup.visible = Boolean(this.aquaticChannelActive && !this._isSubmergedBiome);
+    }
+    this._syncUnderwaterGeometry();
   }
 
   setSkyCorridorActive(active) {
@@ -883,10 +898,8 @@ export class World {
     const baseDens = from.fogDensity + (to.fogDensity - from.fogDensity) * k;
     this.scene.fog.density = this.clearVision ? 0.006 : baseDens;
     this.groundMat.color.copy(from.ground).lerp(to.ground, k);
-    if (!(this.fullWaterTrack || this.waterSurfaceActive) || this._isSubmergedBiome) {
-      this.trackMat.color.copy(from.track).lerp(to.track, k);
-      this.trackMat.emissive.copy(this.trackMat.color).multiplyScalar(0.18);
-    }
+    this.trackMat.color.copy(from.track).lerp(to.track, k);
+    this.trackMat.emissive.copy(this.trackMat.color).multiplyScalar(0.18);
     this.laneStripeMat.color.copy(from.stripe).lerp(to.stripe, k);
     this.laneStripeMat.emissive.copy(this.laneStripeMat.color).multiplyScalar(0.24);
     this.bankMat.color.copy(from.bank).lerp(to.bank, k);

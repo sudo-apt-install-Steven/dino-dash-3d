@@ -879,14 +879,9 @@ export class Spawner {
   }
 
   _isWaterTrack() {
-    if (this.habitatMode === 'flying' && this.biomeId !== 'abyss_submerged') return false;
-    return Boolean(
-      this.habitatMode === 'aquatic' ||
-      this.isAquaticBiome ||
-      this.biomeId === 'abyss_submerged' ||
-      this.biomeId === 'jurassic_river' ||
-      this.biomeId === 'ocean_surface'
-    );
+    if (this.biomeId === 'abyss_submerged') return true;
+    if (this.habitatMode === 'flying') return false;
+    return this.habitatMode === 'aquatic';
   }
 
   _getUnderwaterBaseY(relY = 0) {
@@ -895,11 +890,11 @@ export class Spawner {
 
   _getLaneX(laneIdx = 1) {
     const idx = Math.max(0, Math.min(2, Math.floor(laneIdx)));
-    return (this.habitatMode === 'aquatic' && !this.isAquaticBiome) ? RIVER_LANE_X[idx] : LANE_X[idx];
+    return (this.habitatMode === 'aquatic' && this.biomeId !== 'abyss_submerged') ? RIVER_LANE_X[idx] : LANE_X[idx];
   }
 
   _getLaneIndexFromX(x) {
-    const lanes = (this.habitatMode === 'aquatic' && !this.isAquaticBiome) ? RIVER_LANE_X : LANE_X;
+    const lanes = (this.habitatMode === 'aquatic' && this.biomeId !== 'abyss_submerged') ? RIVER_LANE_X : LANE_X;
     let best = -1;
     let bestD = 1.1;
     for (let i = 0; i < 3; i++) {
@@ -913,7 +908,7 @@ export class Spawner {
   }
 
   _getBaseY(defaultY = 0) {
-    return (this.habitatMode === 'flying' ? (SKY_CORRIDOR_Y - 1.15) : 0) + defaultY;
+    return (this.habitatMode === 'flying' && this.biomeId !== 'abyss_submerged' ? (SKY_CORRIDOR_Y - 1.15) : 0) + defaultY;
   }
 
   _getBlockedLanesNearZ(zMin, zMax) {

@@ -30,7 +30,7 @@ export const BIOMES = [
     currentForce: 1.8,
     theme: {
       sky: '#4fb8f0', fog: '#5dc2f5', fogDensity: 0.0105,
-      ground: '#2b9348', track: '#219ebc', stripe: '#8ecae6', bank: '#55a630',
+      ground: '#2b9348', track: '#b59264', stripe: '#8c6b3f', bank: '#55a630',
       river: '#0077b6', riverEmissive: '#023e8a', sun: '#fff3b0', sunGlow: '#90e0ef',
       scenery: { pebble: '#48cae4', rock: '#4f772d', flora: '#2d6a4f', flower: '#ff9ebb', mesa: '#386641', cloud: '#ffffff', wood: '#582f0e' }
     }
@@ -253,7 +253,7 @@ export const BIOMES = [
     currentForce: 1.5,
     theme: {
       sky: '#38bdf8', fog: '#7dd3fc', fogDensity: 0.0085,
-      ground: '#0ea5e9', track: '#22d3ee', stripe: '#f0f9ff', bank: '#0284c7', edgeGlow: '#67e8f9',
+      ground: '#d4a359', track: '#e6c280', stripe: '#c99e52', bank: '#b8863b', edgeGlow: '#67e8f9',
       river: '#0369a1', riverEmissive: '#0ea5e9', sun: '#fef08a', sunGlow: '#fde047',
       scenery: { pebble: '#f472b6', rock: '#0c4a6e', flora: '#2dd4bf', flower: '#fb7185', mesa: '#075985', cloud: '#ffffff', wood: '#78350f' }
     }
@@ -271,7 +271,7 @@ export const BIOMES = [
     lowGravity: 0.72,
     theme: {
       sky: '#1d4ed8', fog: '#2563eb', fogDensity: 0.0115,
-      ground: '#1e3a8a', track: '#3b82f6', stripe: '#72efdd', bank: '#1e40af', edgeGlow: '#38bdf8',
+      ground: '#0f2942', track: '#1e4e68', stripe: '#38bdf8', bank: '#163b52', edgeGlow: '#38bdf8',
       river: '#0891b2', riverEmissive: '#06b6d4', sun: '#72efdd', sunGlow: '#38bdf8',
       scenery: { pebble: '#38bdf8', rock: '#334155', flora: '#34d399', flower: '#f472b6', mesa: '#1e293b', cloud: '#67e8f9', wood: '#0f766e' }
     }

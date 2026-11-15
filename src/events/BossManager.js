@@ -255,12 +255,13 @@ export class BossManager {
     b.phaseTime += dt;
     this.currentHabitatMode = ctx?.habitatMode || 'land';
     this.currentIsAquaticBiome = !!ctx?.isAquaticBiome;
+    const trackCenterX = this.currentHabitatMode === 'aquatic' && !this.currentIsAquaticBiome ? (RIVER_LANE_X[1] ?? 10) : 0;
 
     // Introdução cinematográfica curta
     if (b.introTimer > 0) {
       b.introTimer -= dt;
       const p = Math.max(0, b.introTimer / 1.65);
-      this.group.position.set(0, p * 6.5, -34 - p * 8);
+      this.group.position.set(trackCenterX, p * 6.5, -34 - p * 8);
       if (b.introTimer <= 0.8 && this.currentAnim !== 'roar') {
         this.currentAnim = 'roar';
         ctx.cameraRig?.triggerShake(0.45, 0.35);
@@ -268,7 +269,7 @@ export class BossManager {
       }
     } else {
       const aggSpeed = b.phase >= 2 ? 1.85 : 1.35;
-      this.group.position.x = Math.sin(b.phaseTime * aggSpeed) * 2.55;
+      this.group.position.x = trackCenterX + Math.sin(b.phaseTime * aggSpeed) * 2.55;
       this.group.position.y = Math.sin(b.phaseTime * 3.1) * 0.18;
       if (b.lungeZ > 0) b.lungeZ = Math.max(0, b.lungeZ - dt * 14);
       this.group.position.z = -33 + b.lungeZ;

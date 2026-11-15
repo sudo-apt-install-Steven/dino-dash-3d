@@ -249,7 +249,7 @@ export class SelectionScreen {
 
           <div class="sel-bottom-dock" id="sel-bottom-dock">
             <div class="tabs-row sel-filter-tabs" id="sel-filter-tabs">
-              <button class="tab-btn active" data-cfilter="all">Todos (${allNonSecret.length})</button>
+              <button class="tab-btn active" data-cfilter="all">Todos (${DINO_CATALOG.length})</button>
               ${Object.entries(DINO_CLASSES).map(([k, info]) => `
                 <button class="tab-btn" data-cfilter="${k}">${info.name.pt}</button>
               `).join('')}

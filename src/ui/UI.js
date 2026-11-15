@@ -121,22 +121,12 @@ export class UIManager {
     const modeDef = getModeDef(this.game.modeId);
     const diffCfg = this.game.difficultyMgr.getConfig();
     const dinoSpec = getDinoSpec(Save.data.selectedDino);
-    const habInfo = getEffectiveDinoHabitat(dinoSpec, {
-      hybrid: Save.data.hybrid,
-      mutationId: Save.data.equippedMutation
-    });
-    const pureAqua = !habInfo.canWalkOnLand;
     const rawBiome = getBiomeById(this.game.startBiomeId);
-    const shownBiome = (pureAqua && !isAquaticBiome(rawBiome))
-      ? (isAquaticBiome(this.game.currentBiome) ? this.game.currentBiome : getBiomeById('ocean_surface'))
-      : rawBiome;
     const biomeLabel = this.game.startBiomeId === 'random_portal'
-      ? (pureAqua ? 'Aleatório (Oceano/Portais)' : 'Aleatório (Portais)')
-      : (pureAqua && !isAquaticBiome(rawBiome)
-        ? `${shownBiome.name} (Aquático)`
-        : (this.game.sequenceBiomes
-          ? `Sequência (${shownBiome.name})`
-          : shownBiome.name));
+      ? 'Aleatório (Portais)'
+      : (this.game.sequenceBiomes
+        ? `Sequência (${rawBiome.name})`
+        : rawBiome.name);
     const isPerf = !!Save.data.perfectMode && modeDef.id !== 'zen';
     const effectiveLives = (isPerf || modeDef.id === 'hardcore')
       ? 1
