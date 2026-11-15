@@ -5,15 +5,48 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '..');
-const DIST_DIR = path.join(ROOT_DIR, 'dist');
+const DIST_DIR = path.resolve(ROOT_DIR, 'dist');
 const PORT = Number(process.env.LAN_PORT || process.env.PORT || 5174);
 const MAX_PLAYERS = 8;
 const ROOM_TTL_MS = 15 * 60 * 1000;
+const WS_MAX_PAYLOAD_BYTES = 16 * 1024;
+const WS_RATE_LIMIT_PER_SEC = 45;
+const WS_FLOOD_CLOSE_PER_SEC = 160;
+
+function cleanStr(value, fallback = '', maxLen = 32) {
+  const s = String(value ?? '')
+    .replace(/[\u0000-\u001F\u007F<>`"'\\]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+  return s || fallback;
+}
+
+function cleanRoomCode(value) {
+  const s = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return /^[A-Z0-9]{4}$/.test(s) ? s : '';
+}
+
+function cleanHexColor(value, fallback = '#58d63a') {
+  return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.trim()) ? value.trim() : fallback;
+}
+
+function cleanId(value, fallback = 'trex', maxLen = 28) {
+  const s = String(value ?? '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, maxLen);
+  return s || fallback;
+}
+
+function isAllowedHttpOrigin(origin) {
+  if (!origin) return false;
+  if (origin === 'https://dino-dash-3d-six.vercel.app') return true;
+  return /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(:\d{2,5})?$/.test(origin);
+}
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -146,12 +179,27 @@ setInterval(() => {
 }, 20000).unref();
 
 const server = http.createServer((req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const reqOrigin = String(req.headers.origin || '').trim();
+  if (isAllowedHttpOrigin(reqOrigin)) {
+    res.setHeader('Access-Control-Allow-Origin', reqOrigin);
+    res.setHeader('Vary', 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
   if (req.method === 'OPTIONS') {
-    res.writeHead(204);
+    res.writeHead(reqOrigin && !isAllowedHttpOrigin(reqOrigin) ? 403 : 204);
     res.end();
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify({ ok: false, error: 'Método não permitido.' }));
     return;
   }
 
@@ -168,12 +216,12 @@ const server = http.createServer((req, res) => {
       if (!room.isPublic || room.peers.size === 0) continue;
       const host = room.peers.get(room.hostPeerId);
       publicRooms.push({
-        code: room.code,
-        hostName: host?.name || 'Host',
-        mode: room.mode,
+        code: cleanRoomCode(room.code) || '0000',
+        hostName: cleanStr(host?.name, 'Host', 18),
+        mode: cleanId(room.mode, 'lan_party', 24),
         playerCount: room.peers.size,
         maxPlayers: MAX_PLAYERS,
-        status: room.status
+        status: ['lobby', 'playing', 'finished'].includes(room.status) ? room.status : 'lobby'
       });
     }
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -181,10 +229,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Caso dist/ esteja compilado, serve o jogo estático diretamente pela porta LAN
+  // Caso dist/ esteja compilado, serve o jogo estático diretamente pela porta LAN com proteção anti-traversal
   if (fs.existsSync(DIST_DIR)) {
-    let filePath = path.join(DIST_DIR, reqUrl.pathname === '/' ? 'index.html' : reqUrl.pathname);
-    if (!filePath.startsWith(DIST_DIR) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    const relPath = reqUrl.pathname === '/' ? 'index.html' : reqUrl.pathname.replace(/^\/+/, '');
+    let filePath = path.resolve(DIST_DIR, relPath);
+    const distPrefix = DIST_DIR.endsWith(path.sep) ? DIST_DIR : DIST_DIR + path.sep;
+    if (!filePath.startsWith(distPrefix) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
       filePath = path.join(DIST_DIR, 'index.html');
     }
     const ext = path.extname(filePath);
@@ -197,14 +247,39 @@ const server = http.createServer((req, res) => {
   res.end('Dino Dash 3D LAN WebSocket Server ativo. Conecte via /ws ou rode npm run dev.');
 });
 
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, maxPayload: WS_MAX_PAYLOAD_BYTES });
 
 wss.on('connection', (ws) => {
+  ws._msgWindowStart = Date.now();
+  ws._msgCount = 0;
+
   ws.on('message', (raw) => {
+    if (raw && raw.length > WS_MAX_PAYLOAD_BYTES) {
+      ws.close(1009, 'Payload excede limite.');
+      return;
+    }
+
+    const nowMs = Date.now();
+    if (nowMs - ws._msgWindowStart >= 1000) {
+      ws._msgWindowStart = nowMs;
+      ws._msgCount = 0;
+    }
+    ws._msgCount += 1;
+    if (ws._msgCount > WS_FLOOD_CLOSE_PER_SEC) {
+      ws.close(1008, 'Flood detectado.');
+      return;
+    }
+    if (ws._msgCount > WS_RATE_LIMIT_PER_SEC) {
+      return;
+    }
+
     let msg;
     try {
       msg = JSON.parse(raw.toString());
     } catch {
+      return;
+    }
+    if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') {
       return;
     }
 
@@ -238,27 +313,28 @@ wss.on('connection', (ws) => {
 
     if (msg.type === 'create_room') {
       cleanupPeer(ws);
-      const code = msg.code && /^[A-Z0-9]{4}$/.test(msg.code) && !rooms.has(msg.code)
-        ? msg.code
+      const requestedCode = cleanRoomCode(msg.code);
+      const code = requestedCode && !rooms.has(requestedCode)
+        ? requestedCode
         : randomRoomCode();
-      const peerId = msg.peerId || `p_${Math.random().toString(36).slice(2, 8)}`;
-      const mpMode = msg.mpMode || (msg.elimination ? 'elimination' : 'race');
+      const peerId = cleanId(msg.peerId, `p_${crypto.randomBytes(4).toString('hex')}`, 32);
+      const mpMode = cleanId(msg.mpMode || (msg.elimination ? 'elimination' : 'race'), 'race', 24);
       const room = {
         code,
         hostPeerId: peerId,
         isPublic: msg.isPublic !== false,
-        mode: msg.mode || 'lan_party',
+        mode: cleanId(msg.mode, 'lan_party', 24),
         mpMode,
         status: 'lobby',
-        seed: msg.seed || `LAN-${code}-${Math.floor(Math.random() * 9999)}`,
+        seed: cleanStr(msg.seed, `LAN-${code}-${crypto.randomInt(1000, 9999)}`, 32),
         elimination: mpMode === 'elimination' || !!msg.elimination,
         partyMode: msg.partyMode !== false,
         teacherMode: !!msg.teacherMode,
         tvScale: !!msg.tvScale,
         config: {
           allowVoting: msg.config?.allowVoting !== false,
-          difficulty: msg.config?.difficulty || 'normal',
-          biomeId: msg.config?.biomeId || 'random_portal',
+          difficulty: cleanId(msg.config?.difficulty, 'normal', 16),
+          biomeId: cleanId(msg.config?.biomeId, 'random_portal', 24),
           allowRevive: msg.config?.allowRevive !== false,
           allowPowerups: msg.config?.allowPowerups !== false
         },
@@ -270,11 +346,11 @@ wss.on('connection', (ws) => {
       room.peers.set(peerId, {
         peerId,
         ws,
-        name: String(msg.name || 'Host PC').slice(0, 18),
-        dinoId: msg.dinoId || 'trex',
-        color: msg.color || '#58d63a',
+        name: cleanStr(msg.name, 'Host PC', 18),
+        dinoId: cleanId(msg.dinoId, 'trex', 28),
+        color: cleanHexColor(msg.color, '#58d63a'),
         ready: true,
-        role: msg.role || 'screen',
+        role: ['screen', 'controller', 'spectator'].includes(msg.role) ? msg.role : 'screen',
         slot: 0,
         pingMs: 0
       });
@@ -287,13 +363,13 @@ wss.on('connection', (ws) => {
 
     if (msg.type === 'join_room') {
       cleanupPeer(ws);
-      const code = String(msg.code || '').toUpperCase().trim();
-      const room = rooms.get(code);
+      const code = cleanRoomCode(msg.code);
+      const room = code ? rooms.get(code) : null;
       if (!room) {
-        send(ws, { type: 'error', message: `Sala "${code}" não encontrada ou expirada.` });
+        send(ws, { type: 'error', message: `Sala "${cleanStr(msg.code, '????', 8)}" não encontrada ou expirada.` });
         return;
       }
-      const peerId = msg.peerId || `p_${Math.random().toString(36).slice(2, 8)}`;
+      const peerId = cleanId(msg.peerId, `p_${crypto.randomBytes(4).toString('hex')}`, 32);
       const existing = room.peers.get(peerId);
       if (!existing && room.peers.size >= MAX_PLAYERS) {
         send(ws, { type: 'error', message: 'Sala cheia (máximo 8 jogadores).' });
@@ -312,11 +388,11 @@ wss.on('connection', (ws) => {
       room.peers.set(peerId, {
         peerId,
         ws,
-        name: String(msg.name || existing?.name || `Dino ${nextSlot + 1}`).slice(0, 18),
-        dinoId: msg.dinoId || existing?.dinoId || 'raptor',
-        color: msg.color || existing?.color || palette[nextSlot % palette.length],
+        name: cleanStr(msg.name || existing?.name, `Dino ${nextSlot + 1}`, 18),
+        dinoId: cleanId(msg.dinoId || existing?.dinoId, 'raptor', 28),
+        color: cleanHexColor(msg.color || existing?.color, palette[nextSlot % palette.length]),
         ready: existing?.ready ?? false,
-        role: msg.role || 'controller',
+        role: ['screen', 'controller', 'spectator'].includes(msg.role) ? msg.role : 'controller',
         slot: nextSlot,
         pingMs: 0
       });
@@ -378,10 +454,10 @@ wss.on('connection', (ws) => {
         break;
       case 'player_meta':
         if (peer) {
-          if (msg.name) peer.name = String(msg.name).slice(0, 18);
-          if (msg.dinoId) peer.dinoId = msg.dinoId;
-          if (msg.color) peer.color = msg.color;
-          if (msg.role) peer.role = msg.role;
+          if (msg.name) peer.name = cleanStr(msg.name, peer.name, 18);
+          if (msg.dinoId) peer.dinoId = cleanId(msg.dinoId, peer.dinoId, 28);
+          if (msg.color) peer.color = cleanHexColor(msg.color, peer.color);
+          if (['screen', 'controller', 'spectator'].includes(msg.role)) peer.role = msg.role;
           if (msg.ready !== undefined) peer.ready = !!msg.ready;
           broadcast(room, { type: 'room_state', room: serializeRoom(room) });
         }
@@ -393,7 +469,20 @@ wss.on('connection', (ws) => {
         }
         break;
       case 'chat':
+        broadcast(room, {
+          type: 'chat',
+          peerId: ws._peerId,
+          name: cleanStr(peer?.name, 'Dino', 18),
+          text: cleanStr(msg.text || msg.message, '', 120)
+        }, ws._peerId);
+        break;
       case 'emote':
+        broadcast(room, {
+          type: 'emote',
+          peerId: ws._peerId,
+          emote: cleanStr(msg.emote || msg.emoji, '🦖', 16)
+        }, ws._peerId);
+        break;
       case 'input':
       case 'card_pick':
       case 'spectator_action':
@@ -426,7 +515,7 @@ wss.on('connection', (ws) => {
         }
         break;
       default:
-        broadcast(room, { ...msg, peerId: ws._peerId }, ws._peerId);
+        // Tipos desconhecidos são descartados para prevenir injeção arbitrária de protocolo.
         break;
     }
   });

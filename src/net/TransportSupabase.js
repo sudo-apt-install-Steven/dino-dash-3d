@@ -1,5 +1,7 @@
 // Transporte Online via Supabase Realtime (Broadcast + Presence) + Auth opcional & Ranking Global.
 import { createClient } from '@supabase/supabase-js';
+import { syncAuthoritativeRoom } from '../security/EdgeClient.js';
+import { sanitizeNickname, sanitizeRoomCode, sanitizeHexColor } from '../security/Sanitize.js';
 
 let _client = null;
 
@@ -27,6 +29,7 @@ export class TransportSupabase {
     this.listeners = new Map();
     this.room = null;
     this.selfPeerId = null;
+    this.hostSecret = null;
     this.pingTimer = null;
   }
 
@@ -100,14 +103,14 @@ export class TransportSupabase {
         entries.push({
           peerId: key,
           isHost: !!info.isHost,
-          name: info.name || `Dino ${idx + 1}`,
-          dinoId: info.dinoId || 'trex',
-          color: info.color || palette[idx % palette.length],
+          name: sanitizeNickname(info.name || `Dino ${idx + 1}`, `Dino ${idx + 1}`, 18),
+          dinoId: String(info.dinoId || 'trex').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 28) || 'trex',
+          color: sanitizeHexColor(info.color, palette[idx % palette.length]),
           ready: !!info.ready,
-          role: info.role || 'controller',
+          role: ['screen', 'controller', 'spectator'].includes(info.role) ? info.role : 'controller',
           slot: info.slot ?? idx,
           joinedAt: info.joinedAt || 0,
-          pingMs: info.pingMs || 0
+          pingMs: Math.max(0, Math.min(9999, Number(info.pingMs || 0)))
         });
         idx++;
       }
@@ -239,9 +242,8 @@ export class TransportSupabase {
             this.send({ type: 'request_room_sync' });
             let foundRemote = this.room.peers.some((p) => p.peerId !== peerId);
             if (!foundRemote) {
-              const cutoff = new Date(Date.now() - 360 * 60 * 1000).toISOString();
-              const [{ data: dbRow }] = await Promise.all([
-                this.client.from('dino_rooms').select('code, status, mode_id').eq('code', code).gte('updated_at', cutoff).maybeSingle(),
+              const [{ data: lookupRes }] = await Promise.all([
+                syncAuthoritativeRoom(this.client, { action: 'lookup', code }).then((r) => ({ data: r?.ok && r.exists ? r.room : null })),
                 new Promise((r) => {
                   let done = false;
                   const finish = () => { if (!done) { done = true; r(); } };
@@ -249,7 +251,7 @@ export class TransportSupabase {
                   setTimeout(finish, 1100);
                 })
               ]);
-              foundRemote = this.room.peers.some((p) => p.peerId !== peerId) || !!dbRow;
+              foundRemote = this.room.peers.some((p) => p.peerId !== peerId) || !!lookupRes;
             }
             if (!foundRemote) {
               settled = true;
@@ -367,15 +369,21 @@ export class TransportSupabase {
     if (!this.client || !this.room) return;
     if (onlyIfHost && this.room.hostPeerId !== this.selfPeerId) return;
     const host = this.room.peers.find((p) => p.peerId === this.room.hostPeerId);
-    await this.client.from('dino_rooms').upsert({
-      code: this.room.code,
-      host_name: host?.name || 'Host',
-      mode_id: this.room.mode,
-      is_public: this.room.isPublic,
-      player_count: Math.max(1, this.room.peers.length),
+    const code = sanitizeRoomCode(this.room.code);
+    if (!code) return;
+    const res = await syncAuthoritativeRoom(this.client, {
+      action: 'upsert',
+      code,
+      hostName: sanitizeNickname(host?.name || 'Host', 'Host', 24),
+      modeId: String(this.room.mode || 'lan_party').slice(0, 24),
+      isPublic: !!this.room.isPublic,
+      playerCount: Math.max(1, Math.min(8, this.room.peers.length)),
       status: this.room.status || 'lobby',
-      updated_at: new Date().toISOString()
+      hostSecret: this.hostSecret || ''
     });
+    if (res?.ok && res.hostSecret) {
+      this.hostSecret = res.hostSecret;
+    }
   }
 
   async listPublicRooms() {
@@ -410,18 +418,9 @@ export class TransportSupabase {
     return { ok: true, rows: data || [] };
   }
 
-  async submitGlobalScore({ playerName, dinoId, modeId, score, distance, eggs }) {
-    if (!this.client) return false;
-    const cleanScore = Math.min(250000, Math.max(0, Math.floor(score)));
-    const { error } = await this.client.from('dino_leaderboard').insert({
-      player_name: String(playerName || 'Dino').trim().slice(0, 24) || 'Dino',
-      dino_id: dinoId || 'trex',
-      mode_id: modeId || 'solo',
-      score: cleanScore,
-      distance: Math.max(0, Math.floor(distance)),
-      eggs: Math.max(0, Math.floor(eggs))
-    });
-    return !error;
+  async submitGlobalScore() {
+    // Escrita direta no ranking foi desativada por segurança (use finishAuthoritativeRun / finish-run).
+    return false;
   }
 
   async signInWithEmailOtp(email) {
@@ -440,6 +439,14 @@ export class TransportSupabase {
   disconnect() {
     clearInterval(this.pingTimer);
     this.pingTimer = null;
+    if (this.client && this.room && this.room.hostPeerId === this.selfPeerId && this.hostSecret) {
+      const code = sanitizeRoomCode(this.room.code);
+      const secret = this.hostSecret;
+      if (code && secret) {
+        syncAuthoritativeRoom(this.client, { action: 'delete', code, hostSecret: secret }).catch(() => {});
+      }
+    }
+    this.hostSecret = null;
     if (this.channel) {
       this.client?.removeChannel(this.channel);
       this.channel = null;
