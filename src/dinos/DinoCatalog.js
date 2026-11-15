@@ -653,28 +653,22 @@ export function getDinoSwimCapabilities(specOrId, { hybrid = null, mutationId = 
   const base = getDinoHabitat(spec);
   const grantsLandWalk = mutationId === 'extra_limbs';
   const isAmphibious = base === 'amphibious' || (base === 'aquatic' && grantsLandWalk);
+  const canSubmergeWater = base === 'aquatic' || base === 'amphibious' || available.includes('aquatic');
   const profile = spec.swimProfile || (base === 'aquatic' ? 'submerge' : base === 'amphibious' ? 'surface' : 'none');
 
-  if (profile === 'submerge') {
+  if (base === 'aquatic' || base === 'amphibious' || available.includes('aquatic')) {
+    const deepSpecialist = profile === 'submerge';
     return {
-      swimProfile: 'submerge',
-      canSubmerge: true,
+      swimProfile: profile,
+      canSubmerge: canSubmergeWater,
       surfaceSwimOnly: false,
       isAmphibious,
-      swimModeLabel: isAmphibious ? 'Anfíbio + Submerso' : 'Submerso Profundo',
-      swimModeDescription: 'Pode nadar na superfície ou mergulhar (S/↓) usando reserva de O₂.'
-    };
-  }
-  if (profile === 'surface') {
-    return {
-      swimProfile: 'surface',
-      canSubmerge: false,
-      surfaceSwimOnly: true,
-      isAmphibious,
-      swimModeLabel: isAmphibious ? 'Anfíbio (Terra ↔ Superfície)' : 'Nado de Superfície',
+      swimModeLabel: isAmphibious
+        ? 'Anfíbio (Terra ↔ Água + Mergulho)'
+        : (deepSpecialist ? 'Mergulho Abissal (Brânquias)' : 'Aquático Ágil (Superfície ↔ Submerso)'),
       swimModeDescription: isAmphibious
-        ? 'Alterna Terra ↔ Água (R / botão 🔄). Na água, nada na superfície sem gastar O₂.'
-        : 'Nada exclusivamente na superfície da água com alta agilidade e zero gasto de O₂.'
+        ? 'Alterna Terra ↔ Água (R / 🔄). Na água, aperte S/↓ para alternar Superfície ↔ Submerso!'
+        : 'Exclusivo da água (zero gasto de O₂). Aperte S/↓ para alternar Superfície ↔ Submerso e W/↑ para emergir!'
     };
   }
   return {
@@ -685,7 +679,7 @@ export function getDinoSwimCapabilities(specOrId, { hybrid = null, mutationId = 
     swimModeLabel: base === 'flying' ? 'Voador' : 'Terrestre',
     swimModeDescription: base === 'flying'
       ? 'Voa pelas rotas aéreas; atravessa água apenas em biomas oceânicos.'
-      : 'Corre em terra firme; pode planar na água em travessias de rio.'
+      : 'Corre em terra firme; pode nadar e mergulhar ao cruzar rios/oceanos.'
   };
 }
 
@@ -699,7 +693,7 @@ export function getEffectiveDinoHabitat(specOrId, { hybrid = null, mutationId = 
     const bodyHab = getDinoHabitat(hybrid.body || hybrid.bodyId || 'trex');
     const normBodyHab = bodyHab === 'amphibious' ? 'aquatic' : bodyHab;
     const primary = availableModes.includes(normBodyHab) ? normBodyHab : (availableModes[0] || 'land');
-    return { primary, availableModes, grantsLandWalk, ...swimCaps };
+    return { primary, availableModes, grantsLandWalk, canWalkOnLand: availableModes.includes('land'), ...swimCaps };
   }
   const modes = new Set();
   if (base === 'amphibious') {
@@ -716,6 +710,7 @@ export function getEffectiveDinoHabitat(specOrId, { hybrid = null, mutationId = 
     primary: base,
     availableModes,
     grantsLandWalk,
+    canWalkOnLand: availableModes.includes('land'),
     ...swimCaps
   };
 }

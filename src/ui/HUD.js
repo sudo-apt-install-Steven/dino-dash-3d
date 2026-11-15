@@ -154,7 +154,7 @@ export class HUD {
           <button class="touch-btn" data-tact="right" aria-label="Faixa Direita">▶</button>
         </div>
         <div class="touch-cluster touch-cluster-right">
-          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar"><span class="touch-btn-ico">▼</span><span class="touch-btn-lbl">Baixo</span></button>
+          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar"><span class="touch-btn-ico" id="touch-duck-ico">▼</span><span class="touch-btn-lbl" id="touch-duck-lbl">Baixo</span></button>
           <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular"><span class="touch-btn-ico">▲</span><span class="touch-btn-lbl">Pulo</span></button>
           <button class="touch-btn touch-btn-action hidden touch-btn-fury" id="touch-fury-btn" data-tact="fury" aria-label="Modo Fúria"><span class="touch-btn-ico">🔥</span><span class="touch-btn-lbl">Fúria!</span></button>
           <button class="touch-btn touch-btn-action hidden touch-btn-item" id="touch-item-btn" data-tact="item" aria-label="Usar Item da Mochila"><span class="touch-btn-ico" id="touch-item-ico">🎒</span><span class="touch-btn-lbl">Item</span></button>
@@ -408,6 +408,9 @@ export class HUD {
     this.touchAttackLbl = q('#touch-attack-lbl');
     this.touchAbilityBtn = q('#touch-ability-btn');
     this.touchAbilityLbl = q('#touch-ability-lbl');
+    this.touchDuckBtn = q('[data-tact="duck"]');
+    this.touchDuckIco = q('#touch-duck-ico');
+    this.touchDuckLbl = q('#touch-duck-lbl');
     this.goCrystalBox = q('#go-crystal-box');
     this.goCrystalDesc = q('#go-crystal-desc');
     this.goCrystalReviveBtn = q('#btn-go-crystal-revive');
@@ -693,13 +696,14 @@ export class HUD {
       if (stars > 0) this.wantedEl.textContent = `🚨 ${'★'.repeat(stars)}`;
     }
 
+    const divingTarget = (player.diveTarget ?? player.diveDepth ?? 0) >= 0.5;
     if (this.statusPillsEl) {
       const activeList = StatusSystem.getActiveList(player);
       const invHtml = (player.invulnTimer || 0) > 0.15
         ? `<span class="status-badge" style="color:#7dd3fc;">✨ Imune ${player.invulnTimer.toFixed(1)}s</span>`
         : '';
-      const diveHtml = (player.diveDepth || 0) > 0.2
-        ? `<span class="status-badge" style="color:#22d3ee;">🤿 Submerso (${player.inWater ? 'W/▲ emerge' : 'Subindo'})</span>`
+      const diveHtml = (player.inSubmerged || (player.diveDepth || 0) > 0.2)
+        ? `<span class="status-badge" style="color:#22d3ee;">🤿 ${player.inSubmerged ? 'Fundo Abissal' : (divingTarget ? 'Submerso (S/▼ ou W/▲ sobe)' : 'Emergindo...')}</span>`
         : '';
       this.statusPillsEl.innerHTML = diveHtml + invHtml + activeList.map((st) => {
         const tm = st.permanentElement ? '' : ` ${st.timeLeft.toFixed(0)}s`;
@@ -796,6 +800,20 @@ export class HUD {
     if (canTransmute && this.touchTransmuteLbl) {
       const m = player.habitatMode || 'land';
       this.touchTransmuteLbl.textContent = m === 'aquatic' ? 'Água' : (m === 'flying' ? 'Céu' : 'Terra');
+    }
+    if (this.touchDuckIco && this.touchDuckLbl) {
+      if (player.inWater && !player.inSubmerged) {
+        if (divingTarget) {
+          this.touchDuckIco.textContent = '🌊';
+          this.touchDuckLbl.textContent = 'Subir';
+        } else {
+          this.touchDuckIco.textContent = '🤿';
+          this.touchDuckLbl.textContent = 'Merg.';
+        }
+      } else {
+        this.touchDuckIco.textContent = '▼';
+        this.touchDuckLbl.textContent = 'Baixo';
+      }
     }
 
     this.comboEl.classList.toggle('hidden', combo <= 1);

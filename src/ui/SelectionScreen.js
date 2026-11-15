@@ -31,14 +31,24 @@ function getSharedPreviewStage() {
   key.position.set(3, 5, 4);
   scene.add(key);
 
+  const pedestalMat = new THREE.MeshStandardMaterial({ color: '#c48640', roughness: 0.85, transparent: false, opacity: 1 });
   const pedestal = new THREE.Mesh(
-    new THREE.BoxGeometry(2.4, 0.25, 2.4),
-    new THREE.MeshStandardMaterial({ color: '#c48640', roughness: 0.85 })
+    new THREE.BoxGeometry(2.5, 0.25, 2.5),
+    pedestalMat
   );
   pedestal.position.y = -0.14;
   scene.add(pedestal);
 
-  _sharedPreviewStage = { renderer, scene, camera };
+  const waterRing = new THREE.Mesh(
+    new THREE.RingGeometry(0.95, 1.24, 28),
+    new THREE.MeshBasicMaterial({ color: '#7dd3fc', transparent: true, opacity: 0.72, side: THREE.DoubleSide })
+  );
+  waterRing.rotation.x = -Math.PI / 2;
+  waterRing.position.y = 0.01;
+  waterRing.visible = false;
+  scene.add(waterRing);
+
+  _sharedPreviewStage = { renderer, scene, camera, pedestal, pedestalMat, waterRing };
   return _sharedPreviewStage;
 }
 
@@ -107,8 +117,36 @@ export class DinoPreview3D {
     } else {
       this.forceLand = false;
     }
+    const habInfo = getEffectiveDinoHabitat(dinoId, {
+      hybrid: customConfig?.hybrid,
+      mutationId: customConfig?.mutation || options?.mutation || null
+    });
+    this.isAquaticPreview = habInfo.primary === 'aquatic' && !this.forceLand;
+    this.isFlyingPreview = habInfo.primary === 'flying' && !this.forceLand;
+    if (this.stage.pedestalMat) {
+      if (this.isAquaticPreview) {
+        this.stage.pedestalMat.color.set('#0284c7');
+        this.stage.pedestalMat.emissive.set('#0369a1');
+        this.stage.pedestalMat.emissiveIntensity = 0.42;
+        this.stage.pedestalMat.roughness = 0.16;
+        this.stage.pedestalMat.transparent = true;
+        this.stage.pedestalMat.opacity = 0.86;
+      } else {
+        this.stage.pedestalMat.color.set(this.isFlyingPreview ? '#64748b' : '#c48640');
+        this.stage.pedestalMat.emissive.set('#000000');
+        this.stage.pedestalMat.emissiveIntensity = 0;
+        this.stage.pedestalMat.roughness = 0.85;
+        this.stage.pedestalMat.transparent = false;
+        this.stage.pedestalMat.opacity = 1;
+      }
+      this.stage.pedestalMat.needsUpdate = true;
+    }
+    if (this.stage.waterRing) {
+      this.stage.waterRing.visible = this.isAquaticPreview;
+    }
     this.model = DinoFactory.build(dinoId, customConfig, options);
     this.model.root.rotation.y = this.rotY;
+    this.model.root.position.y = this.isAquaticPreview ? 0.24 : 0;
     this.scene.add(this.model.root);
     this.animator = new DinoAnimator(this.model);
   }
@@ -139,7 +177,13 @@ export class DinoPreview3D {
     if (!this.dragging) this.rotY += dt * 0.75;
     if (this.model) {
       this.model.root.rotation.y = this.rotY;
-      this.animator?.update(dt, { speed: 12, grounded: true, forceLand: this.forceLand });
+      this.animator?.update(dt, {
+        speed: 12,
+        grounded: !this.isFlyingPreview,
+        swimming: !!this.isAquaticPreview,
+        locomotion: this.isAquaticPreview ? 'aquatic' : (this.isFlyingPreview ? 'flying' : 'land'),
+        forceLand: this.forceLand
+      });
     }
     this.renderer.render(this.scene, this.camera);
   }

@@ -3,10 +3,11 @@
 export class PhysicsCollision {
   static getPlayerBox(player) {
     const scale = (player.giantScale || 1) * (player.hitboxScale || 1);
-    const height = (player.ducking || player.sliding ? 0.96 : 1.85) * scale;
+    const isHorizontalSwim = Boolean(player.inSubmerged || (player.inWater && (player.diveDepth || 0) > 0.35));
+    const height = (player.ducking || player.sliding ? 0.96 : (isHorizontalSwim ? 1.18 : 1.85)) * scale;
     const halfW = 0.38 * scale * (player.smallHitbox ? 0.75 : 1);
     const halfD = 0.44 * scale * (player.smallHitbox ? 0.75 : 1);
-    const diveOffset = player.inSubmerged ? 0.32 : (player.diveDepth || 0) * 1.45;
+    const diveOffset = player.inSubmerged ? 0.2 : (player.diveDepth || 0) * 2.75;
     const wy = (player.baseY || 0) + player.y - diveOffset;
     return {
       minX: player.x - halfW,
@@ -48,13 +49,16 @@ export class PhysicsCollision {
 
   static checkNearMiss(pBox, obs) {
     if (obs.nearMissed || obs.hit || obs.nonHazard) return false;
-    if (['egg', 'powerup', 'ramp', 'speed_pad', 'trampoline', 'mud_pool', 'toxic_pool', 'tar_pit', 'campfire', 'shortcut', 'fruit', 'elemental_egg', 'treasure', 'grapple_point', 'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation', 'oasis_zone', 'fragile_bridge', 'rescue_cross', 'oxygen_bubble'].includes(obs.kind)) return false;
+    if (['egg', 'powerup', 'ramp', 'speed_pad', 'trampoline', 'mud_pool', 'toxic_pool', 'tar_pit', 'campfire', 'shortcut', 'fruit', 'elemental_egg', 'treasure', 'grapple_point', 'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation', 'oasis_zone', 'fragile_bridge', 'rescue_cross', 'oxygen_bubble', 'current_ring'].includes(obs.kind)) return false;
     const oz = obs.group.position.z;
     if (oz < pBox.maxZ || oz > pBox.maxZ + 1.15) return false;
     const ox = obs.group.position.x;
+    const obsMinY = obs.group.position.y + obs.minY;
+    const obsMaxY = obs.group.position.y + obs.maxY;
     const dx = Math.abs((pBox.minX + pBox.maxX) * 0.5 - ox);
-    const dy = pBox.minY - (obs.group.position.y + obs.maxY);
-    const closeSide = dx < obs.halfW + 1.05 && dy < 0.7 && pBox.maxY > obs.minY;
+    const dy = pBox.minY - obsMaxY;
+    const verticalOverlap = pBox.maxY > obsMinY - 0.15 && pBox.minY < obsMaxY + 0.75;
+    const closeSide = dx < obs.halfW + 1.05 && dy < 0.7 && verticalOverlap;
     const closeJump = dx < obs.halfW + 0.52 && dy >= 0 && dy < 0.72;
     return closeSide || closeJump;
   }

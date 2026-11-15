@@ -118,7 +118,9 @@ export class CameraRig {
 
     const trackCenterX = envOpts?.trackCenterX ?? (fx > 6 ? 10 : 0);
     const relFx = fx - trackCenterX;
-    const isSubmerged = !!(envOpts?.isSubmerged || diveDepth > 0.35);
+    const isSubmergedBiome = !!envOpts?.isSubmergedBiome;
+    const effectiveDive = isSubmergedBiome ? 0 : Math.max(0, Math.min(1, envOpts?.diveDepth ?? diveDepth ?? 0));
+    const isSubmerged = !!(envOpts?.isSubmerged || effectiveDive > 0.35);
     const isWaterSurface = !!(envOpts?.isWaterSurface || (envOpts?.inWater && !isSubmerged));
     const aspect = this.camera.aspect || 1;
     const isPortrait = aspect > 0 && aspect < 0.85;
@@ -146,46 +148,58 @@ export class CameraRig {
       this.targetPos.set(fx + Math.sin(this.photoOrbitAngle) * r, 3.6 + fy, fz + Math.cos(this.photoOrbitAngle) * r);
       this.targetLook.set(fx, 1.3 + fy, fz - 1.5);
     } else {
-      const waterYDrop = isSubmerged ? -1.45 - diveDepth * 0.65 : (isWaterSurface ? -0.42 - diveDepth * 0.95 : 0);
-      const waterZPull = isSubmerged ? -1.35 : (isWaterSurface ? -0.45 : 0);
+      const lerpMix = (a, b, m) => a + (b - a) * m;
       const waterDriftX = isSubmerged ? Math.sin(this.cinematicTime * 1.15) * 0.14 : 0;
-      const waterLookYOff = isSubmerged ? -0.45 - diveDepth * 0.6 : (isWaterSurface ? -0.18 - diveDepth * 0.4 : 0);
+      const surfBaseY = (isWaterSurface ? 4.62 : (isSubmergedBiome ? 4.1 : 5.0)) + fy * 0.35 + spreadExtra * 0.4 + portraitDist * 0.36;
+      const surfLookY = (isWaterSurface ? 1.18 : (isSubmergedBiome ? 1.05 : 1.35)) + fy * 0.25;
+      const surfBaseZ = fz + (isSubmergedBiome ? 8.1 : (isWaterSurface ? 8.85 : 9.2)) + spreadExtra + highlightZoom + portraitDist;
+
+      // Ao mergulhar abaixo de y = 0, a câmera mergulha fisicamente abaixo da lâmina da água (-1.15 < 0)!
+      const subCamY = Math.min(-0.62, -1.16 + fy * 0.28 + spreadExtra * 0.1);
+      const subLookY = -2.32 + fy * 0.24;
+      const subCamZ = fz + 7.9 + spreadExtra + highlightZoom + portraitDist * 0.78;
+
+      const camYThird = lerpMix(surfBaseY, subCamY, effectiveDive);
+      const camZThird = lerpMix(surfBaseZ, subCamZ, effectiveDive);
+      const lookYThird = lerpMix(surfLookY, subLookY, effectiveDive);
+      const diveDropY = effectiveDive * -2.75;
 
       switch (this.currentMode.id) {
         case 'third':
-          // Centralizado em trackCenterX (funciona perfeitamente tanto em x=0 quanto no Canal do Rio x=10!), submerso e retrato
           this.targetPos.set(
             trackCenterX + relFx * (isPortrait ? 0.52 : 0.62) - (isPortrait ? 0.2 : 0.52) + waterDriftX,
-            5.0 + fy * 0.35 + spreadExtra * 0.4 + portraitDist * 0.36 + waterYDrop,
-            fz + 9.2 + spreadExtra + highlightZoom + portraitDist + waterZPull
+            camYThird,
+            camZThird
           );
           this.targetLook.set(
             trackCenterX + relFx * (isPortrait ? 0.4 : 0.45) + (isPortrait ? 0.22 : 0.55),
-            1.35 + fy * 0.25 + waterLookYOff,
+            lookYThird,
             fz - 11.5
           );
           break;
         case 'side':
-          this.targetPos.set(fx - 13.0, 3.4 + fy * 0.25 + waterYDrop * 0.6, fz - 2.5);
-          this.targetLook.set(fx + 1.5, 1.4 + waterLookYOff * 0.5, fz - 6.0);
+          this.targetPos.set(fx - 13.0, lerpMix(3.4 + fy * 0.25, -1.25 + fy * 0.25, effectiveDive), fz - 2.5);
+          this.targetLook.set(fx + 1.5, lerpMix(1.4, -2.15, effectiveDive), fz - 6.0);
           break;
         case 'iso':
-          this.targetPos.set(fx - 8.8, 8.6 + fy * 0.25 + waterYDrop * 0.8, fz + 7.8);
-          this.targetLook.set(fx + 0.8, 1.1 + waterLookYOff * 0.5, fz - 7.5);
+          this.targetPos.set(fx - 8.8, lerpMix(8.6 + fy * 0.25, -0.75 + fy * 0.2, effectiveDive), fz + 7.8);
+          this.targetLook.set(fx + 0.8, lerpMix(1.1, -2.35, effectiveDive), fz - 7.5);
           break;
         case 'top':
-          this.targetPos.set(trackCenterX + relFx * 0.5 + 0.8, 17.0 + waterYDrop, fz + 3.0);
-          this.targetLook.set(trackCenterX + relFx * 0.4 + 0.6, 0.5 + waterLookYOff, fz - 9.5);
+          this.targetPos.set(trackCenterX + relFx * 0.5 + 0.8, lerpMix(17.0, -0.68, effectiveDive), fz + (effectiveDive > 0.4 ? 6.2 : 3.0));
+          this.targetLook.set(trackCenterX + relFx * 0.4 + 0.6, lerpMix(0.5, -2.6, effectiveDive), fz - 9.5);
           break;
         case 'first':
-          // Posicionada logo à frente do focinho para evitar colisão interna com a cabeça do dino
-          this.targetPos.set(fx, 1.85 + fy * 0.9 - diveDepth * 1.1, fz - 1.75);
-          this.targetLook.set(fx, 1.35 + fy * 0.5 - diveDepth * 1.0, fz - 22);
+          // Posicionada logo à frente do focinho na superfície ou dentro d'água
+          this.targetPos.set(fx, 1.85 + fy * 0.9 + diveDropY, fz - 1.75);
+          this.targetLook.set(fx, 1.35 + fy * 0.5 + diveDropY, fz - 22);
           break;
         case 'cinematic': {
           const orbit = Math.sin(this.cinematicTime * 0.65) * 4.4;
-          this.targetPos.set(trackCenterX + relFx * 0.5 + orbit, 4.4 + Math.cos(this.cinematicTime * 0.5) * 1.1 + waterYDrop, fz + 8.5 + waterZPull);
-          this.targetLook.set(trackCenterX + relFx * 0.5 + 0.4, 1.4 + fy * 0.3 + waterLookYOff, fz - 10.5);
+          const surfCinY = 4.4 + Math.cos(this.cinematicTime * 0.5) * 1.1;
+          const subCinY = Math.min(-0.62, -1.15 + Math.cos(this.cinematicTime * 0.5) * 0.35);
+          this.targetPos.set(trackCenterX + relFx * 0.5 + orbit, lerpMix(surfCinY, subCinY, effectiveDive), fz + 8.5 - effectiveDive * 0.9);
+          this.targetLook.set(trackCenterX + relFx * 0.5 + 0.4, lookYThird, fz - 10.5);
           break;
         }
         default:
@@ -210,9 +224,10 @@ export class CameraRig {
     this.camera.lookAt(this.currentLook);
 
     const speedExtra = Math.min(11, Math.max(0, (speed - 18) * 0.32));
+    const underwaterFov = effectiveDive * 4.2;
     const portraitExtraFov = isPortrait ? Math.min(16, (0.85 - aspect) * 30) : 0;
     const maxFov = isPortrait ? 85 : 79;
-    const targetFov = Math.min(maxFov, this.baseFov + portraitExtraFov + speedExtra);
+    const targetFov = Math.min(maxFov, this.baseFov + portraitExtraFov + speedExtra + underwaterFov);
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 6);
       this.camera.updateProjectionMatrix();

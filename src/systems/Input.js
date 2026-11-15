@@ -102,7 +102,7 @@ export class InputSystem {
 
   triggerVirtualPulse(playerKey, action, holdMs = 0) {
     if (!this.virtualState[playerKey]) {
-      this.virtualState[playerKey] = { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false };
+      this.virtualState[playerKey] = { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false, transmute: false };
       this.virtualJustPressed[playerKey] = new Set();
     }
     this.virtualJustPressed[playerKey].add(action);
@@ -181,6 +181,12 @@ export class InputSystem {
       if (action === 'duck' && this.justPressed.has('ArrowDown')) return true;
       if (action === 'left' && this.justPressed.has('ArrowLeft')) return true;
       if (action === 'right' && this.justPressed.has('ArrowRight')) return true;
+    }
+
+    if (Save.data.settings.accessibility.oneHand && playerKey === 'p1') {
+      if (action === 'jump' && this.justPressed.has('KeyK')) return true;
+      if (action === 'duck' && this.justPressed.has('KeyJ')) return true;
+      if (action === 'ability' && this.justPressed.has('KeyL')) return true;
     }
 
     return this._wasGamepadActionJustPressed(playerKey, action);

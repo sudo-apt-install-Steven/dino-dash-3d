@@ -206,6 +206,10 @@ export class Spawner {
     this.jellyMat = new THREE.MeshStandardMaterial({ color: '#a855f7', emissive: '#9333ea', emissiveIntensity: 0.65, transparent: true, opacity: 0.84 });
     this.vortexMat = new THREE.MeshBasicMaterial({ color: '#06b6d4', transparent: true, opacity: 0.72 });
     this.bubbleMat = new THREE.MeshStandardMaterial({ color: '#67e8f9', emissive: '#22d3ee', emissiveIntensity: 0.85, transparent: true, opacity: 0.82, roughness: 0.15 });
+    this.sharkFinMat = new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.35, emissive: '#0f172a', emissiveIntensity: 0.25 });
+    this.anglerMat = new THREE.MeshStandardMaterial({ color: '#312e81', roughness: 0.45, emissive: '#4338ca', emissiveIntensity: 0.45 });
+    this.lureMat = new THREE.MeshBasicMaterial({ color: '#fde047' });
+    this.currentRingMat = new THREE.MeshBasicMaterial({ color: '#22d3ee', transparent: true, opacity: 0.86, side: THREE.DoubleSide });
   }
 
   _initPools() {
@@ -263,7 +267,11 @@ export class Spawner {
       abyss_mine: new ObjectPool(() => this._makeAbyssMine(), (o) => { resetBase(o); o.bobPhase = 0; }, 7),
       jellyfish_swarm: new ObjectPool(() => this._makeJellyfishSwarm(), (o) => { resetBase(o); o.bobPhase = 0; }, 7),
       whirlpool_vortex: new ObjectPool(() => this._makeWhirlpoolVortex(), resetBase, 5),
-      oxygen_bubble: new ObjectPool(() => this._makeOxygenBubble(), resetBase, 8)
+      oxygen_bubble: new ObjectPool(() => this._makeOxygenBubble(), resetBase, 8),
+      shark_fin: new ObjectPool(() => this._makeSharkFin(), (o) => { resetBase(o); o.bobPhase = 0; }, 6),
+      angler_hazard: new ObjectPool(() => this._makeAnglerHazard(), (o) => { resetBase(o); o.bobPhase = 0; }, 6),
+      thermal_vent: new ObjectPool(() => this._makeThermalVent(), resetBase, 5),
+      current_ring: new ObjectPool(() => this._makeCurrentRing(), resetBase, 5)
     };
   }
 
@@ -783,6 +791,57 @@ export class Spawner {
     }, { y: 1.45, label: '🫧 +OXIGÊNIO (O2)', color: '#67e8f9' });
   }
 
+  _makeSharkFin() {
+    const g = new THREE.Group();
+    makeBox(g, 0.16, 0.45, 0.72, 0, 0.24, 0, this.sharkFinMat);
+    makeBox(g, 0.14, 0.42, 0.48, 0, 0.62, 0.06, this.sharkFinMat);
+    makeBox(g, 0.12, 0.26, 0.24, 0, 0.92, 0.12, this.sharkFinMat);
+    makeBox(g, 0.68, 0.08, 1.05, 0, 0.02, 0.12, this.iceCrackMat);
+    const trim = addDangerTrim(g, 0.86, 1.05);
+    return this._reg('shark_fin', g, {
+      bobPhase: 0, extraSpeed: 4.2, halfW: 0.46, minY: -0.1, maxY: 1.1, halfD: 0.54,
+      dangerVisuals: [trim], color: '#64748b'
+    }, { y: 1.55, label: '🦈 TUBARÃO ⬇ MERGULHE / ⬅➡', color: '#38bdf8' });
+  }
+
+  _makeAnglerHazard() {
+    const g = new THREE.Group();
+    makeBox(g, 0.84, 0.68, 1.05, 0, 0.48, 0, this.anglerMat);
+    makeBox(g, 0.68, 0.22, 0.58, 0, 0.24, 0.42, this.eggMat); // dentes / mandíbula
+    makeBox(g, 0.12, 0.48, 0.42, 0, 0.48, -0.68, this.coralMat); // cauda
+    makeBox(g, 0.1, 0.45, 0.1, 0, 0.98, 0.35, this.stoneMat); // antena
+    const lureBulb = makeBox(g, 0.26, 0.26, 0.26, 0, 1.06, 0.58, this.lureMat);
+    const trim = addDangerTrim(g, 1.05, 1.15);
+    return this._reg('angler_hazard', g, {
+      lureBulb, bobPhase: 0, extraSpeed: 3.2, halfW: 0.52, minY: 0.05, maxY: 1.15, halfD: 0.56,
+      breakable: true, dangerVisuals: [trim], color: '#818cf8'
+    }, { y: 1.68, label: '🐟 PEIXE ABISSAL ⬅➡ / [Q]', color: '#a5b4fc' });
+  }
+
+  _makeThermalVent() {
+    const g = new THREE.Group();
+    makeBox(g, 1.05, 0.95, 1.05, 0, 0.48, 0, this.stoneMat);
+    makeBox(g, 0.66, 0.42, 0.66, 0, 1.05, 0, this.lavaMat);
+    const plume = makeBox(g, 0.52, 2.25, 0.52, 0, 2.2, 0, this.bubbleMat);
+    const trim = addDangerTrim(g, 1.15, 1.15);
+    return this._reg('thermal_vent', g, {
+      plume, halfW: 0.56, minY: 0, maxY: 3.15, halfD: 0.56,
+      dangerVisuals: [trim], color: '#fb923c'
+    }, { y: 3.55, label: '🌋 FUMAROLA ⬅➡ / SUBIR', color: '#fb923c' });
+  }
+
+  _makeCurrentRing() {
+    const g = new THREE.Group();
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.76, 0.12, 6, 18), this.currentRingMat);
+    ring.position.y = 0.72;
+    g.add(ring);
+    const core = makeBox(g, 0.34, 0.34, 0.34, 0, 0.72, 0, this.bubbleMat);
+    return this._reg('current_ring', g, {
+      ring, core, halfW: 0.88, minY: -0.1, maxY: 1.55, halfD: 0.65,
+      nonHazard: true, color: '#22d3ee'
+    }, { y: 1.85, label: '🌀 CORRENTE TURBO!', color: '#22d3ee' });
+  }
+
   setSeed(seed) {
     this.rng = seed ? createSeededRng(seed) : Math.random;
   }
@@ -819,6 +878,20 @@ export class Spawner {
     this.isAquaticBiome = !!isAquaticBiome;
   }
 
+  _isWaterTrack() {
+    return Boolean(
+      this.habitatMode === 'aquatic' ||
+      this.isAquaticBiome ||
+      this.biomeId === 'abyss_submerged' ||
+      this.biomeId === 'jurassic_river' ||
+      this.biomeId === 'ocean_surface'
+    );
+  }
+
+  _getUnderwaterBaseY(relY = 0) {
+    return (this.biomeId === 'abyss_submerged' ? 0 : -2.75) + relY;
+  }
+
   _getLaneX(laneIdx = 1) {
     const idx = Math.max(0, Math.min(2, Math.floor(laneIdx)));
     return (this.habitatMode === 'aquatic' && !this.isAquaticBiome) ? RIVER_LANE_X[idx] : LANE_X[idx];
@@ -848,7 +921,8 @@ export class Spawner {
       'egg', 'powerup', 'fruit', 'elemental_egg', 'treasure', 'speed_pad',
       'trampoline', 'ramp', 'campfire', 'shortcut', 'grapple_point',
       'gravity_zone', 'minecart_zone', 'river_log', 'bifurcation',
-      'oasis_zone', 'fragile_bridge', 'rescue_cross', 'shop_gate', 'oxygen_bubble'
+      'oasis_zone', 'fragile_bridge', 'rescue_cross', 'shop_gate',
+      'oxygen_bubble', 'current_ring'
     ]);
     for (const key of Object.keys(this.pools)) {
       if (skipKinds.has(key)) continue;
@@ -885,8 +959,9 @@ export class Spawner {
     if (!pool) return null;
     const item = pool.acquire();
     item.pool = pool;
-    item.breakable = kind === 'cactus_small' || kind === 'scorpion' || kind === 'rolling_log' || kind === 'cactus_shooter' || kind === 'cactus_spine' || kind === 'amber_crystal' || kind === 'falling_stalactite' || kind === 'spike_barricade' || kind === 'coral_reef' || kind === 'jellyfish_swarm';
+    item.breakable = kind === 'cactus_small' || kind === 'scorpion' || kind === 'rolling_log' || kind === 'cactus_shooter' || kind === 'cactus_spine' || kind === 'amber_crystal' || kind === 'falling_stalactite' || kind === 'spike_barricade' || kind === 'coral_reef' || kind === 'jellyfish_swarm' || kind === 'angler_hazard';
     const baseY = opts.rawY ? y : this._getBaseY(y);
+    item.spawnY = baseY;
     item.group.position.set(x, baseY, z);
     item.group.visible = true;
     const showRed = !!this.showRedHazardSignage;
@@ -963,10 +1038,13 @@ export class Spawner {
     egg.group.scale.set(s, s, s);
   }
 
-  spawnEggArc(laneIdx, count = 3, tierOrBool = false, startZ = -125) {
+  spawnEggArc(laneIdx, count = 3, tierOrBool = false, startZ = -125, opts = {}) {
     const x = this._getLaneX(laneIdx);
+    const underwater = Boolean(opts?.underwater);
     for (let i = 0; i < count; i++) {
-      const egg = this._acquire('egg', x, Math.sin((i / Math.max(1, count - 1)) * Math.PI) * 1.1, startZ - i * 2.2);
+      const arcOffset = Math.sin((i / Math.max(1, count - 1)) * Math.PI) * (underwater ? 0.68 : 1.1);
+      const y = underwater ? this._getUnderwaterBaseY(0.12 + arcOffset) : arcOffset;
+      const egg = this._acquire('egg', x, y, startZ - i * 2.2, underwater ? { rawY: true } : undefined);
       if (!egg) continue;
       let tier = 1;
       if (tierOrBool === 'mystery' || tierOrBool === 'misterioso') {
@@ -1030,6 +1108,201 @@ export class Spawner {
     }
   }
 
+  _acquirePowerup(x, y, z, opts = {}) {
+    const p = this._acquire('powerup', x, y, z, opts);
+    if (!p) return null;
+    const isBackpack = this.rng() < 0.28;
+    p.isBackpack = isBackpack;
+    if (isBackpack) {
+      p.powerId = BACKPACK_ITEM_KEYS[Math.floor(this.rng() * BACKPACK_ITEM_KEYS.length)];
+      p.mat.color.set('#f59e0b');
+      p.mat.emissive.set('#f59e0b');
+      this._setHint(p, '🎒 MOCHILA [E]', '#f59e0b');
+    } else {
+      p.powerId = TRACK_POWERUP_KEYS[Math.floor(this.rng() * TRACK_POWERUP_KEYS.length)];
+      const info = TRACK_POWERUPS[p.powerId];
+      p.mat.color.set(info.color);
+      p.mat.emissive.set(info.color);
+      this._setHint(p, `⚡ ${info.name.toUpperCase()}`, info.color);
+    }
+    this._setPowerupVisual(p);
+    return p;
+  }
+
+  _acquireElementalEgg(x, y, z, opts = {}) {
+    const ee = this._acquire('elemental_egg', x, y, z, opts);
+    if (!ee) return null;
+    const elems = [
+      { id: 'fire', color: '#ff5e1a', label: '🔥 OVO FOGO' },
+      { id: 'ice', color: '#38bdf8', label: '❄️ OVO GELO' },
+      { id: 'lightning', color: '#facc15', label: '⚡ OVO RAIO' },
+      { id: 'poison', color: '#a3e635', label: '☠️ OVO VENENO' }
+    ];
+    const pick = elems[Math.floor(this.rng() * elems.length)];
+    ee.element = pick.id;
+    ee.color = pick.color;
+    ee.mat.color.set(pick.color);
+    ee.mat.emissive.set(pick.color);
+    this._setElementalVisual(ee, pick.id);
+    this._setHint(ee, pick.label, pick.color);
+    return ee;
+  }
+
+  _spawnWaterWave(speed, score, laneIdx, otherLane, thirdLane, spawnZ, waveRoll, r) {
+    const isAbyss = this.biomeId === 'abyss_submerged';
+    const x = this._getLaneX(laneIdx);
+    const otherX = this._getLaneX(otherLane);
+
+    // 1. Onda de recompensa aquática (arco de ovos na superfície ou trilha submersa para incentivar mergulho)
+    if (waveRoll < 0.19) {
+      const diveArc = !isAbyss && score >= 120 && this.rng() < 0.56;
+      this.spawnEggArc(laneIdx, 2 + Math.floor(this.rng() * 2), null, spawnZ - 1, { underwater: diveArc });
+      if (score > 340 && this.rng() < 0.4 && this._canBlockLane(otherLane, spawnZ - 3)) {
+        if (isAbyss) {
+          this._acquire('coral_reef', otherX, 0, spawnZ - 3);
+        } else {
+          const sf = this._acquire('shark_fin', otherX, -0.05, spawnZ - 3);
+          if (sf) sf.bobPhase = this.rng() * Math.PI * 2;
+        }
+      }
+      return;
+    }
+
+    // 2. Onda de Power-Up / Mochila aquática
+    if (waveRoll < 0.27 && score > 150 && this.powerupCooldown <= 0) {
+      this.powerupCooldown = 13 + this.rng() * 6;
+      const pLane = (laneIdx + 2) % 3;
+      const deepPu = !isAbyss && score > 240 && this.rng() < 0.42;
+      const puY = deepPu ? this._getUnderwaterBaseY(0.15) : 0.08;
+      this._acquirePowerup(this._getLaneX(pLane), puY, spawnZ - 2, { rawY: deepPu });
+      return;
+    }
+
+    // 3. Onda de coletável aquático (Bolha de O2, Anel de Corrente, Baú submerso ou Ovo Elemental)
+    if (waveRoll < 0.38 && score > 140 && this.collectibleCooldown <= 0) {
+      this.collectibleCooldown = 7.5 + this.rng() * 4.5;
+      const bonusRoll = this.rng();
+      const deepReward = !isAbyss && this.rng() < 0.6;
+      if (bonusRoll < 0.44) {
+        const by = deepReward ? this._getUnderwaterBaseY(0.05) : 0.15;
+        this._acquire('oxygen_bubble', otherX, by, spawnZ - 2, { rawY: deepReward });
+      } else if (bonusRoll < 0.68) {
+        const ry = !isAbyss ? this._getUnderwaterBaseY(-0.2) : 0.1;
+        this._acquire('current_ring', otherX, ry, spawnZ - 2, { rawY: !isAbyss });
+        if (score >= 160) {
+          this.spawnEggArc(otherLane, 2, 5, spawnZ - 5.5, { underwater: !isAbyss });
+        }
+      } else if (bonusRoll < 0.86 && score > 220) {
+        const ey = deepReward ? this._getUnderwaterBaseY(0.1) : 0.12;
+        this._acquireElementalEgg(otherX, ey, spawnZ - 2, { rawY: deepReward });
+      } else if (score > 280) {
+        const sunken = !isAbyss && this.rng() < 0.72;
+        this._acquire('treasure', otherX, sunken ? this._getUnderwaterBaseY(0) : 0, spawnZ - 2, { rawY: sunken });
+      } else {
+        this._acquire('oxygen_bubble', otherX, deepReward ? this._getUnderwaterBaseY(0.05) : 0.15, spawnZ - 2, { rawY: deepReward });
+      }
+      return;
+    }
+
+    // 4. Anel de Corrente Submarino (convite visual para mergulhar)
+    if (!isAbyss && waveRoll < 0.45 && score > 180 && this.featureCooldown <= 0) {
+      this.featureCooldown = 8.0 + this.rng() * 4.5;
+      this._acquire('current_ring', x, this._getUnderwaterBaseY(-0.2), spawnZ, { rawY: true });
+      this.spawnEggArc(laneIdx, 3, null, spawnZ - 3.5, { underwater: true });
+      return;
+    }
+
+    // 5. Obstáculos aquáticos temáticos (camada de superfície E camada submersa)
+    let targetLane = laneIdx;
+    if (!this._canBlockLane(targetLane, spawnZ)) {
+      const alt = [otherLane, thirdLane].find((idx) => this._canBlockLane(idx, spawnZ));
+      if (alt === undefined) {
+        this.spawnEggArc(laneIdx, 3, null, spawnZ, { underwater: !isAbyss && this.rng() < 0.45 });
+        return;
+      }
+      targetLane = alt;
+    }
+    const obsX = this._getLaneX(targetLane);
+
+    if (this.rng() < 0.18) {
+      this.spawnEggArc((targetLane + 1) % 3, 2, null, spawnZ - 2, { underwater: !isAbyss && this.rng() < 0.5 });
+    }
+
+    if (score < 260) {
+      if (isAbyss) {
+        if (r < 0.45) {
+          this._acquire('coral_reef', obsX, 0, spawnZ);
+        } else if (r < 0.78) {
+          const ang = this._acquire('angler_hazard', obsX, 0.22, spawnZ);
+          if (ang) ang.bobPhase = this.rng() * Math.PI * 2;
+        } else {
+          const jf = this._acquire('jellyfish_swarm', obsX, 1.32, spawnZ);
+          if (jf) jf.bobPhase = this.rng() * Math.PI * 2;
+        }
+      } else {
+        if (r < 0.48) {
+          const sf = this._acquire('shark_fin', obsX, -0.05, spawnZ);
+          if (sf) sf.bobPhase = this.rng() * Math.PI * 2;
+        } else if (r < 0.78) {
+          const mine = this._acquire('abyss_mine', obsX, -0.22, spawnZ);
+          if (mine) mine.bobPhase = this.rng() * Math.PI * 2;
+        } else {
+          this._acquire('whirlpool_vortex', obsX, 0, spawnZ);
+        }
+      }
+      return;
+    }
+
+    if (isAbyss) {
+      if (r < 0.26) {
+        this._acquire('coral_reef', obsX, 0, spawnZ);
+      } else if (r < 0.5) {
+        const ang = this._acquire('angler_hazard', obsX, 0.22, spawnZ);
+        if (ang) ang.bobPhase = this.rng() * Math.PI * 2;
+      } else if (r < 0.72) {
+        this._acquire('thermal_vent', obsX, 0, spawnZ);
+      } else if (r < 0.88) {
+        const jf = this._acquire('jellyfish_swarm', obsX, 1.42, spawnZ);
+        if (jf) jf.bobPhase = this.rng() * Math.PI * 2;
+      } else {
+        const mine = this._acquire('abyss_mine', obsX, 0.22, spawnZ);
+        if (mine) mine.bobPhase = this.rng() * Math.PI * 2;
+      }
+      return;
+    }
+
+    // Pista Oceânica / Rio com dualidade vertical (superfície para mergulhar por baixo vs fundo para subir/desviar)
+    const spawnDeep = this.rng() < 0.46;
+    if (spawnDeep) {
+      if (r < 0.3) {
+        const ang = this._acquire('angler_hazard', obsX, -2.85, spawnZ, { rawY: true });
+        if (ang) ang.bobPhase = this.rng() * Math.PI * 2;
+      } else if (r < 0.56) {
+        this._acquire('thermal_vent', obsX, -4.6, spawnZ, { rawY: true });
+      } else if (r < 0.8) {
+        const mine = this._acquire('abyss_mine', obsX, -3.25, spawnZ, { rawY: true });
+        if (mine) mine.bobPhase = this.rng() * Math.PI * 2;
+      } else {
+        const jf = this._acquire('jellyfish_swarm', obsX, -2.35, spawnZ, { rawY: true });
+        if (jf) jf.bobPhase = this.rng() * Math.PI * 2;
+      }
+      return;
+    }
+
+    if (r < 0.36) {
+      const sf = this._acquire('shark_fin', obsX, -0.05, spawnZ);
+      if (sf) sf.bobPhase = this.rng() * Math.PI * 2;
+    } else if (r < 0.68) {
+      this._acquire('whirlpool_vortex', obsX, 0, spawnZ);
+    } else if (r < 0.86) {
+      const mine = this._acquire('abyss_mine', obsX, -0.22, spawnZ);
+      if (mine) mine.bobPhase = this.rng() * Math.PI * 2;
+    } else {
+      const jf = this._acquire('jellyfish_swarm', obsX, 1.18, spawnZ);
+      if (jf) jf.bobPhase = this.rng() * Math.PI * 2;
+    }
+  }
+
   _spawnOne(speed, score) {
     const spawnZ = -125;
     const laneIdx = Math.floor(this.rng() * 3);
@@ -1040,6 +1313,11 @@ export class Spawner {
     const waveRoll = this.rng();
     const otherLane = (laneIdx + 1) % 3;
     const thirdLane = [0, 1, 2].find((idx) => idx !== laneIdx && idx !== otherLane) ?? otherLane;
+
+    if (this._isWaterTrack()) {
+      this._spawnWaterWave(speed, score, laneIdx, otherLane, thirdLane, spawnZ, waveRoll, r);
+      return;
+    }
 
     // 1. Onda de recompensa leve (apenas arco de ovos limpo no início; obstáculo leve só após 480 pts com caminho garantido)
     if (waveRoll < 0.17) {
@@ -1054,24 +1332,7 @@ export class Spawner {
     if (waveRoll < 0.25 && score > 160 && this.powerupCooldown <= 0) {
       this.powerupCooldown = 13 + this.rng() * 6;
       const pLane = (laneIdx + 2) % 3;
-      const p = this._acquire('powerup', this._getLaneX(pLane), 0, spawnZ - 2);
-      if (p) {
-        const isBackpack = this.rng() < 0.28;
-        p.isBackpack = isBackpack;
-        if (isBackpack) {
-          p.powerId = BACKPACK_ITEM_KEYS[Math.floor(this.rng() * BACKPACK_ITEM_KEYS.length)];
-          p.mat.color.set('#f59e0b');
-          p.mat.emissive.set('#f59e0b');
-          this._setHint(p, '🎒 MOCHILA [E]', '#f59e0b');
-        } else {
-          p.powerId = TRACK_POWERUP_KEYS[Math.floor(this.rng() * TRACK_POWERUP_KEYS.length)];
-          const info = TRACK_POWERUPS[p.powerId];
-          p.mat.color.set(info.color);
-          p.mat.emissive.set(info.color);
-          this._setHint(p, `⚡ ${info.name.toUpperCase()}`, info.color);
-        }
-        this._setPowerupVisual(p);
-      }
+      this._acquirePowerup(this._getLaneX(pLane), 0, spawnZ - 2);
       return;
     }
 
@@ -1082,22 +1343,7 @@ export class Spawner {
       if (bonusRoll < 0.46) {
         this._acquire('fruit', this._getLaneX(otherLane), 0.1, spawnZ - 3);
       } else if (bonusRoll < 0.8 && score > 240) {
-        const ee = this._acquire('elemental_egg', this._getLaneX(otherLane), 0.1, spawnZ - 3);
-        if (ee) {
-          const elems = [
-            { id: 'fire', color: '#ff5e1a', label: '🔥 OVO FOGO' },
-            { id: 'ice', color: '#38bdf8', label: '❄️ OVO GELO' },
-            { id: 'lightning', color: '#facc15', label: '⚡ OVO RAIO' },
-            { id: 'poison', color: '#a3e635', label: '☠️ OVO VENENO' }
-          ];
-          const pick = elems[Math.floor(this.rng() * elems.length)];
-          ee.element = pick.id;
-          ee.color = pick.color;
-          ee.mat.color.set(pick.color);
-          ee.mat.emissive.set(pick.color);
-          this._setElementalVisual(ee, pick.id);
-          this._setHint(ee, pick.label, pick.color);
-        }
+        this._acquireElementalEgg(this._getLaneX(otherLane), 0.1, spawnZ - 3);
       } else if (score > 340) {
         this._acquire('treasure', this._getLaneX(otherLane), 0, spawnZ - 3);
       }
@@ -1168,34 +1414,6 @@ export class Spawner {
       } else {
         this._acquire('cactus_tall', obsX, 0, spawnZ);
       }
-      return;
-    }
-
-    const isWaterTrack = this.habitatMode === 'aquatic' || this.biomeId === 'abyss_submerged' || this.biomeId === 'jurassic_river' || this.biomeId === 'frozen_ocean';
-    if (isWaterTrack) {
-      if (waveRoll < 0.22 || (this.biomeId === 'abyss_submerged' && r < 0.22)) {
-        this._acquire('oxygen_bubble', obsX, 0.1, spawnZ - 1);
-        if (this.rng() < 0.55) this.spawnEggArc(otherLane, 3, null, spawnZ - 1);
-        return;
-      }
-      if (r < 0.34) {
-        this._acquire('coral_reef', obsX, 0, spawnZ);
-        return;
-      }
-      if (score > 220 && r < 0.6) {
-        const jf = this._acquire('jellyfish_swarm', obsX, 1.52, spawnZ);
-        if (jf) {
-          jf.bobPhase = this.rng() * Math.PI * 2;
-          jf.group.position.y = this._getBaseY(1.52);
-        }
-        return;
-      }
-      if (score > 300 && r < 0.84) {
-        const mine = this._acquire('abyss_mine', obsX, 0.22, spawnZ);
-        if (mine) mine.bobPhase = this.rng() * Math.PI * 2;
-        return;
-      }
-      this._acquire('whirlpool_vortex', obsX, 0, spawnZ);
       return;
     }
 
@@ -1383,11 +1601,28 @@ export class Spawner {
           else if (obs.b1) obs.b1.scale.setScalar(0.85 + Math.sin(this.elapsed * 7) * 0.28);
         } else if (obs.kind === 'abyss_mine') {
           obs.bobPhase = (obs.bobPhase || 0) + dt * 3.8;
-          obs.group.position.y = this._getBaseY((obs.baseY || 0.22) + Math.sin(obs.bobPhase) * 0.22);
+          obs.group.position.y = (obs.spawnY ?? 0.22) + Math.sin(obs.bobPhase) * 0.22;
           obs.group.rotation.y += dt * 1.4;
         } else if (obs.kind === 'jellyfish_swarm') {
           obs.bobPhase = (obs.bobPhase || 0) + dt * 4.2;
-          obs.group.position.y = this._getBaseY((obs.baseY || 1.52) + Math.sin(obs.bobPhase) * 0.18);
+          obs.group.position.y = (obs.spawnY ?? 1.42) + Math.sin(obs.bobPhase) * 0.18;
+        } else if (obs.kind === 'shark_fin') {
+          obs.bobPhase = (obs.bobPhase || 0) + dt * 5.2;
+          obs.group.position.y = (obs.spawnY ?? -0.05) + Math.sin(obs.bobPhase) * 0.08;
+          obs.group.rotation.z = Math.sin(obs.bobPhase * 0.7) * 0.09;
+        } else if (obs.kind === 'angler_hazard') {
+          obs.bobPhase = (obs.bobPhase || 0) + dt * 4.6;
+          obs.group.position.y = (obs.spawnY ?? -2.85) + Math.sin(obs.bobPhase) * 0.2;
+          if (obs.lureBulb) {
+            const pulse = 0.85 + Math.sin(this.elapsed * 9) * 0.25;
+            obs.lureBulb.scale.setScalar(pulse);
+          }
+        } else if (obs.kind === 'thermal_vent' && obs.plume) {
+          obs.plume.scale.y = 0.85 + Math.sin(this.elapsed * 8 + obs.group.position.x) * 0.22;
+          obs.plume.rotation.y += dt * 2.5;
+        } else if (obs.kind === 'current_ring') {
+          if (obs.ring) obs.ring.rotation.z += dt * 3.6;
+          if (obs.core) obs.core.rotation.y += dt * 3.2;
         } else if (obs.kind === 'whirlpool_vortex' && obs.spin) {
           obs.spin.rotation.y += dt * 6.5;
         } else if (obs.kind === 'oxygen_bubble' && obs.core) {

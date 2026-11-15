@@ -10,6 +10,10 @@ export class SceneryInstancer {
     this.scene.add(this.group);
 
     this.items = [];
+    this._lowDetail = false;
+    this._submergedMode = false;
+    this._fullWaterMode = false;
+    this._floorY = 0;
     this._createMeshes();
     this._populateInitial();
   }
@@ -164,11 +168,29 @@ export class SceneryInstancer {
   }
 
   setLowDetail(enabled) {
-    const low = !!enabled;
-    if (this.bugMesh) this.bugMesh.visible = !low;
-    if (this.faunaMesh) this.faunaMesh.visible = !low;
-    if (this.boneMesh) this.boneMesh.visible = !low;
-    if (this.flowerMesh) this.flowerMesh.visible = !low;
+    this._lowDetail = !!enabled;
+    this._syncLayerVisibility();
+  }
+
+  setWaterState({ submerged = false, fullWater = false, floorY = 0 } = {}) {
+    this._submergedMode = !!submerged;
+    this._fullWaterMode = !!fullWater;
+    this._floorY = this._submergedMode ? (Number(floorY) || 0) : 0;
+    this._syncLayerVisibility();
+  }
+
+  _syncLayerVisibility() {
+    const low = this._lowDetail;
+    const sub = this._submergedMode;
+    const hideLandFlora = sub || this._fullWaterMode;
+    if (this.bugMesh) this.bugMesh.visible = !low && !hideLandFlora;
+    if (this.faunaMesh) this.faunaMesh.visible = !low && !hideLandFlora;
+    if (this.cactusMesh) this.cactusMesh.visible = !hideLandFlora;
+    if (this.flowerMesh) this.flowerMesh.visible = !low && !hideLandFlora;
+    if (this.treeMesh) this.treeMesh.visible = !hideLandFlora;
+    if (this.boneMesh) this.boneMesh.visible = !low && (!this._fullWaterMode || sub);
+    if (this.mesaMesh) this.mesaMesh.visible = !sub;
+    if (this.cloudMesh) this.cloudMesh.visible = !sub;
   }
 
   setBiomePalette(palette) {
@@ -187,12 +209,14 @@ export class SceneryInstancer {
     const wrapMax = 20;
     const wrapSpan = wrapMax - wrapMin;
 
+    const floorY = this._floorY || 0;
+
     // Pedrinhas
     for (let i = 0; i < this.pebbles.length; i++) {
       const p = this.pebbles[i];
       p.z += move;
       if (p.z > wrapMax) p.z -= wrapSpan;
-      DUMMY.position.set(p.x, p.y, p.z);
+      DUMMY.position.set(p.x, p.y + floorY, p.z);
       DUMMY.rotation.set(0, p.ry, 0);
       DUMMY.scale.set(p.sx, p.sy, p.sz);
       DUMMY.updateMatrix();
@@ -205,7 +229,7 @@ export class SceneryInstancer {
       const r = this.rocks[i];
       r.z += move;
       if (r.z > wrapMax) r.z -= wrapSpan;
-      DUMMY.position.set(r.x, r.y, r.z);
+      DUMMY.position.set(r.x, r.y + floorY, r.z);
       DUMMY.rotation.set(0, r.ry, 0);
       DUMMY.scale.set(r.sx, r.sy, r.sz);
       DUMMY.updateMatrix();
@@ -240,7 +264,7 @@ export class SceneryInstancer {
       const b = this.bones[i];
       b.z += move;
       if (b.z > wrapMax) b.z -= wrapSpan;
-      DUMMY.position.set(b.x, 0.18, b.z);
+      DUMMY.position.set(b.x, 0.18 + floorY, b.z);
       DUMMY.rotation.set(0.15, b.ry, 0.25);
       DUMMY.scale.set(0.95, 0.18, 0.22);
       DUMMY.updateMatrix();

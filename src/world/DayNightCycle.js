@@ -59,10 +59,10 @@ export class DayNightCycle {
     const minFactor = this.world.brightnessMult || 1.05;
     if (this.world.submergedActive) {
       this.phase = 'submerged';
-      this.world.setCycleLighting(1.12 * minFactor, 1.34 * minFactor, 0.42);
-      this.scene.background.lerp(new THREE.Color('#072c4d'), Math.min(1, dt * 6));
-      this.scene.fog.color.lerp(new THREE.Color('#0d4d7a'), Math.min(1, dt * 6));
-      const subDens = clearVis ? 0.011 : 0.021;
+      this.world.setCycleLighting(1.38 * minFactor, 1.48 * minFactor, 0.38);
+      this.scene.background.lerp(new THREE.Color('#073d66'), Math.min(1, dt * 6));
+      this.scene.fog.color.lerp(new THREE.Color('#0c5e8a'), Math.min(1, dt * 6));
+      const subDens = clearVis ? 0.0085 : 0.0155;
       this.scene.fog.density += (subDens - this.scene.fog.density) * Math.min(1, dt * 6);
       this.starMat.opacity = 0;
       this.auroraMat.opacity = 0;

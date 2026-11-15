@@ -97,30 +97,35 @@ export class World {
     groundLeft.position.set(-57, -0.52, -70);
     groundLeft.receiveShadow = true;
     this.worldGroup.add(groundLeft);
+    this.groundLeft = groundLeft;
 
     const groundRight = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 220), this.groundMat);
     groundRight.position.set(66.5, -0.52, -70);
     groundRight.receiveShadow = true;
     this.worldGroup.add(groundRight);
+    this.groundRight = groundRight;
 
-    // Fundo do leito do rio (abaixo da superfície azul)
+    // Fundo do leito do rio (rebaixado para suportar mergulho 3D real no rio e oceano!)
     this.riverBedMat = new THREE.MeshStandardMaterial({ color: '#0d4f82', roughness: 0.9 });
     const riverBed = new THREE.Mesh(new THREE.BoxGeometry(11.6, 0.5, 220), this.riverBedMat);
-    riverBed.position.set(11.6, -0.55, -70);
+    riverBed.position.set(11.6, -4.85, -70);
     riverBed.receiveShadow = true;
     this.worldGroup.add(riverBed);
+    this.riverBed = riverBed;
 
-    // Pista principal de areia dourada
+    // Pista principal (torna-se lâmina de água translúcida em biomas aquáticos ou dinos 100% aquáticos)
     this.trackMat = new THREE.MeshStandardMaterial({
       color: '#eab76a',
       roughness: 0.82,
       emissive: '#3a2210',
-      emissiveIntensity: 0.16
+      emissiveIntensity: 0.16,
+      side: THREE.FrontSide
     });
     const track = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH, 0.16, 210), this.trackMat);
     track.position.set(0, -0.06, -70);
     track.receiveShadow = true;
     this.worldGroup.add(track);
+    this.track = track;
 
     // Guias das 3 faixas + trilhos luminosos nas bordas da pista
     this.laneStripeMat = new THREE.MeshStandardMaterial({
@@ -201,19 +206,52 @@ export class World {
     bankRight.position.set(5.55, 0.02, -70);
     bankRight.receiveShadow = true;
     this.worldGroup.add(bankRight);
+    this.bankRight = bankRight;
 
     const bankLeft = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.22, 210), this.bankMat);
     bankLeft.position.set(-5.2, 0.02, -70);
     bankLeft.receiveShadow = true;
     this.worldGroup.add(bankLeft);
+    this.bankLeft = bankLeft;
 
-    // Rio azul brilhante ao lado direito da pista (visível e vibrante!)
+    // Leito oceânico real a y = -4.6 (visível ao mergulhar abaixo de y = 0!)
+    this.seabedGroup = new THREE.Group();
+    this.seabedGroup.visible = false;
+    this.seabedMat = new THREE.MeshStandardMaterial({
+      color: '#0e7490',
+      roughness: 0.88,
+      emissive: '#083344',
+      emissiveIntensity: 0.35
+    });
+    const seabedMesh = new THREE.Mesh(new THREE.BoxGeometry(140, 0.5, 220), this.seabedMat);
+    seabedMesh.position.set(4, -4.85, -70);
+    seabedMesh.receiveShadow = true;
+    this.seabedGroup.add(seabedMesh);
+
+    const seabedRailMat = new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.55 });
+    for (const rx of [-3.6, -1.2, 1.2, 3.6, 6.4, 8.8, 11.2, 13.6]) {
+      const sRail = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 200), seabedRailMat);
+      sRail.position.set(rx, -4.57, -70);
+      this.seabedGroup.add(sRail);
+    }
+    this.seabedBars = [];
+    const seabedBarMat = new THREE.MeshStandardMaterial({ color: '#155e75', roughness: 0.8 });
+    for (let i = 0; i < 22; i++) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.08, 0.55), seabedBarMat);
+      bar.position.set(i % 2 === 0 ? 0 : 10, -4.56, -155 + i * 8);
+      this.seabedGroup.add(bar);
+      this.seabedBars.push(bar);
+    }
+    this.worldGroup.add(this.seabedGroup);
+
+    // Rio azul brilhante ao lado direito da pista (translúcido e dupla-face para olhar de baixo ao mergulhar!)
     this.riverMat = new THREE.MeshStandardMaterial({
       color: '#1b98f5',
       roughness: 0.18,
       metalness: 0.14,
       emissive: '#0c5ea8',
-      emissiveIntensity: 0.35
+      emissiveIntensity: 0.35,
+      side: THREE.DoubleSide
     });
     this.riverMesh = new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.22, 210), this.riverMat);
     this.riverMesh.position.set(11.6, -0.14, -70);
@@ -385,33 +423,40 @@ export class World {
     }
     this.worldGroup.add(this.waterSurfaceGroup);
 
-    // 7. Ambiente 3D real SUBMERSO ("Submerso" & mergulho ativo: teto oceânico, raios de sol, bolhas e algas)
+    // 7. Ambiente 3D real SUBMERSO ("Submerso" & mergulho real abaixo da superfície y = 0)
     this.underwaterEnvGroup = new THREE.Group();
     this.underwaterEnvGroup.visible = false;
     this.submergedActive = false;
+    this.fullWaterTrack = false;
+    this.waterSurfaceActive = false;
+    this._subFloorY = -4.6;
+    this._subCeilY = 0.0;
 
     const surfaceCeilingMat = new THREE.MeshBasicMaterial({
       color: '#22d3ee',
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.36,
       side: THREE.DoubleSide,
+      depthWrite: false,
       fog: false
     });
-    const surfaceCeiling = new THREE.Mesh(new THREE.PlaneGeometry(82, 200), surfaceCeilingMat);
+    const surfaceCeiling = new THREE.Mesh(new THREE.PlaneGeometry(110, 210), surfaceCeilingMat);
     surfaceCeiling.rotation.x = Math.PI / 2;
-    surfaceCeiling.position.set(4, 12.6, -70);
+    surfaceCeiling.position.set(4, 0.02, -70);
     this.underwaterEnvGroup.add(surfaceCeiling);
+    this.surfaceCeiling = surfaceCeiling;
 
     this.ceilingWaveSlats = [];
     const ceilRibMat = new THREE.MeshBasicMaterial({
-      color: '#a5f3fc',
+      color: '#cffafe',
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.38,
+      depthWrite: false,
       fog: false
     });
-    for (let i = 0; i < 14; i++) {
-      const rib = new THREE.Mesh(new THREE.BoxGeometry(28, 0.14, 1.4), ceilRibMat);
-      rib.position.set(4, 12.42, -145 + i * 11.5);
+    for (let i = 0; i < 16; i++) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(36, 0.12, 1.3), ceilRibMat);
+      rib.position.set(4, -0.06, -145 + i * 10.5);
       this.underwaterEnvGroup.add(rib);
       this.ceilingWaveSlats.push(rib);
     }
@@ -420,14 +465,14 @@ export class World {
     const rayMat = new THREE.MeshBasicMaterial({
       color: '#7dd3fc',
       transparent: true,
-      opacity: 0.14,
+      opacity: 0.18,
       blending: THREE.AdditiveBlending,
       depthWrite: false
     });
-    for (let i = 0; i < 7; i++) {
-      const ray = new THREE.Mesh(new THREE.BoxGeometry(1.9, 15.5, 4.2), rayMat);
-      const sideX = (i % 2 === 0 ? -5.8 : 6.2) + (i % 3) * 1.4;
-      ray.position.set(sideX, 5.8, -125 + i * 19);
+    for (let i = 0; i < 8; i++) {
+      const ray = new THREE.Mesh(new THREE.BoxGeometry(1.75, 9.2, 3.8), rayMat);
+      const sideX = (i % 2 === 0 ? -5.8 : 5.8) + (i % 3) * 1.4;
+      ray.position.set(sideX, -2.4, -125 + i * 18);
       ray.rotation.z = 0.24;
       this.underwaterEnvGroup.add(ray);
       this.underwaterGodRays.push(ray);
@@ -436,10 +481,10 @@ export class World {
     this.underwaterBubbleMat = new THREE.MeshBasicMaterial({
       color: '#e0f2fe',
       transparent: true,
-      opacity: 0.72
+      opacity: 0.78
     });
     this.underwaterBubblesMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(0.16, 0.16, 0.16),
+      new THREE.BoxGeometry(0.18, 0.18, 0.18),
       this.underwaterBubbleMat,
       96
     );
@@ -447,9 +492,9 @@ export class World {
     for (let i = 0; i < 96; i++) {
       this.underwaterBubbles.push({
         x: -10 + ((i * 3.17) % 26),
-        y: 0.2 + ((i * 1.73) % 11.5),
+        yFrac: (i * 0.137) % 1,
         z: -140 + (i / 96) * 155,
-        vy: 1.4 + (i % 4) * 0.45,
+        vy: 0.9 + (i % 4) * 0.35,
         scale: 0.65 + (i % 3) * 0.45
       });
     }
@@ -458,21 +503,21 @@ export class World {
     this.kelpColumns = [];
     const kelpMat = new THREE.MeshStandardMaterial({
       color: '#0d9488',
-      emissive: '#115e59',
-      emissiveIntensity: 0.35,
-      roughness: 0.75
+      emissive: '#14b8a6',
+      emissiveIntensity: 0.42,
+      roughness: 0.72
     });
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 18; i++) {
       const kelp = new THREE.Group();
       const side = i % 2 === 0 ? -1 : 1;
-      const baseX = i >= 10 ? (side < 0 ? 6.2 : 14.2) : side * 5.4;
-      const segs = 3 + (i % 2);
+      const baseX = i >= 10 ? (side < 0 ? 6.2 : 14.2) : side * 5.2;
+      const segs = 2 + (i % 2);
       for (let s = 0; s < segs; s++) {
-        const frond = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.45, 0.22), kelpMat);
-        frond.position.set((s % 2 === 0 ? 0.08 : -0.08), 0.72 + s * 1.25, 0);
+        const frond = new THREE.Mesh(new THREE.BoxGeometry(0.34, 1.35, 0.24), kelpMat);
+        frond.position.set((s % 2 === 0 ? 0.08 : -0.08), 0.65 + s * 1.15, 0);
         kelp.add(frond);
       }
-      kelp.position.set(baseX, -0.1, -135 + i * 9.5);
+      kelp.position.set(baseX, -4.6, -135 + i * 8.8);
       this.underwaterEnvGroup.add(kelp);
       this.kelpColumns.push(kelp);
     }
@@ -481,14 +526,95 @@ export class World {
   }
 
   setWaterTrackVisuals(active) {
-    const on = !!active;
-    if (this.waterSurfaceGroup) this.waterSurfaceGroup.visible = on;
+    this.waterSurfaceActive = !!active;
+    this._syncUnderwaterGeometry();
   }
 
-  setSubmergedVisuals(active) {
-    const on = !!active;
-    this.submergedActive = on;
-    if (this.underwaterEnvGroup) this.underwaterEnvGroup.visible = on;
+  setFullWaterTrack(active) {
+    this.fullWaterTrack = !!active;
+    this._syncUnderwaterGeometry();
+  }
+
+  setSubmergedVisuals(active, submergedBiome = false) {
+    this.submergedActive = !!active;
+    this._isSubmergedBiome = !!submergedBiome;
+    this._syncUnderwaterGeometry();
+  }
+
+  _syncUnderwaterGeometry() {
+    const sub = !!this.submergedActive;
+    const isSubBiome = !!this._isSubmergedBiome;
+    const fullWater = Boolean(this.fullWaterTrack || this.waterSurfaceActive);
+    const surfaceWaveOn = Boolean((this.waterSurfaceActive || this.fullWaterTrack) && !isSubBiome);
+
+    if (this.waterSurfaceGroup) this.waterSurfaceGroup.visible = surfaceWaveOn;
+    if (this.underwaterEnvGroup) this.underwaterEnvGroup.visible = sub;
+    if (this.seabedGroup) this.seabedGroup.visible = Boolean((fullWater || sub) && !isSubBiome);
+
+    const floorY = isSubBiome ? -0.1 : -4.6;
+    const ceilY = isSubBiome ? 9.8 : 0.0;
+    this._subFloorY = floorY;
+    this._subCeilY = ceilY;
+
+    if (this.surfaceCeiling) this.surfaceCeiling.position.y = ceilY + 0.02;
+    const midY = (floorY + ceilY) * 0.5;
+    for (let i = 0; i < (this.underwaterGodRays?.length || 0); i++) {
+      this.underwaterGodRays[i].position.y = midY;
+      this.underwaterGodRays[i].scale.y = Math.max(0.45, (ceilY - floorY) / 9.2);
+    }
+    for (let i = 0; i < (this.kelpColumns?.length || 0); i++) {
+      this.kelpColumns[i].position.y = floorY;
+    }
+
+    // Submergindo abaixo da superfície y=0: pista d'água fica translúcida para revelar o mundo submerso e o teto oceânico!
+    const waterLookOn = fullWater && !isSubBiome;
+    if (this.track) {
+      this.track.position.y = waterLookOn ? -0.02 : -0.06;
+    }
+    if (this.trackMat) {
+      if (waterLookOn) {
+        this.trackMat.color.set(sub ? '#0284c7' : '#0ea5e9');
+        this.trackMat.emissive.set('#0369a1');
+        this.trackMat.emissiveIntensity = sub ? 0.34 : 0.42;
+        this.trackMat.roughness = 0.16;
+        this.trackMat.transparent = true;
+        this.trackMat.opacity = sub ? 0.46 : 0.78;
+        this.trackMat.depthWrite = !sub;
+        this.trackMat.side = THREE.DoubleSide;
+      } else {
+        this.trackMat.roughness = 0.82;
+        this.trackMat.transparent = false;
+        this.trackMat.opacity = 1;
+        this.trackMat.depthWrite = true;
+        this.trackMat.side = THREE.FrontSide;
+      }
+      this.trackMat.needsUpdate = true;
+    }
+    if (this.riverMat) {
+      this.riverMat.transparent = sub;
+      this.riverMat.opacity = sub ? 0.46 : 1;
+      this.riverMat.depthWrite = !sub;
+      this.riverMat.needsUpdate = true;
+    }
+
+    // Esconde faixas secas / margens terrestres / cactos opacos quando em corrida aquática ou abaixo d'água!
+    const hideSideLand = Boolean((fullWater || sub) && !isSubBiome);
+    if (this.groundLeft) this.groundLeft.position.y = hideSideLand ? -5.15 : -0.52;
+    if (this.groundRight) this.groundRight.position.y = (sub || this.aquaticChannelActive || hideSideLand) ? -5.15 : -0.52;
+    if (this.bankLeft) this.bankLeft.visible = !hideSideLand;
+    if (this.bankRight) this.bankRight.visible = !hideSideLand;
+    for (let i = 0; i < (this.trackLanterns?.length || 0); i++) {
+      this.trackLanterns[i].visible = !this.lowSpec && !sub;
+    }
+    if (this.trackStripes) {
+      this.trackStripes.visible = !(sub && !isSubBiome);
+    }
+
+    this.scenery?.setWaterState?.({
+      submerged: sub,
+      fullWater: waterLookOn,
+      floorY: isSubBiome ? 0 : -4.6
+    });
   }
 
   setAquaticChannelActive(active) {
@@ -567,6 +693,13 @@ export class World {
         }
       }
     }
+    if (this.seabedGroup?.visible && this.seabedBars) {
+      for (let i = 0; i < this.seabedBars.length; i++) {
+        const sb = this.seabedBars[i];
+        sb.position.z += speed * dt;
+        if (sb.position.z > 20) sb.position.z -= 176;
+      }
+    }
     if (this.waterSurfaceGroup?.visible && this.oceanWaveSlats) {
       for (let i = 0; i < this.oceanWaveSlats.length; i++) {
         const w = this.oceanWaveSlats[i];
@@ -576,30 +709,33 @@ export class World {
       }
     }
     if (this.submergedActive && this.underwaterEnvGroup?.visible) {
+      const floorY = this._subFloorY ?? -4.6;
+      const ceilY = this._subCeilY ?? 0.0;
+      const spanY = Math.max(2.0, ceilY - floorY);
       for (let i = 0; i < this.ceilingWaveSlats.length; i++) {
         const rib = this.ceilingWaveSlats[i];
         rib.position.z += speed * dt * 0.72;
-        rib.position.y = 12.42 + Math.sin(this.time * 2.8 + i) * 0.16;
-        if (rib.position.z > 20) rib.position.z -= 161;
+        rib.position.y = ceilY - 0.08 + Math.sin(this.time * 2.8 + i) * 0.09;
+        if (rib.position.z > 20) rib.position.z -= 168;
       }
       for (let i = 0; i < this.underwaterGodRays.length; i++) {
         const ray = this.underwaterGodRays[i];
         ray.position.z += speed * dt * 0.85;
-        if (ray.position.z > 22) ray.position.z -= 133;
+        if (ray.position.z > 22) ray.position.z -= 144;
       }
       for (let i = 0; i < this.kelpColumns.length; i++) {
         const k = this.kelpColumns[i];
         k.position.z += speed * dt;
         k.rotation.z = Math.sin(this.time * 2.4 + i) * 0.12;
-        if (k.position.z > 18) k.position.z -= 152;
+        if (k.position.z > 18) k.position.z -= 158;
       }
       for (let i = 0; i < this.underwaterBubbles.length; i++) {
         const b = this.underwaterBubbles[i];
-        b.y += b.vy * dt;
+        b.yFrac = (b.yFrac + (b.vy * dt) / spanY) % 1;
         b.z += speed * dt * 0.92;
-        if (b.y > 12.1) b.y = 0.25;
         if (b.z > 16) b.z -= 155;
-        this._dummy.position.set(b.x + Math.sin(this.time * 3.2 + i) * 0.18, b.y, b.z);
+        const wy = floorY + 0.25 + b.yFrac * (spanY - 0.35);
+        this._dummy.position.set(b.x + Math.sin(this.time * 3.2 + i) * 0.18, wy, b.z);
         this._dummy.rotation.set(0, 0, 0);
         this._dummy.scale.setScalar(b.scale);
         this._dummy.updateMatrix();
@@ -659,20 +795,22 @@ export class World {
   }
 
   updatePlayerFocus(x, y, z, accentColor = '#fde047') {
+    const floorRefY = (this.submergedActive && !this._isSubmergedBiome && y < -0.5) ? -4.57 : 0;
+    const heightAboveFloor = Math.max(0, y - floorRefY);
     if (this.playerShadowMesh) {
-      this.playerShadowMesh.position.set(x, 0.032, z);
-      const shadowScale = Math.max(0.45, 1.0 - Math.min(4.2, Math.max(0, y)) * 0.13);
+      this.playerShadowMesh.position.set(x, floorRefY + 0.032, z);
+      const shadowScale = Math.max(0.45, 1.0 - Math.min(4.2, heightAboveFloor) * 0.13);
       this.playerShadowMesh.scale.set(shadowScale, shadowScale, 1);
-      this.playerShadowMesh.material.opacity = Math.max(0.18, 0.48 - Math.max(0, y) * 0.06);
+      this.playerShadowMesh.material.opacity = Math.max(0.18, 0.48 - heightAboveFloor * 0.06);
     }
     if (this.playerLaneRingMesh) {
-      this.playerLaneRingMesh.position.set(x, 0.036, z);
+      this.playerLaneRingMesh.position.set(x, floorRefY + 0.036, z);
       const pulse = 1 + Math.sin(this.time * 6) * 0.06;
       this.playerLaneRingMesh.scale.set(pulse, pulse, 1);
       if (accentColor) this.playerLaneRingMesh.material.color.set(accentColor);
     }
     if (this.trackFillLight) {
-      this.trackFillLight.position.set(x * 0.45, 7.6, z - 3.2);
+      this.trackFillLight.position.set(x * 0.45, y < -0.5 ? 0.8 : 7.6, z - 3.2);
     }
   }
 
@@ -745,8 +883,10 @@ export class World {
     const baseDens = from.fogDensity + (to.fogDensity - from.fogDensity) * k;
     this.scene.fog.density = this.clearVision ? 0.006 : baseDens;
     this.groundMat.color.copy(from.ground).lerp(to.ground, k);
-    this.trackMat.color.copy(from.track).lerp(to.track, k);
-    this.trackMat.emissive.copy(this.trackMat.color).multiplyScalar(0.18);
+    if (!(this.fullWaterTrack || this.waterSurfaceActive) || this._isSubmergedBiome) {
+      this.trackMat.color.copy(from.track).lerp(to.track, k);
+      this.trackMat.emissive.copy(this.trackMat.color).multiplyScalar(0.18);
+    }
     this.laneStripeMat.color.copy(from.stripe).lerp(to.stripe, k);
     this.laneStripeMat.emissive.copy(this.laneStripeMat.color).multiplyScalar(0.24);
     this.bankMat.color.copy(from.bank).lerp(to.bank, k);

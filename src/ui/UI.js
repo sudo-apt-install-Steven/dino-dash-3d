@@ -17,8 +17,8 @@ import { LegalModal } from './LegalModal.js';
 import { GachaSystem } from '../systems/GachaSystem.js';
 import { PerfMonitor } from '../systems/PerfMonitor.js';
 import { getModeDef } from '../game/Modes.js';
-import { getDinoSpec } from '../dinos/DinoCatalog.js';
-import { getBiomeById } from '../world/Biomes.js';
+import { getDinoSpec, getEffectiveDinoHabitat } from '../dinos/DinoCatalog.js';
+import { getBiomeById, isAquaticBiome } from '../world/Biomes.js';
 
 export class UIManager {
   constructor(rootEl, game) {
@@ -121,11 +121,22 @@ export class UIManager {
     const modeDef = getModeDef(this.game.modeId);
     const diffCfg = this.game.difficultyMgr.getConfig();
     const dinoSpec = getDinoSpec(Save.data.selectedDino);
+    const habInfo = getEffectiveDinoHabitat(dinoSpec, {
+      hybrid: Save.data.hybrid,
+      mutationId: Save.data.equippedMutation
+    });
+    const pureAqua = !habInfo.canWalkOnLand;
+    const rawBiome = getBiomeById(this.game.startBiomeId);
+    const shownBiome = (pureAqua && !isAquaticBiome(rawBiome))
+      ? (isAquaticBiome(this.game.currentBiome) ? this.game.currentBiome : getBiomeById('ocean_surface'))
+      : rawBiome;
     const biomeLabel = this.game.startBiomeId === 'random_portal'
-      ? 'Aleatório (Portais)'
-      : (this.game.sequenceBiomes
-        ? `Sequência (${getBiomeById(this.game.startBiomeId).name})`
-        : getBiomeById(this.game.startBiomeId).name);
+      ? (pureAqua ? 'Aleatório (Oceano/Portais)' : 'Aleatório (Portais)')
+      : (pureAqua && !isAquaticBiome(rawBiome)
+        ? `${shownBiome.name} (Aquático)`
+        : (this.game.sequenceBiomes
+          ? `Sequência (${shownBiome.name})`
+          : shownBiome.name));
     const isPerf = !!Save.data.perfectMode && modeDef.id !== 'zen';
     const effectiveLives = (isPerf || modeDef.id === 'hardcore')
       ? 1
