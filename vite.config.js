@@ -1,5 +1,29 @@
 import { defineConfig } from 'vite';
 
+const LEGAL_BANNER_JS = '/*! DINO DASH 3D | Copyright (c) 2026 Steven Tayllon teixeira Jerônimo De Melos | https://dino-dash-3d-six.vercel.app | Todos os direitos reservados (UNLICENSED) */\n';
+const LEGAL_BANNER_HTML = '<!-- DINO DASH 3D | Copyright (c) 2026 Steven Tayllon teixeira Jerônimo De Melos | https://dino-dash-3d-six.vercel.app | Todos os direitos reservados -->\n';
+
+function proprietaryBannerPlugin() {
+  return {
+    name: 'dino-proprietary-banner',
+    enforce: 'post',
+    transformIndexHtml(html) {
+      return html.includes('Steven Tayllon teixeira Jerônimo De Melos | https://dino-dash-3d-six.vercel.app')
+        ? html
+        : `${LEGAL_BANNER_HTML}${html}`;
+    },
+    generateBundle(_options, bundle) {
+      for (const asset of Object.values(bundle)) {
+        if (asset.type === 'chunk' && asset.fileName.endsWith('.js')) {
+          asset.code = `${LEGAL_BANNER_JS}${asset.code}`;
+        } else if (asset.type === 'asset' && asset.fileName.endsWith('.css') && typeof asset.source === 'string') {
+          asset.source = `${LEGAL_BANNER_JS}${asset.source}`;
+        }
+      }
+    }
+  };
+}
+
 const lanProxy = {
   '/api/lan-info': 'http://127.0.0.1:5174',
   '/api/rooms': 'http://127.0.0.1:5174',
@@ -10,6 +34,7 @@ const lanProxy = {
 };
 
 export default defineConfig({
+  plugins: [proprietaryBannerPlugin()],
   server: {
     host: true,
     port: 5173,
@@ -24,8 +49,12 @@ export default defineConfig({
     port: 4173,
     proxy: lanProxy
   },
+  esbuild: {
+    legalComments: 'none'
+  },
   build: {
     target: 'es2022',
+    sourcemap: false,
     chunkSizeWarningLimit: 1200
   }
 });

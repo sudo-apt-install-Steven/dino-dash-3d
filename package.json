@@ -2,6 +2,13 @@
   "name": "dino-dash-3d",
   "version": "1.0.0",
   "private": true,
+  "license": "UNLICENSED",
+  "author": "Steven Tayllon teixeira Jerônimo De Melos",
+  "homepage": "https://dino-dash-3d-six.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sudo-apt-install-Steven/dino-dash-3d"
+  },
   "type": "module",
   "description": "DINO DASH 3D - Releitura voxel procedural em Three.js do clássico Chrome Dino",
   "scripts": {

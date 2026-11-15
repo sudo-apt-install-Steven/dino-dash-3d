@@ -232,8 +232,8 @@ export class Menus {
           <div class="item-card" style="border-color:#ff9a24; background:linear-gradient(145deg, rgba(43,23,11,0.92), rgba(20,11,6,0.94));">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
               <div>
-                <small style="color:#ffd447; font-weight:900; letter-spacing:0.06em; text-transform:uppercase;">Criador &amp; Idealizador</small>
-                <h3 style="margin:2px 0 0; color:#fff9eb; font-size:1.32rem;">Steven Tayllon</h3>
+                <small style="color:#ffd447; font-weight:900; letter-spacing:0.06em; text-transform:uppercase;">Criador, Autor &amp; Titular Legal</small>
+                <h3 style="margin:2px 0 0; color:#fff9eb; font-size:1.22rem;">Steven Tayllon teixeira Jerônimo De Melos</h3>
               </div>
               <a
                 href="https://github.com/sudo-apt-install-Steven/dino-dash-3d"
@@ -242,19 +242,21 @@ export class Menus {
                 class="chunky-btn orange"
                 style="padding:8px 14px; font-size:0.82rem; text-decoration:none; display:inline-flex; align-items:center; gap:6px;"
               >
-                🐙 GitHub do Projeto
+                🐙 GitHub (@sudo-apt-install-Steven)
               </a>
             </div>
             <p style="font-size:0.86rem; color:#ffe8b5; line-height:1.45;">
-              <strong>Ideia do Projeto &amp; Conceito do Jogo:</strong> Idealizado por <strong>Steven Tayllon</strong> como um corredor infinito pré-histórico em 3D com biomas reativos, dinossauros terrestres, aquáticos e voadores realistas, mutações evolutivas, sistema de gacha 3D, híbridos adaptativos, chefes, sobrevivência contra predadores e multiplayer em tempo real.
+              <strong>Ideia do Projeto &amp; Conceito do Jogo:</strong> Idealizado por <strong>Steven Tayllon teixeira Jerônimo De Melos</strong> como um corredor infinito pré-histórico em 3D com biomas reativos, dinossauros terrestres, aquáticos e voadores realistas, mutações evolutivas, sistema de gacha 3D, híbridos adaptativos, chefes, sobrevivência contra predadores e multiplayer em tempo real.
             </p>
-            <div style="font-size:0.78rem; color:#fde68a;">
-              Repositório: <a href="https://github.com/sudo-apt-install-Steven/dino-dash-3d" target="_blank" rel="noopener noreferrer" style="color:#38bdf8; text-decoration:underline; word-break:break-all;">github.com/sudo-apt-install-Steven/dino-dash-3d</a>
+            <div style="font-size:0.78rem; color:#fde68a; line-height:1.5;">
+              <strong>Domínio oficial:</strong> <a href="https://dino-dash-3d-six.vercel.app" target="_blank" rel="noopener noreferrer" style="color:#38bdf8; text-decoration:underline;">dino-dash-3d-six.vercel.app</a><br/>
+              <strong>Repositório:</strong> <a href="https://github.com/sudo-apt-install-Steven/dino-dash-3d" target="_blank" rel="noopener noreferrer" style="color:#38bdf8; text-decoration:underline; word-break:break-all;">github.com/sudo-apt-install-Steven/dino-dash-3d</a><br/>
+              <span style="color:#fca5a5;">© 2026 Steven Tayllon teixeira Jerônimo De Melos — Todos os direitos reservados (Licença Proprietária • Lei nº 9.609/98 &amp; Lei nº 9.610/98).</span>
             </div>
           </div>
 
           <div class="item-card">
-            <strong style="color:#58d63a;">🛠️ Ferramentas &amp; Tecnologias Utilizadas</strong>
+            <strong style="color:#58d63a;">🛠️ Ferramentas &amp; Tecnologias Utilizadas (Atribuição Open Source)</strong>
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
               <span class="hud-pill" style="font-size:0.76rem; color:#fde047;">Three.js (WebGL 3D)</span>
               <span class="hud-pill" style="font-size:0.76rem; color:#93c5fd;">JavaScript (ES Modules)</span>
@@ -266,7 +268,7 @@ export class Menus {
               <span class="hud-pill" style="font-size:0.76rem; color:#f472b6;">Antigravity • Claude • Gemini</span>
             </div>
             <p style="font-size:0.8rem; color:#d8c2a6; margin-top:4px;">
-              Todos os modelos voxel procedurais, mecânicas de biomas (Terra, Sobre a Água, Submerso, Céu e Terra Oca), síntese de áudio e efeitos climáticos rodam nativamente no navegador.
+              Todos os modelos voxel procedurais, mecânicas de biomas (Terra, Sobre a Água, Submerso, Céu e Terra Oca), síntese de áudio e efeitos climáticos rodam nativamente no navegador. Bibliotecas de terceiros (Three.js, Supabase JS, QRCode, ws, Vite) seguem sob suas respectivas licenças permissivas (ver <code>THIRD_PARTY_LICENSES.md</code>).
             </p>
           </div>
 

@@ -1,0 +1,40 @@
+NOTICE — DINO DASH 3D
+================================================================================
+
+DINO DASH 3D
+Copyright (c) 2026 Steven Tayllon teixeira Jerônimo De Melos
+Domínio oficial: https://dino-dash-3d-six.vercel.app
+GitHub do titular: @sudo-apt-install-Steven (https://github.com/sudo-apt-install-Steven/dino-dash-3d)
+
+Todo o código autoral proprietário localizado neste repositório (incluindo src/,
+server/, supabase/, index.html, manifest.webmanifest e assets autorais) pertence
+exclusivamente a Steven Tayllon teixeira Jerônimo De Melos (UNLICENSED / Todos os
+direitos reservados — ver arquivo LICENSE).
+
+--------------------------------------------------------------------------------
+ATRIBUIÇÕES DE SOFTWARE DE TERCEIROS (OPEN SOURCE)
+--------------------------------------------------------------------------------
+Em cumprimento às condições de atribuição das licenças permissivas aplicáveis,
+este software inclui ou utiliza em build as seguintes bibliotecas principais:
+
+1. three (v0.170.0) — The MIT License
+   Copyright © 2010-2024 three.js authors
+
+2. @supabase/supabase-js (v2.119.0) — MIT License
+   Copyright (c) 2020 Supabase
+
+3. qrcode (v1.5.4) — The MIT License (MIT)
+   Copyright (c) 2012 Ryan Day
+
+4. ws (v8.23.0) — MIT License
+   Copyright (c) 2011 Einar Otto Stangvik <einaros@gmail.com>
+   Copyright (c) 2013 Arnout Kazemier and contributors
+   Copyright (c) 2016 Luigi Pinca and contributors
+
+5. vite (v6.4.6, ferramenta de desenvolvimento/build) — MIT License
+   Copyright (c) 2019-present, VoidZero Inc. and Vite contributors
+
+A relação completa das dependências transitivas (104 pacotes em
+package-lock.json, todos sob licenças permissivas MIT, ISC, BSD-3-Clause e 0BSD,
+sem bibliotecas copyleft/GPL) e os textos integrais de licença encontram-se em
+THIRD_PARTY_LICENSES.md.
