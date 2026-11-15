@@ -12,7 +12,7 @@ import { DinoFactory } from '../dinos/DinoFactory.js';
 import { buildVoxelGoldenEgg, buildVoxelDebris } from '../models/VoxelLibrary.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { DinoAbilities } from '../dinos/DinoAbilities.js';
-import { getDinoSpec, getDinoHabitat, getEffectiveDinoHabitat } from '../dinos/DinoCatalog.js';
+import { getDinoSpec, getDinoHabitat, getEffectiveDinoHabitat, getDinoSwimCapabilities } from '../dinos/DinoCatalog.js';
 import {
   getActivePreset,
   rollRandomMutation,
@@ -119,6 +119,8 @@ export class Game {
     this._merchantGuardUntil = 0;
     this.hitStopTimer = 0;
     this.spotlightActive = false;
+    this._spotlightQueue = [];
+    this._crystalReviveUsed = false;
     this._lastFrameRenderAt = 0;
     this.pendingRestart = false;
     this.restartPrevState = 'playing';
@@ -710,6 +712,7 @@ export class Game {
       const mutProfile = eqMutationId ? getMutationComputedProfile(eqMutationId, eqMutationTier) : null;
       const hybridCfg = i === 0 ? Save.data.hybrid : null;
       const habInfo = getEffectiveDinoHabitat(spec, { hybrid: hybridCfg, mutationId: eqMutationId });
+      const swimCaps = getDinoSwimCapabilities(spec, { hybrid: hybridCfg, mutationId: eqMutationId });
       const initialHabitat = habInfo.primary === 'amphibious' ? 'land' : (habInfo.primary || 'land');
       const modelCfg = {
         ...localCustom,
@@ -823,6 +826,12 @@ export class Game {
         baseHabitat: habInfo.primary,
         availableHabitats: habInfo.availableModes,
         grantsLandWalk: habInfo.grantsLandWalk,
+        swimProfile: swimCaps.swimProfile,
+        canSubmerge: swimCaps.canSubmerge,
+        surfaceSwimOnly: swimCaps.surfaceSwimOnly,
+        isAmphibious: swimCaps.isAmphibious,
+        swimModeLabel: swimCaps.swimModeLabel,
+        swimModeDescription: swimCaps.swimModeDescription,
         diveDepth: 0,
         inWater: false,
         inSubmerged: false,
@@ -1181,6 +1190,8 @@ export class Game {
     this.isTestTrack = isTestTrack;
     this.pendingRestart = false;
     this.spotlightActive = false;
+    this._spotlightQueue = [];
+    this._crystalReviveUsed = false;
     this.merchantUses = 0;
     this._merchantGuardUntil = 0;
     this.seenHints = new Set();
@@ -1415,8 +1426,8 @@ export class Game {
 
     const lead0 = this.players[0];
     if (lead0) {
-      lead0.model?.root.position.set(lead0.x, 0, lead0.z);
-      lead0.animator?.update(0.016, { speed: 0, grounded: true });
+      lead0.model?.root.position.set(lead0.x, (lead0.baseY || 0) + (lead0.y || 0), lead0.z);
+      lead0.animator?.update(0.016, { speed: 0, grounded: lead0.habitatMode !== 'flying', habitatMode: lead0.habitatMode });
       this.ui.hud.updatePlayStatus(
         lead0,
         Save.data.eggs,
@@ -1904,6 +1915,9 @@ export class Game {
       narrator: this.narrator,
       currentBiome: this.currentBiome,
       habitatMode: this.players[0]?.habitatMode || this.players[0]?.habitat || 'land',
+      playerHabitat: this.players[0]?.baseHabitat || this.players[0]?.habitat || 'land',
+      leadX: this.players[0]?.x || 0,
+      leadY: (this.players[0]?.baseY || 0) + (this.players[0]?.y || 0),
       playerCount: this.players.length,
       decoyTimer: this.decoyTimer,
       addScore: (v, p) => this.addScore(v, p),
@@ -2319,6 +2333,15 @@ export class Game {
     if (gachaCrates > 0) GachaSystem.addCrates(gachaCrates);
     const totalCrates = GachaSystem.getCrateCount();
 
+    const canCrystalRevive = Boolean(
+      !this.isTestTrack &&
+      !this.multiplayerSession?.active &&
+      !this._crystalReviveUsed &&
+      !Save.data.perfectMode &&
+      this.modeId !== 'hardcore' &&
+      (this.difficultyMgr.activeId === 'easy' || this.difficultyMgr.activeId === 'normal')
+    );
+
     const deathInfo = this._describeDeathCause(this.players[0]?._lastDeathCause);
     this.lastPodiumSummary = null;
     this.lastGameOverArgs = {
@@ -2333,10 +2356,44 @@ export class Game {
       causeLabel: deathInfo.label,
       avoidTip: deathInfo.tip,
       gachaCrates,
-      totalCrates
+      totalCrates,
+      canCrystalRevive,
+      crystalReviveCost: 2,
+      crystals: Save.data.crystals || 0,
+      onCrystalRevive: () => this.reviveWithCrystal()
     };
 
     this.ui.hud.showGameOver(this.lastGameOverArgs);
+  }
+
+  reviveWithCrystal() {
+    if (this.state !== 'gameover' || this._crystalReviveUsed) return false;
+    if (this.isTestTrack || this.multiplayerSession?.active || Save.data.perfectMode || this.modeId === 'hardcore') return false;
+    if (this.difficultyMgr.activeId !== 'easy' && this.difficultyMgr.activeId !== 'normal') return false;
+    if ((Save.data.crystals || 0) < 2) return false;
+    const p0 = this.players[0];
+    if (!p0) return false;
+
+    Save.addCrystals(-2);
+    this._crystalReviveUsed = true;
+    p0.dead = false;
+    p0.hp = Math.min(p0.maxHp || 3, 2);
+    p0.invulnTimer = 3.2;
+    p0.oxygen = 100;
+    p0.stamina = 100;
+    p0.y = 0;
+    p0.vy = 0;
+    p0.grounded = p0.habitatMode !== 'flying';
+    p0.model.root.rotation.set(0, 0, 0);
+    this._clearNearbyObstacles(p0.x, p0.z, 28, false);
+    this.ui.hud.hideGameOver();
+    this.state = 'playing';
+    this.lastTime = performance.now();
+    this.music.setPlaying(true);
+    this.sfx.heal?.();
+    this.particles.emitExplosion(p0.x, (p0.baseY || 0) + 1.0, p0.z, '#38bdf8', 22, true);
+    this.ui.hud.showBanner('💎 RENASCIMENTO DE CRISTAL (-2 💎)! +2 ❤️ & Escudo Temporário!', '#38bdf8', 3.2);
+    return true;
   }
 
   startReplayPlayback() {
@@ -2413,7 +2470,7 @@ export class Game {
       abilityJust = this.input.wasActionJustPressed(actKey, 'ability', false);
       attackJust = this.input.wasActionJustPressed(actKey, 'attack', false);
       furyJust = this.input.wasKeyJustPressed('KeyF') || this.input.wasActionJustPressed('p1', 'fury', false);
-      itemJust = this.input.wasKeyJustPressed('KeyE');
+      itemJust = this.input.wasKeyJustPressed('KeyE') || this.input.wasActionJustPressed(actKey, 'item', false);
       transmuteJust = this.input.wasActionJustPressed(actKey, 'transmute', false);
     } else if (isRemotePeer) {
       leftJust = !!this.input.virtualJustPressed[p.key]?.has('left');
@@ -2437,7 +2494,9 @@ export class Game {
       abilityJust = this.input.wasActionJustPressed(inKey, 'ability', false);
       attackJust = this.input.wasActionJustPressed(inKey, 'attack', false);
       furyJust = isLocalMain && (this.input.wasKeyJustPressed('KeyF') || this.input.wasActionJustPressed('p1', 'fury', false));
-      itemJust = isLocalMain ? this.input.wasKeyJustPressed('KeyE') : this.input.wasActionJustPressed(inKey, 'item', false);
+      itemJust = isLocalMain
+        ? (this.input.wasKeyJustPressed('KeyE') || this.input.wasActionJustPressed('p1', 'item', false))
+        : this.input.wasActionJustPressed(inKey, 'item', false);
       transmuteJust = this.input.wasActionJustPressed(inKey, 'transmute', false);
     }
 
@@ -2614,16 +2673,41 @@ export class Game {
     }
     if (duckHeld) {
       if (inWater && !p.inSubmerged) {
-        const prevDive = p.diveDepth || 0;
-        p.diveDepth = Math.min(1, prevDive + dt * 5.2);
-        p.diveTimer = Math.max(p.diveTimer || 0, 0.16);
-        p.ducking = true;
-        if (prevDive <= 0.25 && p.diveDepth > 0.25) {
-          this.sfx.slide?.();
-          this.particles.emitDust(p.x, (p.baseY || 0) + 0.25, p.z, 8, '#67e8f9', 2.6);
-        }
-        if (Math.random() < dt * 8) {
-          this.particles.emitDust(p.x, (p.baseY || 0) - 0.35, p.z + 0.2, 2, '#90e0ef', 1.4);
+        if (p.surfaceSwimOnly) {
+          // Nadadores de superfície (Elasmossauro, Espinossauro, Barionix) deslizam rasantes na superfície sem afundar nem gastar O2
+          p.diveDepth = 0;
+          p.diveTimer = Math.max(p.diveTimer || 0, 0.14);
+          p.ducking = true;
+          if (p.index === 0) {
+            this._triggerFirstUseSpotlight('spotlight_surface_swim', {
+              icon: '🌊',
+              title: 'Nado de Superfície',
+              desc: `${p.spec?.name || 'Seu dino'} desliza na superfície da água com baixo perfil, sem afundar nem gastar O₂! Apenas espécies de mergulho profundo (Mosasaurus, Dunkleosteus, Liopleurodon) submergem abaixo das ondas.`,
+              selector: '#hud-oxygen-pill',
+              accent: '#38bdf8'
+            });
+          }
+        } else {
+          const prevDive = p.diveDepth || 0;
+          p.diveDepth = Math.min(1, prevDive + dt * 5.2);
+          p.diveTimer = Math.max(p.diveTimer || 0, 0.16);
+          p.ducking = true;
+          if (prevDive <= 0.25 && p.diveDepth > 0.25) {
+            this.sfx.slide?.();
+            this.particles.emitDust(p.x, (p.baseY || 0) + 0.25, p.z, 8, '#67e8f9', 2.6);
+            if (p.index === 0 && !p.isAquaticNative) {
+              this._triggerFirstUseSpotlight('spotlight_submerge', {
+                icon: '🫧',
+                title: 'Mergulho Profundo & O₂',
+                desc: 'Segure S/↓ ou Arraste para Baixo na água para mergulhar! Fique atento à barra de O₂ azul: solte ou pegue bolhas 🫧 para respirar.',
+                selector: '#hud-oxygen-pill',
+                accent: '#22d3ee'
+              });
+            }
+          }
+          if (Math.random() < dt * 8) {
+            this.particles.emitDust(p.x, (p.baseY || 0) - 0.35, p.z + 0.2, 2, '#90e0ef', 1.4);
+          }
         }
       } else if (!p.grounded) {
         if (p.vy > -18 && (this.runTime - (p._lastJumpAt ?? -99)) <= 0.85 && (p._moveComboCd || 0) <= 0) {
@@ -3034,10 +3118,23 @@ export class Game {
   }
 
   _flushStartBanners() {
-    if (!this._pendingStartBanners?.length) return;
-    const first = this._pendingStartBanners.shift();
-    this.ui.hud.showBanner(first.text, first.color, first.dur);
-    this._pendingStartBanners.length = 0;
+    if (this._pendingStartBanners?.length) {
+      const first = this._pendingStartBanners.shift();
+      this.ui.hud.showBanner(first.text, first.color, first.dur);
+      this._pendingStartBanners.length = 0;
+    }
+    const isCoarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    if (this.state === 'playing' && !this.headlessBot && !this.isTestTrack && !this.tutorialState?.active) {
+      this._triggerFirstUseSpotlight('spotlight_controls', {
+        icon: isCoarse ? '📱' : '⌨️',
+        title: isCoarse ? 'Controles no Celular' : 'Controles de Corrida',
+        desc: isCoarse
+          ? 'Deslize o dedo na tela (⬅️ ➡️ faixas • ⬆️ pular • ⬇️ abaixar/mergulhar) e use os botões grandes no canto inferior direito para ⚡ Habilidade, ⚔️ Ataque, 🔥 Fúria e 🔄 Troca!'
+          : 'Mova com [A/D] ou [⬅️ ➡️], pule com [W/⬆️] e deslize/mergulhe com [S/⬇️]. Use [Espaço] Habilidade, [Q] Ataque, [F] Fúria e [E] Mochila!',
+        selector: isCoarse ? '#touch-controls' : '#hud-group-combat',
+        accent: '#58d63a'
+      });
+    }
   }
 
   _updatePredatorIntro(dt) {
@@ -3970,13 +4067,21 @@ export class Game {
           obs.pool?.release(obs);
           const gold = 25 + Math.floor((Save.data.talents?.greed || 0) * 6);
           Save.addEggs(gold);
-          Save.data.crystals = (Save.data.crystals || 0) + 1;
-          Save.save();
+          Save.addCrystals(1);
           this.runEggs += gold;
           this.sfx.pickupRarity('épica');
           this.ui.hud.triggerEdgeFlash('épica');
           this.addScore(180 * this.combo, p);
           this.ui.hud.showBanner(`💎 BAÚ DO TESOURO! +${gold} 🥚 & +1 💎!`, '#ffd447', 2.8);
+          if (p.index === 0) {
+            this._triggerFirstUseSpotlight('spotlight_diamond', {
+              icon: '💎',
+              title: 'Para que servem os Diamantes (💎)?',
+              desc: 'Use 💎 na Loja Rotativa (Atualizar por 2 💎), na Forja de Mutações (evoluir direto por 2-4 💎), no Catalisador do Gacha (3 💎 garante Épica+!) ou para Renascer 1x na corrida (2 💎)!',
+              selector: '#hud-crystals',
+              accent: '#38bdf8'
+            });
+          }
           continue;
         }
 
@@ -4232,6 +4337,15 @@ export class Game {
 
   _dismissSpotlight() {
     if (!this.spotlightActive) return;
+    if (this._spotlightQueue && this._spotlightQueue.length > 0) {
+      const nextCfg = this._spotlightQueue.shift();
+      this.ui.hud.showSpotlight({
+        ...nextCfg,
+        onDismiss: () => this._dismissSpotlight()
+      });
+      this.lastTime = performance.now();
+      return;
+    }
     this.spotlightActive = false;
     this.ui.hud.hideSpotlight(false);
     if (this.state === 'playing') this.music.setPlaying(true);
@@ -4249,6 +4363,11 @@ export class Game {
     Save.save();
 
     if (Save.data.settings?.discoveryPopups !== false) {
+      if (this.spotlightActive) {
+        this._spotlightQueue = this._spotlightQueue || [];
+        this._spotlightQueue.push(cfg);
+        return;
+      }
       this.spotlightActive = true;
       this.music.setPlaying(false);
       this.ui.hud.showSpotlight({
@@ -4318,6 +4437,16 @@ export class Game {
     Save.addEggs(val);
     this.addScore((15 + this.eggChain * 5 + baseTier * 2) * this.combo, p);
     p.fury = Math.min(100, p.fury + (isMystery ? 24 : (baseTier >= 25 ? 20 : (baseTier >= 5 ? 12 : 6))) * (p.furyChargeMult || 1));
+    if (p.index === 0 && p.fury >= 100 && (p.furyTimer || 0) <= 0) {
+      const isCoarseFury = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+      this._triggerFirstUseSpotlight('spotlight_fury_ready', {
+        icon: '🔥',
+        title: 'Modo Fúria 100% Pronto!',
+        desc: 'Sua barra de Fúria encheu! Pressione [F] no teclado ou toque no botão 🔥 Fúria no celular para ficar gigante e invencível!',
+        selector: isCoarseFury ? '#touch-fury-btn' : '#btn-fury-melee',
+        accent: '#fbbf24'
+      });
+    }
     p.stamina = Math.min(100, (p.stamina ?? 100) + (isMystery ? 18 : (baseTier >= 25 ? 20 : (baseTier >= 5 ? 8 : 3))));
     p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + (isMystery ? 22 : (baseTier >= 25 ? 24 : (baseTier >= 5 ? 12 : 4))));
     this.sfx.egg(this.eggChain);
@@ -4357,11 +4486,12 @@ export class Game {
       const added = p.backpack.add(obs.powerId);
       this.ui.hud.showFloatText(added ? 'ITEM NA MOCHILA!' : 'MOCHILA CHEIA!', '#f59e0b');
       if (p.index === 0) {
+        const isCoarseItem = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
         this._triggerFirstUseSpotlight('spotlight_item', {
           icon: '🎒',
           title: 'Item Guardado na Mochila!',
-          desc: 'Pressione [E] durante a corrida para usar o item ativo na sua mochila no momento certo!',
-          selector: '.backpack-pill',
+          desc: 'Pressione [E] no teclado ou toque em 🎒 Item no celular para usar o item ativo no momento certo!',
+          selector: isCoarseItem ? '#touch-item-btn' : '#hud-backpack',
           accent: '#f59e0b'
         });
       }

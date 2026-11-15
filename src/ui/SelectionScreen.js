@@ -1,7 +1,7 @@
 // Tela de Seleção 3D de Dinossauros: modelo girando (arrastar para rotacionar),
 // barras de atributos, passiva, habilidade, árvore de níveis 1-10 e botão "Testar".
 import * as THREE from 'three';
-import { DINO_CATALOG, DINO_CLASSES, getDinoSpec, getDinoHabitat, getEffectiveDinoHabitat } from '../dinos/DinoCatalog.js';
+import { DINO_CATALOG, DINO_CLASSES, getDinoSpec, getDinoHabitat, getEffectiveDinoHabitat, getDinoSwimCapabilities } from '../dinos/DinoCatalog.js';
 import { getDinoSkins, getEquippedSkinVariant, SKIN_VARIANTS } from '../dinos/DinoCustomization.js';
 import { DinoFactory } from '../dinos/DinoFactory.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
@@ -194,6 +194,10 @@ export class SelectionScreen {
             </div>
 
             <div class="sel-details-col" id="sel-details-col">
+              <div class="hud-pill" id="sel-hybrid-banner" style="display:none; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; background:rgba(139,92,246,0.22); border-color:#a855f7; color:#f3e8ff; padding:6px 10px; font-size:0.8rem;">
+                <span>🧬 Modo Híbrido Ativo (sobrepõe dino na corrida)</span>
+                <button class="tab-btn" id="sel-disable-hybrid" style="padding:4px 9px; font-size:0.74rem; border-color:#c084fc;">Usar Dino Puro</button>
+              </div>
               <div class="hud-pill" id="sel-notice" style="color:#ffd447; text-align:center; padding:6px 12px; font-size:0.82rem; display:none;"></div>
               <div id="sel-details" style="display:flex; flex-direction:column; gap:9px;"></div>
             </div>
@@ -224,7 +228,29 @@ export class SelectionScreen {
       };
     };
 
-    preview = new DinoPreview3D(previewBox, currentId, getCustomFor(currentId));
+    preview = new DinoPreview3D(previewBox, currentId, getCustomFor(currentId), { allowHybrid: false });
+
+    const equipDino = (id, notify = true) => {
+      const targetSpec = getDinoSpec(id);
+      const owned = Save.data.unlockedDinos.includes(id) || (targetSpec.unlockCost || 0) === 0;
+      if (!owned) return false;
+      const hadHybrid = Boolean(Save.data.hybrid?.enabled);
+      if (hadHybrid) {
+        Save.data.hybrid.enabled = false;
+      }
+      Save.data.selectedDino = id;
+      if (!Save.data.albumDiscovered.includes(id)) {
+        Save.data.albumDiscovered.push(id);
+      }
+      Save.save();
+      if (onSelect) onSelect(id);
+      if (notify) {
+        noticeMsg = hadHybrid
+          ? `✅ ${targetSpec.name} equipado! (Modo Híbrido desativado para correr com este dino)`
+          : `★ ${targetSpec.name} equipado para a próxima corrida!`;
+      }
+      return true;
+    };
 
     const syncListSelection = () => {
       const listEl = container.querySelector('#sel-dino-list');
@@ -263,6 +289,7 @@ export class SelectionScreen {
         btn.addEventListener('click', () => {
           noticeMsg = '';
           currentId = btn.getAttribute('data-dino-id');
+          equipDino(currentId, true);
           if (onPlayRoar) onPlayRoar(currentId);
           updateContent({ updatePreview: true, resetDetailsScroll: true });
         });
@@ -289,6 +316,11 @@ export class SelectionScreen {
       container.querySelector('#sel-heading').textContent = `🦖 Dinossauros (${curUnlocked}/${DINO_CATALOG.length})`;
       container.querySelector('#sel-eggs-val').textContent = Save.data.eggs;
 
+      const hybridBanner = container.querySelector('#sel-hybrid-banner');
+      if (hybridBanner) {
+        hybridBanner.style.display = Save.data.hybrid?.enabled ? 'flex' : 'none';
+      }
+
       const noticeEl = container.querySelector('#sel-notice');
       if (noticeMsg) {
         noticeEl.textContent = noticeMsg;
@@ -298,12 +330,12 @@ export class SelectionScreen {
       }
 
       container.querySelector('#sel-lock-hint').textContent =
-        `Arraste para girar o modelo 3D • ${isUnlocked ? '✔ Desbloqueado' : `🔒 Custo: ${spec.unlockCost} 🥚`}`;
+        `Arraste para girar o modelo 3D • ${isUnlocked ? (isEquipped && !Save.data.hybrid?.enabled ? '★ Equipado Agora' : '✔ Desbloqueado') : `🔒 Custo: ${spec.unlockCost} 🥚`}`;
 
       const confirmBtn = container.querySelector('#sel-confirm');
       confirmBtn.className = `chunky-btn ${isUnlocked ? '' : 'orange'}`;
       confirmBtn.textContent = isUnlocked
-        ? (isEquipped ? '✔ Equipado' : 'Equipar')
+        ? (isEquipped && !Save.data.hybrid?.enabled ? '✔ Equipado • Voltar' : '★ Equipar Agora')
         : `🔓 Liberar (${spec.unlockCost} 🥚)`;
 
       const activePreset = Save.data.customization.p1.presets[Save.data.customization.p1.activePreset];
@@ -336,14 +368,20 @@ export class SelectionScreen {
 
       const activeMut = Save.data.equippedMutation || null;
       const habInfo = getEffectiveDinoHabitat(spec, { mutationId: activeMut });
+      const swimCaps = getDinoSwimCapabilities(spec, { mutationId: activeMut });
       const hab = habInfo.primary || getDinoHabitat(spec);
       const habLabel = hab === 'aquatic'
-        ? (habInfo.grantsLandWalk ? '🌊 Aquático + 🐾 Terra (Mutação)' : '🌊 Aquático (Exclusivo Água)')
+        ? (habInfo.grantsLandWalk
+          ? '🌊 Aquático + 🐾 Terra (Mutação)'
+          : (swimCaps.canSubmerge ? '🌊 Aquático • Mergulho Profundo' : '🌊 Aquático • Superfície (Sem Afundar)'))
         : hab === 'amphibious'
-          ? '🐊 Anfíbio (Água/Terra)'
+          ? '🐊 Anfíbio • Terra ↔ Água (Superfície)'
           : hab === 'flying'
             ? '🪽 Aéreo (Voo/Céu)'
             : '🌿 Terrestre (Corre/Nada)';
+      const swimTipLine = (hab === 'aquatic' || hab === 'amphibious')
+        ? `<div style="font-size:0.78rem; color:#67e8f9; background:rgba(14,116,144,0.22); border:1px solid rgba(34,211,238,0.35); border-radius:8px; padding:5px 8px;">💧 ${swimCaps.swimModeDescription}</div>`
+        : '';
       const eqVarId = getEquippedSkinVariant(currentId);
       const vDef = SKIN_VARIANTS.find((v) => v.id === eqVarId);
       const varPill = vDef && vDef.id !== 'normal'
@@ -360,6 +398,7 @@ export class SelectionScreen {
           </div>
         </div>
         <div style="font-size:0.84rem; color:#9ce6e0;">Passiva: ${cls.passive.pt}</div>
+        ${swimTipLine}
         <div class="item-card" style="padding:10px;">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
             ${renderSkillSvg(spec.id, 34)}
@@ -402,7 +441,7 @@ export class SelectionScreen {
       });
 
       if (updatePreview) {
-        preview?.setDino(currentId, getCustomFor(currentId));
+        preview?.setDino(currentId, getCustomFor(currentId), { allowHybrid: false });
       }
       if (rebuildList) rebuildDinoList();
       else syncListSelection();
@@ -410,6 +449,12 @@ export class SelectionScreen {
       if (detailsCol) detailsCol.scrollTop = resetDetailsScroll ? 0 : savedDetailsScroll;
       if (modalCard) modalCard.scrollTop = savedCardScroll;
     };
+
+    container.querySelector('#sel-disable-hybrid')?.addEventListener('click', () => {
+      if (Save.data.hybrid) Save.data.hybrid.enabled = false;
+      equipDino(currentId, true);
+      updateContent({ updatePreview: true });
+    });
 
     container.querySelectorAll('[data-cfilter]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -439,11 +484,7 @@ export class SelectionScreen {
         if (!Save.data.unlockedDinos.includes(currentId)) Save.data.unlockedDinos.push(currentId);
         noticeMsg = `🎉 ${spec.name} desbloqueado e equipado!`;
       }
-      Save.data.selectedDino = currentId;
-      if (!Save.data.albumDiscovered.includes(currentId)) {
-        Save.data.albumDiscovered.push(currentId);
-      }
-      Save.save();
+      equipDino(currentId, false);
       preview?.destroy();
       if (onSelect) onSelect(currentId);
       if (onClose) onClose();
@@ -453,8 +494,7 @@ export class SelectionScreen {
       const spec = getDinoSpec(currentId);
       const isUnlocked = Save.data.unlockedDinos.includes(currentId) || (spec.unlockCost || 0) === 0;
       if (isUnlocked) {
-        Save.data.selectedDino = currentId;
-        Save.save();
+        equipDino(currentId, false);
       }
       preview?.destroy();
       if (onTestTrack) onTestTrack(currentId);

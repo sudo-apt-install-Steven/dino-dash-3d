@@ -490,6 +490,44 @@ export function getMutationUpgradeCost(mutOrId, currentLevel = 1) {
   return Math.round(base * (0.55 + currentLevel * 0.55));
 }
 
+export function getMutationCrystalCost(mutOrId, currentLevel = 0) {
+  const def = typeof mutOrId === 'string' ? getMutationDef(mutOrId) : mutOrId;
+  if (!def) return 0;
+  if (currentLevel >= MAX_MUTATION_LEVEL) return 0;
+  if (currentLevel === 0) {
+    if (def.rarity === 'lendária' || def.rarity === 'mítica' || (def.cost || 0) >= 1200) return 4;
+    if (def.rarity === 'épica' || (def.cost || 0) >= 750) return 3;
+    return 2;
+  }
+  return Math.min(4, currentLevel + 1);
+}
+
+export function synthesizeOrUpgradeMutationWithCrystals(id) {
+  const def = getMutationDef(id);
+  if (!def) return { ok: false, reason: 'Mutação desconhecida.' };
+  const unlocked = isMutationUnlocked(id);
+  const cur = unlocked ? getMutationUnlockedLevel(id) : 0;
+  if (cur >= MAX_MUTATION_LEVEL) return { ok: false, reason: 'Nível máximo (4/4) já atingido!' };
+  const cost = getMutationCrystalCost(def, cur);
+  if ((Save.data.crystals || 0) < cost) {
+    return { ok: false, reason: `Precisa de ${cost} 💎 para forjar ${def.name}!` };
+  }
+  Save.addCrystals(-cost);
+  if (!unlocked) {
+    unlockMutation(id);
+    Save.data.equippedMutation = id;
+    Save.save();
+    return { ok: true, action: 'unlocked', level: 1, cost };
+  }
+  if (!Save.data.mutationLevels) Save.data.mutationLevels = {};
+  if (!Save.data.mutationActiveTiers) Save.data.mutationActiveTiers = {};
+  const nextLv = cur + 1;
+  Save.data.mutationLevels[id] = nextLv;
+  Save.data.mutationActiveTiers[id] = nextLv;
+  Save.save();
+  return { ok: true, action: 'upgraded', level: nextLv, cost };
+}
+
 export function upgradeMutation(id) {
   const def = getMutationDef(id);
   if (!def) return { ok: false, reason: 'Mutação desconhecida.' };

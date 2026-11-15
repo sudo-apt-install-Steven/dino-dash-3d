@@ -185,9 +185,20 @@ export class GuideModal {
                       <div class="item-card"><strong>❄️ Gelo & ⚡ Raio</strong><small style="color:#d8c2a6;">Gelo reduz ritmo brevemente; Raio dá carga magnética e combina com Gelo para formar <strong>⚡ Tempestade Supercondutora</strong>!</small></div>
                     </div>
                   </div>
+                  <div class="item-card" style="border-color:#38bdf8;">
+                    <strong style="color:#38bdf8;">💎 Para que servem os Diamantes?</strong>
+                    <ul style="font-size:0.82rem; color:#bae6fd; padding-left:18px; display:flex; flex-direction:column; gap:4px; margin-top:6px;">
+                      <li><strong>🎲 Catalisador Estelar (3 💎):</strong> No Gacha 3D, garante raridade <strong>Épica+</strong> e dobra chances Shiny/Mítica/Secreta.</li>
+                      <li><strong>🧬 Forja de Mutações (2–4 💎):</strong> Em Personalização &gt; Mutações DNA, sintetiza ou evolui níveis sem gastar Ovos.</li>
+                      <li><strong>💖 Renascimento de Cristal (2 💎):</strong> No Game Over (Solo Fácil/Normal), renasce 1× por partida com +2 ❤️ e escudo!</li>
+                      <li><strong>🔄 Atualizar Loja Rotativa (2 💎):</strong> Troca ofertas com -20% instantaneamente.</li>
+                      <li><strong>Onde ganhar:</strong> Baús do Tesouro nas pistas, derrotando Chefes e ao abrir Ovo Misterioso após completar 100% da coleção!</li>
+                    </ul>
+                  </div>
                   <div class="item-card">
-                    <strong>🥚 Economia Balanceada (Sem Farm Infinito)</strong>
+                    <strong>🥚 Economia &amp; Nado Inteligente</strong>
                     <ul style="font-size:0.84rem; color:#e5d3bc; padding-left:18px; display:flex; flex-direction:column; gap:4px;">
+                      <li><strong>💧 Superfície vs Mergulho vs Híbridos:</strong> <strong>Mosasaurus, Dunkleosteus e Liopleurodon</strong> mergulham fundo com [S/↓] (usando O₂). <strong>Elasmosaurus, Espinossauro e Baryonyx</strong> deslizam na superfície sem afundar. Anfíbios e Híbridos trocam <strong>Terra ↔ Água</strong> com [R] / botão 🔄!</li>
                       <li><strong>Estamina Física:</strong> Agora você gerencia Vida, Escudo, Fúria, <strong>Estamina</strong> (Bullet-Time [Shift] e Pulo Duplo aéreo, recarrega no chão/Oásis/itens) e carga combinada da Habilidade [Espaço] (tempo + combos/pisões/Q).</li>
                       <li><strong>Pacotes & Patamares:</strong> Ovos valem 1, 5 (Dourado) ou 25 (Colossal) rendendo ~150–400 🥚 por partida de 3 min. Loja segue patamares claros (150 / 600 / 2.500 / 10.000 🥚), loja rotativa (-20%) e Cristais 💎 raros de chefes/baús.</li>
                       <li><strong>Ovo Misterioso (${600} 🥚):</strong> Sorteia um acessório ou rastro faltante. Com coleção 100% completa, devolve <strong>240 🥚 + 150 XP + 1 💎</strong> (sem farm infinito).</li>
@@ -227,11 +238,12 @@ export class GuideModal {
                 <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));">
                   ${PREDATOR_CATALOG.map((p) => {
                     const seen = (Save.data.seenElements || []).includes('pred_intro_' + p.id);
+                    const habBadge = p.habitat === 'aquatic' ? '🌊 Aquático' : p.habitat === 'flying' ? '🪽 Aéreo' : '🌿 Terrestre';
                     return `
                       <div class="item-card" style="border-left: 4px solid ${p.accent};">
-                        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
                           <strong style="color:${p.accent};">🐾 ${p.name}</strong>
-                          <span class="hud-pill" style="font-size:0.68rem; padding:2px 6px;">${seen ? '✅ Avistado' : p.biome}</span>
+                          <span class="hud-pill" style="font-size:0.68rem; padding:2px 6px;">${habBadge} ${seen ? '• ✅' : ''}</span>
                         </div>
                         <small style="color:#ffd447; font-weight:700;">${p.title} • ${p.archetype}</small>
                         <p style="font-size:0.81rem; color:#fef3c7; margin:4px 0;">${p.lore}</p>

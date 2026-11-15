@@ -52,9 +52,17 @@ export class Menus {
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
               <span class="hud-pill">🏆 HI: <strong>${Save.getHighScore()}</strong></span>
               <span class="hud-pill">🥚 Ovos: <strong>${Save.data.eggs}</strong></span>
-              ${(Save.data.crystals || 0) > 0 ? `<span class="hud-pill" style="color:#38bdf8;">💎 ${Save.data.crystals}</span>` : ''}
+              <button type="button" class="hud-pill" id="menu-crystals-info-btn" title="Clique para ver para que servem os Diamantes 💎" style="color:#38bdf8; cursor:pointer; border:1px solid rgba(56,189,248,0.45);">💎 <strong>${Save.data.crystals || 0}</strong> ℹ️</button>
               <span class="hud-pill">🎖️ ${title}</span>
               ${prestigeLv > 0 ? `<span class="hud-pill" style="color:#ffd447;">✨ P${prestigeLv}</span>` : ''}
+            </div>
+            <div id="menu-crystals-popover" class="item-card" style="display:none; margin-top:8px; padding:8px 10px; border-color:#38bdf8; font-size:0.76rem; color:#bae6fd; line-height:1.4;">
+              <strong style="color:#38bdf8;">💎 O que os Diamantes fazem?</strong><br>
+              • <strong>Catalisador Gacha (3 💎):</strong> Garante Épica+ e dobra chance Shiny/Mítica.<br>
+              • <strong>Forja de Mutações (2–4 💎):</strong> Desbloqueia ou evolui DNA direto.<br>
+              • <strong>Renascer na Corrida (2 💎):</strong> Volta à vida 1× no Fácil/Normal.<br>
+              • <strong>Loja Rotativa (2 💎):</strong> Atualiza ofertas com -20% na hora.<br>
+              <small style="color:#94a3b8;">Ganhe 💎 em Baús do Tesouro na corrida, Chefes ou Ovo Misterioso completo.</small>
             </div>
           </div>
 
@@ -122,6 +130,10 @@ export class Menus {
       });
     }
 
+    container.querySelector('#menu-crystals-info-btn')?.addEventListener('click', () => {
+      const pop = container.querySelector('#menu-crystals-popover');
+      if (pop) pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
+    });
     container.querySelector('#menu-play').addEventListener('click', actions.onPlay);
     container.querySelector('#menu-lowspec-suggest')?.addEventListener('click', actions.onToggleLowSpec);
     container.querySelectorAll('[data-nav]').forEach((btn) => {

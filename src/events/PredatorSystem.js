@@ -4,8 +4,10 @@ import { Save } from '../systems/Save.js';
 import {
   buildPredatorEggProp,
   buildPredatorModel,
+  buildPredatorNestProp,
   getPredatorForBiome,
   getPredatorSpec,
+  normalizePredatorHabitat,
   pickRandomPredator
 } from './PredatorModels.js';
 
@@ -60,20 +62,22 @@ export class PredatorSystem {
     }
   }
 
-  _selectRunPredator(biomeId, overrideId = null) {
+  _selectRunPredator(biomeId, overrideId = null, habitat = 'land') {
     const pinned = Save.data.pinnedPredator || null;
     if (overrideId) return getPredatorSpec(overrideId);
-    if (pinned) return getPredatorSpec(pinned);
-    return pickRandomPredator(this._lastRunPredatorId || biomeId);
+    const normHab = normalizePredatorHabitat(habitat);
+    if (pinned) {
+      const pinnedSpec = getPredatorSpec(pinned);
+      if ((pinnedSpec.habitat || 'land') === normHab) return pinnedSpec;
+    }
+    return pickRandomPredator(this._lastRunPredatorId || biomeId, normHab);
   }
 
   _spawnIntroProps(spec, leadX = 0, leadY = 0) {
     this._clearIntroProps();
     const nest = new THREE.Group();
-    const twigMat = new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.9 });
-    const ring = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.24, 1.75), twigMat);
-    ring.position.y = 0.12;
-    nest.add(ring);
+    const nestBase = buildPredatorNestProp(spec.habitat || 'land', spec.accent);
+    nest.add(nestBase);
 
     const nestEgg = buildPredatorEggProp(spec.accent);
     nestEgg.position.y = 0.45;
@@ -115,7 +119,8 @@ export class PredatorSystem {
       return false;
     }
 
-    const spec = this._selectRunPredator(biomeId, overrideId);
+    const habitat = normalizePredatorHabitat(ctx.habitatMode || ctx.playerHabitat || 'land');
+    const spec = this._selectRunPredator(biomeId, overrideId, habitat);
     this._lastRunPredatorId = spec.id;
     this.runPredatorSpec = spec;
 
@@ -163,15 +168,22 @@ export class PredatorSystem {
   startEncounter(biomeId, ctx = {}, overrideId = null) {
     this.clearActiveModel();
 
+    const habitat = normalizePredatorHabitat(ctx.habitatMode || ctx.playerHabitat || 'land');
     const pinned = Save.data.pinnedPredator || null;
+    const pinnedSpec = pinned ? getPredatorSpec(pinned) : null;
+    const runMatchesHabitat = this.runPredatorSpec && (this.runPredatorSpec.habitat || 'land') === habitat;
     const spec = overrideId
       ? getPredatorSpec(overrideId)
-      : (pinned ? getPredatorSpec(pinned) : (this.runPredatorSpec || getPredatorForBiome(biomeId)));
+      : (pinnedSpec && (pinnedSpec.habitat || 'land') === habitat
+        ? pinnedSpec
+        : (runMatchesHabitat ? this.runPredatorSpec : getPredatorForBiome(biomeId, habitat)));
 
     this.activeSpec = spec;
     this.activeModel = buildPredatorModel(spec.id);
     this.activeModel.root.scale.setScalar(1.08);
-    this.activeModel.root.position.set(-0.78, 0, 4.6);
+    const startTrackX = ctx.leadX ?? (habitat === 'aquatic' ? 10 : habitat === 'flying' ? -10 : 0);
+    const startTrackY = ctx.leadY ?? (habitat === 'flying' ? 2.4 : 0);
+    this.activeModel.root.position.set(startTrackX - 0.78, startTrackY, 4.6);
     this.activeModel.root.rotation.y = 0;
     this.scene.add(this.activeModel.root);
 
@@ -337,10 +349,16 @@ export class PredatorSystem {
       this.distance = Math.max(1.4, Math.min(9.2, this.distance + (paceBonus + decoyPush) * dt));
 
       if (lead) {
-        const flankX = lead.x >= (ctx.habitatMode === 'aquatic' ? 10 : 0) ? -0.78 : 0.78;
+        const trackCenterX = ctx.habitatMode === 'aquatic' ? 10 : (ctx.habitatMode === 'flying' ? -10 : 0);
+        const flankX = lead.x >= trackCenterX ? -0.78 : 0.78;
         const targetX = lead.x + flankX * 0.75;
         this.activeModel.root.position.x += (targetX - this.activeModel.root.position.x) * Math.min(1, dt * 4.4);
-        const targetY = ctx.habitatMode === 'flying' ? Math.max(1.8, (lead.baseY || 0) + lead.y * 0.8) : 0;
+        let targetY = (lead.baseY || 0) + Math.max(0, (lead.y || 0) * 0.25);
+        if (ctx.habitatMode === 'flying') {
+          targetY = Math.max(1.8, (lead.baseY || 0) + (lead.y || 0) * 0.85);
+        } else if (ctx.habitatMode === 'aquatic') {
+          targetY = (lead.baseY || 0) + (lead.y || 0) * 0.72;
+        }
         this.activeModel.root.position.y += (targetY - this.activeModel.root.position.y) * Math.min(1, dt * 4.0);
       }
       this.activeModel.root.rotation.y = 0;

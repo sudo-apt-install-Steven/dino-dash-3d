@@ -753,20 +753,65 @@
   height: 52px;
   border-radius: 16px;
   border: 2.5px solid var(--panel-border);
-  background: rgba(24, 14, 8, 0.62);
-  backdrop-filter: blur(4px);
+  background: rgba(24, 14, 8, 0.72);
+  backdrop-filter: blur(5px);
   color: #fff8e7;
   font-weight: 900;
   font-size: 1.15rem;
   touch-action: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-  transition: transform 0.06s ease, background 0.08s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.42);
+  transition: transform 0.06s ease, background 0.08s ease, border-color 0.12s ease;
+}
+
+.touch-btn-ico {
+  font-size: 1.08rem;
+  line-height: 1;
+}
+
+.touch-btn-lbl {
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fde68a;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
 
 .touch-btn.touch-btn-action {
-  border-radius: 50%;
-  border-color: rgba(255, 212, 71, 0.55);
-  background: rgba(28, 16, 9, 0.58);
+  border-radius: 16px;
+  border-color: rgba(255, 212, 71, 0.65);
+  background: rgba(28, 16, 9, 0.78);
+}
+
+.touch-btn-ability { border-color: #58d63a !important; }
+.touch-btn-attack { border-color: #fb923c !important; }
+.touch-btn-radial { border-color: #c084fc !important; }
+.touch-btn-transmute { border-color: #38bdf8 !important; }
+.touch-btn-item { border-color: #f59e0b !important; }
+.touch-btn-fury {
+  border-color: #ffd447 !important;
+  background: linear-gradient(180deg, rgba(234, 88, 12, 0.9), rgba(124, 45, 18, 0.92)) !important;
+  box-shadow: 0 0 16px rgba(255, 212, 71, 0.55);
+  animation: touchFuryPulse 0.85s ease-in-out infinite alternate;
+}
+
+.touch-btn-action.touch-ready {
+  box-shadow: 0 0 12px rgba(255, 212, 71, 0.36);
+}
+
+.touch-btn-action.touch-locked {
+  border-style: dashed !important;
+  filter: grayscale(0.45);
+}
+
+@keyframes touchFuryPulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.06); }
 }
 
 .touch-btn:active {
@@ -970,19 +1015,19 @@
     z-index: 15;
   }
 
-  /* HUD Inferior compacta no canto esquerdo (deixa o centro e pista 100% livres para swipe) */
+  /* HUD Inferior compacta no canto esquerdo (deixa o centro, o dino e o bloco de toque direito 100% livres) */
   .hud-bottom-bar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-    left: calc(env(safe-area-inset-left, 0px) + 10px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    left: calc(env(safe-area-inset-left, 0px) + 8px);
     right: auto;
     width: auto;
-    max-width: min(255px, 60vw);
+    max-width: calc(100vw - 180px);
     padding: 0;
     gap: 4px;
     align-items: flex-start;
   }
   .hud-meters {
-    width: auto;
+    width: 100%;
     max-width: 100%;
     gap: 4px;
     flex-direction: column;
@@ -993,69 +1038,73 @@
   }
   .hud-group {
     padding: 3px 6px;
-    gap: 4px;
+    gap: 3px;
     border-radius: 10px;
     border-width: 1.5px;
-    width: auto;
-    background: rgba(16, 10, 6, 0.56);
+    width: 100%;
+    max-width: 100%;
+    background: rgba(16, 10, 6, 0.62);
     backdrop-filter: blur(4px);
+    box-sizing: border-box;
   }
   #hud-group-vital {
-    border-radius: 999px;
-    padding: 2px 8px;
+    border-radius: 12px;
+    padding: 2px 6px;
+    display: flex;
+    flex-wrap: wrap;
+    width: auto;
   }
   #hud-group-vital .meter-pill {
     min-width: 0;
     flex: 0 1 auto;
-    padding: 1px 4px;
-    font-size: 0.7rem;
+    padding: 1px 3px;
+    font-size: 0.68rem;
     border: none;
     background: transparent;
   }
   #hud-group-combat {
     display: grid;
-    grid-template-columns: repeat(5, minmax(36px, 44px));
-    gap: 4px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+  }
+  #hud-group-combat #btn-radial-wheel,
+  #hud-group-combat #btn-transmute-mode,
+  #hud-group-combat #hud-backpack {
+    display: none;
   }
   #hud-group-combat .meter-pill {
     min-width: 0;
-    padding: 3px 4px;
-    font-size: 0.66rem;
+    padding: 2px 3px;
+    font-size: 0.62rem;
     text-align: center;
     border-width: 1px;
-    border-radius: 8px;
+    border-radius: 7px;
     white-space: nowrap;
     overflow: hidden;
-    background: rgba(16, 10, 6, 0.5);
+    background: rgba(16, 10, 6, 0.52);
   }
   #hud-group-combat .meter-bar {
     margin-top: 2px;
-    height: 4px;
-  }
-  #hud-backpack {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
+    height: 3.5px;
   }
   #hud-group-combat .btn-label {
     display: none;
   }
 
-  /* Quando o jogador ativa Setas Direcionais nas Configurações, eleva barras para não sobrepor */
+  /* Quando o jogador ativa Setas Direcionais nas Configurações, eleva HUD à esquerda acima de ◀▶ */
   #ui-root:has(#touch-controls.touch-mode-buttons) .hud-bottom-bar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
-    left: 8px;
-    right: 8px;
-    max-width: none;
-    align-items: center;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 66px);
+    left: calc(env(safe-area-inset-left, 0px) + 8px);
+    right: auto;
+    max-width: calc(100vw - 180px);
+    align-items: flex-start;
   }
 
   .touch-controls {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
     left: 0;
     right: 0;
-    padding: 0 10px;
+    padding: 0 8px;
   }
   .touch-cluster-left {
     display: flex;
@@ -1063,25 +1112,27 @@
     gap: 6px;
   }
   .touch-cluster-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(3, 50px);
+    justify-items: end;
+    align-items: end;
+    gap: 5px;
   }
   .touch-controls.touch-mode-buttons .touch-cluster-right {
     display: grid;
-    grid-template-columns: repeat(2, 46px);
-    gap: 6px;
+    grid-template-columns: repeat(3, 48px);
+    gap: 5px;
   }
   .touch-btn {
     width: 50px;
     height: 50px;
-    font-size: 1.15rem;
-    border-radius: 50%;
+    font-size: 1.08rem;
+    border-radius: 15px;
     border-width: 2px;
   }
   .touch-controls.touch-mode-buttons .touch-btn {
-    width: 46px;
-    height: 46px;
+    width: 48px;
+    height: 48px;
     border-radius: 13px;
   }
 }
@@ -1114,10 +1165,10 @@
     min-height: 38px;
   }
   .hud-bottom-bar {
-    max-width: min(260px, calc(100vw - 16px));
+    max-width: calc(100vw - 178px);
   }
   #hud-group-combat {
-    grid-template-columns: repeat(5, minmax(34px, 42px));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -1187,10 +1238,34 @@
   .hud-bottom-bar {
     bottom: 6px;
     left: 10px;
+    max-width: calc(100vw - 188px);
+  }
+  .hud-meters {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: flex-end;
+    gap: 5px;
+  }
+  #hud-group-combat {
+    grid-template-columns: repeat(4, minmax(40px, 56px));
+  }
+  #ui-root:has(#touch-controls.touch-mode-buttons) .hud-bottom-bar {
+    bottom: 6px;
+    left: 118px;
+    right: auto;
+    max-width: calc(100vw - 294px);
   }
   .touch-controls {
     bottom: 6px;
-    padding: 0 10px;
+    padding: 0 8px;
+  }
+  .touch-cluster-right {
+    grid-template-columns: repeat(3, 48px);
+    gap: 4px;
+  }
+  .touch-btn {
+    width: 48px;
+    height: 48px;
   }
 }
 
@@ -1289,6 +1364,55 @@
   border: 1.5px solid;
 }
 
+.gacha-pity-bars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.gacha-pity-item {
+  background: rgba(24, 13, 7, 0.72);
+  border: 1.5px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gacha-pity-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.74rem;
+  color: #fde68a;
+  font-weight: 800;
+}
+
+.gacha-pity-track {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  border: 1px solid rgba(255, 212, 71, 0.22);
+}
+
+.gacha-pity-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.gacha-pity-fill.epic {
+  background: linear-gradient(90deg, #9333ea, #c084fc);
+}
+
+.gacha-pity-fill.shiny {
+  background: linear-gradient(90deg, #f59e0b, #ffd447, #fde047);
+}
+
 /* Badges de Prós / Contras para Mutações e Híbridos */
 .mut-tradeoff-list {
   display: flex;
@@ -1356,12 +1480,23 @@
     font-size: 0.82rem;
   }
   #hud-group-combat {
-    grid-template-columns: repeat(4, minmax(34px, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
-  .touch-btn {
-    width: 44px;
-    height: 44px;
-    font-size: 1rem;
+  .touch-controls .touch-cluster-right {
+    grid-template-columns: repeat(3, 48px);
+    gap: 4px;
+  }
+  .touch-btn,
+  .touch-controls.touch-mode-buttons .touch-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 0.98rem;
+  }
+  .hud-bottom-bar {
+    max-width: calc(100vw - 170px);
+  }
+  #ui-root:has(#touch-controls.touch-mode-buttons) .hud-bottom-bar {
+    max-width: calc(100vw - 170px);
   }
 }
 

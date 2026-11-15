@@ -109,14 +109,30 @@ export async function finishAuthoritativeRun(client, payload) {
   });
 }
 
-export async function requestAuthoritativeGachaRoll(client, { useEggs, crateCount, eggs, pity, ownedRewards }) {
+export async function requestAuthoritativeGachaRoll(client, {
+  useEggs,
+  crateCount,
+  eggs,
+  crystals = 0,
+  pity,
+  pityEpic,
+  pityShiny,
+  useCrystalCatalyst = false,
+  ownedRewards
+}) {
   if (!client) return { ok: false, offline: true };
+  const epicCount = Math.max(0, Math.floor(pityEpic ?? pity ?? 0));
+  const shinyCount = Math.max(0, Math.floor(pityShiny ?? pity ?? 0));
   return await invokeEdgeFunction(client, 'gacha-roll', {
     useEggs: !!useEggs,
+    useCrystalCatalyst: !!useCrystalCatalyst,
     lootboxRealMoney: LOOTBOX_REAL_MONEY_ENABLED,
     clientCrateCount: Math.max(0, Math.floor(crateCount || 0)),
     clientEggs: Math.max(0, Math.floor(eggs || 0)),
-    clientPity: Math.max(0, Math.floor(pity || 0)),
+    clientCrystals: Math.max(0, Math.floor(crystals || 0)),
+    clientPity: epicCount,
+    clientPityEpic: epicCount,
+    clientPityShiny: shinyCount,
     ownedRewards: Array.isArray(ownedRewards) ? ownedRewards.slice(0, 200) : []
   });
 }

@@ -81,6 +81,8 @@ const DEFAULT_SAVE = {
   crystals: 0,
   fossilCrates: 2,
   gachaPity: 0,
+  gachaPityEpic: 0,
+  gachaPityShiny: 0,
   gachaStats: { pulls: 0, shinies: 0, mechas: 0, secrets: 0 },
   discoveredHollowEarth: false,
   unlockedMutations: ['amber_core'],
@@ -293,6 +295,14 @@ class SaveSystem {
     if (!loaded.introModeCustom && !loaded.settings?.disableIntro && loaded.settings?.introMode === 'first_time') {
       loaded.settings.introMode = 'always';
     }
+    const legacyPity = Math.max(0, Math.floor(Number(loaded.gachaPity || 0)));
+    loaded.gachaPityEpic = parsed?.gachaPityEpic == null
+      ? Math.min(8, legacyPity)
+      : Math.max(0, Math.min(8, Math.floor(Number(loaded.gachaPityEpic || 0))));
+    loaded.gachaPityShiny = parsed?.gachaPityShiny == null
+      ? Math.min(14, legacyPity)
+      : Math.max(0, Math.min(14, Math.floor(Number(loaded.gachaPityShiny || 0))));
+    loaded.gachaPity = loaded.gachaPityEpic;
     if (!import.meta.env?.DEV) {
       loaded.devMode = false;
     }
@@ -414,6 +424,12 @@ class SaveSystem {
     this.data.eggs = Math.max(0, Math.floor((this.data.eggs || 0) + amount));
     this.save();
     return this.data.eggs;
+  }
+
+  addCrystals(amount) {
+    this.data.crystals = Math.max(0, Math.floor((this.data.crystals || 0) + amount));
+    this.save();
+    return this.data.crystals;
   }
 
   unlockAchievement(id) {

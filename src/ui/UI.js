@@ -49,6 +49,7 @@ export class UIManager {
       onBasicAttack: () => this.game.triggerManualAttack(0),
       onTriggerFury: () => this.game.input.triggerVirtualPulse('p1', 'fury', 100),
       onTransmute: () => this.game.input.triggerVirtualPulse('p1', 'transmute', 100),
+      onCrystalRevive: () => this.game.reviveWithCrystal(),
       onToggleRadialWheel: (force) => this.game.toggleRadialWheel?.(force),
       onSelectRadialAction: (slot) => this.game.executeRadialAction?.(slot),
       onTouchAction: (act, active) => this.game.input.setVirtualAction('p1', act, active)

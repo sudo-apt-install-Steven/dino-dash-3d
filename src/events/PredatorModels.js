@@ -25,6 +25,7 @@ export const PREDATOR_CATALOG = [
     name: 'Cindermaw',
     title: 'Fauces de Brasa',
     biome: 'volcano',
+    habitat: 'land',
     archetype: 'Titã Magmático',
     color: '#991b1b',
     accent: '#fb923c',
@@ -39,6 +40,7 @@ export const PREDATOR_CATALOG = [
     name: 'Cryoclaw',
     title: 'Garras de Gelo',
     biome: 'ice_age',
+    habitat: 'land',
     archetype: 'Raptor Glacial',
     color: '#0284c7',
     accent: '#bae6fd',
@@ -53,6 +55,7 @@ export const PREDATOR_CATALOG = [
     name: 'Voltspire',
     title: 'Espinho Voltaico',
     biome: 'storm_desert',
+    habitat: 'land',
     archetype: 'Caçador Elétrico',
     color: '#1e3a8a',
     accent: '#facc15',
@@ -67,6 +70,7 @@ export const PREDATOR_CATALOG = [
     name: 'Mirefang',
     title: 'Presa do Pântano',
     biome: 'dark_swamp',
+    habitat: 'land',
     archetype: 'Fera Venenosa',
     color: '#14532d',
     accent: '#84cc16',
@@ -81,6 +85,7 @@ export const PREDATOR_CATALOG = [
     name: 'Razorcrest',
     title: 'Crista Navalha',
     biome: 'jurassic_forest',
+    habitat: 'land',
     archetype: 'Predador de Selva',
     color: '#15803d',
     accent: '#ef4444',
@@ -95,6 +100,7 @@ export const PREDATOR_CATALOG = [
     name: 'Ironhide Rex',
     title: 'Couraça de Ferro',
     biome: 'ruined_city',
+    habitat: 'land',
     archetype: 'Colosso Blindado',
     color: '#334155',
     accent: '#94a3b8',
@@ -109,6 +115,7 @@ export const PREDATOR_CATALOG = [
     name: 'Vexwing',
     title: 'Asa Sombria',
     biome: 'snowy_mountain',
+    habitat: 'flying',
     archetype: 'Terror Alado',
     color: '#3b0764',
     accent: '#c084fc',
@@ -116,13 +123,14 @@ export const PREDATOR_CATALOG = [
     eyeColor: '#f472b6',
     introDuration: 6.5,
     lore: 'Plana sobre picos nevados e mergulha com asas de envergadura dupla e grito ultrassônico.',
-    counterTip: 'Pule com precisão sobre pedras baixas; velocidade constante afasta Vexwing.'
+    counterTip: 'Ganhe altitude com W/↑ e use Turbo para quebrar o ângulo de mergulho do Vexwing.'
   },
   {
     id: 'blightjaw',
     name: 'Blightjaw',
     title: 'Mandíbula Tóxica',
     biome: 'fossil_graveyard',
+    habitat: 'land',
     archetype: 'Necrófago Ósseo',
     color: '#3f3f46',
     accent: '#a3e635',
@@ -137,20 +145,23 @@ export const PREDATOR_CATALOG = [
     name: 'Siltstalker',
     title: 'Rastejante do Lodo',
     biome: 'jurassic_river',
-    archetype: 'Anfíbio Fluvial',
+    habitat: 'aquatic',
+    swimType: 'plesio_eel',
+    archetype: 'Leviatã Fluvial',
     color: '#0f766e',
     accent: '#2dd4bf',
     belly: '#99f6e4',
     eyeColor: '#facc15',
     introDuration: 6.5,
-    lore: 'Híbrido anfíbio de focinho longo serrilhado e crista dorsal em leme que caça às margens do rio.',
-    counterTip: 'Aproveite Troncos no Rio e rampas para disparar à frente rapidamente.'
+    lore: 'Predador aquático esguio com nadadeiras em remo e cauda em leme que caça nas correntezas.',
+    counterTip: 'Alterne profundidade ou salte sobre cristas d’água para disparar à frente rapidamente.'
   },
   {
     id: 'chronotail',
     name: 'Chronotail',
     title: 'Cauda do Tempo',
     biome: 'alien_factory',
+    habitat: 'land',
     archetype: 'Anomalia Crono',
     color: '#4c1d95',
     accent: '#e879f9',
@@ -165,6 +176,7 @@ export const PREDATOR_CATALOG = [
     name: 'Glarebeast',
     title: 'Fera Ofuscante',
     biome: 'crystal_cavern',
+    habitat: 'land',
     archetype: 'Predador de Cristal',
     color: '#164e63',
     accent: '#67e8f9',
@@ -179,6 +191,7 @@ export const PREDATOR_CATALOG = [
     name: 'Gorgeraptor',
     title: 'Raptor Voraz',
     biome: 'migration_savanna',
+    habitat: 'land',
     archetype: 'Alfa de Matilha',
     color: '#b45309',
     accent: '#fde047',
@@ -193,6 +206,7 @@ export const PREDATOR_CATALOG = [
     name: 'Dunescourge',
     title: 'Flagelo das Dunas',
     biome: 'desert',
+    habitat: 'land',
     archetype: 'Quitinoso das Areias',
     color: '#92400e',
     accent: '#f59e0b',
@@ -207,13 +221,15 @@ export const PREDATOR_CATALOG = [
     name: 'Mawcrest',
     title: 'Crista Abissal',
     biome: 'beach_sea',
-    archetype: 'Leviatã Terrestre',
+    habitat: 'aquatic',
+    swimType: 'leviathan',
+    archetype: 'Leviatã Abissal',
     color: '#1e1b4b',
     accent: '#38bdf8',
     belly: '#0f172a',
     eyeColor: '#00f5d4',
     introDuration: 6.6,
-    lore: 'Predador abissal de antena bioluminescente na fronte e bocarra desproporcional repleta de presas.',
+    lore: 'Predador abissal de antena bioluminescente na fronte e 4 nadadeiras de alta impulsão.',
     counterTip: 'Foque nos desvios limpos; cada 20m de vantagem despista Mawcrest!'
   },
   {
@@ -221,20 +237,39 @@ export const PREDATOR_CATALOG = [
     name: 'Kraken Fóssil',
     title: 'Guardião dos Recifes',
     biome: 'ocean_surface',
+    habitat: 'aquatic',
+    swimType: 'cephalopod',
     archetype: 'Cefalópode Blindado',
     color: '#0f766e',
     accent: '#2dd4bf',
     belly: '#99f6e4',
     eyeColor: '#facc15',
     introDuration: 6.5,
-    lore: 'Cefalópode pré-histórico que persegue quem ousa roubar seus ovos abissais luminosos.',
+    lore: 'Cefalópode pré-histórico de tentáculos articulados que persegue quem rouba seus ovos abissais.',
     counterTip: 'Combine saltos curtos e Turbo para quebrar o alcance dos tentáculos.'
+  },
+  {
+    id: 'kronos_abyssal',
+    name: 'Kronossauro Alfa',
+    title: 'Terror dos Mares',
+    biome: 'deep_ocean',
+    habitat: 'aquatic',
+    swimType: 'leviathan',
+    archetype: 'Pliossauro Colossal',
+    color: '#0c4a6e',
+    accent: '#22d3ee',
+    belly: '#e0f2fe',
+    eyeColor: '#fde047',
+    introDuration: 6.5,
+    lore: 'Pliossauro gigante de mandíbula esmagadora e quatro grandes remos que domina águas abertas.',
+    counterTip: 'Use Turbo aquático e alternância de profundidade para escapar da investida submersa.'
   },
   {
     id: 'mecha_stalker',
     name: 'Stalker Mecânico',
     title: 'Sentinela Ômega',
     biome: 'mecha_city',
+    habitat: 'land',
     archetype: 'Caçador Cibernético',
     color: '#334155',
     accent: '#f43f5e',
@@ -249,6 +284,7 @@ export const PREDATOR_CATALOG = [
     name: 'Harpia Celeste',
     title: 'Soberana das Nuvens',
     biome: 'sky_canyon',
+    habitat: 'flying',
     archetype: 'Rapina Colossal',
     color: '#4338ca',
     accent: '#f59e0b',
@@ -257,22 +293,56 @@ export const PREDATOR_CATALOG = [
     introDuration: 6.4,
     lore: 'Mergulha dos cânions celestes assim que sente seu ovo dourado deixar o ninho.',
     counterTip: 'Mantenha velocidade alta e evite tropeçar para não dar janela de mergulho.'
+  },
+  {
+    id: 'quetzal_tyrant',
+    name: 'Tirano Quetzal',
+    title: 'Soberano dos Ventos',
+    biome: 'sky_canyon',
+    habitat: 'flying',
+    archetype: 'Pterossauro Alfa',
+    color: '#7f1d1d',
+    accent: '#f59e0b',
+    belly: '#fef3c7',
+    eyeColor: '#fbbf24',
+    introDuration: 6.4,
+    lore: 'Pterossauro apex de bico em lança e crista solar que intercepta invasores em pleno voo.',
+    counterTip: 'Alterne faixas aéreas e rasantes rápidos quando a sombra alada se aproximar.'
   }
 ];
+
+export function normalizePredatorHabitat(habitat = 'land') {
+  if (habitat === 'aquatic' || habitat === 'flying' || habitat === 'land') return habitat;
+  if (habitat === 'amphibious') return 'aquatic';
+  return 'land';
+}
+
+export function getPredatorsForHabitat(habitat = 'land') {
+  const norm = normalizePredatorHabitat(habitat);
+  const filtered = PREDATOR_CATALOG.filter((p) => (p.habitat || 'land') === norm);
+  return filtered.length ? filtered : PREDATOR_CATALOG;
+}
 
 export function getPredatorSpec(id) {
   return PREDATOR_CATALOG.find((p) => p.id === id) || PREDATOR_CATALOG[0];
 }
 
-export function getPredatorForBiome(biomeId) {
+export function getPredatorForBiome(biomeId, habitat = null) {
+  if (habitat) {
+    const pool = getPredatorsForHabitat(habitat);
+    const biomeMatch = pool.find((p) => p.biome === biomeId);
+    if (biomeMatch) return biomeMatch;
+    return pool[0];
+  }
   return PREDATOR_CATALOG.find((p) => p.biome === biomeId) || PREDATOR_CATALOG[0];
 }
 
-export function pickRandomPredator(excludeId = null) {
-  const pool = excludeId && PREDATOR_CATALOG.length > 1
-    ? PREDATOR_CATALOG.filter((p) => p.id !== excludeId)
-    : PREDATOR_CATALOG;
-  return pool[Math.floor(Math.random() * pool.length)] || PREDATOR_CATALOG[0];
+export function pickRandomPredator(excludeId = null, habitat = null) {
+  const basePool = habitat ? getPredatorsForHabitat(habitat) : PREDATOR_CATALOG;
+  const pool = excludeId && basePool.length > 1
+    ? basePool.filter((p) => p.id !== excludeId)
+    : basePool;
+  return pool[Math.floor(Math.random() * pool.length)] || basePool[0] || PREDATOR_CATALOG[0];
 }
 
 export function buildPredatorEggProp(accentColor = '#facc15') {
@@ -296,6 +366,40 @@ export function buildPredatorEggProp(accentColor = '#facc15') {
   const spot2 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.14, 0.14), spotMat);
   spot2.position.y = -0.08;
   g.add(core, top, spot1, spot2);
+  return g;
+}
+
+export function buildPredatorNestProp(habitat = 'land', accentColor = '#facc15') {
+  const g = new THREE.Group();
+  const norm = normalizePredatorHabitat(habitat);
+  if (norm === 'aquatic') {
+    const coralMat = new THREE.MeshStandardMaterial({
+      color: '#0f766e',
+      roughness: 0.6,
+      emissive: new THREE.Color(accentColor),
+      emissiveIntensity: 0.25
+    });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.28, 1.48), coralMat);
+    base.position.y = 0.14;
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.36, 1.12), coralMat);
+    rim.position.y = 0.24;
+    g.add(base, rim);
+    return g;
+  }
+  if (norm === 'flying') {
+    const cliffMat = new THREE.MeshStandardMaterial({ color: '#475569', roughness: 0.72 });
+    const cloudMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.9, transparent: true, opacity: 0.85 });
+    const perch = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.24, 1.42), cliffMat);
+    perch.position.y = 0.12;
+    const fluff = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.14, 1.66), cloudMat);
+    fluff.position.y = 0.04;
+    g.add(perch, fluff);
+    return g;
+  }
+  const twigMat = new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.9 });
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.22, 1.36), twigMat);
+  rim.position.y = 0.12;
+  g.add(rim);
   return g;
 }
 
@@ -358,15 +462,16 @@ export function buildPredatorModel(id) {
     vox(headPivot, 0.22, 0.72, 0.42, 0, 0.68, -0.45, accentMat);
     vox(headPivot, 0.16, 0.48, 0.24, -0.34, 0.56, -0.22, accentMat);
     vox(headPivot, 0.16, 0.48, 0.24, 0.34, 0.56, -0.22, accentMat);
-  } else if (spec.id === 'mawcrest' || spec.id === 'kraken_fossil') {
+  } else if (spec.id === 'mawcrest' || spec.id === 'kraken_fossil' || spec.id === 'kronos_abyssal') {
     lure = pivotAt(headPivot, 0, 0.56, -0.6);
     vox(lure, 0.1, 0.5, 0.1, 0, 0.22, -0.22, bodyMat);
     vox(lure, 0.28, 0.28, 0.28, 0, 0.48, -0.5, eyeMat);
-    if (spec.id === 'kraken_fossil') {
-      for (let t = -1; t <= 1; t += 2) {
-        vox(body, 0.22, 0.22, 1.35, t * 0.72, -0.25, -0.9, accentMat);
-      }
+    if (spec.id === 'kronos_abyssal') {
+      vox(headPivot, 0.28, 0.34, 1.25, 0, 0.45, -0.65, accentMat);
     }
+  } else if (spec.id === 'quetzal_tyrant') {
+    vox(headPivot, 0.14, 0.62, 1.05, 0, 0.66, 0.08, accentMat);
+    vox(headPivot, 0.28, 0.24, 1.32, 0, 0.14, -1.28, accentMat);
   } else if (spec.id === 'mecha_stalker') {
     vox(headPivot, 1.05, 0.24, 0.65, 0, 0.34, -0.68, eyeMat);
     vox(body, 0.45, 0.55, 0.85, -0.78, 0.42, 0.22, accentMat);
@@ -376,16 +481,54 @@ export function buildPredatorModel(id) {
     vox(headPivot, 1.48, 0.95, 0.14, 0, 0.25, 0.08, accentMat);
   }
 
-  // Braços/Garras (ou pinças no Dunescourge, asas duplas no Vexwing / Harpia Celeste)
+  const isAquatic = spec.habitat === 'aquatic';
+  const isFlying = spec.habitat === 'flying';
+
+  // Braços/Garras (ou pinças no Dunescourge, asas amplas nos voadores, nadadeiras nos aquáticos)
   let wingL = null;
   let wingR = null;
-  if (spec.id === 'vexwing' || spec.id === 'sky_harpy') {
-    wingL = pivotAt(body, -0.62, 0.25, -0.1);
-    vox(wingL, 1.85, 0.12, 0.85, -0.92, 0, 0.1, bodyMat);
-    vox(wingL, 1.65, 0.08, 0.32, -0.85, 0.04, 0.45, accentMat);
-    wingR = pivotAt(body, 0.62, 0.25, -0.1);
-    vox(wingR, 1.85, 0.12, 0.85, 0.92, 0, 0.1, bodyMat);
-    vox(wingR, 1.65, 0.08, 0.32, 0.85, 0.04, 0.45, accentMat);
+  const flippers = [];
+  const tentacles = [];
+
+  if (isFlying) {
+    wingL = pivotAt(body, -0.58, 0.28, -0.1);
+    vox(wingL, 2.25, 0.12, 0.92, -1.12, 0, 0.12, bodyMat);
+    vox(wingL, 1.95, 0.08, 0.36, -1.05, 0.04, 0.48, accentMat);
+    vox(wingL, 0.95, 0.07, 0.42, -2.35, -0.02, 0.25, bellyMat);
+    wingR = pivotAt(body, 0.58, 0.28, -0.1);
+    vox(wingR, 2.25, 0.12, 0.92, 1.12, 0, 0.12, bodyMat);
+    vox(wingR, 1.95, 0.08, 0.36, 1.05, 0.04, 0.48, accentMat);
+    vox(wingR, 0.95, 0.07, 0.42, 2.35, -0.02, 0.25, bellyMat);
+    // Garras aéreas recolhidas (sem pernas bípedes de corrida terrestre)
+    for (const sx of [-0.42, 0.42]) {
+      vox(body, 0.22, 0.22, 0.52, sx, -0.52, 0.32, bodyMat);
+      vox(body, 0.14, 0.14, 0.28, sx, -0.58, 0.62, accentMat);
+    }
+  } else if (isAquatic) {
+    if (spec.swimType === 'cephalopod') {
+      for (const sx of [-0.62, -0.24, 0.24, 0.62]) {
+        const tent = pivotAt(body, sx, -0.22, 0.72);
+        vox(tent, 0.24, 0.22, 1.35, 0, -0.05, 0.68, bodyMat);
+        vox(tent, 0.16, 0.16, 0.95, 0, -0.12, 1.62, accentMat);
+        tentacles.push(tent);
+      }
+      // Sifões laterais hidrodinâmicos
+      vox(body, 0.28, 0.28, 0.85, -0.78, 0.1, -0.15, accentMat);
+      vox(body, 0.28, 0.28, 0.85, 0.78, 0.1, -0.15, accentMat);
+    } else {
+      const fConfigs = [
+        { x: -0.68, z: -0.52, s: -1 },
+        { x: 0.68, z: -0.52, s: 1 },
+        { x: -0.62, z: 0.55, s: -1 },
+        { x: 0.62, z: 0.55, s: 1 }
+      ];
+      for (const fc of fConfigs) {
+        const fl = pivotAt(body, fc.x, -0.32, fc.z);
+        vox(fl, 1.15, 0.1, 0.46, fc.s * 0.56, -0.04, 0.08, bodyMat);
+        vox(fl, 0.85, 0.08, 0.28, fc.s * 0.72, -0.04, 0.24, accentMat);
+        flippers.push({ pivot: fl, side: fc.s, front: fc.z < 0 });
+      }
+    }
   } else {
     const clawLen = spec.id === 'dunescourge' || spec.id === 'cryoclaw' ? 0.72 : 0.45;
     vox(body, 0.24, 0.24, clawLen, -0.68, -0.14, -0.85, bodyMat);
@@ -394,20 +537,30 @@ export function buildPredatorModel(id) {
     vox(body, 0.14, 0.14, 0.28, 0.68, -0.18, -0.98 - clawLen * 0.45, accentMat);
   }
 
-  // Pernas articuladas robustas
-  const legL = pivotAt(root, -0.52, 0.92, 0.12);
-  vox(legL, 0.42, 0.72, 0.48, 0, -0.34, 0, bodyMat);
-  vox(legL, 0.48, 0.22, 0.68, 0, -0.82, -0.1, bellyMat);
+  // Pernas articuladas robustas APENAS para predadores terrestres
+  let legL = null;
+  let legR = null;
+  if (!isAquatic && !isFlying) {
+    legL = pivotAt(root, -0.52, 0.92, 0.12);
+    vox(legL, 0.42, 0.72, 0.48, 0, -0.34, 0, bodyMat);
+    vox(legL, 0.48, 0.22, 0.68, 0, -0.82, -0.1, bellyMat);
 
-  const legR = pivotAt(root, 0.52, 0.92, 0.12);
-  vox(legR, 0.42, 0.72, 0.48, 0, -0.34, 0, bodyMat);
-  vox(legR, 0.48, 0.22, 0.68, 0, -0.82, -0.1, bellyMat);
+    legR = pivotAt(root, 0.52, 0.92, 0.12);
+    vox(legR, 0.42, 0.72, 0.48, 0, -0.34, 0, bodyMat);
+    vox(legR, 0.48, 0.22, 0.68, 0, -0.82, -0.1, bellyMat);
+  } else {
+    body.position.y = isAquatic ? 1.02 : 1.52;
+  }
 
-  // Cauda articulada multi-segmentos (+ anéis crono / clava / aguilhão)
+  // Cauda articulada multi-segmentos (+ leme caudal para aquáticos, estabilizador aéreo para voadores)
   const tail = pivotAt(body, 0, 0.12, 1.05);
   vox(tail, 0.72, 0.62, 0.88, 0, 0, 0.44, bodyMat);
   vox(tail, 0.48, 0.42, 0.88, 0, 0.06, 1.25, bodyMat);
-  if (spec.id === 'ironhide_rex') {
+  if (isAquatic) {
+    vox(tail, 0.16, 1.18, 0.72, 0, 0.08, 1.98, accentMat);
+  } else if (isFlying) {
+    vox(tail, 1.38, 0.1, 0.65, 0, 0.06, 1.88, accentMat);
+  } else if (spec.id === 'ironhide_rex') {
     vox(tail, 0.75, 0.58, 0.68, 0, 0.1, 1.85, accentMat);
   } else if (spec.id === 'chronotail') {
     vox(tail, 0.95, 0.95, 0.16, 0, 0.08, 1.1, accentMat);
@@ -419,7 +572,7 @@ export function buildPredatorModel(id) {
     vox(tail, 0.26, 0.24, 0.68, 0, 0.1, 1.92, accentMat);
   }
 
-  // Anel luminoso vermelho de ameaça sob os pés para diferenciar claramente Caçador vs Jogador
+  // Anel luminoso vermelho de ameaça para diferenciar claramente Caçador vs Jogador
   const threatMat = new THREE.MeshBasicMaterial({
     color: '#ff2e4c',
     transparent: true,
@@ -434,7 +587,7 @@ export function buildPredatorModel(id) {
   return {
     root,
     spec,
-    parts: { body, headPivot, jaw, legL, legR, tail, wingL, wingR, lure, threatRing },
+    parts: { body, headPivot, jaw, legL, legR, tail, wingL, wingR, flippers, tentacles, lure, threatRing },
     phase: 0,
     update(dt, roarScale = 0, mode = 'chase') {
       if (threatRing) {
@@ -442,48 +595,83 @@ export function buildPredatorModel(id) {
         threatMat.opacity = 0.48 + pulse * 0.4;
         threatRing.scale.setScalar(0.95 + pulse * 0.12);
       }
-      if (mode === 'intro') {
-        this.phase += dt * 4.4;
-        const breathe = Math.sin(this.phase * 1.4);
-        const roarPulse = Math.max(0, Math.sin(this.phase * 1.8));
-        // Patas firmes plantadas no chão durante a pose/rugido de abertura (sem corrida no lugar)
-        legL.rotation.x = 0.14 + Math.max(0, Math.sin(this.phase * 0.9)) * 0.10;
-        legR.rotation.x = -0.14 - Math.max(0, -Math.sin(this.phase * 0.9)) * 0.10;
+      const isIntro = mode === 'intro';
+      const speedMult = isIntro ? 4.4 : (isAquatic ? 8.2 : isFlying ? 7.8 : 11.0);
+      this.phase += dt * speedMult;
+      const breathe = Math.sin(this.phase * 1.4);
+      const roarPulse = Math.max(0, Math.sin(this.phase * 1.8));
+
+      if (isAquatic) {
+        body.position.y = 1.02 + Math.sin(this.phase * 0.85) * (isIntro ? 0.08 : 0.14);
+        body.rotation.x = isIntro ? 0.04 + roarScale * 0.06 * roarPulse : Math.sin(this.phase * 0.75) * 0.07;
+        body.rotation.z = Math.cos(this.phase * 0.55) * 0.08;
+        headPivot.rotation.x = isIntro ? -0.14 * roarScale * (0.4 + 0.6 * roarPulse) : 0.04;
+        headPivot.rotation.z = Math.sin(this.phase * 0.8) * 0.06;
+        tail.rotation.y = Math.sin(this.phase * 1.15) * (isIntro ? 0.35 : 0.48);
+        jaw.rotation.x = -(isIntro
+          ? (0.16 + roarScale * (0.28 + roarPulse * 0.36))
+          : (0.14 + Math.abs(Math.sin(this.phase * 0.8)) * 0.30 + roarScale * 0.32));
+        for (const fl of flippers) {
+          const offset = fl.front ? 0 : Math.PI * 0.65;
+          const stroke = Math.sin(this.phase * 0.95 + offset);
+          fl.pivot.rotation.z = fl.side * (0.18 + stroke * (isIntro ? 0.24 : 0.42));
+          fl.pivot.rotation.x = stroke * 0.22;
+        }
+        for (let i = 0; i < tentacles.length; i++) {
+          const tent = tentacles[i];
+          tent.rotation.x = Math.sin(this.phase * 1.1 + i * 0.9) * (isIntro ? 0.22 : 0.38);
+          tent.rotation.y = Math.cos(this.phase * 0.85 + i * 0.7) * 0.25;
+        }
+        if (lure) lure.rotation.y += dt * 4.0;
+        return;
+      }
+
+      if (isFlying) {
+        body.position.y = 1.52 + Math.sin(this.phase * 0.95) * (isIntro ? 0.10 : 0.18);
+        body.rotation.x = isIntro ? 0.05 + roarScale * 0.07 * roarPulse : -0.08;
+        body.rotation.z = Math.sin(this.phase * 0.5) * 0.09;
+        headPivot.rotation.x = isIntro ? -0.15 * roarScale * (0.4 + 0.6 * roarPulse) : 0.06;
+        headPivot.rotation.z = Math.sin(this.phase * 2.2) * 0.05;
+        tail.rotation.y = Math.sin(this.phase * 0.65) * 0.18;
+        tail.rotation.x = Math.cos(this.phase * 0.95) * 0.14;
+        jaw.rotation.x = -(isIntro
+          ? (0.14 + roarScale * (0.28 + roarPulse * 0.34))
+          : (0.16 + Math.abs(Math.sin(this.phase * 0.9)) * 0.30 + roarScale * 0.35));
+        if (wingL && wingR) {
+          const flap = Math.sin(this.phase * (isIntro ? 1.15 : 1.35)) * (isIntro ? 0.48 : 0.62);
+          wingL.rotation.z = flap + (isIntro ? 0.18 : 0.08);
+          wingR.rotation.z = -flap - (isIntro ? 0.18 : 0.08);
+        }
+        return;
+      }
+
+      if (isIntro) {
+        if (legL && legR) {
+          legL.rotation.x = 0.14 + Math.max(0, Math.sin(this.phase * 0.9)) * 0.10;
+          legR.rotation.x = -0.14 - Math.max(0, -Math.sin(this.phase * 0.9)) * 0.10;
+        }
         body.position.y = 1.38 + breathe * 0.04;
         body.rotation.x = 0.06 + roarScale * 0.08 * roarPulse;
         headPivot.rotation.x = -0.16 * roarScale * (0.4 + 0.6 * roarPulse);
         headPivot.rotation.z = Math.sin(this.phase * 3.1) * 0.07 * roarScale;
         tail.rotation.y = Math.sin(this.phase * 0.9) * 0.34;
         jaw.rotation.x = -(0.14 + roarScale * (0.28 + roarPulse * 0.36));
-        if (wingL && wingR) {
-          const spread = 0.24 + roarPulse * 0.32;
-          wingL.rotation.z = spread;
-          wingR.rotation.z = -spread;
-        }
-        if (lure) {
-          lure.rotation.y += dt * 4.2;
-        }
+        if (lure) lure.rotation.y += dt * 4.2;
         return;
       }
 
-      this.phase += dt * 11;
       const swing = Math.sin(this.phase) * 0.52;
-      legL.rotation.x = swing;
-      legR.rotation.x = -swing;
+      if (legL && legR) {
+        legL.rotation.x = swing;
+        legR.rotation.x = -swing;
+      }
       body.position.y = 1.38 + Math.abs(Math.sin(this.phase)) * 0.14;
       body.rotation.x = 0;
       headPivot.rotation.x = 0;
       headPivot.rotation.z = 0;
       tail.rotation.y = Math.sin(this.phase * 0.7) * 0.24;
       jaw.rotation.x = -(0.18 + Math.abs(Math.sin(this.phase * 0.9)) * 0.32 + roarScale * 0.35);
-      if (wingL && wingR) {
-        const flap = Math.sin(this.phase * 1.1) * 0.52;
-        wingL.rotation.z = flap;
-        wingR.rotation.z = -flap;
-      }
-      if (lure) {
-        lure.rotation.y += dt * 3.5;
-      }
+      if (lure) lure.rotation.y += dt * 3.5;
     }
   };
 }

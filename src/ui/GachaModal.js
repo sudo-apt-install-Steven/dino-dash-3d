@@ -1,7 +1,7 @@
 // Modal 3D de Gacha / Caixa Fóssil adaptado do modelo Claude com miniaturas 3D reais das recompensas.
 import * as THREE from 'three';
 import { Save } from '../systems/Save.js';
-import { GACHA_EGG_ROLL_COST, GACHA_RARITIES, GachaSystem } from '../systems/GachaSystem.js';
+import { GACHA_CRYSTAL_CATALYST_COST, GACHA_EGG_ROLL_COST, GACHA_RARITIES, GachaSystem } from '../systems/GachaSystem.js';
 import { DinoFactory } from '../dinos/DinoFactory.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { getDinoSpec, getDinoHabitat } from '../dinos/DinoCatalog.js';
@@ -65,6 +65,7 @@ export class GachaModal {
 
   open() {
     this.close(true);
+    const pity = GachaSystem.getPityState();
     const wrap = document.createElement('div');
     wrap.className = 'overlay-center';
     wrap.id = 'gacha-modal';
@@ -82,8 +83,18 @@ export class GachaModal {
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
             <span id="gacha-crates-pill" class="hud-pill" style="color:#ffd447;">📦 Caixas Fósseis: <strong>${GachaSystem.getCrateCount()}</strong></span>
             <span id="gacha-eggs-pill" class="hud-pill" style="color:#6ee7b7;">🥚 Ovos: <strong>${Math.floor(Save.data.eggs || 0)}</strong></span>
+            <button type="button" id="gacha-cryst-pill" class="hud-pill" title="Clique para saber como usar Diamantes 💎" style="color:#38bdf8; cursor:pointer; border:1px solid rgba(56,189,248,0.45);">💎 <strong>${Math.floor(Save.data.crystals || 0)}</strong> ℹ️</button>
           </div>
-          <span id="gacha-pity-pill" class="hud-pill" style="color:#d8b4fe; font-size:0.76rem;">✨ Garantia Épica+: <strong>${Save.data.gachaPity || 0}/9</strong> • Shiny+: <strong>${Save.data.gachaPity || 0}/15</strong></span>
+          <div id="gacha-pity-bars" class="gacha-pity-bars">
+            <div class="gacha-pity-item">
+              <div class="gacha-pity-head"><span>✨ Garantia Épica+</span><strong id="gacha-pity-epic-val">${pity.epic}/9</strong></div>
+              <div class="gacha-pity-track"><div id="gacha-pity-epic-fill" class="gacha-pity-fill epic" style="width:${Math.min(100, (pity.epic / 9) * 100)}%"></div></div>
+            </div>
+            <div class="gacha-pity-item" title="Épicas não resetam o Pity Shiny! Só reseta ao tirar Lendária, Mítica ou Secreta.">
+              <div class="gacha-pity-head"><span>🌟 Garantia Shiny (Lendária+)</span><strong id="gacha-pity-shiny-val">${pity.shiny}/15</strong></div>
+              <div class="gacha-pity-track"><div id="gacha-pity-shiny-fill" class="gacha-pity-fill shiny" style="width:${Math.min(100, (pity.shiny / 15) * 100)}%"></div></div>
+            </div>
+          </div>
         </div>
 
         <div class="gacha-stage-box">
@@ -94,9 +105,15 @@ export class GachaModal {
         <div id="gacha-result-box" class="item-card gacha-result-card">
           <div style="flex:1; min-width:0;">
             <div id="gacha-res-title" style="font-weight:900; color:#ffd447; font-size:0.98rem;">Escolha abaixo para chocar seu Ovo Fóssil!</div>
-            <div id="gacha-res-desc" style="color:#e5d3bc; font-size:0.8rem; margin-top:3px;">Pontuações altas em dificuldades maiores (Difícil/Supremo) concedem mais Caixas grátis por corrida.</div>
+            <div id="gacha-res-desc" style="color:#e5d3bc; font-size:0.8rem; margin-top:3px;">Pontuações altas em dificuldades maiores (Difícil/Supremo) concedem mais Caixas grátis por corrida. Tirar Épica NÃO zera o Pity Shiny (15)!</div>
           </div>
           <span id="gacha-res-tier" class="hud-pill" style="display:none; flex-shrink:0;"></span>
+        </div>
+
+        <div style="display:flex; justify-content:center; margin-top:6px;">
+          <button id="gacha-catalyst-toggle" class="tab-btn" type="button" style="border-color:#38bdf8; color:#bae6fd; font-size:0.78rem; padding:6px 12px;">
+            💎 Usar Catalisador (${GACHA_CRYSTAL_CATALYST_COST} 💎): Épica+ &amp; 2× Shiny/Mítica
+          </button>
         </div>
 
         <div class="gacha-actions-row">
@@ -365,41 +382,100 @@ export class GachaModal {
       }
     };
 
+    let useCatalyst = false;
+    let isPulling = false;
+
     const refreshCounters = () => {
       const c = GachaSystem.getCrateCount();
+      const crystals = Math.floor(Save.data.crystals || 0);
+      const pity = GachaSystem.getPityState();
       const cratesEl = wrap.querySelector('#gacha-crates-pill');
       const btnNum = wrap.querySelector('#gacha-crate-btn-num');
       const eggsEl = wrap.querySelector('#gacha-eggs-pill');
-      const pityEl = wrap.querySelector('#gacha-pity-pill');
+      const crystEl = wrap.querySelector('#gacha-cryst-pill');
+      const epicVal = wrap.querySelector('#gacha-pity-epic-val');
+      const epicFill = wrap.querySelector('#gacha-pity-epic-fill');
+      const shinyVal = wrap.querySelector('#gacha-pity-shiny-val');
+      const shinyFill = wrap.querySelector('#gacha-pity-shiny-fill');
+      const catBtn = wrap.querySelector('#gacha-catalyst-toggle');
       const crateBtn = wrap.querySelector('#gacha-open-crate');
       const eggsBtn = wrap.querySelector('#gacha-open-eggs');
       if (cratesEl) cratesEl.innerHTML = `📦 Caixas Fósseis: <strong>${c}</strong>`;
       if (btnNum) btnNum.textContent = `${c}`;
       if (eggsEl) eggsEl.innerHTML = `🥚 Ovos: <strong>${Math.floor(Save.data.eggs || 0)}</strong>`;
-      if (pityEl) pityEl.innerHTML = `✨ Garantia Épica+: <strong>${Save.data.gachaPity || 0}/9</strong> • Shiny+: <strong>${Save.data.gachaPity || 0}/15</strong>`;
+      if (crystEl) crystEl.innerHTML = `💎 <strong>${crystals}</strong> ℹ️`;
+      if (epicVal) epicVal.textContent = `${pity.epic}/9`;
+      if (epicFill) epicFill.style.width = `${Math.min(100, (pity.epic / 9) * 100)}%`;
+      if (shinyVal) shinyVal.textContent = `${pity.shiny}/15`;
+      if (shinyFill) shinyFill.style.width = `${Math.min(100, (pity.shiny / 15) * 100)}%`;
+
+      if (crystals < GACHA_CRYSTAL_CATALYST_COST) useCatalyst = false;
       const gachaBlocked = !!Save.data.settings?.disableGachaVoluntary;
-      if (crateBtn) crateBtn.disabled = gachaBlocked || c <= 0 || state === 'shake' || state === 'burst';
-      if (eggsBtn) eggsBtn.disabled = gachaBlocked || (Save.data.eggs || 0) < GACHA_EGG_ROLL_COST || state === 'shake' || state === 'burst';
+      const busy = isPulling || state === 'shake' || state === 'burst';
+      if (catBtn) {
+        catBtn.disabled = gachaBlocked || busy || crystals < GACHA_CRYSTAL_CATALYST_COST;
+        catBtn.classList.toggle('active', useCatalyst && !catBtn.disabled);
+        catBtn.innerHTML = useCatalyst
+          ? `✅ Catalisador Ativo (-${GACHA_CRYSTAL_CATALYST_COST} 💎): Épica+ &amp; 2× Shiny!`
+          : `💎 Usar Catalisador (${GACHA_CRYSTAL_CATALYST_COST} 💎): Épica+ &amp; 2× Shiny`;
+      }
+      if (crateBtn) {
+        crateBtn.disabled = gachaBlocked || c <= 0 || busy;
+        if (!isPulling) crateBtn.innerHTML = `📦 Chocar Caixa Grátis (<span id="gacha-crate-btn-num">${c}</span>)`;
+      }
+      if (eggsBtn) {
+        eggsBtn.disabled = gachaBlocked || (Save.data.eggs || 0) < GACHA_EGG_ROLL_COST || busy;
+        if (!isPulling) eggsBtn.textContent = `🥚 Chocar por ${GACHA_EGG_ROLL_COST} Ovos`;
+      }
     };
+
+    wrap.querySelector('#gacha-cryst-pill')?.addEventListener('click', () => {
+      const t = wrap.querySelector('#gacha-res-title');
+      const d = wrap.querySelector('#gacha-res-desc');
+      if (t) t.textContent = '💎 Para que servem os Diamantes?';
+      if (d) d.textContent = `Ganhe 💎 em Baús do Tesouro, Chefes e Ovo Misterioso completo. Gaste no Catalisador do Gacha (${GACHA_CRYSTAL_CATALYST_COST} 💎 -> Épica+!), na Forja de Mutações (2-4 💎), na Loja Rotativa (2 💎) ou para Renascer na corrida (2 💎)!`;
+    });
+
+    wrap.querySelector('#gacha-catalyst-toggle')?.addEventListener('click', () => {
+      if (isPulling || state === 'shake' || state === 'burst') return;
+      if ((Save.data.crystals || 0) < GACHA_CRYSTAL_CATALYST_COST) return;
+      useCatalyst = !useCatalyst;
+      refreshCounters();
+    });
 
     const runPull = async (useEggs) => {
       if (Save.data.settings?.disableGachaVoluntary) return;
-      if (state === 'shake' || state === 'burst') return;
+      if (isPulling || state === 'shake' || state === 'burst') return;
+      isPulling = true;
       const crateBtn = wrap.querySelector('#gacha-open-crate');
       const eggsBtn = wrap.querySelector('#gacha-open-eggs');
-      if (crateBtn) crateBtn.disabled = true;
-      if (eggsBtn) eggsBtn.disabled = true;
+      if (crateBtn) {
+        crateBtn.disabled = true;
+        if (!useEggs) crateBtn.textContent = '⏳ Sorteando...';
+      }
+      if (eggsBtn) {
+        eggsBtn.disabled = true;
+        if (useEggs) eggsBtn.textContent = '⏳ Sorteando...';
+      }
 
-      const res = await GachaSystem.openCrateAsync({
-        useEggs,
-        supabaseClient: getSupabaseClient()
-      });
-      if (!res.ok) {
+      const useCrystalCatalyst = useCatalyst && (Save.data.crystals || 0) >= GACHA_CRYSTAL_CATALYST_COST;
+      let res;
+      try {
+        res = await GachaSystem.openCrateAsync({
+          useEggs,
+          useCrystalCatalyst,
+          supabaseClient: getSupabaseClient()
+        });
+      } finally {
+        isPulling = false;
+      }
+      if (!res?.ok) {
         const desc = wrap.querySelector('#gacha-res-desc');
-        if (desc) desc.textContent = res.error;
+        if (desc) desc.textContent = res?.error || 'Não foi possível sortear agora.';
         refreshCounters();
         return;
       }
+      if (useCrystalCatalyst) useCatalyst = false;
       resetEgg();
       curReward = res.reward;
       state = 'shake';
@@ -407,7 +483,7 @@ export class GachaModal {
       const titleEl = wrap.querySelector('#gacha-res-title');
       const descEl = wrap.querySelector('#gacha-res-desc');
       const badgeEl = wrap.querySelector('#gacha-res-tier');
-      if (titleEl) titleEl.textContent = 'Chocando Ovo Fóssil...';
+      if (titleEl) titleEl.textContent = res.usedCatalyst ? '💎 Chocando com Catalisador Estelar...' : 'Chocando Ovo Fóssil...';
       if (descEl) descEl.textContent = res.serverVerified
         ? 'As rachaduras estão brilhando! (Sorteio autenticado no servidor)'
         : 'As rachaduras estão brilhando!';

@@ -42,6 +42,9 @@ Deno.serve(async (req: Request) => {
   const nickname = cleanText(body.nickname, 'Dino', 24);
   const eggs = Math.max(0, Math.min(100000, Math.floor(Number(body.eggs || 0))));
   const crates = Math.max(0, Math.min(200, Math.floor(Number(body.fossilCrates || 0))));
+  const crystals = Math.max(0, Math.min(50000, Math.floor(Number(body.crystals || 0))));
+  const pityEpic = Math.max(0, Math.min(8, Math.floor(Number(body.gachaPityEpic ?? body.gachaPity ?? 0))));
+  const pityShiny = Math.max(0, Math.min(14, Math.floor(Number(body.gachaPityShiny ?? body.gachaPity ?? 0))));
 
   const { data: existing } = await admin
     .from('player_wallets')
@@ -51,6 +54,9 @@ Deno.serve(async (req: Request) => {
 
   const mergedEggs = existing ? Math.min(5000000, Math.max(Number(existing.eggs || 0), eggs)) : eggs;
   const mergedCrates = existing ? Math.min(5000, Math.max(Number(existing.fossil_crates || 0), crates)) : crates;
+  const mergedCrystals = existing ? Math.min(50000, Math.max(Number(existing.crystals || 0), crystals)) : crystals;
+  const mergedPityEpic = existing ? Math.min(8, Math.max(Number(existing.gacha_pity_epic ?? existing.gacha_pity ?? 0), pityEpic)) : pityEpic;
+  const mergedPityShiny = existing ? Math.min(14, Math.max(Number(existing.gacha_pity_shiny ?? existing.gacha_pity ?? 0), pityShiny)) : pityShiny;
 
   await admin.from('player_wallets').upsert({
     actor_key: actor.actorKey,
@@ -58,12 +64,19 @@ Deno.serve(async (req: Request) => {
     nickname,
     eggs: mergedEggs,
     fossil_crates: mergedCrates,
+    crystals: mergedCrystals,
+    gacha_pity: mergedPityEpic,
+    gacha_pity_epic: mergedPityEpic,
+    gacha_pity_shiny: mergedPityShiny,
     updated_at: new Date().toISOString()
   });
 
   return jsonResponse({
     ok: true,
     eggs: mergedEggs,
-    fossilCrates: mergedCrates
+    fossilCrates: mergedCrates,
+    crystals: mergedCrystals,
+    gachaPityEpic: mergedPityEpic,
+    gachaPityShiny: mergedPityShiny
   }, 200, originCheck.origin);
 });

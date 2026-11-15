@@ -21,6 +21,8 @@ import {
   setMutationActiveLevel,
   getMutationUpgradeCost,
   upgradeMutation,
+  getMutationCrystalCost,
+  synthesizeOrUpgradeMutationWithCrystals,
   getMutationComputedProfile,
   randomizePreset
 } from '../dinos/DinoCustomization.js';
@@ -61,7 +63,7 @@ export class CustomizationScreen {
             <h2>🎨 Personalizar, Skins & Laboratório</h2>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <span class="hud-pill">🥚 <strong id="cust-eggs-val">${Save.data.eggs}</strong></span>
-              <span class="hud-pill" style="color:#38bdf8;">💎 <strong id="cust-cryst-val">${Save.data.crystals || 0}</strong></span>
+              <button type="button" class="hud-pill" id="cust-cryst-info-btn" title="Clique para ver todas as utilidades dos Diamantes 💎" style="color:#38bdf8; cursor:pointer; border:1px solid rgba(56,189,248,0.5);">💎 <strong id="cust-cryst-val">${Save.data.crystals || 0}</strong> <small style="opacity:0.8;">ℹ️</small></button>
               <span class="hud-pill" style="color:#fde047;">📦 <strong id="cust-crate-val">${GachaSystem.getCrateCount()}</strong></span>
               <button class="chunky-btn orange" id="cust-open-gacha" style="padding:7px 12px; font-size:0.82rem;">🎲 Gacha 3D</button>
               <button class="chunky-btn secondary" id="cust-close">Concluir</button>
@@ -199,6 +201,7 @@ export class CustomizationScreen {
             const activeLv = owned ? getMutationActiveLevel(m.id) : 1;
             const profile = getMutationComputedProfile(m.id, activeLv);
             const nextCost = getMutationUpgradeCost(m, unlockedLv);
+            const crystalCost = getMutationCrystalCost(m, unlockedLv);
             const isMax = unlockedLv >= MAX_MUTATION_LEVEL;
             return `
               <div class="item-card ${equipped ? 'selected' : ''}">
@@ -228,15 +231,25 @@ export class CustomizationScreen {
                     <button class="tab-btn" data-upgrade-mut="${m.id}" ${isMax ? 'disabled' : ''} style="border-color:#f59e0b; color:#fde047;">
                       ${isMax ? 'MAX Nv.4' : `⬆ Nv.${unlockedLv + 1} (${nextCost} 🥚)`}
                     </button>
+                    ${!isMax ? `
+                      <button class="tab-btn" data-cryst-mut="${m.id}" title="Evoluir instantaneamente usando Cristais 💎" style="border-color:#38bdf8; color:#7dd3fc;">
+                        💎 Nv.${unlockedLv + 1} (${crystalCost} 💎)
+                      </button>
+                    ` : ''}
                   </div>
                 ` : (m.gachaOnly ? `
                   <button class="tab-btn" data-mut-gacha="${m.id}" style="border-color:#c084fc; color:#f5d0fe; margin-top:6px;">
                     🎲 Secreta no Gacha 3D
                   </button>
                 ` : `
-                  <button class="tab-btn" data-buy-mut="${m.id}" style="margin-top:6px;">
-                    Sintetizar (${m.cost} 🥚)
-                  </button>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+                    <button class="tab-btn" data-buy-mut="${m.id}" style="flex:1;">
+                      Sintetizar (${m.cost} 🥚)
+                    </button>
+                    <button class="tab-btn" data-cryst-mut="${m.id}" title="Desbloquear sem gastar Ovos usando Cristais 💎" style="border-color:#38bdf8; color:#7dd3fc;">
+                      💎 Forjar (${crystalCost} 💎)
+                    </button>
+                  </div>
                 `)}
               </div>
             `;
@@ -445,6 +458,21 @@ export class CustomizationScreen {
             render({ updatePreview: true });
           });
         });
+        rightEl.querySelectorAll('[data-cryst-mut]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const mid = btn.getAttribute('data-cryst-mut');
+            const res = synthesizeOrUpgradeMutationWithCrystals(mid);
+            if (!res.ok) {
+              statusMsg = res.reason;
+              render({ updatePreview: false });
+              return;
+            }
+            const prof = getMutationComputedProfile(mid, res.level);
+            statusMsg = `💎 Forja de Cristal (-${res.cost} 💎): ${prof?.tierLabel || `Nv.${res.level}`} ativada!`;
+            if (onApplyCustom) onApplyCustom();
+            render({ updatePreview: true });
+          });
+        });
         rightEl.querySelectorAll('[data-buy-mut]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const mid = btn.getAttribute('data-buy-mut');
@@ -563,6 +591,11 @@ export class CustomizationScreen {
 
       if (modalCard) modalCard.scrollTop = savedCardScroll;
     };
+
+    container.querySelector('#cust-cryst-info-btn')?.addEventListener('click', () => {
+      statusMsg = '💎 Diamantes servem para: Catalisador no Gacha (3 💎 -> Épica+!), Forjar/Evoluir Mutações (2-4 💎), Atualizar Loja Rotativa (2 💎) e Renascer na corrida (2 💎)!';
+      render({ updatePreview: false });
+    });
 
     container.querySelector('#cust-open-gacha')?.addEventListener('click', () => {
       preview?.destroy();

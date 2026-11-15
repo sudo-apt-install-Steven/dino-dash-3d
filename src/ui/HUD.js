@@ -32,6 +32,7 @@ export class HUD {
           <div class="hud-pill" id="hud-camera" style="cursor:pointer; pointer-events:auto;" data-tip="Troca a câmera de visão (Tecla C ou toque)."><span class="kb-only">Câmera: </span><span class="mob-only">📷 </span><strong>3ª Pessoa</strong></div>
           <div class="hud-pill" id="hud-speed" data-tip="Velocidade atual da corrida.">Vel: <strong>1.0x</strong></div>
           <div class="hud-pill" id="hud-eggs" data-tip="Total de Ovos guardados para Loja e Dinossauros.">${renderEggSvg('dourado', 18)} <strong>0</strong></div>
+          <div class="hud-pill" id="hud-crystals" style="color:#7dd3fc; border-color:#38bdf8;" data-tip="Diamantes: servem para Catalisador Gacha (3 💎), Forja de Mutações, Reroll na Loja (2 💎) e Revive (2 💎).">💎 <strong>0</strong></div>
           <div class="hud-pill hidden" id="hud-combo" style="color:#ffd447;" data-tip="Multiplicador por quase-colisões e pisões seguidos.">Combo: <strong>x1</strong></div>
           <div class="hud-pill hidden" id="hud-mp-rank" style="color:#fde047; border-color:#ffd447;" data-tip="Sua posição atual contra outros jogadores.">🏆 #1</div>
           <div class="hud-pill hidden" id="hud-element" style="color:#38bdf8;" data-tip="Elemento ativo: combine com outro ou acerte a fraqueza do Chefe!">✨ Nenhum</div>
@@ -146,19 +147,21 @@ export class HUD {
         </div>
       </div>
 
-      <!-- Controles touch para celular (Swipe livre por padrão + botões ⚔️/⚡/🧭; setas opcionais em Config) -->
+      <!-- Controles touch para celular (Swipe livre por padrão + botões ⚔️/⚡/🧭/🔥/🔄/🎒 ergonômicos com rótulo claro) -->
       <div class="touch-controls" id="touch-controls">
         <div class="touch-cluster touch-cluster-left touch-dpad-only">
           <button class="touch-btn" data-tact="left" aria-label="Faixa Esquerda">◀</button>
           <button class="touch-btn" data-tact="right" aria-label="Faixa Direita">▶</button>
         </div>
         <div class="touch-cluster touch-cluster-right">
-          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar">▼</button>
-          <button class="touch-btn touch-btn-action" id="touch-radial-btn" aria-label="Roda Tática X" style="border-color:#c084fc;">🧭</button>
-          <button class="touch-btn touch-btn-action hidden" id="touch-transmute-btn" data-tact="transmute" aria-label="Trocar Habitat" style="border-color:#38bdf8;">🔄</button>
-          <button class="touch-btn touch-btn-action" data-tact="attack" aria-label="Ataque">⚔️</button>
-          <button class="touch-btn touch-btn-action" data-tact="ability" aria-label="Habilidade">⚡</button>
-          <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular">▲</button>
+          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar"><span class="touch-btn-ico">▼</span><span class="touch-btn-lbl">Baixo</span></button>
+          <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular"><span class="touch-btn-ico">▲</span><span class="touch-btn-lbl">Pulo</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-fury" id="touch-fury-btn" data-tact="fury" aria-label="Modo Fúria"><span class="touch-btn-ico">🔥</span><span class="touch-btn-lbl">Fúria!</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-item" id="touch-item-btn" data-tact="item" aria-label="Usar Item da Mochila"><span class="touch-btn-ico" id="touch-item-ico">🎒</span><span class="touch-btn-lbl">Item</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-transmute" id="touch-transmute-btn" data-tact="transmute" aria-label="Trocar Habitat"><span class="touch-btn-ico">🔄</span><span class="touch-btn-lbl" id="touch-transmute-lbl">Troca</span></button>
+          <button class="touch-btn touch-btn-action touch-btn-radial" id="touch-radial-btn" aria-label="Roda Tática X"><span class="touch-btn-ico">🧭</span><span class="touch-btn-lbl">Roda</span></button>
+          <button class="touch-btn touch-btn-action touch-btn-attack" id="touch-attack-btn" data-tact="attack" aria-label="Ataque Rápido"><span class="touch-btn-ico">⚔️</span><span class="touch-btn-lbl" id="touch-attack-lbl">Atq</span></button>
+          <button class="touch-btn touch-btn-action touch-btn-ability" id="touch-ability-btn" data-tact="ability" aria-label="Habilidade Especial"><span class="touch-btn-ico">⚡</span><span class="touch-btn-lbl" id="touch-ability-lbl">Hab</span></button>
         </div>
       </div>
 
@@ -277,6 +280,13 @@ export class HUD {
             <div class="stat-tile"><span class="label">Distância</span><span class="val" id="go-dist">0 m</span></div>
             <div class="stat-tile"><span class="label">Ovos / Max Combo</span><span class="val" id="go-eggs">0 / x1</span></div>
           </div>
+          <div id="go-crystal-box" class="item-card hidden" style="padding:10px 12px; border-color:#38bdf8; background:rgba(8, 47, 73, 0.58); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <div style="text-align:left;">
+              <strong style="color:#7dd3fc; font-size:0.9rem;">💎 Renascimento de Cristal</strong>
+              <div style="font-size:0.78rem; color:#bae6fd;" id="go-crystal-desc">Volte já na pista com +2 ❤️ e escudo temporário (1x por corrida).</div>
+            </div>
+            <button class="chunky-btn" id="btn-go-crystal-revive" style="padding:7px 14px; font-size:0.84rem; background:linear-gradient(180deg,#0284c7,#0369a1); border-color:#7dd3fc;">💖 Renascer (2 💎)</button>
+          </div>
           <div id="go-gacha-box" class="item-card hidden" style="padding:10px 12px; border-color:#a855f7; background:rgba(46, 16, 101, 0.55); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
             <div style="text-align:left;">
               <strong style="color:#f5d0fe; font-size:0.9rem;">🦴 Lootbox Fóssil Conquistada!</strong>
@@ -311,6 +321,7 @@ export class HUD {
     this.cameraEl = q('#hud-camera strong');
     this.speedEl = q('#hud-speed strong');
     this.eggsEl = q('#hud-eggs strong');
+    this.crystalsEl = q('#hud-crystals strong');
     this.comboEl = q('#hud-combo');
     this.mpRankEl = q('#hud-mp-rank');
     this.elementEl = q('#hud-element');
@@ -389,6 +400,17 @@ export class HUD {
     this.transmuteBtn = q('#btn-transmute-mode');
     this.transmuteLbl = q('#lbl-transmute-mode');
     this.touchTransmuteBtn = q('#touch-transmute-btn');
+    this.touchTransmuteLbl = q('#touch-transmute-lbl');
+    this.touchFuryBtn = q('#touch-fury-btn');
+    this.touchItemBtn = q('#touch-item-btn');
+    this.touchItemIco = q('#touch-item-ico');
+    this.touchAttackBtn = q('#touch-attack-btn');
+    this.touchAttackLbl = q('#touch-attack-lbl');
+    this.touchAbilityBtn = q('#touch-ability-btn');
+    this.touchAbilityLbl = q('#touch-ability-lbl');
+    this.goCrystalBox = q('#go-crystal-box');
+    this.goCrystalDesc = q('#go-crystal-desc');
+    this.goCrystalReviveBtn = q('#btn-go-crystal-revive');
     this.goGachaBox = q('#go-gacha-box');
     this.goGachaText = q('#go-gacha-text');
     this.restartConfirmOverlay = q('#restart-confirm-overlay');
@@ -404,6 +426,10 @@ export class HUD {
     this.root.querySelector('#btn-replay').addEventListener('click', () => this.callbacks.onReplay?.());
     this.root.querySelector('#btn-go-dinos')?.addEventListener('click', () => this.callbacks.onGoDinos?.());
     this.root.querySelector('#btn-go-gacha')?.addEventListener('click', () => this.callbacks.onOpenGacha?.());
+    this.root.querySelector('#btn-go-crystal-revive')?.addEventListener('click', () => {
+      if (this._onCrystalRevive) this._onCrystalRevive();
+      else this.callbacks.onCrystalRevive?.();
+    });
     this.root.querySelector('#btn-go-menu').addEventListener('click', () => this.callbacks.onGoMenu?.());
     this.root.querySelector('#btn-mp-revive')?.addEventListener('click', () => this.callbacks.onMpRevive?.());
     this.root.querySelector('#btn-transmute-mode')?.addEventListener('click', () => this.callbacks.onTransmute?.());
@@ -517,6 +543,8 @@ export class HUD {
     this.radialOverlay?.classList.add('hidden');
     this.transmuteBtn?.classList.add('hidden');
     this.touchTransmuteBtn?.classList.add('hidden');
+    this.touchFuryBtn?.classList.add('hidden');
+    this.touchItemBtn?.classList.add('hidden');
     this.bannerEl.classList.add('hidden');
     this.narratorEl.classList.add('hidden');
     this.elementEl?.classList.add('hidden');
@@ -605,6 +633,7 @@ export class HUD {
 
   updatePlayStatus(player, eggsTotal, biomeName, nextPortalDist, combo, score, extra = {}) {
     this.eggsEl.textContent = String(eggsTotal);
+    if (this.crystalsEl) this.crystalsEl.textContent = String(Save.data.crystals || 0);
     const maxHp = Math.max(1, player.maxHp || 1);
     const hp = Math.max(0, Math.min(maxHp, Math.round(player.hp ?? 0)));
     const hearts = maxHp <= 6 ? `${'❤️'.repeat(hp)}${'🖤'.repeat(maxHp - hp)} ` : '❤️ ';
@@ -726,9 +755,47 @@ export class HUD {
     }
 
     if (player.backpack?.slots?.length > 0) {
+      const firstId = player.backpack.slots[0];
+      const firstIcon = BACKPACK_ITEMS[firstId]?.icon || '📦';
       this.lblBackpack.textContent = player.backpack.slots.map((id) => BACKPACK_ITEMS[id]?.icon || '📦').join(' ');
+      if (this.touchItemBtn) {
+        this.touchItemBtn.classList.remove('hidden');
+        if (this.touchItemIco) this.touchItemIco.textContent = firstIcon;
+      }
     } else {
       this.lblBackpack.textContent = 'Vazia';
+      this.touchItemBtn?.classList.add('hidden');
+    }
+
+    // Sincronia ergonômica dos botões touch no celular (Fúria, Transmutação, Ataque, Habilidade)
+    const atkCd = Math.max(0, player.attackCooldown || 0);
+    const abReadyPct = Math.min(cdPct, chargePct);
+    if (this.touchAbilityBtn) {
+      const abReady = abilityOpen && abReadyPct >= 99;
+      this.touchAbilityBtn.classList.toggle('touch-locked', !abilityOpen);
+      this.touchAbilityBtn.classList.toggle('touch-ready', abReady);
+      this.touchAbilityBtn.style.opacity = !abilityOpen ? '0.45' : (abReady ? '1' : '0.72');
+      if (this.touchAbilityLbl) {
+        this.touchAbilityLbl.textContent = !abilityOpen ? '600pt' : (abReady ? 'Hab!' : `${Math.round(abReadyPct)}%`);
+      }
+    }
+    if (this.touchAttackBtn) {
+      const atkReady = attackOpen && atkCd <= 0.05;
+      this.touchAttackBtn.classList.toggle('touch-locked', !attackOpen);
+      this.touchAttackBtn.classList.toggle('touch-ready', atkReady);
+      this.touchAttackBtn.style.opacity = !attackOpen ? '0.45' : (atkReady ? '1' : '0.68');
+      if (this.touchAttackLbl) {
+        this.touchAttackLbl.textContent = !attackOpen ? '1.8k' : (atkReady ? 'Atq!' : `${atkCd.toFixed(1)}s`);
+      }
+    }
+    if (this.touchFuryBtn) {
+      const furyReady = furyOpen && (player.fury || 0) >= 100 && (player.furyTimer || 0) <= 0;
+      this.touchFuryBtn.classList.toggle('hidden', !furyReady);
+      this.touchFuryBtn.classList.toggle('touch-ready', furyReady);
+    }
+    if (canTransmute && this.touchTransmuteLbl) {
+      const m = player.habitatMode || 'land';
+      this.touchTransmuteLbl.textContent = m === 'aquatic' ? 'Água' : (m === 'flying' ? 'Céu' : 'Terra');
     }
 
     this.comboEl.classList.toggle('hidden', combo <= 1);
@@ -966,7 +1033,8 @@ export class HUD {
     return Boolean(this.merchantOverlay && !this.merchantOverlay.classList.contains('hidden'));
   }
 
-  showGameOver({ title = 'GAME OVER!', causeLabel = '', avoidTip = '', score, hiScore, isNewRecord, distance, eggs, maxCombo, dinoId, gachaCrates = 0, totalCrates = 0 }) {
+  showGameOver({ title = 'GAME OVER!', causeLabel = '', avoidTip = '', score, hiScore, isNewRecord, distance, eggs, maxCombo, dinoId, gachaCrates = 0, totalCrates = 0, canCrystalRevive = false, crystalReviveCost = 2, crystals = 0, onCrystalRevive = null }) {
+    this._onCrystalRevive = typeof onCrystalRevive === 'function' ? onCrystalRevive : null;
     this.root.querySelector('#go-title').textContent = title;
     const causeBox = this.root.querySelector('#go-cause-box');
     const causeText = this.root.querySelector('#go-cause-text');
@@ -980,6 +1048,22 @@ export class HUD {
     this.root.querySelector('#go-hi').textContent = formatScoreValue(hiScore);
     this.root.querySelector('#go-dist').textContent = `${Math.floor(distance)} m`;
     this.root.querySelector('#go-eggs').textContent = `${eggs} / x${maxCombo}`;
+    if (this.goCrystalBox && this.goCrystalReviveBtn) {
+      this.goCrystalBox.classList.toggle('hidden', !canCrystalRevive);
+      if (canCrystalRevive) {
+        const canAfford = (Number(crystals) || 0) >= crystalReviveCost;
+        this.goCrystalReviveBtn.disabled = !canAfford;
+        this.goCrystalReviveBtn.style.opacity = canAfford ? '1' : '0.52';
+        this.goCrystalReviveBtn.textContent = canAfford
+          ? `💖 Renascer (${crystalReviveCost} 💎)`
+          : `🔒 Precisa ${crystalReviveCost} 💎 (Tem ${Math.max(0, Math.floor(Number(crystals) || 0))})`;
+        if (this.goCrystalDesc) {
+          this.goCrystalDesc.textContent = canAfford
+            ? `Volte imediatamente na pista com +2 ❤️ e escudo temporário (Saldo: ${crystals} 💎).`
+            : `Colete Diamantes na pista ou conquistas para usar o Revive de Cristal (1x por corrida).`;
+        }
+      }
+    }
     if (this.goGachaBox) {
       const showCrates = gachaCrates > 0 || totalCrates > 0;
       this.goGachaBox.classList.toggle('hidden', !showCrates);

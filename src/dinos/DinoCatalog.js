@@ -103,6 +103,8 @@ export const DINO_CATALOG = [
     id: 'spinosaurus',
     name: 'Spinosaurus',
     dinoClass: 'aquatic',
+    habitat: 'amphibious',
+    swimProfile: 'surface',
     unlockCost: 0,
     stats: { speed: 8, jump: 7, hp: 3, defense: 7, attack: 8 },
     ability: { name: 'Mergulho', desc: 'Mergulha invulnerável por baixo de obstáculos por 2s.', cooldown: 8.5, duration: 2.0 },
@@ -187,6 +189,8 @@ export const DINO_CATALOG = [
     id: 'baryonyx',
     name: 'Baryonyx',
     dinoClass: 'aquatic',
+    habitat: 'amphibious',
+    swimProfile: 'surface',
     unlockCost: 600,
     stats: { speed: 8, jump: 7, hp: 3, defense: 7, attack: 8 },
     ability: { name: 'Corte Aquático', desc: 'Rajada d’água destrói obstáculos e concede +1 Escudo se estiver na água.', cooldown: 9.0, duration: 2.0 },
@@ -270,7 +274,8 @@ export const DINO_CATALOG = [
   {
     id: 'quetzalcoatlus',
     name: 'Quetzalcoatlus',
-    dinoClass: 'mystic',
+    dinoClass: 'flying',
+    habitat: 'flying',
     unlockCost: 2500,
     stats: { speed: 9, jump: 10, hp: 2, defense: 4, attack: 7 },
     ability: { name: 'Voo Rasante', desc: 'Plana acima dos perigos terrestres com controle aéreo por 2.6s.', cooldown: 9.5, duration: 2.6 },
@@ -413,6 +418,7 @@ export const DINO_CATALOG = [
     name: 'Mosasaurus',
     dinoClass: 'aquatic',
     habitat: 'aquatic',
+    swimProfile: 'submerge',
     unlockCost: 950,
     stats: { speed: 9, jump: 6, hp: 4, defense: 7, attack: 9 },
     ability: { name: 'Mordida Abissal', desc: 'Avança quebrando troncos/redemoinhos e cria onda maremoto.', cooldown: 8.5, duration: 2.0 },
@@ -428,6 +434,7 @@ export const DINO_CATALOG = [
     name: 'Elasmosaurus',
     dinoClass: 'aquatic',
     habitat: 'aquatic',
+    swimProfile: 'surface',
     unlockCost: 1200,
     stats: { speed: 8, jump: 7, hp: 3, defense: 7, attack: 7 },
     ability: { name: 'Jato de Maré', desc: 'Surfa invulnerável em corrente rápida e atrai ovos fluviais.', cooldown: 8.0, duration: 2.2 },
@@ -443,6 +450,7 @@ export const DINO_CATALOG = [
     name: 'Dunkleosteus',
     dinoClass: 'aquatic',
     habitat: 'aquatic',
+    swimProfile: 'submerge',
     unlockCost: 2200,
     stats: { speed: 7, jump: 5, hp: 5, defense: 10, attack: 10 },
     ability: { name: 'Mandíbula Blindada', desc: 'Escudo de placas ósseas estilhaça todos os obstáculos marinhos.', cooldown: 9.5, duration: 2.5 },
@@ -458,6 +466,7 @@ export const DINO_CATALOG = [
     name: 'Liopleurodon',
     dinoClass: 'aquatic',
     habitat: 'aquatic',
+    swimProfile: 'submerge',
     unlockCost: 3500,
     stats: { speed: 9, jump: 7, hp: 4, defense: 8, attack: 9 },
     ability: { name: 'Salto Oceânico', desc: 'Impulso sônico sob as ondas que atrai tesouros e limpa a pista.', cooldown: 8.5, duration: 2.1 },
@@ -604,16 +613,93 @@ export function getHybridAvailableModes(hybridCfg = null, mutationId = null) {
   return order.filter((m) => modes.has(m));
 }
 
+export function getDinoSwimCapabilities(specOrId, { hybrid = null, mutationId = null } = {}) {
+  const spec = typeof specOrId === 'string' ? getDinoSpec(specOrId) : (specOrId || getDinoSpec('trex'));
+  if (hybrid?.enabled) {
+    const availableModes = getHybridAvailableModes(hybrid, mutationId);
+    const hasAquatic = availableModes.includes('aquatic');
+    if (!hasAquatic) {
+      return {
+        swimProfile: 'none',
+        canSubmerge: false,
+        surfaceSwimOnly: false,
+        isAmphibious: false,
+        swimModeLabel: 'Terrestre / Aéreo',
+        swimModeDescription: 'Não possui nado especializado; atravessa rios rasos pela superfície.'
+      };
+    }
+    const partSpecs = [
+      hybrid.body || hybrid.bodyId,
+      hybrid.head || hybrid.headId,
+      hybrid.tail || hybrid.tailId,
+      hybrid.limbsId
+    ].filter(Boolean).map((id) => getDinoSpec(id));
+    const canSubmerge = partSpecs.some((s) => s?.swimProfile === 'submerge');
+    const isAmphibious = availableModes.includes('land') || availableModes.includes('flying');
+    return {
+      swimProfile: canSubmerge ? 'submerge' : 'surface',
+      canSubmerge,
+      surfaceSwimOnly: !canSubmerge,
+      isAmphibious,
+      swimModeLabel: canSubmerge
+        ? (isAmphibious ? 'Híbrido Submerso (Terra ↔ Água)' : 'Submerso Profundo')
+        : (isAmphibious ? 'Híbrido Superfície (Terra ↔ Água)' : 'Nado de Superfície'),
+      swimModeDescription: canSubmerge
+        ? 'Nada na superfície e mergulha com S/↓ (consome O₂).'
+        : 'Hidroplana na superfície da água sem afundar nem gastar O₂.'
+    };
+  }
+
+  const base = getDinoHabitat(spec);
+  const grantsLandWalk = mutationId === 'extra_limbs';
+  const isAmphibious = base === 'amphibious' || (base === 'aquatic' && grantsLandWalk);
+  const profile = spec.swimProfile || (base === 'aquatic' ? 'submerge' : base === 'amphibious' ? 'surface' : 'none');
+
+  if (profile === 'submerge') {
+    return {
+      swimProfile: 'submerge',
+      canSubmerge: true,
+      surfaceSwimOnly: false,
+      isAmphibious,
+      swimModeLabel: isAmphibious ? 'Anfíbio + Submerso' : 'Submerso Profundo',
+      swimModeDescription: 'Pode nadar na superfície ou mergulhar (S/↓) usando reserva de O₂.'
+    };
+  }
+  if (profile === 'surface') {
+    return {
+      swimProfile: 'surface',
+      canSubmerge: false,
+      surfaceSwimOnly: true,
+      isAmphibious,
+      swimModeLabel: isAmphibious ? 'Anfíbio (Terra ↔ Superfície)' : 'Nado de Superfície',
+      swimModeDescription: isAmphibious
+        ? 'Alterna Terra ↔ Água (R / botão 🔄). Na água, nada na superfície sem gastar O₂.'
+        : 'Nada exclusivamente na superfície da água com alta agilidade e zero gasto de O₂.'
+    };
+  }
+  return {
+    swimProfile: 'none',
+    canSubmerge: false,
+    surfaceSwimOnly: false,
+    isAmphibious: false,
+    swimModeLabel: base === 'flying' ? 'Voador' : 'Terrestre',
+    swimModeDescription: base === 'flying'
+      ? 'Voa pelas rotas aéreas; atravessa água apenas em biomas oceânicos.'
+      : 'Corre em terra firme; pode planar na água em travessias de rio.'
+  };
+}
+
 export function getEffectiveDinoHabitat(specOrId, { hybrid = null, mutationId = null } = {}) {
   const base = getDinoHabitat(specOrId);
   const grantsLandWalk = mutationId === 'extra_limbs';
   const order = ['land', 'aquatic', 'flying'];
+  const swimCaps = getDinoSwimCapabilities(specOrId, { hybrid, mutationId });
   if (hybrid?.enabled) {
     const availableModes = getHybridAvailableModes(hybrid, mutationId);
     const bodyHab = getDinoHabitat(hybrid.body || hybrid.bodyId || 'trex');
     const normBodyHab = bodyHab === 'amphibious' ? 'aquatic' : bodyHab;
     const primary = availableModes.includes(normBodyHab) ? normBodyHab : (availableModes[0] || 'land');
-    return { primary, availableModes, grantsLandWalk };
+    return { primary, availableModes, grantsLandWalk, ...swimCaps };
   }
   const modes = new Set();
   if (base === 'amphibious') {
@@ -629,6 +715,7 @@ export function getEffectiveDinoHabitat(specOrId, { hybrid = null, mutationId = 
   return {
     primary: base,
     availableModes,
-    grantsLandWalk
+    grantsLandWalk,
+    ...swimCaps
   };
 }

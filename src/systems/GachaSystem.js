@@ -21,6 +21,7 @@ export const GACHA_RARITIES = [
 ];
 
 export const GACHA_EGG_ROLL_COST = 240;
+export const GACHA_CRYSTAL_CATALYST_COST = 3;
 
 function pickRandom(list) {
   return list[Math.floor(Math.random() * list.length)];
@@ -50,19 +51,49 @@ export class GachaSystem {
     return 4;
   }
 
-  static rollRarity(forceMinIdx = 0) {
-    const pity = Save.data.gachaPity || 0;
-    if (pity >= 14) return GACHA_RARITIES[3]; // Garante Lendária/Shiny no pity alto
-    if (pity >= 8 && forceMinIdx < 2) forceMinIdx = 2; // Garante Épica+ a cada 9 aberturas
+  static getPityState() {
+    const epic = Math.max(0, Math.min(8, Math.floor(Save.data.gachaPityEpic ?? Save.data.gachaPity ?? 0)));
+    const shiny = Math.max(0, Math.min(14, Math.floor(Save.data.gachaPityShiny ?? Save.data.gachaPity ?? 0)));
+    return {
+      epic,
+      epicMax: 9,
+      epicRemaining: 9 - epic,
+      shiny,
+      shinyMax: 15,
+      shinyRemaining: 15 - shiny
+    };
+  }
 
-    const eligible = GACHA_RARITIES.slice(forceMinIdx);
-    const total = eligible.reduce((sum, r) => sum + r.weight, 0);
+  static _applyDualPityAfterTier(tierId) {
+    const isEpicOrBetter = tierId === 'épica' || tierId === 'lendária' || tierId === 'mítica' || tierId === 'secreta';
+    const isShinyOrBetter = tierId === 'lendária' || tierId === 'mítica' || tierId === 'secreta';
+    const curEpic = Math.max(0, Math.min(8, Math.floor(Save.data.gachaPityEpic ?? Save.data.gachaPity ?? 0)));
+    const curShiny = Math.max(0, Math.min(14, Math.floor(Save.data.gachaPityShiny ?? Save.data.gachaPity ?? 0)));
+    const nextEpic = isEpicOrBetter ? 0 : Math.min(8, curEpic + 1);
+    const nextShiny = isShinyOrBetter ? 0 : Math.min(14, curShiny + 1);
+    Save.data.gachaPityEpic = nextEpic;
+    Save.data.gachaPityShiny = nextShiny;
+    Save.data.gachaPity = nextEpic;
+  }
+
+  static rollRarity(forceMinIdx = 0, { useCrystalCatalyst = false } = {}) {
+    const epicPity = Math.max(0, Math.min(8, Math.floor(Save.data.gachaPityEpic ?? Save.data.gachaPity ?? 0)));
+    const shinyPity = Math.max(0, Math.min(14, Math.floor(Save.data.gachaPityShiny ?? Save.data.gachaPity ?? 0)));
+    if ((epicPity >= 8 || useCrystalCatalyst) && forceMinIdx < 2) forceMinIdx = 2;
+    if (shinyPity >= 14 && forceMinIdx < 3) forceMinIdx = 3;
+
+    const eligible = GACHA_RARITIES.slice(forceMinIdx).map((tier, idx) => {
+      const absIdx = forceMinIdx + idx;
+      const weight = useCrystalCatalyst && absIdx >= 3 ? tier.weight * 2 : tier.weight;
+      return { tier, weight };
+    });
+    const total = eligible.reduce((sum, entry) => sum + entry.weight, 0);
     let r = Math.random() * total;
-    for (const tier of eligible) {
-      r -= tier.weight;
-      if (r <= 0) return tier;
+    for (const entry of eligible) {
+      r -= entry.weight;
+      if (r <= 0) return entry.tier;
     }
-    return eligible[0];
+    return eligible[0].tier;
   }
 
   static _grantRewardForTier(tier) {
@@ -286,30 +317,40 @@ export class GachaSystem {
     };
   }
 
-  static openCrate({ useEggs = false } = {}) {
+  static openCrate({ useEggs = false, useCrystalCatalyst = false } = {}) {
     if (useEggs) {
       if ((Save.data.eggs || 0) < GACHA_EGG_ROLL_COST) {
         return { ok: false, error: `Precisa de ${GACHA_EGG_ROLL_COST} ovos.` };
+      }
+      if (useCrystalCatalyst && (Save.data.crystals || 0) < GACHA_CRYSTAL_CATALYST_COST) {
+        return { ok: false, error: `Catalisador requer ${GACHA_CRYSTAL_CATALYST_COST} Cristais 💎.` };
       }
       Save.addEggs(-GACHA_EGG_ROLL_COST);
     } else {
       if ((Save.data.fossilCrates || 0) <= 0) {
         return { ok: false, error: 'Sem Caixas Fósseis disponíveis. Corra ou use ovos!' };
       }
+      if (useCrystalCatalyst && (Save.data.crystals || 0) < GACHA_CRYSTAL_CATALYST_COST) {
+        return { ok: false, error: `Catalisador requer ${GACHA_CRYSTAL_CATALYST_COST} Cristais 💎.` };
+      }
       Save.data.fossilCrates = Math.max(0, (Save.data.fossilCrates || 0) - 1);
     }
-
-    const tier = this.rollRarity(0);
-    if (tier.id === 'épica' || tier.id === 'lendária' || tier.id === 'mítica' || tier.id === 'secreta') {
-      Save.data.gachaPity = 0;
-    } else {
-      Save.data.gachaPity = (Save.data.gachaPity || 0) + 1;
+    if (useCrystalCatalyst) {
+      Save.data.crystals = Math.max(0, (Save.data.crystals || 0) - GACHA_CRYSTAL_CATALYST_COST);
     }
+
+    const tier = this.rollRarity(0, { useCrystalCatalyst });
+    this._applyDualPityAfterTier(tier.id);
     Save.save();
-    return { ok: true, reward: this._grantRewardForTier(tier) };
+    return {
+      ok: true,
+      reward: this._grantRewardForTier(tier),
+      usedCatalyst: useCrystalCatalyst,
+      pityState: this.getPityState()
+    };
   }
 
-  static async openCrateAsync({ useEggs = false, supabaseClient = null } = {}) {
+  static async openCrateAsync({ useEggs = false, useCrystalCatalyst = false, supabaseClient = null } = {}) {
     if (LOOTBOX_REAL_MONEY_ENABLED) {
       return { ok: false, error: 'Compras pagas em lootbox requerem verificação 18+ ativa.' };
     }
@@ -319,13 +360,21 @@ export class GachaSystem {
     if (!useEggs && (Save.data.fossilCrates || 0) <= 0) {
       return { ok: false, error: 'Sem Caixas Fósseis disponíveis. Corra ou use ovos!' };
     }
+    if (useCrystalCatalyst && (Save.data.crystals || 0) < GACHA_CRYSTAL_CATALYST_COST) {
+      return { ok: false, error: `Catalisador requer ${GACHA_CRYSTAL_CATALYST_COST} Cristais 💎.` };
+    }
 
     if (supabaseClient && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      const pityNow = this.getPityState();
       const authRes = await requestAuthoritativeGachaRoll(supabaseClient, {
         useEggs,
+        useCrystalCatalyst,
         crateCount: Save.data.fossilCrates || 0,
         eggs: Save.data.eggs || 0,
-        pity: Save.data.gachaPity || 0,
+        crystals: Save.data.crystals || 0,
+        pity: pityNow.epic,
+        pityEpic: pityNow.epic,
+        pityShiny: pityNow.shiny,
         ownedRewards: [
           ...(Save.data.unlockedDinos || []),
           ...(Save.data.unlockedAccessories || []),
@@ -336,18 +385,33 @@ export class GachaSystem {
         const tier = GACHA_RARITIES.find((r) => r.id === authRes.tierId) || GACHA_RARITIES[0];
         if (useEggs) Save.addEggs(-GACHA_EGG_ROLL_COST);
         else Save.data.fossilCrates = Math.max(0, (Save.data.fossilCrates || 0) - 1);
-        Save.data.gachaPity = Number.isFinite(authRes.pityAfter)
-          ? authRes.pityAfter
-          : ((tier.id === 'épica' || tier.id === 'lendária' || tier.id === 'mítica' || tier.id === 'secreta') ? 0 : (Save.data.gachaPity || 0) + 1);
+        if (useCrystalCatalyst) {
+          Save.data.crystals = Number.isFinite(authRes.remainingCrystals)
+            ? authRes.remainingCrystals
+            : Math.max(0, (Save.data.crystals || 0) - GACHA_CRYSTAL_CATALYST_COST);
+        }
+        if (Number.isFinite(authRes.pityEpicAfter) && Number.isFinite(authRes.pityShinyAfter)) {
+          Save.data.gachaPityEpic = authRes.pityEpicAfter;
+          Save.data.gachaPityShiny = authRes.pityShinyAfter;
+          Save.data.gachaPity = authRes.pityEpicAfter;
+        } else {
+          this._applyDualPityAfterTier(tier.id);
+        }
         Save.save();
-        return { ok: true, reward: this._grantRewardForTier(tier), serverVerified: true };
+        return {
+          ok: true,
+          reward: this._grantRewardForTier(tier),
+          serverVerified: true,
+          usedCatalyst: useCrystalCatalyst,
+          pityState: this.getPityState()
+        };
       }
-      if (!authRes.offline && authRes.error && /limite|rate|429|insuficiente|bloqueado/i.test(authRes.error)) {
+      if (!authRes.offline && authRes.error && /limite|rate|429|insuficiente|bloqueado|cristais/i.test(authRes.error)) {
         return { ok: false, error: authRes.error };
       }
     }
 
-    return this.openCrate({ useEggs });
+    return this.openCrate({ useEggs, useCrystalCatalyst });
   }
 
   static rollPreviewTier(tierIndex = 0) {
