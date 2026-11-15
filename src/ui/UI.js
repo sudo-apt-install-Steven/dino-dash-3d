@@ -13,6 +13,7 @@ import { MetagameModal } from './MetagameModal.js';
 import { PartyModals } from './PartyModals.js';
 import { GuideModal } from './GuideModal.js';
 import { GachaModal } from './GachaModal.js';
+import { LegalModal } from './LegalModal.js';
 import { GachaSystem } from '../systems/GachaSystem.js';
 import { PerfMonitor } from '../systems/PerfMonitor.js';
 import { getModeDef } from '../game/Modes.js';
@@ -365,10 +366,23 @@ export class UIManager {
       case 'credits':
         Menus.renderCreditsModal(this.hud.modalLayer, () => this.openSection('extras'));
         break;
+      case 'legal':
+      case 'report':
+        LegalModal.renderInto(this.hud.modalLayer, {
+          initialTab: section === 'report' ? 'report' : 'terms',
+          onOpenSettings: () => this.openSection('settings'),
+          onAfterWipe: () => {
+            this.applyVisualSettings();
+            this.game.rebuildPlayers?.();
+          },
+          onClose: back
+        });
+        break;
       case 'settings':
         SettingsModal.renderInto(this.hud.modalLayer, {
           onClose: back,
           onRunBenchmark: () => PerfMonitor.runTimedBenchmark(this.game, 1050),
+          onOpenLegal: () => this.openSection('legal'),
           onApplySettings: () => {
             this.applyVisualSettings();
             this.game.applySettings();

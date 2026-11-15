@@ -96,8 +96,12 @@ export class Menus {
 
           <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; font-size:0.74rem; color:#d6d3d1;">
             <button type="button" class="inline-change-btn" data-nav="custom" title="Desbloqueie e equipe cápsulas de DNA em Personalização">🧬 Mutações DNA</button>
-            <button type="button" class="inline-change-btn" data-nav="gacha" title="Desbloqueie Variantes Mecânicas, Shiny e Secretas">🤖 Mecânico & Shiny</button>
+            <button type="button" class="inline-change-btn" data-nav="gacha" title="Desbloqueie Variantes Mecânicas, Shiny e Secretas">🤖 Mecânico &amp; Shiny</button>
             <button type="button" class="inline-change-btn" data-nav="guide" title="Lojinha especial na 4ª Pista a cada 30.000 pts">🛍️ Lojinha 30k</button>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:center; font-size:0.7rem; color:#a8a29e; border-top:1px solid rgba(255,255,255,0.08); padding-top:8px;">
+            <button type="button" class="inline-change-btn" data-nav="legal" style="color:#a7f3d0;">🟢 Livre • 📜 Termos &amp; Privacidade (LGPD)</button>
+            <button type="button" class="inline-change-btn" data-nav="report" style="color:#fca5a5;">🚨 Denunciar</button>
           </div>
         </div>
       </div>
@@ -200,6 +204,11 @@ export class Menus {
             <button class="item-card" data-ex-nav="credits" style="text-align:left; cursor:pointer;">
               <strong>📜 Créditos</strong>
               <small style="color:#d8c2a6;">Sobre o projeto Dino Dash 3D e tecnologias utilizadas.</small>
+            </button>
+
+            <button class="item-card" data-ex-nav="legal" style="text-align:left; cursor:pointer; border-color:#22c55e;">
+              <strong style="color:#86efac;">🛡️ LGPD, Termos &amp; Denúncia</strong>
+              <small style="color:#d8c2a6;">Privacidade, ECA Digital, exportar ou excluir dados.</small>
             </button>
 
             ${import.meta.env.DEV && state.devMode ? `

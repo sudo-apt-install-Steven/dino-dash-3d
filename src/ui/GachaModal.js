@@ -100,9 +100,15 @@ export class GachaModal {
         </div>
 
         <div class="gacha-actions-row">
-          <button id="gacha-open-crate" class="chunky-btn" type="button">📦 Chocar Caixa Grátis (<span id="gacha-crate-btn-num">${GachaSystem.getCrateCount()}</span>)</button>
-          <button id="gacha-open-eggs" class="chunky-btn orange" type="button">🥚 Chocar por ${GACHA_EGG_ROLL_COST} Ovos</button>
+          <button id="gacha-open-crate" class="chunky-btn" type="button" ${Save.data.settings?.disableGachaVoluntary ? 'disabled' : ''}>📦 Chocar Caixa Grátis (<span id="gacha-crate-btn-num">${GachaSystem.getCrateCount()}</span>)</button>
+          <button id="gacha-open-eggs" class="chunky-btn orange" type="button" ${Save.data.settings?.disableGachaVoluntary ? 'disabled' : ''}>🥚 Chocar por ${GACHA_EGG_ROLL_COST} Ovos</button>
         </div>
+
+        ${Save.data.settings?.disableGachaVoluntary ? `
+          <div class="item-card" style="margin-top:6px; border-color:#f59e0b; color:#fde68a; font-size:0.78rem; text-align:center;">
+            🛡️ Caixas Gacha desativadas voluntariamente nas Configurações (ECA Digital / Controle Parental).
+          </div>
+        ` : ''}
 
         <div class="gacha-odds">
           ${GACHA_RARITIES.map((r) => `<span class="gacha-odd-pill" style="background:${r.bg}; color:${r.fg}; border-color:${r.hex}88;">${r.name}: ${r.weight}%</span>`).join('')}
@@ -371,11 +377,13 @@ export class GachaModal {
       if (btnNum) btnNum.textContent = `${c}`;
       if (eggsEl) eggsEl.innerHTML = `🥚 Ovos: <strong>${Math.floor(Save.data.eggs || 0)}</strong>`;
       if (pityEl) pityEl.innerHTML = `✨ Garantia Épica+: <strong>${Save.data.gachaPity || 0}/9</strong> • Shiny+: <strong>${Save.data.gachaPity || 0}/15</strong>`;
-      if (crateBtn) crateBtn.disabled = c <= 0 || state === 'shake' || state === 'burst';
-      if (eggsBtn) eggsBtn.disabled = (Save.data.eggs || 0) < GACHA_EGG_ROLL_COST || state === 'shake' || state === 'burst';
+      const gachaBlocked = !!Save.data.settings?.disableGachaVoluntary;
+      if (crateBtn) crateBtn.disabled = gachaBlocked || c <= 0 || state === 'shake' || state === 'burst';
+      if (eggsBtn) eggsBtn.disabled = gachaBlocked || (Save.data.eggs || 0) < GACHA_EGG_ROLL_COST || state === 'shake' || state === 'burst';
     };
 
     const runPull = async (useEggs) => {
+      if (Save.data.settings?.disableGachaVoluntary) return;
       if (state === 'shake' || state === 'burst') return;
       const crateBtn = wrap.querySelector('#gacha-open-crate');
       const eggsBtn = wrap.querySelector('#gacha-open-eggs');

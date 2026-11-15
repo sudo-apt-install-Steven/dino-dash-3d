@@ -3,7 +3,7 @@ import { Save } from '../systems/Save.js';
 import { attachModalHelp } from './Menus.js';
 
 export class SettingsModal {
-  static renderInto(container, { onClose, onApplySettings, onRunBenchmark = null }) {
+  static renderInto(container, { onClose, onApplySettings, onRunBenchmark = null, onOpenLegal = null }) {
     const s = Save.data.settings;
     const kb1 = s.keybindings.p1;
     const kb2 = s.keybindings.p2;
@@ -81,6 +81,10 @@ export class SettingsModal {
                 <span>📺 Modo TV de Sala (HUD maior)</span>
                 <input type="checkbox" id="set-tvscale" ${Save.data.network?.tvScale ? 'checked' : ''} />
               </div>
+              <div class="field-row">
+                <span>🎲 Desativar Caixas Gacha Voluntariamente (ECA Digital)</span>
+                <input type="checkbox" id="set-disable-gacha" ${s.disableGachaVoluntary ? 'checked' : ''} />
+              </div>
               ${import.meta.env.DEV ? `
               <div class="field-row">
                 <span>🛠️ Ativar Modo Desenvolvedor / Debug</span>
@@ -88,8 +92,15 @@ export class SettingsModal {
               </div>
               ` : ''}
             </details>
-            <div class="item-card" style="margin-top:8px; font-size:0.82rem; color:#ffe6a7;">
-              📱 <strong>Escaneie para jogar:</strong> Abra <strong>Multiplayer</strong> no menu principal para exibir o QR Code e usar celulares como controles!
+            <div class="item-card" style="margin-top:8px; font-size:0.82rem; color:#ffe6a7; display:flex; flex-direction:column; gap:8px;">
+              <div>📱 <strong>Escaneie para jogar:</strong> Abra <strong>Multiplayer</strong> no menu principal para exibir o QR Code e usar celulares como controles!</div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="chunky-btn secondary" id="set-export-save" style="padding:6px 10px; font-size:0.78rem;">💾 Exportar Save (JSON)</button>
+                <button type="button" class="chunky-btn secondary" id="set-import-save" style="padding:6px 10px; font-size:0.78rem;">📂 Importar Save</button>
+                <input type="file" id="set-import-file" accept=".json,application/json" class="hidden" />
+                <button type="button" class="chunky-btn secondary" id="set-legal-open" style="padding:6px 10px; font-size:0.78rem; border-color:#22c55e; color:#86efac;">🛡️ LGPD, Termos &amp; Excluir Dados</button>
+              </div>
+              <small id="set-save-status" style="color:#6ee7b7;"></small>
             </div>
           </div>
 
@@ -289,6 +300,7 @@ export class SettingsModal {
       Save.data.network.tvScale = container.querySelector('#set-tvscale').checked;
       Save.data.mirroredMode = container.querySelector('#set-mirrored').checked;
       Save.data.teacherMode = container.querySelector('#set-teacher').checked;
+      s.disableGachaVoluntary = !!container.querySelector('#set-disable-gacha')?.checked;
       Save.data.devMode = import.meta.env.DEV ? !!container.querySelector('#set-devmode')?.checked : false;
 
       s.accessibility.oneHand = container.querySelector('#a11y-onehand').checked;
@@ -345,6 +357,50 @@ export class SettingsModal {
         };
         window.addEventListener('keydown', handler, true);
       });
+    });
+
+    container.querySelector('#set-export-save')?.addEventListener('click', () => {
+      sync();
+      const jsonText = Save.exportJson();
+      const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dino-dash-3d-save-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const st = container.querySelector('#set-save-status');
+      if (st) st.textContent = '✅ Save exportado em JSON!';
+    });
+
+    const importFile = container.querySelector('#set-import-file');
+    container.querySelector('#set-import-save')?.addEventListener('click', () => {
+      importFile?.click();
+    });
+    importFile?.addEventListener('change', async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      const text = await f.text();
+      const res = Save.importJson(text);
+      const st = container.querySelector('#set-save-status');
+      if (res.ok) {
+        if (st) {
+          st.style.color = '#6ee7b7';
+          st.textContent = '✅ Save importado! Feche para aplicar visualmente.';
+        }
+        if (onApplySettings) onApplySettings();
+      } else if (st) {
+        st.style.color = '#fca5a5';
+        st.textContent = `⚠️ ${res.error}`;
+      }
+      importFile.value = '';
+    });
+
+    container.querySelector('#set-legal-open')?.addEventListener('click', () => {
+      sync();
+      onOpenLegal?.();
     });
 
     container.querySelector('#close-settings').addEventListener('click', () => {

@@ -1,6 +1,11 @@
-// Persistência segura com fallback em memória caso localStorage falhe.
+// Persistência resiliente em 3 camadas (localStorage + IndexedDB + Cookie técnico de recuperação),
+// sem vínculo com IP ou Wi-Fi (LGPD Art. 6º / Art. 18).
 
 const STORAGE_KEY = 'dino_dash_3d_save_v1';
+const IDB_NAME = 'DinoDash3DDB';
+const IDB_STORE = 'saves';
+const IDB_KEY = 'primary';
+const CHECKPOINT_COOKIE = 'dd3d_chk';
 
 const DEFAULT_SAVE = {
   highScore: 0,
@@ -69,9 +74,10 @@ const DEFAULT_SAVE = {
   benchmarkDone: false,
   benchmarkVersion: 3,
   benchmarkGpu: '',
-  introModeCustom: false,
-  devMode: false,
-  playerActorId: '',
+    introModeCustom: false,
+    devMode: false,
+    playerActorId: '',
+    savedAt: 0,
   crystals: 0,
   fossilCrates: 2,
   gachaPity: 0,
@@ -111,6 +117,7 @@ const DEFAULT_SAVE = {
     narrator: false,
     obstacleHints: true,
     touchMode: 'swipe',
+    disableGachaVoluntary: false,
     audio: { music: 0.45, sfx: 0.75, muted: false },
     accessibility: {
       oneHand: false,
@@ -147,37 +154,130 @@ function mergeDefaults(target, defaults) {
   return target;
 }
 
+function readCheckpointCookie() {
+  if (typeof document === 'undefined') return null;
+  try {
+    const parts = document.cookie ? document.cookie.split('; ') : [];
+    const hit = parts.find((p) => p.startsWith(`${CHECKPOINT_COOKIE}=`));
+    if (!hit) return null;
+    const raw = decodeURIComponent(hit.slice(CHECKPOINT_COOKIE.length + 1));
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCheckpointCookie(data) {
+  if (typeof document === 'undefined' || !data) return;
+  try {
+    const summary = {
+      highScore: Math.floor(data.highScore || 0),
+      eggs: Math.floor(data.eggs || 0),
+      crystals: Math.floor(data.crystals || 0),
+      fossilCrates: Math.floor(data.fossilCrates || 0),
+      selectedDino: String(data.selectedDino || 'trex').slice(0, 28),
+      unlockedDinos: Array.isArray(data.unlockedDinos) ? data.unlockedDinos.slice(0, 40) : ['trex'],
+      activeTitle: String(data.activeTitle || 'Iniciante').slice(0, 28),
+      playerActorId: String(data.playerActorId || '').slice(0, 64),
+      savedAt: Number(data.savedAt || Date.now())
+    };
+    const encoded = encodeURIComponent(JSON.stringify(summary));
+    if (encoded.length > 3400) return;
+    const secFlag = (typeof window !== 'undefined' && window.location?.protocol === 'https:') ? '; Secure' : '';
+    document.cookie = `${CHECKPOINT_COOKIE}=${encoded}; path=/; max-age=15552000; SameSite=Lax${secFlag}`;
+  } catch {
+    // Cookie opcional de recuperação
+  }
+}
+
+function clearCheckpointCookie() {
+  if (typeof document === 'undefined') return;
+  try {
+    document.cookie = `${CHECKPOINT_COOKIE}=; path=/; max-age=0; SameSite=Lax`;
+  } catch {}
+}
+
+function openSaveDb() {
+  if (typeof window === 'undefined' || !window.indexedDB) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function idbReadSave() {
+  const db = await openSaveDb();
+  if (!db) return null;
+  return await new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = () => { db.close(); resolve(req.result || null); };
+      req.onerror = () => { db.close(); resolve(null); };
+    } catch {
+      try { db.close(); } catch {}
+      resolve(null);
+    }
+  });
+}
+
+async function idbWriteSave(snapshot) {
+  const db = await openSaveDb();
+  if (!db) return false;
+  return await new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(snapshot, IDB_KEY);
+      tx.oncomplete = () => { db.close(); resolve(true); };
+      tx.onerror = () => { db.close(); resolve(false); };
+    } catch {
+      try { db.close(); } catch {}
+      resolve(false);
+    }
+  });
+}
+
+async function idbDeleteAll() {
+  if (typeof window === 'undefined' || !window.indexedDB) return;
+  await new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.deleteDatabase(IDB_NAME);
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      req.onblocked = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
 class SaveSystem {
   constructor() {
     this.memoryFallback = null;
     this.storageAvailable = true;
+    this._wipedAt = 0;
     this.data = this.load();
   }
 
-  load() {
-    let loaded = null;
-    let prevBenchVer = 2;
-    try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        prevBenchVer = parsed?.benchmarkVersion || 1;
-        loaded = mergeDefaults(parsed, DEFAULT_SAVE);
-      }
-    } catch {
-      this.storageAvailable = false;
-    }
-    if (!loaded) {
-      if (this.memoryFallback) return this.memoryFallback;
-      this.memoryFallback = deepClone(DEFAULT_SAVE);
-      return this.memoryFallback;
-    }
-    // Garante que novos iniciais gratuitos sejam liberados em saves antigos
+  _normalizeLoaded(parsed) {
+    const prevBenchVer = parsed?.benchmarkVersion || 1;
+    const loaded = mergeDefaults(deepClone(parsed), DEFAULT_SAVE);
     const freeStarters = DEFAULT_SAVE.unlockedDinos;
     for (const id of freeStarters) {
       if (!loaded.unlockedDinos.includes(id)) loaded.unlockedDinos.push(id);
     }
-    // Revalida benchmark antigo (v1/v2 mediam durante compilacao ou puniam drivers NVIDIA mascarados)
     if (prevBenchVer < 3) {
       const wasLowTier = loaded.benchmarkTier === 'Baixo';
       loaded.benchmarkVersion = 3;
@@ -199,7 +299,58 @@ class SaveSystem {
     return loaded;
   }
 
+  load() {
+    let parsed = null;
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        parsed = JSON.parse(raw);
+      }
+    } catch {
+      this.storageAvailable = false;
+    }
+
+    if (!parsed) {
+      const cookieChk = readCheckpointCookie();
+      if (cookieChk) {
+        parsed = cookieChk;
+      }
+    }
+
+    if (!parsed) {
+      if (this.memoryFallback) return this.memoryFallback;
+      this.memoryFallback = deepClone(DEFAULT_SAVE);
+      return this.memoryFallback;
+    }
+    return this._normalizeLoaded(parsed);
+  }
+
+  async hydrateAsync() {
+    const reqStart = Date.now();
+    const idbData = await idbReadSave();
+    if (!idbData || typeof idbData !== 'object') return false;
+    if (this._wipedAt >= reqStart) return false;
+    const idbSavedAt = Number(idbData.savedAt || 0);
+    const curSavedAt = Number(this.data?.savedAt || 0);
+    let hasLocal = false;
+    try {
+      hasLocal = !!window.localStorage.getItem(STORAGE_KEY);
+    } catch {}
+    const shouldRestore = !hasLocal || idbSavedAt > curSavedAt || (Number(idbData.highScore || 0) > Number(this.data?.highScore || 0) && curSavedAt === 0);
+    if (!shouldRestore) return false;
+    this.data = this._normalizeLoaded(idbData);
+    this.memoryFallback = this.data;
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+      this.storageAvailable = true;
+    } catch {}
+    writeCheckpointCookie(this.data);
+    return true;
+  }
+
   save() {
+    this.data.savedAt = Date.now();
+    if (!import.meta.env?.DEV) this.data.devMode = false;
     this.memoryFallback = this.data;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
@@ -207,6 +358,37 @@ class SaveSystem {
     } catch {
       this.storageAvailable = false;
     }
+    writeCheckpointCookie(this.data);
+    idbWriteSave(deepClone(this.data)).catch(() => {});
+  }
+
+  exportJson() {
+    return JSON.stringify(this.data, null, 2);
+  }
+
+  importJson(rawText) {
+    try {
+      const parsed = JSON.parse(String(rawText || ''));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { ok: false, error: 'Arquivo JSON inválido.' };
+      }
+      this.data = this._normalizeLoaded(parsed);
+      this.save();
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Não foi possível ler este JSON de save.' };
+    }
+  }
+
+  async wipeAllLocalData() {
+    this._wipedAt = Date.now();
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    clearCheckpointCookie();
+    await idbDeleteAll();
+    this.data = deepClone(DEFAULT_SAVE);
+    this.memoryFallback = this.data;
   }
 
   getHighScore() {

@@ -121,6 +121,13 @@ function showSplashAndBoot() {
   requestAnimationFrame(() => {
     const game = new Game(canvas, uiRoot);
     window.__DINO_DASH_GAME__ = game;
+    Save.hydrateAsync().then((restored) => {
+      if (restored && game.state === 'menu') {
+        game.rebuildPlayers?.();
+        game.ui?.applyVisualSettings?.();
+        game.ui?.showMainMenu?.();
+      }
+    }).catch(() => {});
 
     if (isControllerUrl) {
       game.ui.openController({
