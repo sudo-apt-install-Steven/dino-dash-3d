@@ -653,14 +653,14 @@ export function getDinoSwimCapabilities(specOrId, { hybrid = null, mutationId = 
   const base = getDinoHabitat(spec);
   const grantsLandWalk = mutationId === 'extra_limbs';
   const isAmphibious = base === 'amphibious' || (base === 'aquatic' && grantsLandWalk);
-  const canSubmergeWater = base === 'aquatic' || base === 'amphibious' || available.includes('aquatic');
+  const canSubmergeWater = base === 'aquatic' || base === 'amphibious';
   const profile = spec.swimProfile || (base === 'aquatic' ? 'submerge' : base === 'amphibious' ? 'surface' : 'none');
 
-  if (base === 'aquatic' || base === 'amphibious' || available.includes('aquatic')) {
+  if (canSubmergeWater) {
     const deepSpecialist = profile === 'submerge';
     return {
       swimProfile: profile,
-      canSubmerge: canSubmergeWater,
+      canSubmerge: true,
       surfaceSwimOnly: false,
       isAmphibious,
       swimModeLabel: isAmphibious
@@ -676,10 +676,10 @@ export function getDinoSwimCapabilities(specOrId, { hybrid = null, mutationId = 
     canSubmerge: false,
     surfaceSwimOnly: false,
     isAmphibious: false,
-    swimModeLabel: base === 'flying' ? 'Voador' : 'Terrestre',
+    swimModeLabel: base === 'flying' ? 'Voador (Rotas Aéreas)' : 'Terrestre (Terra + Nado em Rios)',
     swimModeDescription: base === 'flying'
-      ? 'Voa pelas rotas aéreas; atravessa água apenas em biomas oceânicos.'
-      : 'Corre em terra firme; pode nadar e mergulhar ao cruzar rios/oceanos.'
+      ? 'Voa pelas rotas aéreas; atravessa mares apenas na superfície.'
+      : 'Corre em terra firme; pode nadar e mergulhar ao cruzar rios/oceanos (consome O₂).'
   };
 }
 

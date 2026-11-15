@@ -879,6 +879,7 @@ export class Spawner {
   }
 
   _isWaterTrack() {
+    if (this.habitatMode === 'flying' && this.biomeId !== 'abyss_submerged') return false;
     return Boolean(
       this.habitatMode === 'aquatic' ||
       this.isAquaticBiome ||
@@ -1303,6 +1304,123 @@ export class Spawner {
     }
   }
 
+  _spawnSkyWave(speed, score, laneIdx, otherLane, thirdLane, spawnZ, waveRoll, r) {
+    const x = this._getLaneX(laneIdx);
+    const otherX = this._getLaneX(otherLane);
+
+    // 1. Onda aérea de ovos no corredor celeste (+ ave opcional bem espaçada)
+    if (waveRoll < 0.21) {
+      this.spawnEggArc(laneIdx, 2 + Math.floor(this.rng() * 2), null, spawnZ - 1);
+      if (score > 420 && this.rng() < 0.38 && this._canBlockLane(otherLane, spawnZ - 3)) {
+        const escort = this._acquire('bird', otherX, 1.35, spawnZ - 3);
+        if (escort) {
+          escort.baseY = 1.35;
+          escort.minY = -0.34;
+          escort.maxY = 0.36;
+          escort.flapPhase = this.rng() * Math.PI * 2;
+          escort.spawnY = this._getBaseY(escort.baseY);
+          escort.group.position.y = escort.spawnY;
+          if (escort.duckOverlay) escort.duckOverlay.visible = !!this.showRedHazardSignage;
+          this._setHint(escort, '⬇ DESCER / PASSAR BAIXO', '#38bdf8');
+        }
+      }
+      return;
+    }
+
+    // 2. Power-up ou Mochila aérea
+    if (waveRoll < 0.29 && score > 150 && this.powerupCooldown <= 0) {
+      this.powerupCooldown = 13 + this.rng() * 6;
+      const pLane = (laneIdx + 2) % 3;
+      this._acquirePowerup(this._getLaneX(pLane), 0.15, spawnZ - 2);
+      return;
+    }
+
+    // 3. Coletáveis aéreos (Fruta, Ovo Elemental ou Tesouro flutuante)
+    if (waveRoll < 0.38 && score > 170 && this.collectibleCooldown <= 0) {
+      this.collectibleCooldown = 8.0 + this.rng() * 4.5;
+      const bonusRoll = this.rng();
+      if (bonusRoll < 0.45) {
+        this._acquire('fruit', otherX, 0.15, spawnZ - 2);
+      } else if (bonusRoll < 0.8 && score > 220) {
+        this._acquireElementalEgg(otherX, 0.12, spawnZ - 2);
+      } else {
+        this._acquire('treasure', otherX, 0.05, spawnZ - 2);
+      }
+      return;
+    }
+
+    // 4. Anel de Corrente Térmica / Vento Turbo no céu
+    if (waveRoll < 0.48 && score > 180 && this.featureCooldown <= 0) {
+      this.featureCooldown = 7.5 + this.rng() * 4.5;
+      const alt = this.rng() < 0.5 ? 0.95 : -0.65;
+      const ring = this._acquire('current_ring', x, alt, spawnZ);
+      if (ring) {
+        this._setHint(ring, alt > 0 ? '💨 CORRENTE ALTA (W/▲)' : '💨 RASANTE TURBO (S/▼)', '#7dd3fc');
+      }
+      return;
+    }
+
+    // 5. Obstáculos estritamente aéreos (zero cactos, troncos ou rochas terrestres!)
+    let targetLane = laneIdx;
+    if (!this._canBlockLane(targetLane, spawnZ)) {
+      const alt = [otherLane, thirdLane].find((idx) => this._canBlockLane(idx, spawnZ));
+      if (alt === undefined) {
+        this.spawnEggArc(laneIdx, 3, null, spawnZ);
+        return;
+      }
+      targetLane = alt;
+    }
+    const obsX = this._getLaneX(targetLane);
+
+    if (this.rng() < 0.18) {
+      this.spawnEggArc((targetLane + 1) % 3, 2, null, spawnZ - 2);
+    }
+
+    if (score >= 380 && r < 0.22) {
+      const pylon = this._acquire('electric_pylon', obsX, -0.55, spawnZ);
+      if (pylon) this._setHint(pylon, '⛈️ TEMPESTADE ⬅➡ / SUBIR', '#fde047');
+      return;
+    }
+
+    if (score >= 480 && r < 0.34) {
+      const crys = this._acquire('amber_crystal', obsX, this.rng() < 0.5 ? 0.65 : -0.65, spawnZ);
+      if (crys) this._setHint(crys, '🔶 METEORO [Q] / ⬅➡', '#fbbf24');
+      return;
+    }
+
+    const tierRoll = this.rng();
+    const isHigh = tierRoll < 0.4;
+    const isLow = !isHigh && tierRoll < 0.72;
+    const birdY = isHigh ? 1.52 : (isLow ? -0.78 : 0.12);
+    const bird = this._acquire('bird', obsX, birdY, spawnZ);
+    if (bird) {
+      bird.baseY = birdY;
+      bird.minY = -0.34;
+      bird.maxY = 0.36;
+      bird.flapPhase = this.rng() * Math.PI * 2;
+      bird.spawnY = this._getBaseY(birdY);
+      bird.group.position.y = bird.spawnY;
+      if (bird.duckOverlay) bird.duckOverlay.visible = !!this.showRedHazardSignage && isHigh;
+      this._setHint(
+        bird,
+        isHigh ? '⬇ DESCER / PASSAR BAIXO' : (isLow ? '⬆ VOAR ALTO' : '⬆ SUBIR / DESVIAR'),
+        isHigh ? '#38bdf8' : '#fbbf24'
+      );
+    }
+
+    if (score > 700 && this.rng() < 0.22) {
+      const secLane = (targetLane + 1) % 3;
+      if (this._canBlockLane(secLane, spawnZ - 2.6)) {
+        const wingman = this._acquire('bird', this._getLaneX(secLane), isHigh ? -0.55 : 1.35, spawnZ - 2.6);
+        if (wingman) {
+          wingman.baseY = isHigh ? -0.55 : 1.35;
+          wingman.spawnY = this._getBaseY(wingman.baseY);
+          wingman.group.position.y = wingman.spawnY;
+        }
+      }
+    }
+  }
+
   _spawnOne(speed, score) {
     const spawnZ = -125;
     const laneIdx = Math.floor(this.rng() * 3);
@@ -1313,6 +1431,11 @@ export class Spawner {
     const waveRoll = this.rng();
     const otherLane = (laneIdx + 1) % 3;
     const thirdLane = [0, 1, 2].find((idx) => idx !== laneIdx && idx !== otherLane) ?? otherLane;
+
+    if (this.habitatMode === 'flying' && this.biomeId !== 'abyss_submerged') {
+      this._spawnSkyWave(speed, score, laneIdx, otherLane, thirdLane, spawnZ, waveRoll, r);
+      return;
+    }
 
     if (this._isWaterTrack()) {
       this._spawnWaterWave(speed, score, laneIdx, otherLane, thirdLane, spawnZ, waveRoll, r);
@@ -1555,7 +1678,7 @@ export class Spawner {
           const flap = Math.sin(obs.flapPhase) * 0.58;
           obs.wingL.rotation.z = flap;
           obs.wingR.rotation.z = -flap;
-          obs.group.position.y = this._getBaseY(obs.baseY) + Math.sin(obs.flapPhase * 0.5) * 0.08;
+          obs.group.position.y = (obs.spawnY ?? this._getBaseY(obs.baseY)) + Math.sin(obs.flapPhase * 0.5) * 0.08;
         } else if (obs.kind === 'rolling_log') {
           obs.body.rotation.x += dt * 9;
         } else if (obs.kind === 'egg') {
@@ -1565,11 +1688,15 @@ export class Spawner {
             if (p.dead) continue;
             const magnetRange = (p.magnetTimer > 0 ? 11.5 : 0) + (p.permanentMagnet || 0) + (p.id === 'ghostgold' ? 5 : 0) + (this.magneticStormActive ? 14 : 0);
             if (magnetRange > 0) {
+              const pDive = p.inSubmerged ? 0.2 : (p.diveDepth || 0) * 2.75;
+              const targetY = (p.baseY || 0) + (p.y || 0) - pDive + 0.45;
               const dx = p.x - obs.group.position.x;
+              const dy = targetY - obs.group.position.y;
               const dz = p.z - obs.group.position.z;
               const dist = Math.hypot(dx, dz);
               if (dist < magnetRange && dist > 0.05) {
                 obs.group.position.x += (dx / dist) * dt * 22;
+                obs.group.position.y += dy * Math.min(1, dt * 10);
                 obs.group.position.z += (dz / dist) * dt * 22;
               }
             }

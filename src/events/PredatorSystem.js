@@ -181,8 +181,8 @@ export class PredatorSystem {
     this.activeSpec = spec;
     this.activeModel = buildPredatorModel(spec.id);
     this.activeModel.root.scale.setScalar(1.08);
-    const startTrackX = ctx.leadX ?? (habitat === 'aquatic' ? (ctx.trackCenterX ?? 0) : habitat === 'flying' ? -10 : 0);
-    const startTrackY = ctx.leadY ?? (habitat === 'flying' ? 2.4 : 0);
+    const startTrackX = ctx.leadX ?? (habitat === 'aquatic' ? (ctx.trackCenterX ?? 0) : 0);
+    const startTrackY = ctx.leadY ?? (habitat === 'flying' ? 2.05 : 0);
     this.activeModel.root.position.set(startTrackX - 0.78, startTrackY, 4.6);
     this.activeModel.root.rotation.y = 0;
     this.scene.add(this.activeModel.root);
@@ -349,7 +349,7 @@ export class PredatorSystem {
       this.distance = Math.max(1.4, Math.min(9.2, this.distance + (paceBonus + decoyPush) * dt));
 
       if (lead) {
-        const trackCenterX = ctx.habitatMode === 'aquatic' ? (ctx.trackCenterX ?? 0) : (ctx.habitatMode === 'flying' ? -10 : 0);
+        const trackCenterX = ctx.habitatMode === 'aquatic' ? (ctx.trackCenterX ?? 0) : 0;
         const flankX = lead.x >= trackCenterX ? -0.78 : 0.78;
         const targetX = lead.x + flankX * 0.75;
         this.activeModel.root.position.x += (targetX - this.activeModel.root.position.x) * Math.min(1, dt * 4.4);

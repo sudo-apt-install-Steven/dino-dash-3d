@@ -810,6 +810,9 @@ export class HUD {
           this.touchDuckIco.textContent = '🤿';
           this.touchDuckLbl.textContent = 'Merg.';
         }
+      } else if (player.habitatMode === 'flying' && !player.inSubmerged) {
+        this.touchDuckIco.textContent = '▼';
+        this.touchDuckLbl.textContent = 'Descer';
       } else {
         this.touchDuckIco.textContent = '▼';
         this.touchDuckLbl.textContent = 'Baixo';

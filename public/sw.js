@@ -1,5 +1,5 @@
 // Service Worker PWA enxuto: permite instalação no celular sem interferir em WebSocket ou Supabase Realtime.
-const CACHE_NAME = 'dino-dash-3d-pwa-v2';
+const CACHE_NAME = 'dino-dash-3d-pwa-v3';
 const CORE_ASSETS = ['/', '/manifest.webmanifest', '/icons/dino-icon.svg'];
 
 self.addEventListener('install', (event) => {

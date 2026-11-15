@@ -770,7 +770,7 @@ export class Game {
         y: 0,
         z: Math.floor(i / 3) * 0.65,
         vy: 0,
-        grounded: true,
+        grounded: initialHabitat !== 'flying',
         ducking: false,
         sliding: false,
         slideTimer: 0,
@@ -1196,6 +1196,10 @@ export class Game {
   }
 
   startRun(isTestTrack = false, opts = {}) {
+    if (typeof isTestTrack === 'object' && isTestTrack !== null) {
+      opts = isTestTrack;
+      isTestTrack = Boolean(opts.isTestTrack);
+    }
     this.isTestTrack = isTestTrack;
     this.pendingRestart = false;
     this.spotlightActive = false;
@@ -1214,6 +1218,7 @@ export class Game {
     this.spectatorMode = false;
     this.state = 'playing';
     this.photoMode = false;
+    this.ui?._clearModal?.();
     this.ui.hud.resetAllOverlays();
     this.ui.hud.setPlayingUI(true);
 
@@ -1309,6 +1314,7 @@ export class Game {
       });
     }
     this.currentBiome = chosenBiome;
+    this._lastSeqBiomeStep = 0;
     this.world.applyTheme(this.currentBiome.theme);
     this.world.setHollowEarthVisuals(false);
     this.world.setShopLane(null);
@@ -1316,19 +1322,22 @@ export class Game {
     if (!isTestTrack) this._discoverCurrentBiomeFossil();
 
     const aquaBiome = isAquaticBiome(this.currentBiome);
+    const isSubmergedStart = Boolean(this.currentBiome?.submerged);
     this._syncEnvironmentHabitat(this.players[0]);
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat;
+      const isFly = mode === 'flying' && !isSubmergedStart;
       const purePlAqua = this._isPureAquaticPlayer(pl);
       const fullWaterPl = Boolean(aquaBiome || allPureAqua || (this.players.length === 1 && purePlAqua));
-      pl.diveDepth = this.currentBiome?.submerged ? 1 : 0;
-      pl.diveTarget = this.currentBiome?.submerged ? 1 : 0;
-      pl.inWater = Boolean(fullWaterPl || mode === 'aquatic');
-      pl.inSubmerged = Boolean(this.currentBiome?.submerged);
+      pl.diveDepth = isSubmergedStart ? 1 : 0;
+      pl.diveTarget = isSubmergedStart ? 1 : 0;
+      pl.inWater = !isFly && Boolean(fullWaterPl || mode === 'aquatic');
+      pl.inSubmerged = isSubmergedStart;
+      pl.grounded = !isFly;
       if (mode === 'aquatic' && !fullWaterPl) {
         pl.x = RIVER_LANE_X[pl.lane] ?? RIVER_LANE_X[1];
         pl.baseY = 0;
-      } else if (mode === 'flying') {
+      } else if (isFly) {
         pl.x = LANE_X[pl.lane] ?? 0;
         pl.baseY = SKY_CORRIDOR_Y - 1.15;
       } else {
@@ -1665,18 +1674,21 @@ export class Game {
     this.spawner.setBiome(targetBiome.id);
     this._syncEnvironmentHabitat(p0);
     const aquaBiome = isAquaticBiome(targetBiome);
+    const isSubmergedBiome = Boolean(targetBiome?.submerged);
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat;
+      const isFly = mode === 'flying' && !isSubmergedBiome;
       const purePlAqua = this._isPureAquaticPlayer(pl);
-      pl.inWater = Boolean(aquaBiome || mode === 'aquatic');
-      pl.inSubmerged = Boolean(targetBiome?.submerged);
-      pl.diveTarget = pl.inSubmerged ? 1 : 0;
-      pl.diveDepth = pl.inSubmerged ? 1 : 0;
+      pl.inWater = !isFly && Boolean(aquaBiome || mode === 'aquatic');
+      pl.inSubmerged = isSubmergedBiome;
+      pl.diveTarget = isSubmergedBiome ? 1 : 0;
+      pl.diveDepth = isSubmergedBiome ? 1 : 0;
+      pl.grounded = !isFly;
       if (mode === 'aquatic') {
         const lanes = (aquaBiome || pureAqua || purePlAqua) ? LANE_X : RIVER_LANE_X;
         pl.x = (lanes[pl.lane] ?? lanes[1]) + (pl.xOffset || 0);
         pl.baseY = 0;
-      } else if (mode === 'flying') {
+      } else if (isFly) {
         pl.x = (LANE_X[pl.lane] ?? 0) + (pl.xOffset || 0);
         pl.baseY = SKY_CORRIDOR_Y - 1.15;
       } else {
@@ -1694,16 +1706,17 @@ export class Game {
     const pureAquaticLead = this._isPureAquaticPlayer(leadPlayer);
     const fullWater = Boolean(aquaBiome || pureAquaticLead);
     const anyAquatic = this.players.some((p) => (p.habitatMode || p.habitat) === 'aquatic') || fullWater;
-    const anyFlying = this.players.some((p) => (p.habitatMode || p.habitat) === 'flying');
+    const anyFlying = this.players.some((p) => (p.habitatMode || p.habitat) === 'flying') && !biome?.submerged;
     const leadMode = leadPlayer ? (leadPlayer.habitatMode || leadPlayer.habitat) : 'land';
     const isSubmergedBiome = !!biome?.submerged;
     const isWaterSurfaceTrack = Boolean(fullWater && !isSubmergedBiome);
+    const leadInWater = Boolean(isSubmergedBiome || leadMode === 'aquatic' || pureAquaticLead || (aquaBiome && leadMode !== 'flying'));
     const leadDive = leadPlayer?.diveDepth || 0;
     this.world.setAquaticChannelActive(anyAquatic);
     this.world.setSkyCorridorActive(anyFlying);
     this.world.setFullWaterTrack(fullWater);
     this.world.setWaterTrackVisuals(isWaterSurfaceTrack);
-    this.world.setSubmergedVisuals(isSubmergedBiome || (Boolean(fullWater || leadMode === 'aquatic') && leadDive > 0.25), isSubmergedBiome);
+    this.world.setSubmergedVisuals(isSubmergedBiome || (leadInWater && leadDive > 0.25), isSubmergedBiome);
     this.spawner.setHabitatMode(leadMode, fullWater);
   }
 
@@ -1713,9 +1726,9 @@ export class Game {
     const fullWater = Boolean(aquaBiome || pureAquatic);
     const leadMode = lead ? (lead.habitatMode || lead.habitat) : 'land';
     const trackCenterX = (!fullWater && leadMode === 'aquatic') ? (RIVER_LANE_X[1] ?? 10) : 0;
-    const inWater = Boolean(fullWater || leadMode === 'aquatic');
-    const diveDepth = lead?.diveDepth || 0;
     const isSubmergedBiome = !!this.currentBiome?.submerged;
+    const inWater = Boolean(isSubmergedBiome || leadMode === 'aquatic' || pureAquatic || (aquaBiome && leadMode !== 'flying'));
+    const diveDepth = lead?.diveDepth || 0;
     const isSubmerged = Boolean(isSubmergedBiome || (inWater && diveDepth > 0.25));
     const isWaterSurface = Boolean(inWater && !isSubmerged);
     return { trackCenterX, inWater, isWaterSurface, isSubmerged, isSubmergedBiome, diveDepth };
@@ -1885,6 +1898,30 @@ export class Game {
     this.ui.hud.showBanner(`☀️ RETORNO À SUPERFÍCIE: ${this.currentBiome.name}!`, '#38bdf8', 2.6);
   }
 
+  _applyBiomePlayersState(targetBiome) {
+    const allPureAqua = this.players.length > 0 && this.players.every((pl) => this._isPureAquaticPlayer(pl));
+    const aqua = isAquaticBiome(targetBiome);
+    const isSub = Boolean(targetBiome?.submerged);
+    this._syncEnvironmentHabitat(this.players[0]);
+    for (const pl of this.players) {
+      const mode = pl.habitatMode || pl.habitat || 'land';
+      const isFly = mode === 'flying' && !isSub;
+      const purePl = this._isPureAquaticPlayer(pl);
+      pl.inSubmerged = isSub;
+      pl.inWater = !isFly && Boolean(aqua || allPureAqua || purePl || mode === 'aquatic');
+      pl.diveTarget = isSub ? 1 : 0;
+      pl.diveDepth = isSub ? 1 : 0;
+      pl.grounded = !isFly;
+      pl.baseY = isFly ? (SKY_CORRIDOR_Y - 1.15) : 0;
+      if (mode === 'aquatic') {
+        const lanes = (aqua || allPureAqua || purePl) ? LANE_X : RIVER_LANE_X;
+        pl.x = lanes[pl.lane] ?? lanes[1];
+        pl.model.root.position.x = pl.x;
+      }
+      pl.model.root.position.y = (pl.baseY || 0) + (pl.y || 0);
+    }
+  }
+
   triggerRandomPortalTransition() {
     if (this.hollowEarthState?.active) this.exitHollowEarth();
     const allPureAqua = this.players.length > 0 && this.players.every((pl) => this._isPureAquaticPlayer(pl));
@@ -1895,19 +1932,7 @@ export class Game {
     this.currentBiome = nextBiome;
     this.world.applyTheme(this.currentBiome.theme);
     this.spawner.setBiome(this.currentBiome.id);
-    const aqua = isAquaticBiome(this.currentBiome);
-    this._syncEnvironmentHabitat(this.players[0]);
-    for (const pl of this.players) {
-      const purePl = this._isPureAquaticPlayer(pl);
-      pl.inSubmerged = Boolean(this.currentBiome?.submerged);
-      pl.diveTarget = pl.inSubmerged ? 1 : 0;
-      pl.diveDepth = pl.inSubmerged ? 1 : 0;
-      if ((pl.habitatMode || pl.habitat) === 'aquatic') {
-        const lanes = (aqua || allPureAqua || purePl) ? LANE_X : RIVER_LANE_X;
-        pl.x = lanes[pl.lane] ?? lanes[1];
-        pl.model.root.position.x = pl.x;
-      }
-    }
+    this._applyBiomePlayersState(this.currentBiome);
     if (!this.isTestTrack) this._discoverCurrentBiomeFossil();
     this.sfx.portal?.();
     this.ui.hud.triggerEdgeFlash('cyan');
@@ -2618,12 +2643,15 @@ export class Game {
     const furyUnlocked = !progLocked || this.score >= 2800;
 
     const aquaBiome = isAquaticBiome(this.currentBiome);
+    const isSubmergedBiome = Boolean(this.currentBiome?.submerged);
     const curHabitat = p.habitatMode || p.habitat || 'land';
+    const isFlyingFlight = curHabitat === 'flying' && !isSubmergedBiome;
     const fullWater = Boolean(aquaBiome || this._isPureAquaticPlayer(p));
     const laneArr = (curHabitat === 'aquatic' && !fullWater) ? RIVER_LANE_X : LANE_X;
-    const inWater = Boolean(fullWater || curHabitat === 'aquatic');
+    const inWater = !isFlyingFlight && Boolean(fullWater || curHabitat === 'aquatic');
     p.inWater = inWater;
-    p.inSubmerged = Boolean(this.currentBiome?.submerged);
+    p.inSubmerged = isSubmergedBiome;
+    p.baseY = isFlyingFlight ? (SKY_CORRIDOR_Y - 1.15) : 0;
 
     if (leftJust) {
       if (p.inShopLane === 'right') {
@@ -2680,155 +2708,189 @@ export class Game {
     p.x += (targetX - p.x) * Math.min(1, dt * laneSpeed);
     const laneLean = (p.x - prevX) / Math.max(dt, 0.001) * 0.055;
 
-    // Pulo + Salto Duplo Limitado + Pulo Carregado (+ Emersão na água)
+    // Pulo + Salto Duplo Limitado + Pulo Carregado / Voo Aerodinâmico + Emersão na água
     const jumpMult = (p.jumpMult || 1) * (p.spec.stats.jump >= 9 ? 1.1 : 1.0);
     const maxAirJumps = p.id === 'compsognathus' ? 2 : 1;
     const airJumpCost = Math.round(58 * (1 - (p.mutationMods?.staminaSave || 0)) * (p.airStaminaCostMult || 1));
-    if (jumpJust) {
-      if (this.events.ufo.active && this.events.ufo.mashBreak()) {
-        // Quebrou o feixe do OVNI!
-      } else if (inWater && !p.inSubmerged && ((p.diveTarget || 0) >= 0.5 || (p.diveDepth || 0) > 0.25)) {
-        p.diveTarget = 0;
-        p.diveDepth = 0;
-        p.diveTimer = 0;
-        p.vy = 11.8 * jumpMult;
-        p.grounded = false;
-        p.ducking = false;
-        p.sliding = false;
-        p.airJumpsUsed = 0;
-        this.sfx.jump(true);
-        this.particles.emitDust(p.x, (p.baseY || 0) + 0.35, p.z, 12, '#67e8f9', 3.2);
-        if (p.index === 0) this.ui.hud.showFloatText('🌊 SALTO NA SUPERFÍCIE!', '#38bdf8');
-      } else if (p.grounded) {
-        p.vy = 13.4 * jumpMult;
-        p.grounded = false;
-        p.ducking = false;
-        p.sliding = false;
-        p.jumpHoldTimer = 0.12;
-        p.airJumpsUsed = 0;
-        p._lastJumpAt = this.runTime;
-        this.runJumps++;
-        this.sfx.jump(false);
-        this.particles.emitDust(p.x, (p.baseY || 0) + 0.12, p.z + 0.2, 6, '#f2c57c', 2.2);
-        if ((this.runTime - (p._lastLaneSwitchAt ?? -99)) <= 0.65 && (p._moveComboCd || 0) <= 0) {
-          p._moveCombo = Math.min(8, (p._moveCombo || 0) + 1);
-          p._moveComboCd = 1.6;
-          this.addScore(35 * p._moveCombo, p);
-          this.ui.hud.showFloatText(`🏃 ESQUIVA ÁGIL! +${35 * p._moveCombo}`, '#5eead4');
-        }
-        if (this.tutorialState?.active && this.tutorialState.step === 1 && p.index === 0) {
-          this.tutorialState.progress++;
-          this._syncTutorialHud();
-          if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
-        }
-      } else if ((p.airJumpsUsed || 0) < maxAirJumps) {
-        if (p.extraJumps > 0) {
-          p.extraJumps--;
-          p.airJumpsUsed = (p.airJumpsUsed || 0) + 1;
-          p.vy = 10.6 * jumpMult;
-          p.jumpHoldTimer = 0;
-          this.sfx.jump(true);
-          this.particles.emitDust(p.x, (p.baseY || 0) + p.y, p.z, 8, '#90e0ef', 2.4);
-        } else if (!staminaUnlocked && p.index === 0) {
-          if (!p._lowStamToastCooldown) {
-            p._lowStamToastCooldown = 0.9;
-            this.ui.hud.showFloatText('🔒 Pulo Duplo & Estamina liberam aos 1.200 pts!', '#94a3b8');
-          }
-        } else if (this.isTestTrack || (p.stamina ?? 100) >= airJumpCost) {
-          if (!this.isTestTrack) {
-            p.stamina = Math.max(0, (p.stamina ?? 100) - airJumpCost);
-            p._staminaRegenDelay = 0.75;
-          }
-          p.airJumpsUsed = (p.airJumpsUsed || 0) + 1;
-          p.vy = 10.1 * jumpMult;
-          p.jumpHoldTimer = 0;
-          this.sfx.jump(true);
-          this.particles.emitDust(p.x, (p.baseY || 0) + p.y, p.z, 8, '#34d399', 2.4);
-        } else if (!p._lowStamToastCooldown) {
-          p._lowStamToastCooldown = 0.8;
-          this.ui.hud.showFloatText(`💨 Estamina baixa (precisa ${airJumpCost})!`, '#fbbf24');
-        }
-      } else if (!p._lowStamToastCooldown) {
-        p._lowStamToastCooldown = 0.8;
-        this.ui.hud.showFloatText('⬇️ Toque o chão antes de outro pulo!', '#94a3b8');
-      }
-    }
 
-    // Pulo carregado enquanto segura a tecla nos primeiros instantes da subida
-    if (jumpHeld && p.jumpHoldTimer > 0 && p.vy > 0) {
-      p.jumpHoldTimer -= dt;
-      p.vy += 13 * dt;
-    }
-
-    // Abaixar / Deslizar / Mergulho Alternante na Água (S / ↓ / Arraste para Baixo alterna Superfície ↔ Submerso)
-    if (p.inSubmerged) {
-      p.diveTarget = 1;
-      p.diveDepth = 1.0;
-      p.ducking = Boolean(duckHeld);
-    } else if (inWater) {
-      if (duckJust) {
-        const nextTarget = (p.diveTarget || 0) >= 0.5 ? 0 : 1;
-        p.diveTarget = nextTarget;
-        this.sfx.slide?.();
-        if (nextTarget === 1) {
-          this.particles.emitDust(p.x, (p.baseY || 0) + 0.25, p.z, 12, '#67e8f9', 3.2);
-          if (p.index === 0) {
-            this.ui.hud.showFloatText('🤿 SUBMERSO! (S/↓ ou W/↑ sobe)', '#22d3ee');
-            if (!p.isAquaticNative) {
-              this._triggerFirstUseSpotlight('spotlight_submerge', {
-                icon: '🫧',
-                title: 'Mergulho Profundo & O₂',
-                desc: 'Toque em S/↓ ou Arraste para Baixo na água para alternar entre Superfície e Fundo do Mar! Embaixo d’água você escapa de tubarões e encontra correntes turbo 🌀 e baús! Pressione S/↓ ou W/↑ novamente para subir antes que o O₂ acabe.',
-                selector: '#hud-oxygen-pill',
-                accent: '#22d3ee'
-              });
-            }
-          }
-        } else {
-          this.particles.emitDust(p.x, (p.baseY || 0) - 0.85, p.z, 10, '#bae6fd', 2.8);
-          if (p.index === 0) {
-            this.ui.hud.showFloatText('🌊 VOLTANDO À SUPERFÍCIE!', '#38bdf8');
-          }
-        }
-      }
-      const target = (p.diveTarget || 0) >= 0.5 ? 1 : 0;
-      const prevDive = p.diveDepth || 0;
-      if (prevDive < target) {
-        p.diveDepth = Math.min(target, prevDive + dt * 4.6);
-      } else if (prevDive > target) {
-        p.diveDepth = Math.max(target, prevDive - dt * 4.2);
-      }
-      p.diveTimer = target === 1 ? 0.25 : 0;
-      p.ducking = Boolean(duckHeld);
-      if ((p.diveDepth || 0) > 0.22 && Math.random() < dt * 9) {
-        this.particles.emitDust(p.x, (p.baseY || 0) - (p.diveDepth || 0) * 2.5, p.z + 0.22, 2, '#90e0ef', 1.4);
-      }
-    } else {
+    if (isFlyingFlight) {
       p.diveTarget = 0;
       p.diveDepth = Math.max(0, (p.diveDepth || 0) - dt * 6.0);
-      if (duckHeld) {
-        if (!p.grounded) {
-          if (p.vy > -18 && (this.runTime - (p._lastJumpAt ?? -99)) <= 0.85 && (p._moveComboCd || 0) <= 0) {
+      p.sliding = false;
+      p.grounded = false;
+      if (jumpJust) {
+        if (this.events.ufo.active && this.events.ufo.mashBreak()) {
+          // Quebrou o feixe do OVNI!
+        } else {
+          p.vy = Math.max(p.vy, 7.8 * jumpMult);
+          p.airJumpsUsed = 0;
+          this.runJumps++;
+          this.sfx.jump(true);
+          this.particles.emitDust(p.x, (p.baseY || 0) + p.y, p.z + 0.25, 5, '#bae6fd', 2.0);
+          if (this.tutorialState?.active && this.tutorialState.step === 1 && p.index === 0) {
+            this.tutorialState.progress++;
+            this._syncTutorialHud();
+            if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+          }
+        }
+      }
+      if (duckJust || duckHeld) {
+        p.vy = duckJust ? Math.min(p.vy, -8.8) : Math.max(-11.2, p.vy - 28.0 * dt);
+        if (duckJust) this.sfx.slide?.();
+      } else if (jumpHeld) {
+        p.vy = Math.min(10.2, p.vy + 26.0 * dt);
+      } else {
+        // Estabilização suave de planeio no corredor celeste
+        p.vy += (-p.y * 5.8 - p.vy * 4.8) * dt;
+      }
+      p.ducking = Boolean(duckHeld);
+    } else {
+      if (jumpJust) {
+        if (this.events.ufo.active && this.events.ufo.mashBreak()) {
+          // Quebrou o feixe do OVNI!
+        } else if (inWater && !p.inSubmerged && ((p.diveTarget || 0) >= 0.5 || (p.diveDepth || 0) > 0.25)) {
+          p.diveTarget = 0;
+          p.diveDepth = 0;
+          p.diveTimer = 0;
+          p.vy = 11.8 * jumpMult;
+          p.grounded = false;
+          p.ducking = false;
+          p.sliding = false;
+          p.airJumpsUsed = 0;
+          this.sfx.jump(true);
+          this.particles.emitDust(p.x, (p.baseY || 0) + 0.35, p.z, 12, '#67e8f9', 3.2);
+          if (p.index === 0) this.ui.hud.showFloatText('🌊 SALTO NA SUPERFÍCIE!', '#38bdf8');
+        } else if (p.grounded) {
+          p.vy = 13.4 * jumpMult;
+          p.grounded = false;
+          p.ducking = false;
+          p.sliding = false;
+          p.jumpHoldTimer = 0.12;
+          p.airJumpsUsed = 0;
+          p._lastJumpAt = this.runTime;
+          this.runJumps++;
+          this.sfx.jump(false);
+          this.particles.emitDust(p.x, (p.baseY || 0) + 0.12, p.z + 0.2, 6, '#f2c57c', 2.2);
+          if ((this.runTime - (p._lastLaneSwitchAt ?? -99)) <= 0.65 && (p._moveComboCd || 0) <= 0) {
             p._moveCombo = Math.min(8, (p._moveCombo || 0) + 1);
             p._moveComboCd = 1.6;
-            this.addScore(45 * p._moveCombo, p);
-            this.ui.hud.showFloatText(`⚡ MERGULHO PERFEITO! +${45 * p._moveCombo}`, '#38bdf8');
+            this.addScore(35 * p._moveCombo, p);
+            this.ui.hud.showFloatText(`🏃 ESQUIVA ÁGIL! +${35 * p._moveCombo}`, '#5eead4');
           }
-          p.vy = Math.min(p.vy, -20);
-        } else if (!p.sliding && !p.ducking) {
-          const slideCost = staminaUnlocked ? 14 : 0;
-          const hasSlideStam = this.isTestTrack || !staminaUnlocked || (p.stamina ?? 100) >= slideCost;
-          if (hasSlideStam && slideCost > 0 && !this.isTestTrack) {
-            p.stamina = Math.max(0, (p.stamina ?? 100) - slideCost);
-            p._staminaRegenDelay = 0.45;
+          if (this.tutorialState?.active && this.tutorialState.step === 1 && p.index === 0) {
+            this.tutorialState.progress++;
+            this._syncTutorialHud();
+            if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
           }
-          p.sliding = hasSlideStam;
-          p.slideTimer = hasSlideStam ? 0.48 : 0;
-          this.sfx.slide();
+        } else if ((p.airJumpsUsed || 0) < maxAirJumps) {
+          if (p.extraJumps > 0) {
+            p.extraJumps--;
+            p.airJumpsUsed = (p.airJumpsUsed || 0) + 1;
+            p.vy = 10.6 * jumpMult;
+            p.jumpHoldTimer = 0;
+            this.sfx.jump(true);
+            this.particles.emitDust(p.x, (p.baseY || 0) + p.y, p.z, 8, '#90e0ef', 2.4);
+          } else if (!staminaUnlocked && p.index === 0) {
+            if (!p._lowStamToastCooldown) {
+              p._lowStamToastCooldown = 0.9;
+              this.ui.hud.showFloatText('🔒 Pulo Duplo & Estamina liberam aos 1.200 pts!', '#94a3b8');
+            }
+          } else if (this.isTestTrack || (p.stamina ?? 100) >= airJumpCost) {
+            if (!this.isTestTrack) {
+              p.stamina = Math.max(0, (p.stamina ?? 100) - airJumpCost);
+              p._staminaRegenDelay = 0.75;
+            }
+            p.airJumpsUsed = (p.airJumpsUsed || 0) + 1;
+            p.vy = 10.1 * jumpMult;
+            p.jumpHoldTimer = 0;
+            this.sfx.jump(true);
+            this.particles.emitDust(p.x, (p.baseY || 0) + p.y, p.z, 8, '#34d399', 2.4);
+          } else if (!p._lowStamToastCooldown) {
+            p._lowStamToastCooldown = 0.8;
+            this.ui.hud.showFloatText(`💨 Estamina baixa (precisa ${airJumpCost})!`, '#fbbf24');
+          }
+        } else if (!p._lowStamToastCooldown) {
+          p._lowStamToastCooldown = 0.8;
+          this.ui.hud.showFloatText('⬇️ Toque o chão antes de outro pulo!', '#94a3b8');
         }
-        p.ducking = true;
+      }
+
+      // Pulo carregado enquanto segura a tecla nos primeiros instantes da subida
+      if (jumpHeld && p.jumpHoldTimer > 0 && p.vy > 0) {
+        p.jumpHoldTimer -= dt;
+        p.vy += 13 * dt;
+      }
+
+      // Abaixar / Deslizar / Mergulho Alternante na Água (S / ↓ / Arraste para Baixo alterna Superfície ↔ Submerso)
+      if (p.inSubmerged) {
+        p.diveTarget = 1;
+        p.diveDepth = 1.0;
+        p.ducking = Boolean(duckHeld);
+      } else if (inWater) {
+        if (duckJust) {
+          const nextTarget = (p.diveTarget || 0) >= 0.5 ? 0 : 1;
+          p.diveTarget = nextTarget;
+          this.sfx.slide?.();
+          if (nextTarget === 1) {
+            this.particles.emitDust(p.x, (p.baseY || 0) + 0.25, p.z, 12, '#67e8f9', 3.2);
+            if (p.index === 0) {
+              this.ui.hud.showFloatText('🤿 SUBMERSO! (S/↓ ou W/↑ sobe)', '#22d3ee');
+              if (!p.isAquaticNative) {
+                this._triggerFirstUseSpotlight('spotlight_submerge', {
+                  icon: '🫧',
+                  title: 'Mergulho Profundo & O₂',
+                  desc: 'Toque em S/↓ ou Arraste para Baixo na água para alternar entre Superfície e Fundo do Mar! Embaixo d’água você escapa de tubarões e encontra correntes turbo 🌀 e baús! Pressione S/↓ ou W/↑ novamente para subir antes que o O₂ acabe.',
+                  selector: '#hud-oxygen-pill',
+                  accent: '#22d3ee'
+                });
+              }
+            }
+          } else {
+            this.particles.emitDust(p.x, (p.baseY || 0) - 0.85, p.z, 10, '#bae6fd', 2.8);
+            if (p.index === 0) {
+              this.ui.hud.showFloatText('🌊 VOLTANDO À SUPERFÍCIE!', '#38bdf8');
+            }
+          }
+        }
+        const target = (p.diveTarget || 0) >= 0.5 ? 1 : 0;
+        const prevDive = p.diveDepth || 0;
+        if (prevDive < target) {
+          p.diveDepth = Math.min(target, prevDive + dt * 4.6);
+        } else if (prevDive > target) {
+          p.diveDepth = Math.max(target, prevDive - dt * 4.2);
+        }
+        p.diveTimer = target === 1 ? 0.25 : 0;
+        p.ducking = Boolean(duckHeld);
+        if ((p.diveDepth || 0) > 0.22 && Math.random() < dt * 9) {
+          this.particles.emitDust(p.x, (p.baseY || 0) - (p.diveDepth || 0) * 2.5, p.z + 0.22, 2, '#90e0ef', 1.4);
+        }
       } else {
-        p.ducking = false;
+        p.diveTarget = 0;
+        p.diveDepth = Math.max(0, (p.diveDepth || 0) - dt * 6.0);
+        if (duckHeld) {
+          if (!p.grounded) {
+            if (p.vy > -18 && (this.runTime - (p._lastJumpAt ?? -99)) <= 0.85 && (p._moveComboCd || 0) <= 0) {
+              p._moveCombo = Math.min(8, (p._moveCombo || 0) + 1);
+              p._moveComboCd = 1.6;
+              this.addScore(45 * p._moveCombo, p);
+              this.ui.hud.showFloatText(`⚡ MERGULHO PERFEITO! +${45 * p._moveCombo}`, '#38bdf8');
+            }
+            p.vy = Math.min(p.vy, -20);
+          } else if (!p.sliding && !p.ducking) {
+            const slideCost = staminaUnlocked ? 14 : 0;
+            const hasSlideStam = this.isTestTrack || !staminaUnlocked || (p.stamina ?? 100) >= slideCost;
+            if (hasSlideStam && slideCost > 0 && !this.isTestTrack) {
+              p.stamina = Math.max(0, (p.stamina ?? 100) - slideCost);
+              p._staminaRegenDelay = 0.45;
+            }
+            p.sliding = hasSlideStam;
+            p.slideTimer = hasSlideStam ? 0.48 : 0;
+            this.sfx.slide();
+          }
+          p.ducking = true;
+        } else {
+          p.ducking = false;
+        }
       }
     }
 
@@ -2938,7 +3000,7 @@ export class Game {
     }
 
     // Garante que qualquer evento (OVNI, montaria, foguete encerrado) retorne o dino à gravidade
-    if (p.y > 0.01 && p.rocketTimer <= 0 && p.grappleTimer <= 0 && p.riverLogTimer <= 0) {
+    if (!isFlyingFlight && p.y > 0.01 && p.rocketTimer <= 0 && p.grappleTimer <= 0 && p.riverLogTimer <= 0) {
       p.grounded = false;
     }
 
@@ -2966,6 +3028,16 @@ export class Game {
       p.grounded = true;
       p.y += (0.55 - p.y) * Math.min(1, dt * 10);
       p.vy = 0;
+    } else if (isFlyingFlight) {
+      p.grounded = false;
+      p.y += p.vy * dt;
+      if (p.y > 2.6) {
+        p.y = 2.6;
+        if (p.vy > 0) p.vy = 0;
+      } else if (p.y < -1.35) {
+        p.y = -1.35;
+        if (p.vy < 0) p.vy = 0;
+      }
     } else if (!p.grounded) {
       p.vy -= 35.0 * gravMult * dt;
       // Planar breve consome estamina rapidamente (impede voar; pesado se +Patas)
@@ -3245,12 +3317,13 @@ export class Game {
 
     for (const p of this.players) {
       if (!p.dead) {
+        const isFlyIntro = p.habitatMode === 'flying' && !p.inSubmerged;
         p.vy = 0;
         p.y = 0;
-        p.grounded = true;
+        p.grounded = !isFlyIntro;
         p.sliding = false;
         p.model.root.position.set(p.x, p.baseY || 0, p.z);
-        p.animator.update(dt, { speed: 0, grounded: true, vy: 0, ducking: false });
+        p.animator.update(dt, { speed: 0, grounded: !isFlyIntro, vy: 0, ducking: false });
       }
     }
 
@@ -3552,26 +3625,24 @@ export class Game {
     }
     if (this.decoyTimer > 0) this.decoyTimer -= dt;
 
-    // Transição de bioma por portal a cada ~1000 pontos respeitando o bioma inicial escolhido (ou Modo História)
+    // Transição de bioma por portal a cada ~1000 pontos avançando a partir do bioma atual (ou Modo História)
     if (this.sequenceBiomes && !this.randomPortalMode && !this.hollowEarthState?.active && this.modeId !== 'story' && this.startBiomeId !== 'random_portal') {
-      const allPureAqua = this.players.length > 0 && this.players.every((pl) => this._isPureAquaticPlayer(pl));
-      const seqList = allPureAqua ? BIOMES.filter((b) => isAquaticBiome(b)) : BIOMES;
-      const startIdx = Math.max(0, seqList.findIndex((b) => b.id === (allPureAqua ? 'ocean_surface' : this.startBiomeId)));
-      const targetIdx = (startIdx + Math.floor(this.score / 1000)) % Math.max(1, seqList.length);
-      const targetBiome = seqList[targetIdx];
-      if (targetBiome && targetBiome.id !== this.currentBiome.id) {
-        this.currentBiome = targetBiome;
-        this.world.applyTheme(targetBiome.theme, false);
-        this.spawner.setBiome(targetBiome.id);
-        for (const pl of this.players) {
-          pl.inSubmerged = Boolean(targetBiome.submerged);
-          pl.diveTarget = pl.inSubmerged ? 1 : 0;
-          pl.diveDepth = pl.inSubmerged ? 1 : 0;
+      const seqStep = Math.floor(this.score / 1000);
+      if (seqStep > (this._lastSeqBiomeStep || 0)) {
+        this._lastSeqBiomeStep = seqStep;
+        const allPureAqua = this.players.length > 0 && this.players.every((pl) => this._isPureAquaticPlayer(pl));
+        const seqList = allPureAqua ? BIOMES.filter((b) => isAquaticBiome(b)) : BIOMES;
+        const curIdx = Math.max(0, seqList.findIndex((b) => b.id === this.currentBiome?.id));
+        const targetBiome = seqList[(curIdx + 1) % Math.max(1, seqList.length)];
+        if (targetBiome && targetBiome.id !== this.currentBiome.id) {
+          this.currentBiome = targetBiome;
+          this.world.applyTheme(targetBiome.theme, false);
+          this.spawner.setBiome(targetBiome.id);
+          this._applyBiomePlayersState(targetBiome);
+          this.ui.hud.showBanner(`🌀 PORTAL! Entrando em: ${targetBiome.name}`, '#00f5d4', 3.5);
+          this._discoverCurrentBiomeFossil();
+          if (targetBiome.id === 'jurassic_river') Save.unlockAchievement('river_king');
         }
-        this._syncEnvironmentHabitat(p0);
-        this.ui.hud.showBanner(`🌀 PORTAL! Entrando em: ${targetBiome.name}`, '#00f5d4', 3.5);
-        this._discoverCurrentBiomeFossil();
-        if (targetBiome.id === 'jurassic_river') Save.unlockAchievement('river_king');
       }
     }
 
@@ -3720,12 +3791,17 @@ export class Game {
         const lanes = [0, 1, 2].sort(() => Math.random() - 0.5).slice(0, 2);
         const waterWave = this.spawner._isWaterTrack();
         const isAbyssWave = this.currentBiome?.id === 'abyss_submerged';
+        const isFlyWave = !waterWave && p0?.habitatMode === 'flying' && !isAbyssWave;
         for (const ln of lanes) {
           const lx = waterWave ? this.spawner._getLaneX(ln) : LANE_X[ln];
           const wKind = waterWave
             ? (isAbyssWave ? (this.waveIndex % 2 === 0 ? 'angler_hazard' : 'coral_reef') : (this.waveIndex % 2 === 0 ? 'whirlpool_vortex' : 'shark_fin'))
-            : (this.waveIndex % 2 === 0 ? 'scorpion' : 'cactus_tall');
-          this.spawner._acquire(wKind, lx, 0, -64);
+            : (isFlyWave ? 'bird' : (this.waveIndex % 2 === 0 ? 'scorpion' : 'cactus_tall'));
+          const spawned = this.spawner._acquire(wKind, lx, isFlyWave ? (this.waveIndex % 2 === 0 ? 1.35 : -0.45) : 0, -64);
+          if (isFlyWave && spawned) {
+            spawned.baseY = this.waveIndex % 2 === 0 ? 1.35 : -0.45;
+            spawned.spawnY = this.spawner._getBaseY(spawned.baseY);
+          }
         }
         if (this.waveIndex % 3 === 0 && !this.events.bosses.activeBoss) {
           this.ui.hud.showBanner(`👑 CHEFE DA ONDA ${this.waveIndex} CHEGANDO!`, '#ff2e63', 3.5);
@@ -4135,13 +4211,15 @@ export class Game {
           p.invulnTimer = Math.max(p.invulnTimer, 2.5);
           this._hintOnce('shortcut', '🌀 Portais de Runas levam a outro bioma (Azul), Ovos (Dourado) ou Surpresa (Roxo)!', obs.color || '#38bdf8');
           if (obs.portalDest === 'biome' && this.modeId !== 'story') {
-            const idx = (BIOMES.findIndex((b) => b.id === this.currentBiome.id) + 1) % BIOMES.length;
-            const nextB = BIOMES[idx];
+            const allPureAqua = this.players.length > 0 && this.players.every((pl) => this._isPureAquaticPlayer(pl));
+            const poolList = allPureAqua ? BIOMES.filter((b) => isAquaticBiome(b)) : BIOMES;
+            const curIdx = poolList.findIndex((b) => b.id === this.currentBiome.id);
+            const nextB = poolList[(curIdx + 1) % Math.max(1, poolList.length)];
             if (nextB) {
               this.currentBiome = nextB;
               this.world.applyTheme(nextB.theme, false);
               this.spawner.setBiome(nextB.id);
-              this._syncEnvironmentHabitat(p);
+              this._applyBiomePlayersState(nextB);
               this._discoverCurrentBiomeFossil();
               this.ui.hud.showBanner(`🌀 PORTAL AZUL → Entrando em: ${nextB.name}!`, '#38bdf8', 3.2);
             }

@@ -150,8 +150,9 @@ export class CameraRig {
     } else {
       const lerpMix = (a, b, m) => a + (b - a) * m;
       const waterDriftX = isSubmerged ? Math.sin(this.cinematicTime * 1.15) * 0.14 : 0;
-      const surfBaseY = (isWaterSurface ? 4.62 : (isSubmergedBiome ? 4.1 : 5.0)) + fy * 0.35 + spreadExtra * 0.4 + portraitDist * 0.36;
-      const surfLookY = (isWaterSurface ? 1.18 : (isSubmergedBiome ? 1.05 : 1.35)) + fy * 0.25;
+      const fyTrack = fy > 1.35 ? 0.56 : 0.35;
+      const surfBaseY = (isWaterSurface ? 4.62 : (isSubmergedBiome ? 4.1 : 5.0)) + fy * fyTrack + spreadExtra * 0.4 + portraitDist * 0.36;
+      const surfLookY = (isWaterSurface ? 1.18 : (isSubmergedBiome ? 1.05 : 1.35)) + fy * (fy > 1.35 ? 0.44 : 0.25);
       const surfBaseZ = fz + (isSubmergedBiome ? 8.1 : (isWaterSurface ? 8.85 : 9.2)) + spreadExtra + highlightZoom + portraitDist;
 
       // Ao mergulhar abaixo de y = 0, a câmera mergulha fisicamente abaixo da lâmina da água (-1.15 < 0)!
