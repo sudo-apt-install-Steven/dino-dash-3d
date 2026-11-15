@@ -2692,10 +2692,16 @@ export class Game {
       p.diveDepth = Math.max(0, (p.diveDepth || 0) - dt * 6.0);
       p.sliding = false;
       p.grounded = false;
+      const flapCost = Math.round(18 * (1 - (p.mutationMods?.staminaSave || 0)) * (p.airStaminaCostMult || 1));
       if (jumpJust) {
         if (this.events.ufo.active && this.events.ufo.mashBreak()) {
           // Quebrou o feixe do OVNI!
-        } else {
+        } else if (this.isTestTrack || (p.stamina ?? 100) >= flapCost) {
+          if (!this.isTestTrack) {
+            p.stamina = Math.max(0, (p.stamina ?? 100) - flapCost);
+            p._staminaRegenDelay = 0.6;
+          }
+          p.glideHoldTimer = 0.65;
           p.vy = Math.max(p.vy, 7.8 * jumpMult);
           p.airJumpsUsed = 0;
           this.runJumps++;
@@ -2706,16 +2712,48 @@ export class Game {
             this._syncTutorialHud();
             if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
           }
+        } else if (!p._lowStamToastCooldown && p.index === 0) {
+          p._lowStamToastCooldown = 0.85;
+          this.ui.hud.showFloatText('💨 Sem estamina nas asas! Voe nivelado ou dê rasante (S/↓)!', '#fbbf24');
         }
       }
       if (duckJust || duckHeld) {
         p.vy = duckJust ? Math.min(p.vy, -8.8) : Math.max(-11.2, p.vy - 28.0 * dt);
+        p.glideHoldTimer = Math.min(0.65, (p.glideHoldTimer ?? 0.4) + dt * 1.1);
         if (duckJust) this.sfx.slide?.();
       } else if (jumpHeld) {
-        p.vy = Math.min(10.2, p.vy + 26.0 * dt);
+        const hasWingStam = this.isTestTrack || (p.stamina ?? 100) > 4;
+        const hasHoldTime = (p.glideHoldTimer ?? 0.65) > 0;
+        if (hasWingStam && hasHoldTime) {
+          if (!this.isTestTrack) {
+            const holdDrain = 56 * (1 - (p.mutationMods?.staminaSave || 0)) * (p.airStaminaCostMult || 1);
+            p.stamina = Math.max(0, (p.stamina ?? 100) - holdDrain * dt);
+            p._staminaRegenDelay = 0.7;
+          }
+          p.glideHoldTimer = Math.max(0, (p.glideHoldTimer ?? 0.65) - dt);
+          if (p.y >= 2.45) {
+            p.glideHoldTimer = Math.min(p.glideHoldTimer, 0.08);
+          }
+          p.vy = Math.min(9.2, p.vy + 22.0 * dt);
+        } else {
+          // Estamina ou tempo máximo de planeio esgotado: perde sustentação imediatamente e desce de volta ao nível base!
+          p.vy = Math.min(p.vy, -1.8) + ((-0.35 - p.y) * 7.2 - p.vy * 4.8) * dt;
+          if (!p._lowStamToastCooldown && p.index === 0) {
+            p._lowStamToastCooldown = 1.1;
+            this.ui.hud.showFloatText(
+              !hasWingStam
+                ? '💨 Estamina esgotada! Solte para recuperar no voo nivelado!'
+                : '🪽 Limite de planeio atingido! Solte a tecla para estabilizar!',
+              '#fbbf24'
+            );
+          }
+        }
       } else {
-        // Estabilização suave de planeio no corredor celeste
+        // Estabilização suave de planeio no corredor celeste e recarga do tempo de sustentação quando nivelado
         p.vy += (-p.y * 5.8 - p.vy * 4.8) * dt;
+        if (p.y <= 0.55) {
+          p.glideHoldTimer = Math.min(0.65, (p.glideHoldTimer ?? 0) + dt * 1.1);
+        }
       }
       p.ducking = Boolean(duckHeld);
     } else {
@@ -3013,10 +3051,11 @@ export class Game {
       }
     } else if (!p.grounded) {
       p.vy -= 35.0 * gravMult * dt;
-      // Planar breve consome estamina rapidamente (impede voar; pesado se +Patas)
-      if (jumpHeld && staminaUnlocked && p.vy < -2.6 && (p.stamina ?? 0) > 4) {
+      // Planar breve consome estamina rapidamente e possui limite de sustentação por salto (impede voar segurando a tecla)
+      if (jumpHeld && p.vy < -2.6 && (p.stamina ?? 0) > 4 && (p.glideHoldTimer ?? 0.65) > 0) {
         p.stamina = Math.max(0, (p.stamina ?? 0) - 62 * (p.airStaminaCostMult || 1) * dt);
-        p._staminaRegenDelay = 0.5;
+        p.glideHoldTimer = Math.max(0, (p.glideHoldTimer ?? 0.65) - dt);
+        p._staminaRegenDelay = 0.55;
         p.vy = Math.max(p.vy, -10.5);
       }
       p.y += p.vy * dt;
@@ -3024,6 +3063,7 @@ export class Game {
         p.y = 0;
         p.vy = 0;
         p.grounded = true;
+        p.glideHoldTimer = 0.65;
         p.extraJumps = p.id === 'compsognathus' ? 1 : 0;
         p.airJumpsUsed = 0;
         p.resonanceWindow = 0.45;
@@ -3058,8 +3098,10 @@ export class Game {
       ? 100
       : Math.min(100, (p.abilityCharge ?? 100) + dt * 10);
     const inOasis = !!this.currentOasis;
-    const canRegenStam = (p._staminaRegenDelay || 0) <= 0 && (p.grounded || p.habitat === 'aquatic' || p.habitat === 'flying');
-    const stamRegen = inOasis ? 28 : (canRegenStam ? 8.5 * (p.mutationMods?.stamRegenMult || 1) : 0);
+    const canRegenFlying = isFlyingFlight && !jumpHeld && p.y <= 0.6;
+    const canRegenStam = (p._staminaRegenDelay || 0) <= 0 && (p.grounded || curHabitat === 'aquatic' || canRegenFlying);
+    const baseStamRegen = isFlyingFlight && (duckHeld || p.y < -0.25) ? 16.5 : (isFlyingFlight ? 11.5 : 8.5);
+    const stamRegen = inOasis ? 28 : (canRegenStam ? baseStamRegen * (p.mutationMods?.stamRegenMult || 1) : 0);
     p.stamina = Math.min(100, (p.stamina ?? 100) + stamRegen * dt);
     if (p.resonanceWindow > 0) p.resonanceWindow = Math.max(0, p.resonanceWindow - dt);
     if (p.ramTimer > 0) p.ramTimer = Math.max(0, p.ramTimer - dt);

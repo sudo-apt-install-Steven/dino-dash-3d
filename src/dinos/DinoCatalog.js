@@ -678,7 +678,7 @@ export function getDinoSwimCapabilities(specOrId, { hybrid = null, mutationId = 
     isAmphibious: false,
     swimModeLabel: base === 'flying' ? 'Voador (Rotas Aéreas)' : 'Terrestre (Terra + Nado em Rios)',
     swimModeDescription: base === 'flying'
-      ? 'Voa pelas rotas aéreas; atravessa mares apenas na superfície.'
+      ? 'Voa pelas rotas aéreas (subir/planar alto consome Estamina; recupere em voo nivelado ou rasante S/↓).'
       : 'Corre em terra firme; pode nadar e mergulhar ao cruzar rios/oceanos (consome O₂).'
   };
 }
