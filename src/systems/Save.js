@@ -71,6 +71,7 @@ const DEFAULT_SAVE = {
   benchmarkGpu: '',
   introModeCustom: false,
   devMode: false,
+  playerActorId: '',
   crystals: 0,
   fossilCrates: 2,
   gachaPity: 0,
@@ -191,6 +192,9 @@ class SaveSystem {
     }
     if (!loaded.introModeCustom && !loaded.settings?.disableIntro && loaded.settings?.introMode === 'first_time') {
       loaded.settings.introMode = 'always';
+    }
+    if (!import.meta.env?.DEV) {
+      loaded.devMode = false;
     }
     return loaded;
   }

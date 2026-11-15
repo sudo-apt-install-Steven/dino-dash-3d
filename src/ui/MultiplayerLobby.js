@@ -7,6 +7,13 @@ import { BIOMES, getBiomePreviewMeta } from '../world/Biomes.js';
 import { DIFFICULTY_PRESETS } from '../game/Difficulty.js';
 import { Save } from '../systems/Save.js';
 import { attachModalHelp } from './Menus.js';
+import {
+  escapeHtml,
+  sanitizeNickname,
+  sanitizeChatText,
+  sanitizeRoomCode,
+  sanitizeHexColor
+} from '../security/Sanitize.js';
 
 export class MultiplayerLobby {
   static renderInto(container, net, callbacks = {}) {
@@ -63,7 +70,7 @@ export class MultiplayerLobby {
               </div>
             </div>
 
-            ${statusMsg ? `<div class="item-card" style="border-color:#ff9a24; color:#ffd447; font-weight:700;">${statusMsg}</div>` : ''}
+            ${statusMsg ? `<div class="item-card" style="border-color:#ff9a24; color:#ffd447; font-weight:700;">${escapeHtml(statusMsg)}</div>` : ''}
 
             ${!connected ? `
               <div class="tabs-row">
@@ -82,7 +89,7 @@ export class MultiplayerLobby {
                 <div class="item-card">
                   <strong style="color:#58d63a;">📺 Criar Sala (Telão PC/TV)</strong>
                   <label style="font-size:0.84rem;">Apelido do Host:
-                    <input class="text-input" id="mp-nick" value="${nickname}" maxlength="18" style="width:100%;" />
+                    <input class="text-input" id="mp-nick" value="${escapeHtml(nickname)}" maxlength="18" style="width:100%;" />
                   </label>
                   <label style="display:flex; gap:8px; align-items:center; font-size:0.84rem;">
                     <input type="checkbox" id="mp-pub" ${isPublic ? 'checked' : ''} /> Sala Pública (visível na lista)
@@ -125,10 +132,10 @@ export class MultiplayerLobby {
                 <div class="item-card">
                   <strong style="color:#ffd447;">🔑 Entrar em Sala por Código</strong>
                   <label style="font-size:0.84rem;">Seu Apelido:
-                    <input class="text-input" id="mp-join-nick" value="${nickname}" maxlength="18" style="width:100%;" />
+                    <input class="text-input" id="mp-join-nick" value="${escapeHtml(nickname)}" maxlength="18" style="width:100%;" />
                   </label>
                   <div style="display:flex; gap:8px;">
-                    <input class="text-input" id="mp-code" value="${joinCode}" maxlength="4" placeholder="ABCD" style="flex:1; text-transform:uppercase; font-size:1.1rem; letter-spacing:3px; text-align:center;" />
+                    <input class="text-input" id="mp-code" value="${escapeHtml(joinCode)}" maxlength="4" placeholder="ABCD" style="flex:1; text-transform:uppercase; font-size:1.1rem; letter-spacing:3px; text-align:center;" />
                     <button class="chunky-btn orange" id="mp-join">Entrar</button>
                   </div>
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
@@ -137,12 +144,15 @@ export class MultiplayerLobby {
                   </div>
                   <div style="display:flex; flex-direction:column; gap:6px; max-height:150px; overflow-y:auto;">
                     ${publicRooms.length === 0 ? `<span style="font-size:0.8rem; color:#d8c2a6;">Nenhuma sala pública listada ainda.</span>` :
-                      publicRooms.map((r) => `
+                      publicRooms.map((r) => {
+                        const codeSafe = escapeHtml(sanitizeRoomCode(r.code));
+                        return `
                         <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:6px 8px; border-radius:8px;">
-                          <span><strong>${r.code}</strong> • ${r.hostName} (${r.playerCount}/8)</span>
-                          <button class="chunky-btn secondary" data-join-code="${r.code}" style="padding:4px 10px; font-size:0.78rem;">Conectar</button>
+                          <span><strong>${codeSafe}</strong> • ${escapeHtml(r.hostName)} (${Number(r.playerCount) || 1}/8)</span>
+                          <button class="chunky-btn secondary" data-join-code="${codeSafe}" style="padding:4px 10px; font-size:0.78rem;">Conectar</button>
                         </div>
-                      `).join('')}
+                      `;
+                      }).join('')}
                   </div>
                 </div>
               </div>
@@ -150,10 +160,10 @@ export class MultiplayerLobby {
               <div class="cards-grid" style="grid-template-columns:220px 1fr;">
                 <div class="item-card" style="align-items:center; text-align:center;">
                   <div style="font-size:0.78rem; font-weight:800; color:#58d63a;">📲 ESCANEIE PARA JOGAR</div>
-                  <div style="font-size:1.9rem; font-weight:900; letter-spacing:5px; color:#ffd447;">${room.code}</div>
+                  <div style="font-size:1.9rem; font-weight:900; letter-spacing:5px; color:#ffd447;">${escapeHtml(room.code)}</div>
                   <canvas id="mp-qr-canvas" width="168" height="168" style="border-radius:10px; background:#fff6e5;"></canvas>
                   <button class="chunky-btn secondary" id="mp-copy-url" style="font-size:0.75rem; padding:6px 10px; width:100%;">🔗 Copiar Link do Celular</button>
-                  <div style="font-size:0.72rem; color:#d8c2a6; word-break:break-all;">${shareUrl}</div>
+                  <div style="font-size:0.72rem; color:#d8c2a6; word-break:break-all;">${escapeHtml(shareUrl)}</div>
                 </div>
 
                 <div style="display:flex; flex-direction:column; gap:10px;">
@@ -235,9 +245,9 @@ export class MultiplayerLobby {
                     ` : ''}
                     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(175px, 1fr)); gap:6px; margin-top:6px;">
                       ${room.peers.map((p) => `
-                        <div style="padding:6px 8px; border-radius:10px; background:rgba(0,0,0,0.35); border:1px solid ${p.color || '#ffd447'}; font-size:0.82rem;">
-                          <div style="font-weight:800;">${p.peerId === room.hostPeerId ? '👑 ' : ''}${p.name}${p.peerId === net.peerId ? ' (Você)' : ''}</div>
-                          <div style="font-size:0.74rem; color:#d8c2a6;">${getDinoSpec(p.dinoId).name} • ${p.ready ? '✅ Pronto' : '⏳ Aguardando'}</div>
+                        <div style="padding:6px 8px; border-radius:10px; background:rgba(0,0,0,0.35); border:1px solid ${sanitizeHexColor(p.color, '#ffd447')}; font-size:0.82rem;">
+                          <div style="font-weight:800;">${p.peerId === room.hostPeerId ? '👑 ' : ''}${escapeHtml(p.name)}${p.peerId === net.peerId ? ' (Você)' : ''}</div>
+                          <div style="font-size:0.74rem; color:#d8c2a6;">${escapeHtml(getDinoSpec(p.dinoId).name)} • ${p.ready ? '✅ Pronto' : '⏳ Aguardando'}</div>
                         </div>
                       `).join('')}
                     </div>
@@ -246,17 +256,17 @@ export class MultiplayerLobby {
                         ${room.status === 'playing'
                           ? `🔥 A corrida já começou! Clique em <strong>ENTRAR NA CORRIDA AGORA!</strong> abaixo.`
                           : (selfReady
-                              ? `✅ Você está <strong>PRONTO</strong>! Aguardando <strong>👑 ${hostPeer?.name || 'o Dono da Sala'}</strong> clicar em <em>INICIAR CORRIDA MULTIPLAYER</em> (iniciará automaticamente aqui na sua tela).`
-                              : `👉 Clique em <strong>👍 MARCAR PRONTO</strong> abaixo para sinalizar a <strong>👑 ${hostPeer?.name || 'o Dono da Sala'}</strong>. Quando ele iniciar, a corrida abrirá automaticamente!`)}
+                              ? `✅ Você está <strong>PRONTO</strong>! Aguardando <strong>👑 ${escapeHtml(hostPeer?.name || 'o Dono da Sala')}</strong> clicar em <em>INICIAR CORRIDA MULTIPLAYER</em> (iniciará automaticamente aqui na sua tela).`
+                              : `👉 Clique em <strong>👍 MARCAR PRONTO</strong> abaixo para sinalizar a <strong>👑 ${escapeHtml(hostPeer?.name || 'o Dono da Sala')}</strong>. Quando ele iniciar, a corrida abrirá automaticamente!`)}
                       </div>
                     ` : ''}
                   </div>
 
                   <div class="item-card" style="gap:6px;">
-                    <strong>💬 Chat Rápido & Emotes</strong>
+                    <strong>💬 Chat Rápido &amp; Emotes</strong>
                     <div style="max-height:85px; overflow-y:auto; font-size:0.8rem; background:rgba(0,0,0,0.25); padding:6px; border-radius:8px;">
                       ${net.chatLog.length === 0 ? `<span style="color:#a89078;">Envie um olá ou emoji para a galera!</span>` :
-                        net.chatLog.map((c) => `<div><strong style="color:#ffd447;">${c.name}:</strong> ${c.text}</div>`).join('')}
+                        net.chatLog.map((c) => `<div><strong style="color:#ffd447;">${escapeHtml(c.name)}:</strong> ${escapeHtml(c.text)}</div>`).join('')}
                     </div>
                     <div style="display:flex; gap:6px; flex-wrap:wrap;">
                       <input class="text-input" id="mp-chat-in" placeholder="Mensagem rápida..." style="flex:1;" />
@@ -307,7 +317,7 @@ export class MultiplayerLobby {
         };
         container.querySelector('#mp-refresh').onclick = refreshRooms;
         container.querySelector('#mp-create').onclick = async () => {
-          nickname = container.querySelector('#mp-nick').value.trim() || 'Host';
+          nickname = sanitizeNickname(container.querySelector('#mp-nick').value, 'Host');
           isPublic = container.querySelector('#mp-pub').checked;
           mpMode = container.querySelector('#mp-mode')?.value || 'race';
           hostDifficulty = container.querySelector('#mp-diff')?.value || hostDifficulty;
@@ -346,8 +356,8 @@ export class MultiplayerLobby {
           render();
         };
         container.querySelector('#mp-join').onclick = async () => {
-          joinCode = container.querySelector('#mp-code').value.toUpperCase().trim();
-          nickname = container.querySelector('#mp-join-nick')?.value?.trim() || container.querySelector('#mp-nick')?.value?.trim() || nickname;
+          joinCode = sanitizeRoomCode(container.querySelector('#mp-code').value);
+          nickname = sanitizeNickname(container.querySelector('#mp-join-nick')?.value || container.querySelector('#mp-nick')?.value || nickname, 'Dino');
           Save.data.network.nickname = nickname;
           Save.save();
           statusMsg = '⏳ Entrando na sala...';
@@ -390,7 +400,7 @@ export class MultiplayerLobby {
           render();
         });
         container.querySelector('#mp-chat-send').onclick = () => {
-          const v = container.querySelector('#mp-chat-in').value.trim();
+          const v = sanitizeChatText(container.querySelector('#mp-chat-in').value);
           if (v) net.sendChat(v);
         };
         container.querySelectorAll('[data-mp-em]').forEach((b) => {

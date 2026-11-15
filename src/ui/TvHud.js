@@ -1,6 +1,7 @@
 // HUD de Tela Principal PC/TV (estilo Jackbox): Ranking lateral com variação ↑↓,
 // foco por clique, contador de eliminação 30s, modo "TV de Sala" e overlay de espectador.
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
+import { escapeHtml, sanitizeHexColor } from '../security/Sanitize.js';
 
 export class TvHud {
   constructor(rootEl, callbacks = {}) {
@@ -61,13 +62,15 @@ export class TvHud {
 
       const spec = getDinoSpec(p.id);
       const isFocused = this.focusedId === id;
-      const color = p.peerColor || spec?.colors?.primary || '#ffd447';
+      const color = sanitizeHexColor(p.peerColor || spec?.colors?.primary, '#ffd447');
+      const safeIdAttr = escapeHtml(id);
+      const safeName = escapeHtml(p.name || spec.name);
       return `
-        <div class="tv-rank-row ${isFocused ? 'focused' : ''} ${p.dead ? 'dead' : ''}" data-focus-id="${id}" title="Clique para focar a câmera">
+        <div class="tv-rank-row ${isFocused ? 'focused' : ''} ${p.dead ? 'dead' : ''}" data-focus-id="${safeIdAttr}" title="Clique para focar a câmera">
           <div style="display:flex; align-items:center; gap:6px; overflow:hidden;">
             <span>#${idx + 1}</span>
             <span style="width:10px; height:10px; border-radius:50%; background:${color}; display:inline-block; flex-shrink:0;"></span>
-            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.name || spec.name}</span>
+            <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${safeName}</span>
           </div>
           <div style="display:flex; align-items:center; gap:5px; font-weight:800;">
             <span>${p.dead ? '💀' : `${Math.floor(p.score || 0)}`}</span>

@@ -81,10 +81,12 @@ export class SettingsModal {
                 <span>📺 Modo TV de Sala (HUD maior)</span>
                 <input type="checkbox" id="set-tvscale" ${Save.data.network?.tvScale ? 'checked' : ''} />
               </div>
+              ${import.meta.env.DEV ? `
               <div class="field-row">
                 <span>🛠️ Ativar Modo Desenvolvedor / Debug</span>
                 <input type="checkbox" id="set-devmode" ${Save.data.devMode ? 'checked' : ''} />
               </div>
+              ` : ''}
             </details>
             <div class="item-card" style="margin-top:8px; font-size:0.82rem; color:#ffe6a7;">
               📱 <strong>Escaneie para jogar:</strong> Abra <strong>Multiplayer</strong> no menu principal para exibir o QR Code e usar celulares como controles!
@@ -287,7 +289,7 @@ export class SettingsModal {
       Save.data.network.tvScale = container.querySelector('#set-tvscale').checked;
       Save.data.mirroredMode = container.querySelector('#set-mirrored').checked;
       Save.data.teacherMode = container.querySelector('#set-teacher').checked;
-      Save.data.devMode = !!container.querySelector('#set-devmode')?.checked;
+      Save.data.devMode = import.meta.env.DEV ? !!container.querySelector('#set-devmode')?.checked : false;
 
       s.accessibility.oneHand = container.querySelector('#a11y-onehand').checked;
       s.accessibility.largeText = container.querySelector('#a11y-large').checked;

@@ -42,7 +42,7 @@ export class HUD {
           <div class="hud-top-actions" style="display:flex; gap:8px; align-items:center;">
             <button class="chunky-btn secondary" id="btn-guide" style="padding:5px 10px; font-size:0.75rem;" data-tip="Abre o Guia Visual de obstáculos, status e chefes.">📖<span class="btn-label"> Guia</span></button>
             <button class="chunky-btn secondary" id="btn-clip-rec" style="padding:5px 10px; font-size:0.75rem;" data-tip="Gravar clipe curto da corrida (.webm).">🎥<span class="btn-label"> Clipe</span></button>
-            <button class="chunky-btn secondary ${Save.data.devMode ? '' : 'hidden'}" id="btn-debug" style="padding:5px 10px; font-size:0.75rem;" data-tip="Painel de Depuração e Testes (F9).">🛠️<span class="btn-label"> Debug</span></button>
+            ${import.meta.env.DEV ? `<button class="chunky-btn secondary ${Save.data.devMode ? '' : 'hidden'}" id="btn-debug" style="padding:5px 10px; font-size:0.75rem;" data-tip="Painel de Depuração e Testes (F9).">🛠️<span class="btn-label"> Debug</span></button>` : ''}
             <button class="chunky-btn secondary" id="btn-photo-mode" style="padding:5px 10px; font-size:0.75rem;" data-tip="Modo Foto (pausa para capturar cena).">📷</button>
             <button class="chunky-btn secondary" id="btn-pause" style="padding:5px 12px; font-size:0.75rem;" data-tip="Pausar corrida (Tecla P).">⏸<span class="btn-label"> P</span></button>
             <div class="hud-score-box" id="hud-score" data-tip="Recorde máximo (HI) e Pontuação atual."><span class="hi-label">HI 00000</span>  00000</div>
@@ -214,8 +214,9 @@ export class HUD {
 
       <!-- Photo Mode Overlay -->
       <div class="overlay-center hidden" id="photo-overlay" style="background:transparent; align-items:flex-end; pointer-events:none;">
-        <div class="chunky-panel" style="padding:12px 18px; display:flex; gap:10px; align-items:center;">
+        <div class="chunky-panel" style="padding:12px 18px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; pointer-events:auto;">
           <strong>📷 Modo Foto / Cinema</strong>
+          <button class="chunky-btn orange" id="photo-snap">📸 Salvar Foto PNG</button>
           <button class="chunky-btn secondary" id="photo-cam">Trocar Ângulo (C)</button>
           <button class="chunky-btn" id="photo-exit">Sair do Modo Foto</button>
         </div>
@@ -364,13 +365,14 @@ export class HUD {
     this.root.querySelector('#btn-cancel-restart').addEventListener('click', () => this.callbacks.onCancelRestart?.());
     this.root.querySelector('#btn-pause-menu').addEventListener('click', () => this.callbacks.onGoMenu?.());
     this.root.querySelector('#btn-photo-mode').addEventListener('click', () => this.callbacks.onTogglePhoto?.());
-    this.root.querySelector('#btn-debug').addEventListener('click', () => this.callbacks.onOpenDebug?.());
+    this.root.querySelector('#btn-debug')?.addEventListener('click', () => this.callbacks.onOpenDebug?.());
     this.root.querySelector('#btn-guide').addEventListener('click', () => this.callbacks.onOpenGuide?.());
     this.root.querySelector('#tut-skip').addEventListener('click', () => this.callbacks.onSkipTutorial?.());
     this.root.querySelector('#btn-clip-rec').addEventListener('click', () => this.callbacks.onRecordClip?.());
     this.root.querySelector('#btn-fury-melee')?.addEventListener('click', () => this.callbacks.onTriggerFury?.());
     this.root.querySelector('#btn-attack-melee').addEventListener('click', () => this.callbacks.onBasicAttack?.());
     this.root.querySelector('#hud-camera')?.addEventListener('click', () => this.callbacks.onCycleCamera?.());
+    this.root.querySelector('#photo-snap')?.addEventListener('click', () => this.callbacks.onCapturePhoto?.());
     this.root.querySelector('#photo-exit').addEventListener('click', () => this.callbacks.onTogglePhoto?.());
     this.root.querySelector('#photo-cam').addEventListener('click', () => this.callbacks.onCycleCamera?.());
     this.root.querySelector('#hud-backpack').addEventListener('click', () => this.callbacks.onUseItem?.());

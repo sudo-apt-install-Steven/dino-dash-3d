@@ -4,6 +4,12 @@
 import { DINO_CATALOG, getDinoSpec } from '../dinos/DinoCatalog.js';
 import { BACKPACK_ITEMS } from '../systems/Items.js';
 import { Save } from '../systems/Save.js';
+import {
+  escapeHtml,
+  sanitizeNickname,
+  sanitizeRoomCode,
+  sanitizeHexColor
+} from '../security/Sanitize.js';
 
 const CLAW_SCRATCH_SVG = `
   <svg class="ctrl-claw-svg" viewBox="0 0 360 22" preserveAspectRatio="none" aria-hidden="true">
@@ -183,13 +189,13 @@ export class MobileController {
           ${CLAW_SCRATCH_SVG}
           <div class="egg-shell-panel" style="max-width:460px; margin:12px auto; width:100%;">
             <h2 style="color:#ffd447; margin-bottom:10px;">🥚 Entrar na Sala do PC/TV</h2>
-            ${this.state.errorMsg ? `<div style="color:#ff6b81; font-weight:700; margin-bottom:8px;">⚠️ ${this.state.errorMsg}</div>` : ''}
+            ${this.state.errorMsg ? `<div style="color:#ff6b81; font-weight:700; margin-bottom:8px;">⚠️ ${escapeHtml(this.state.errorMsg)}</div>` : ''}
             <div style="display:grid; gap:10px;">
               <label>Código da Sala (4 letras):
-                <input class="text-input" id="ctrl-room" maxlength="4" style="width:100%; text-transform:uppercase; font-size:1.3rem; letter-spacing:4px; text-align:center;" value="${this.state.roomCode}" placeholder="DINO" />
+                <input class="text-input" id="ctrl-room" maxlength="4" style="width:100%; text-transform:uppercase; font-size:1.3rem; letter-spacing:4px; text-align:center;" value="${escapeHtml(this.state.roomCode)}" placeholder="DINO" />
               </label>
               <label>Seu Apelido:
-                <input class="text-input" id="ctrl-name" maxlength="16" style="width:100%;" value="${this.state.nickname}" />
+                <input class="text-input" id="ctrl-name" maxlength="16" style="width:100%;" value="${escapeHtml(this.state.nickname)}" />
               </label>
               <div style="display:flex; gap:8px;">
                 <label style="flex:1;">Transporte:
@@ -199,7 +205,7 @@ export class MobileController {
                   </select>
                 </label>
                 <label>Cor:
-                  <input type="color" id="ctrl-color" value="${this.state.color}" style="width:52px; height:36px;" />
+                  <input type="color" id="ctrl-color" value="${sanitizeHexColor(this.state.color, '#58d63a')}" style="width:52px; height:36px;" />
                 </label>
               </div>
               <label>Seu Dinossauro:
@@ -220,10 +226,10 @@ export class MobileController {
       });
       this.rootEl.querySelector('#ctrl-join').onclick = async () => {
         this._vibrate(30);
-        this.state.roomCode = this.rootEl.querySelector('#ctrl-room').value.toUpperCase().trim();
-        this.state.nickname = this.rootEl.querySelector('#ctrl-name').value.trim() || 'Dino';
+        this.state.roomCode = sanitizeRoomCode(this.rootEl.querySelector('#ctrl-room').value);
+        this.state.nickname = sanitizeNickname(this.rootEl.querySelector('#ctrl-name').value, 'Dino', 16);
         this.state.transport = this.rootEl.querySelector('#ctrl-tr').value;
-        this.state.color = this.rootEl.querySelector('#ctrl-color').value;
+        this.state.color = sanitizeHexColor(this.rootEl.querySelector('#ctrl-color').value, '#58d63a');
         this.state.dinoId = this.rootEl.querySelector('#ctrl-dino').value;
         Save.data.network.nickname = this.state.nickname;
         Save.data.network.lastRoom = this.state.roomCode;
@@ -249,12 +255,12 @@ export class MobileController {
         <div class="ctrl-screen">
           <div class="ctrl-topbar">
             <div class="ctrl-player-tag">
-              <span class="ctrl-color-dot" style="background:${this.state.color};"></span>
-              <span>${this.state.nickname} (${spec.name})</span>
+              <span class="ctrl-color-dot" style="background:${sanitizeHexColor(this.state.color, '#58d63a')};"></span>
+              <span>${escapeHtml(this.state.nickname)} (${escapeHtml(spec.name)})</span>
             </div>
             <div style="display:flex; gap:6px; align-items:center;">
               <span class="ctrl-latency" id="ctrl-ping">📶 ${this.net.pingMs || 2} ms</span>
-              <span class="ctrl-latency">Sala ${this.net.room?.code || ''}</span>
+              <span class="ctrl-latency">Sala ${escapeHtml(this.net.room?.code || '')}</span>
               <button class="chunky-btn secondary" id="ctrl-leave" style="padding:4px 10px; font-size:0.75rem;">Sair</button>
             </div>
           </div>
@@ -271,7 +277,7 @@ export class MobileController {
             </div>
             <div style="margin-top:10px; display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">
               <span style="font-size:0.8rem; color:#ffe6a7; align-self:center;">Apostar 10 Ovos no vencedor:</span>
-              ${(this.net.room?.peers || []).map((p) => `<button class="ctrl-slot-btn" data-bet="${p.peerId}">🎲 ${p.name}</button>`).join('')}
+              ${(this.net.room?.peers || []).map((p) => `<button class="ctrl-slot-btn" data-bet="${escapeHtml(p.peerId)}">🎲 ${escapeHtml(p.name)}</button>`).join('')}
             </div>
           </div>
         </div>
@@ -302,8 +308,8 @@ export class MobileController {
       <div class="ctrl-screen">
         <div class="ctrl-topbar">
           <div class="ctrl-player-tag">
-            <span class="ctrl-color-dot" style="background:${this.state.color};"></span>
-            <span>${this.state.nickname}</span>
+            <span class="ctrl-color-dot" style="background:${sanitizeHexColor(this.state.color, '#58d63a')};"></span>
+            <span>${escapeHtml(this.state.nickname)}</span>
             <span id="ctrl-hp" style="font-size:0.85rem; color:#ffd447;">❤️ ${snap.lives}/${snap.maxLives} • 🛡️ ${snap.shields || 0}</span>
           </div>
           <div style="display:flex; gap:6px; align-items:center;">

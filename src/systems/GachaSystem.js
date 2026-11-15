@@ -1,6 +1,7 @@
 // Sistema de Gacha / Caixa Fóssil 3D com raridades, pity e miniaturas reais.
 import { Save } from './Save.js';
 import { DINO_CATALOG } from '../dinos/DinoCatalog.js';
+import { requestAuthoritativeGachaRoll, LOOTBOX_REAL_MONEY_ENABLED } from '../security/EdgeClient.js';
 import {
   ACCESSORIES_SHOP,
   MUTATIONS,
@@ -306,6 +307,47 @@ export class GachaSystem {
     }
     Save.save();
     return { ok: true, reward: this._grantRewardForTier(tier) };
+  }
+
+  static async openCrateAsync({ useEggs = false, supabaseClient = null } = {}) {
+    if (LOOTBOX_REAL_MONEY_ENABLED) {
+      return { ok: false, error: 'Compras pagas em lootbox requerem verificação 18+ ativa.' };
+    }
+    if (useEggs && (Save.data.eggs || 0) < GACHA_EGG_ROLL_COST) {
+      return { ok: false, error: `Precisa de ${GACHA_EGG_ROLL_COST} ovos.` };
+    }
+    if (!useEggs && (Save.data.fossilCrates || 0) <= 0) {
+      return { ok: false, error: 'Sem Caixas Fósseis disponíveis. Corra ou use ovos!' };
+    }
+
+    if (supabaseClient && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+      const authRes = await requestAuthoritativeGachaRoll(supabaseClient, {
+        useEggs,
+        crateCount: Save.data.fossilCrates || 0,
+        eggs: Save.data.eggs || 0,
+        pity: Save.data.gachaPity || 0,
+        ownedRewards: [
+          ...(Save.data.unlockedDinos || []),
+          ...(Save.data.unlockedAccessories || []),
+          ...(Save.data.unlockedMutations || [])
+        ]
+      });
+      if (authRes.ok && authRes.tierId) {
+        const tier = GACHA_RARITIES.find((r) => r.id === authRes.tierId) || GACHA_RARITIES[0];
+        if (useEggs) Save.addEggs(-GACHA_EGG_ROLL_COST);
+        else Save.data.fossilCrates = Math.max(0, (Save.data.fossilCrates || 0) - 1);
+        Save.data.gachaPity = Number.isFinite(authRes.pityAfter)
+          ? authRes.pityAfter
+          : ((tier.id === 'épica' || tier.id === 'lendária' || tier.id === 'mítica' || tier.id === 'secreta') ? 0 : (Save.data.gachaPity || 0) + 1);
+        Save.save();
+        return { ok: true, reward: this._grantRewardForTier(tier), serverVerified: true };
+      }
+      if (!authRes.offline && authRes.error && /limite|rate|429|insuficiente|bloqueado/i.test(authRes.error)) {
+        return { ok: false, error: authRes.error };
+      }
+    }
+
+    return this.openCrate({ useEggs });
   }
 
   static rollPreviewTier(tierIndex = 0) {

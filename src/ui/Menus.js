@@ -9,6 +9,7 @@ import { BOSS_DEFS } from '../events/BossManager.js';
 import { PREDATOR_CATALOG } from '../events/PredatorModels.js';
 import { ACHIEVEMENTS_CATALOG, ProgressionManager } from '../systems/Progression.js';
 import { Save } from '../systems/Save.js';
+import { escapeHtml } from '../security/Sanitize.js';
 
 export function attachModalHelp(container, helpText) {
   const header = container.querySelector('.modal-header');
@@ -102,18 +103,20 @@ export class Menus {
       </div>
     `;
 
-    let logoClicks = 0;
-    let lastLogoClick = 0;
-    container.querySelector('#main-dino-logo')?.addEventListener('click', () => {
-      const now = performance.now();
-      if (now - lastLogoClick > 2400) logoClicks = 0;
-      lastLogoClick = now;
-      logoClicks++;
-      if (logoClicks >= 5) {
-        logoClicks = 0;
-        actions.onUnlockDevMode?.();
-      }
-    });
+    if (import.meta.env.DEV) {
+      let logoClicks = 0;
+      let lastLogoClick = 0;
+      container.querySelector('#main-dino-logo')?.addEventListener('click', () => {
+        const now = performance.now();
+        if (now - lastLogoClick > 2400) logoClicks = 0;
+        lastLogoClick = now;
+        logoClicks++;
+        if (logoClicks >= 5) {
+          logoClicks = 0;
+          actions.onUnlockDevMode?.();
+        }
+      });
+    }
 
     container.querySelector('#menu-play').addEventListener('click', actions.onPlay);
     container.querySelector('#menu-lowspec-suggest')?.addEventListener('click', actions.onToggleLowSpec);
@@ -199,7 +202,7 @@ export class Menus {
               <small style="color:#d8c2a6;">Sobre o projeto Dino Dash 3D e tecnologias utilizadas.</small>
             </button>
 
-            ${state.devMode ? `
+            ${import.meta.env.DEV && state.devMode ? `
               <button class="item-card" data-ex-nav="debug" style="text-align:left; cursor:pointer; border-color:#38bdf8;">
                 <strong style="color:#38bdf8;">🛠️ Depurar (Debug / QA)</strong>
                 <small style="color:#d8c2a6;">Auditoria visual, simuladores, chefes e FPS ao vivo.</small>
@@ -304,7 +307,7 @@ export class Menus {
             </div>
             <div class="field-row">
               <span>Seed Compartilhável (opcional, ex.: JURASSIC99)</span>
-              <input class="text-input" id="mode-seed" value="${currentSeed || ''}" placeholder="Aleatória" />
+              <input class="text-input" id="mode-seed" value="${escapeHtml(currentSeed || '')}" placeholder="Aleatória" />
             </div>
             <div class="cards-grid">
               ${list.map((m) => `
@@ -535,7 +538,7 @@ export class Menus {
           <div class="field-row">
             <span>Título Ativo:</span>
             <select id="active-title">
-              ${Save.data.unlockedTitles.map((t) => `<option value="${t}" ${Save.data.activeTitle === t ? 'selected' : ''}>${t}</option>`).join('')}
+              ${Save.data.unlockedTitles.map((t) => `<option value="${escapeHtml(t)}" ${Save.data.activeTitle === t ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('')}
             </select>
           </div>
           <div class="cards-grid">

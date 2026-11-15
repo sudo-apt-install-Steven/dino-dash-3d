@@ -1,5 +1,6 @@
 // Extras de Festa (Ideias 191–196) & Tela Final de Pódio/MVP/Ping/Replay.
 import { Save } from '../systems/Save.js';
+import { escapeHtml, sanitizeHexColor } from '../security/Sanitize.js';
 
 export const TRIVIA_BANK = [
   { question: 'Qual dinossauro é conhecido como o "Rei dos Predadores" e possui braços curtos?', options: ['Triceratops', 'T-Rex', 'Estegossauro', 'Brachiossauro'], correct: 1 },
@@ -37,15 +38,15 @@ export class PartyModals {
         <div class="chunky-panel modal-card" style="max-width:700px; text-align:center;">
           <h2 style="color:#ffd447; font-size:1.75rem;">🏆 PÓDIO MULTIPLAYER (${modeName})</h2>
           ${mvp ? `<div class="item-card" style="border-color:#ffd447; margin:10px 0;">
-            <strong style="font-size:1.15rem; color:#58d63a;">🥇 CAMPEÃO & MVP: ${mvp.name} (${Math.floor(mvp.score)} pts)</strong>
+            <strong style="font-size:1.15rem; color:#58d63a;">🥇 CAMPEÃO &amp; MVP: ${escapeHtml(mvp.name)} (${Math.floor(mvp.score)} pts)</strong>
             <div style="font-size:0.84rem; color:#ffe6a7;">
               ${summary?.rewardEggs > 0 ? `🥚 Prêmio ganho nesta corrida: <strong>+${summary.rewardEggs} Ovos</strong>` : '👑 Coroa de Campeão conquistada! (Prêmios de ovos exigem 2+ humanos na sala)'}
             </div>
           </div>` : ''}
           <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
             ${standings.map((p, i) => `
-              <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:10px; background:rgba(0,0,0,0.35); border-left:4px solid ${p.color || '#ffd447'};">
-                <span><strong>#${i + 1} ${p.name}</strong> ${i === 0 ? '👑 MVP' : ''}</span>
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:10px; background:rgba(0,0,0,0.35); border-left:4px solid ${sanitizeHexColor(p.color, '#ffd447')};">
+                <span><strong>#${i + 1} ${escapeHtml(p.name)}</strong> ${i === 0 ? '👑 MVP' : ''}</span>
                 <span>${Math.floor(p.score)} pts${p.pvpHits ? ` • ⚔️ ${p.pvpHits}` : ''} • 📶 ${p.pingMs || 2}ms</span>
               </div>
             `).join('')}

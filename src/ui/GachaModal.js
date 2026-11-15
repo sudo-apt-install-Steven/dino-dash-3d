@@ -6,6 +6,8 @@ import { DinoFactory } from '../dinos/DinoFactory.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { getDinoSpec, getDinoHabitat } from '../dinos/DinoCatalog.js';
 import { applySkinVariantToColors } from '../dinos/DinoCustomization.js';
+import { getSupabaseClient } from '../net/TransportSupabase.js';
+import { LOOTBOX_REAL_MONEY_ENABLED } from '../security/EdgeClient.js';
 
 function buildDnaCapsuleMini(hexColor = '#5eead4') {
   const g = new THREE.Group();
@@ -104,6 +106,11 @@ export class GachaModal {
 
         <div class="gacha-odds">
           ${GACHA_RARITIES.map((r) => `<span class="gacha-odd-pill" style="background:${r.bg}; color:${r.fg}; border-color:${r.hex}88;">${r.name}: ${r.weight}%</span>`).join('')}
+        </div>
+        <div style="margin-top:6px; font-size:0.74rem; color:#a7f3d0; text-align:center;">
+          ${LOOTBOX_REAL_MONEY_ENABLED
+            ? '⚠️ Modo pago desativado para menores de 18 anos (ECA Digital • Lei nº 15.211/2025).'
+            : '🛡️ Gacha 100% gratuito (apenas Ovos/Caixas do jogo • Sem compras em dinheiro real • Lei nº 14.852/24 &amp; ECA Digital).'}
         </div>
       </div>
     `;
@@ -368,12 +375,21 @@ export class GachaModal {
       if (eggsBtn) eggsBtn.disabled = (Save.data.eggs || 0) < GACHA_EGG_ROLL_COST || state === 'shake' || state === 'burst';
     };
 
-    const runPull = (useEggs) => {
+    const runPull = async (useEggs) => {
       if (state === 'shake' || state === 'burst') return;
-      const res = GachaSystem.openCrate({ useEggs });
+      const crateBtn = wrap.querySelector('#gacha-open-crate');
+      const eggsBtn = wrap.querySelector('#gacha-open-eggs');
+      if (crateBtn) crateBtn.disabled = true;
+      if (eggsBtn) eggsBtn.disabled = true;
+
+      const res = await GachaSystem.openCrateAsync({
+        useEggs,
+        supabaseClient: getSupabaseClient()
+      });
       if (!res.ok) {
         const desc = wrap.querySelector('#gacha-res-desc');
         if (desc) desc.textContent = res.error;
+        refreshCounters();
         return;
       }
       resetEgg();
@@ -384,7 +400,9 @@ export class GachaModal {
       const descEl = wrap.querySelector('#gacha-res-desc');
       const badgeEl = wrap.querySelector('#gacha-res-tier');
       if (titleEl) titleEl.textContent = 'Chocando Ovo Fóssil...';
-      if (descEl) descEl.textContent = 'As rachaduras estão brilhando!';
+      if (descEl) descEl.textContent = res.serverVerified
+        ? 'As rachaduras estão brilhando! (Sorteio autenticado no servidor)'
+        : 'As rachaduras estão brilhando!';
       if (badgeEl) badgeEl.style.display = 'none';
       refreshCounters();
     };

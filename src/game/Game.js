@@ -44,6 +44,8 @@ import { MusicSequencer } from '../audio/MusicSequencer.js';
 import { Narrator } from '../audio/Narrator.js';
 import { UIManager } from '../ui/UI.js';
 import { TvHud } from '../ui/TvHud.js';
+import { startAuthoritativeRun, finishAuthoritativeRun } from '../security/EdgeClient.js';
+import { exportWatermarkedSnapshot } from '../security/Watermark.js';
 
 export class Game {
   constructor(canvas, uiRoot) {
@@ -288,7 +290,7 @@ export class Game {
     this.spawner.setObstacleHints(s.obstacleHints !== false);
     this.spawner.setDifficultyConfig(this.difficultyMgr.getConfig());
     this.audio.applyVolumes();
-    this.ui?.hud?.setDebugButtonVisible?.(!!Save.data.devMode);
+    this.ui?.hud?.setDebugButtonVisible?.(import.meta.env.DEV && !!Save.data.devMode);
     if (this.multiplayerSession?.active) {
       this.tvHud.setVisible(true, !!Save.data.network?.tvScale);
     }
@@ -1198,6 +1200,15 @@ export class Game {
     this.maxSpeed = diff.maxSpeed;
     this.speedAccel = diff.accel;
     this.speed = this.baseSpeed;
+    if (!isTestTrack && this.net?.supabase?.isConfigured?.()) {
+      const firstDinoId = this.players[0]?.id || Save.data.selectedDino || 'trex';
+      startAuthoritativeRun(this.net.supabase.client, {
+        modeId: this.modeId,
+        difficulty: diff.id,
+        dinoId: firstDinoId,
+        seed: opts.seed || this.customSeed || null
+      }).catch(() => {});
+    }
     this.score = 0;
     this.distance = 0;
     this.runTime = 0;
@@ -1482,6 +1493,12 @@ export class Game {
     this.state = this.photoMode ? 'paused' : 'playing';
     this.ui.hud.showPhotoMode(this.photoMode);
     this.ui.hud.showPause(false);
+  }
+
+  capturePhotoSnapshot() {
+    this.renderer.render(this.scene, this.camera);
+    const ok = exportWatermarkedSnapshot(this.canvas, 'dino-dash-3d-foto');
+    this.ui.hud.showFloatText(ok ? '📸 Foto salva com marca d\'água oficial!' : '⚠️ Falha ao capturar foto.', ok ? '#58d63a' : '#ff4757');
   }
 
   cycleCamera() {
@@ -2121,13 +2138,16 @@ export class Game {
     }
 
     if (this.net?.supabase?.isConfigured?.() && finalScore > 100 && !this.isTestTrack) {
-      this.net.supabase.submitGlobalScore({
+      finishAuthoritativeRun(this.net.supabase.client, {
         playerName: Save.data.network?.nickname || 'Dino',
         dinoId: this.players[0]?.id || 'trex',
         modeId: this.modeId,
+        difficulty: diff.id,
         score: finalScore,
         distance: this.distance,
-        eggs: this.runEggs
+        eggs: this.runEggs,
+        runTimeSec: this.runTime,
+        maxCombo: this.maxCombo
       }).catch(() => {});
     }
 
@@ -4230,7 +4250,7 @@ export class Game {
       return;
     }
 
-    if (this.input.wasKeyJustPressed('F9')) {
+    if (import.meta.env.DEV && this.input.wasKeyJustPressed('F9')) {
       if (!Save.data.devMode) {
         Save.data.devMode = true;
         Save.save();

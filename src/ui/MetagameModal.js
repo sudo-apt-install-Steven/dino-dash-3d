@@ -5,6 +5,7 @@ import { Metagame, TALENT_DEFS, CAMPAIGN_NODES } from '../systems/Metagame.js';
 import { DINO_CATALOG, getDinoHabitat, getHybridAvailableModes } from '../dinos/DinoCatalog.js';
 import { BIOMES } from '../world/Biomes.js';
 import { attachModalHelp } from './Menus.js';
+import { escapeHtml, sanitizeNickname } from '../security/Sanitize.js';
 
 export class MetagameModal {
   static renderInto(container, game, onClose) {
@@ -46,7 +47,7 @@ export class MetagameModal {
               <button class="tab-btn ${tab === 'global' ? 'active' : ''}" data-mt="global">🌐 Ranking Global</button>
             </div>
 
-            ${feedback ? `<div class="item-card" style="border-color:#ffd447; color:#ffd447; font-weight:700;">${feedback}</div>` : ''}
+            ${feedback ? `<div class="item-card" style="border-color:#ffd447; color:#ffd447; font-weight:700;">${escapeHtml(feedback)}</div>` : ''}
 
             ${tab === 'prestige' ? `
               <div class="item-card" style="margin-bottom:10px;">
@@ -177,9 +178,9 @@ export class MetagameModal {
                 </div>
                 <div class="item-card">
                   <strong>🚩 Time Local, Evento Sazonal & Desafios</strong>
-                  <label style="font-size:0.82rem;">Nome do Time: <input class="text-input" id="tm-name" value="${Save.data.team?.name || 'Dino Squad'}" style="width:100%;" /></label>
+                  <label style="font-size:0.82rem;">Nome do Time: <input class="text-input" id="tm-name" value="${escapeHtml(Save.data.team?.name || 'Dino Squad')}" style="width:100%;" /></label>
                   <div style="display:flex; gap:8px;">
-                    <label>Cor: <input type="color" id="tm-color" value="${Save.data.team?.color || '#58d63a'}" /></label>
+                    <label>Cor: <input type="color" id="tm-color" value="${escapeHtml(Save.data.team?.color || '#58d63a')}" /></label>
                     <label style="flex:1;">Evento Sazonal:
                       <select class="select-input" id="tm-season" style="width:100%;">
                         <option value="auto" ${Save.data.season === 'auto' ? 'selected' : ''}>Automático</option>
@@ -198,7 +199,7 @@ export class MetagameModal {
             ${tab === 'global' ? `
               <div class="item-card">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                  <strong>${globalInfo || '🌐 Placar Global Online (Supabase Database)'}</strong>
+                  <strong>${escapeHtml(globalInfo || '🌐 Placar Global Online (Supabase Database)')}</strong>
                   <div style="display:flex; gap:6px;">
                     <input class="text-input" id="gl-email" placeholder="E-mail p/ login opcional..." />
                     <button class="chunky-btn secondary" id="gl-login">Entrar OTP</button>
@@ -209,8 +210,8 @@ export class MetagameModal {
                   ${!globalRows || globalRows.length === 0 ? `<div style="font-size:0.84rem; color:#d8c2a6;">Nenhum placar carregado ainda ou Supabase offline.</div>` :
                     globalRows.map((r, i) => `
                       <div style="display:flex; justify-content:space-between; padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.08);">
-                        <span>#${i + 1} <strong>${r.player_name}</strong> (${r.dino_id})</span>
-                        <span style="color:#ffd447; font-weight:800;">${r.score} pts</span>
+                        <span>#${i + 1} <strong>${escapeHtml(r.player_name)}</strong> (${escapeHtml(r.dino_id)})</span>
+                        <span style="color:#ffd447; font-weight:800;">${Number(r.score) || 0} pts</span>
                       </div>
                     `).join('')}
                 </div>
@@ -334,7 +335,7 @@ export class MetagameModal {
           render();
         });
         container.querySelector('#tm-save').onclick = () => {
-          Save.data.team.name = container.querySelector('#tm-name').value.trim() || 'Dino Squad';
+          Save.data.team.name = sanitizeNickname(container.querySelector('#tm-name').value, 'Dino Squad', 24);
           Save.data.team.color = container.querySelector('#tm-color').value;
           Save.data.season = container.querySelector('#tm-season').value;
           Save.save();

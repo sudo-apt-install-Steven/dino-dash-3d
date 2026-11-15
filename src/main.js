@@ -4,6 +4,8 @@ import './styles/controller.css';
 import { Game } from './game/Game.js';
 import { Save } from './systems/Save.js';
 import { PerfMonitor } from './systems/PerfMonitor.js';
+import { verifyAuthorizedDomain, renderUnauthorizedDomainNotice } from './security/DomainGuard.js';
+import { attachForensicMeta } from './security/Watermark.js';
 
 const LOADING_TIPS = [
   'Dica: Cada dinossauro possui uma habilidade única no Espaço — teste todos na Pista de Testes!',
@@ -69,6 +71,12 @@ function runBackgroundWarmup(game, onStep = null) {
 function showSplashAndBoot() {
   const canvas = document.getElementById('game-canvas');
   const uiRoot = document.getElementById('ui-root');
+  const domainCheck = verifyAuthorizedDomain();
+  if (!domainCheck.allowed) {
+    renderUnauthorizedDomainNotice(uiRoot, domainCheck);
+    return;
+  }
+  attachForensicMeta();
   const params = new URLSearchParams(window.location.search);
   const isControllerUrl = params.get('controller') === '1' || (Boolean(params.get('room')) && params.get('screen') !== '1');
 

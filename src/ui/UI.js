@@ -10,7 +10,6 @@ import { MinigamesUI } from './MinigamesUI.js';
 import { MultiplayerLobby } from './MultiplayerLobby.js';
 import { MobileController } from './MobileController.js';
 import { MetagameModal } from './MetagameModal.js';
-import { DebugModal } from './DebugModal.js';
 import { PartyModals } from './PartyModals.js';
 import { GuideModal } from './GuideModal.js';
 import { GachaModal } from './GachaModal.js';
@@ -39,6 +38,7 @@ export class UIManager {
       onGoMenu: () => this.game.openMainMenu(),
       onTogglePause: () => this.game.togglePause(),
       onTogglePhoto: () => this.game.togglePhotoMode(),
+      onCapturePhoto: () => this.game.capturePhotoSnapshot(),
       onCycleCamera: () => this.game.cycleCamera(),
       onUseItem: () => this.game.usePlayerItem(0),
       onMerchantBuy: () => this.game.buyFromMerchant(),
@@ -74,7 +74,7 @@ export class UIManager {
     if (s.accessibility.colorblind && s.accessibility.colorblind !== 'none') {
       app.classList.add(`cb-${s.accessibility.colorblind}`);
     }
-    this.hud.setDebugButtonVisible(!!Save.data.devMode);
+    this.hud.setDebugButtonVisible(import.meta.env.DEV && !!Save.data.devMode);
     this.hud.applyTouchMode(s.touchMode || 'swipe');
   }
 
@@ -130,7 +130,7 @@ export class UIManager {
         benchmarkFps: Save.data.benchmarkFps || 0,
         benchmarkTier: Save.data.benchmarkTier || '',
         tutorialDone: !!Save.data.tutorialDone,
-        devMode: !!Save.data.devMode
+        devMode: import.meta.env.DEV ? !!Save.data.devMode : false
       },
       {
         onPlay: () => {
@@ -143,13 +143,13 @@ export class UIManager {
           PerfMonitor.applyLowSpec(this.game, !Save.data.lowSpecMode);
           this.showMainMenu();
         },
-        onUnlockDevMode: () => {
+        onUnlockDevMode: import.meta.env.DEV ? () => {
           Save.data.devMode = true;
           Save.save();
           this.hud.setDebugButtonVisible(true);
           this.game.sfx.powerup();
           this.hud.showBanner('🛠️ Modo Desenvolvedor ativado! (F9 / Extras)', '#38bdf8', 3.0);
-        },
+        } : null,
         onNavigate: (section) => {
           this.game.sfx.click();
           this.openSection(section);
@@ -290,16 +290,22 @@ export class UIManager {
         this.openController({ deferredInstall: window.__DINO_DEFERRED_INSTALL__ });
         break;
       case 'debug': {
+        if (!import.meta.env.DEV) {
+          back();
+          break;
+        }
         const wasPlaying = this.game.state === 'playing';
         if (wasPlaying) this.game.state = 'paused';
-        DebugModal.renderInto(this.hud.modalLayer, this.game, () => {
-          this._clearModal();
-          if (wasPlaying) {
-            this.game.state = 'playing';
-            this.game.lastTime = performance.now();
-          } else {
-            back();
-          }
+        import('./DebugModal.js').then(({ DebugModal }) => {
+          DebugModal.renderInto(this.hud.modalLayer, this.game, () => {
+            this._clearModal();
+            if (wasPlaying) {
+              this.game.state = 'playing';
+              this.game.lastTime = performance.now();
+            } else {
+              back();
+            }
+          });
         });
         break;
       }
@@ -332,7 +338,7 @@ export class UIManager {
           this.hud.modalLayer,
           {
             tutorialDone: !!Save.data.tutorialDone,
-            devMode: !!Save.data.devMode,
+            devMode: import.meta.env.DEV ? !!Save.data.devMode : false,
             lowSpec: !!Save.data.lowSpecMode,
             pinnedPredator: Save.data.pinnedPredator || ''
           },
