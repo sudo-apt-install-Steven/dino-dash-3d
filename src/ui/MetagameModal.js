@@ -2,7 +2,7 @@
 // Editor de Híbridos, Editor de Pistas (seed/JSON), Estatísticas SVG, Sazonal, Times, Ghost & Ranking Global.
 import { Save } from '../systems/Save.js';
 import { Metagame, TALENT_DEFS, CAMPAIGN_NODES } from '../systems/Metagame.js';
-import { DINO_CATALOG } from '../dinos/DinoCatalog.js';
+import { DINO_CATALOG, getDinoHabitat, getHybridAvailableModes } from '../dinos/DinoCatalog.js';
 import { BIOMES } from '../world/Biomes.js';
 import { attachModalHelp } from './Menus.js';
 
@@ -23,6 +23,8 @@ export class MetagameModal {
     };
 
     const render = () => {
+      const prevModalCard = container.querySelector('.modal-card');
+      const savedModalScroll = prevModalCard ? prevModalCard.scrollTop : 0;
       const st = Save.data.stats || { runs: 0, totalDist: 0, totalEggs: 0, deathsBy: {}, skillsUsed: {} };
       const { def: wkDef, state: wkState } = Metagame.ensureWeekly();
       const prestige = Save.data.prestige || { level: 0, bonusMult: 1.0 };
@@ -96,33 +98,45 @@ export class MetagameModal {
               </div>
             ` : ''}
 
-            ${tab === 'hybrid' ? `
+            ${tab === 'hybrid' ? (() => {
+              const habIcon = (d) => {
+                const h = getDinoHabitat(d);
+                return h === 'aquatic' ? '🌊' : h === 'amphibious' ? '🐊' : h === 'flying' ? '🪽' : '🌿';
+              };
+              const hybState = Save.data.hybrid || { enabled: false, head: 'trex', body: 'raptor', tail: 'ankylosaurus' };
+              const modes = getHybridAvailableModes(hybState, Save.data.equippedMutation);
+              const modeBadges = modes.map((m) => (m === 'aquatic' ? '🌊 Água/Submerso' : m === 'flying' ? '🪽 Voo Aéreo' : '🌿 Terra Firme'));
+              return `
               <div class="item-card">
-                <strong style="color:#c084fc;">🧬 Editor de Dinossauro Híbrido</strong>
-                <p style="font-size:0.82rem; color:#d8c2a6;">Misture cabeça, corpo e cauda de espécies diferentes no modelo 3D em tempo real!</p>
+                <strong style="color:#c084fc;">🧬 Editor de Dinossauro Híbrido — Transmutação Adaptativa</strong>
+                <p style="font-size:0.82rem; color:#d8c2a6;">Misture TODAS as espécies (Terrestres, Aquáticas e Voadoras)! Híbridos com múltiplos habitats ganham <strong>🔄 Transmutação Adaptativa [X]</strong> para alternar entre Terra, Água e Céu durante a corrida.</p>
                 <label style="display:flex; gap:8px; align-items:center;">
-                  <input type="checkbox" id="hyb-en" ${Save.data.hybrid?.enabled ? 'checked' : ''} /> Ativar Híbrido Customizado nas Corridas
+                  <input type="checkbox" id="hyb-en" ${hybState.enabled ? 'checked' : ''} /> Ativar Híbrido Customizado nas Corridas
                 </label>
-                <div class="cards-grid" style="grid-template-columns:repeat(3,1fr);">
+                <div class="cards-grid" style="grid-template-columns:repeat(auto-fit, minmax(175px, 1fr));">
                   <label>Cabeça:
                     <select class="select-input" id="hyb-head" style="width:100%;">
-                      ${DINO_CATALOG.slice(0, 13).map((d) => `<option value="${d.id}" ${Save.data.hybrid?.head === d.id ? 'selected' : ''}>${d.name}</option>`).join('')}
+                      ${DINO_CATALOG.map((d) => `<option value="${d.id}" ${hybState.head === d.id ? 'selected' : ''}>${habIcon(d)} ${d.name}</option>`).join('')}
                     </select>
                   </label>
-                  <label>Corpo & Pernas:
+                  <label>Corpo & Membros:
                     <select class="select-input" id="hyb-body" style="width:100%;">
-                      ${DINO_CATALOG.slice(0, 13).map((d) => `<option value="${d.id}" ${Save.data.hybrid?.body === d.id ? 'selected' : ''}>${d.name}</option>`).join('')}
+                      ${DINO_CATALOG.map((d) => `<option value="${d.id}" ${hybState.body === d.id ? 'selected' : ''}>${habIcon(d)} ${d.name}</option>`).join('')}
                     </select>
                   </label>
                   <label>Cauda:
                     <select class="select-input" id="hyb-tail" style="width:100%;">
-                      ${DINO_CATALOG.slice(0, 13).map((d) => `<option value="${d.id}" ${Save.data.hybrid?.tail === d.id ? 'selected' : ''}>${d.name}</option>`).join('')}
+                      ${DINO_CATALOG.map((d) => `<option value="${d.id}" ${hybState.tail === d.id ? 'selected' : ''}>${habIcon(d)} ${d.name}</option>`).join('')}
                     </select>
                   </label>
                 </div>
+                <div class="hud-pill" id="hyb-modes-preview" style="margin-top:6px; border-color:#c084fc; color:#f5d0fe;">
+                  Habitats herdados: ${modeBadges.join(' • ')} ${modes.length > 1 ? '— 🔄 Transmutação Adaptativa [X] ATIVA!' : '(adicione parte aquática/voadora para alternar [X])'}
+                </div>
                 <button class="chunky-btn" id="hyb-save">🧬 Aplicar Híbrido no Jogo</button>
               </div>
-            ` : ''}
+              `;
+            })() : ''}
 
             ${tab === 'editor' ? `
               <div class="item-card">
@@ -247,6 +261,23 @@ export class MetagameModal {
       }
 
       if (tab === 'hybrid') {
+        const refreshModesPreview = () => {
+          const previewCfg = {
+            enabled: true,
+            head: container.querySelector('#hyb-head').value,
+            body: container.querySelector('#hyb-body').value,
+            tail: container.querySelector('#hyb-tail').value
+          };
+          const modes = getHybridAvailableModes(previewCfg, Save.data.equippedMutation);
+          const badges = modes.map((m) => (m === 'aquatic' ? '🌊 Água/Submerso' : m === 'flying' ? '🪽 Voo Aéreo' : '🌿 Terra Firme'));
+          const prevEl = container.querySelector('#hyb-modes-preview');
+          if (prevEl) {
+            prevEl.textContent = `Habitats herdados: ${badges.join(' • ')} ${modes.length > 1 ? '— 🔄 Transmutação Adaptativa [X] ATIVA!' : '(adicione parte aquática/voadora para alternar [X])'}`;
+          }
+        };
+        ['#hyb-head', '#hyb-body', '#hyb-tail'].forEach((sel) => {
+          container.querySelector(sel)?.addEventListener('change', refreshModesPreview);
+        });
         container.querySelector('#hyb-save').onclick = () => {
           Save.data.hybrid = {
             enabled: container.querySelector('#hyb-en').checked,
@@ -256,8 +287,9 @@ export class MetagameModal {
           };
           Save.save();
           game.rebuildPlayers();
+          const modes = getHybridAvailableModes(Save.data.hybrid, Save.data.equippedMutation);
           feedback = Save.data.hybrid.enabled
-            ? `🧬 Híbrido ativo: ${Save.data.hybrid.head} + ${Save.data.hybrid.body} + ${Save.data.hybrid.tail}!`
+            ? `🧬 Híbrido ativo (${modes.length > 1 ? '🔄 Transmutação [X] liberada!' : modes[0]}): ${Save.data.hybrid.head} + ${Save.data.hybrid.body} + ${Save.data.hybrid.tail}!`
             : '🧬 Híbrido salvo (desativado no momento).';
           render();
         };
@@ -322,6 +354,8 @@ export class MetagameModal {
         };
       }
       attachModalHelp(container, 'Evolua talentos permanentes, avance na campanha jurássica, crie dinos híbridos, pistas por seed e veja o Ranking Global.');
+      const curModalCard = container.querySelector('.modal-card');
+      if (curModalCard) curModalCard.scrollTop = savedModalScroll;
     };
 
     render();

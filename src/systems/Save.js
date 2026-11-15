@@ -77,6 +77,8 @@ const DEFAULT_SAVE = {
   gachaStats: { pulls: 0, shinies: 0, mechas: 0, secrets: 0 },
   discoveredHollowEarth: false,
   unlockedMutations: ['amber_core'],
+  mutationLevels: { amber_core: 1 },
+  mutationActiveTiers: { amber_core: 1 },
   equippedMutation: null,
   unlockedSkins: {},
   equippedSkinVariants: {},

@@ -1090,3 +1090,210 @@
     padding: 0 10px;
   }
 }
+
+/* Gacha Fóssil 3D — Modal no tema chunky madeira/âmbar do jogo */
+.gacha-modal-card {
+  width: min(700px, 95vw) !important;
+  max-width: 700px;
+  gap: 11px;
+}
+
+.gacha-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.gacha-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gacha-stage-box {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 3px solid var(--panel-border);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 174, 52, 0.22) 0%, rgba(42, 22, 10, 0.94) 72%),
+    #1b0e06;
+  box-shadow: inset 0 0 28px rgba(0, 0, 0, 0.55);
+}
+
+.gacha-canvas {
+  width: 100%;
+  height: 240px;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+
+.gacha-canvas:active {
+  cursor: grabbing;
+}
+
+.gacha-stage-badge {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fde68a;
+  background: rgba(24, 13, 7, 0.82);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--panel-border);
+  pointer-events: none;
+}
+
+.gacha-result-card {
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 58px;
+  padding: 10px 14px;
+  border-color: #7c4723;
+}
+
+.gacha-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.gacha-actions-row .chunky-btn {
+  flex: 1 1 200px;
+  min-height: 46px;
+  font-size: 0.92rem;
+}
+
+.gacha-odds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.gacha-odd-pill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1.5px solid;
+}
+
+/* Badges de Prós / Contras para Mutações e Híbridos */
+.mut-tradeoff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0 6px;
+  font-size: 0.74rem;
+  line-height: 1.32;
+}
+
+.mut-pro {
+  color: #6ee7b7;
+}
+
+.mut-con {
+  color: #fca5a5;
+}
+
+.mut-tier-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.mut-tier-chip {
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  border-radius: 8px;
+}
+
+/* Botão/Pill de Transmutação Adaptativa para Híbridos */
+.transmute-pill {
+  border-color: #c084fc !important;
+  color: #f5d0fe !important;
+  background: rgba(88, 28, 135, 0.55) !important;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* Vinheta atmosférica subaquática sutil */
+.submerged-hud-tint {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  background: radial-gradient(circle at 50% 45%, rgba(56, 189, 248, 0.04) 48%, rgba(6, 78, 122, 0.34) 100%);
+  box-shadow: inset 0 26px 48px rgba(103, 232, 249, 0.16);
+}
+
+/* Telas ultracompactas (<= 380px) e monitores amplos (>= 1400px) */
+@media (max-width: 380px) {
+  .modal-card {
+    padding: 9px !important;
+    gap: 8px !important;
+    border-width: 2px;
+  }
+  .gacha-canvas {
+    height: 175px;
+  }
+  .gacha-actions-row .chunky-btn {
+    min-width: 0;
+    flex: 1 1 100%;
+    padding: 9px 10px;
+    font-size: 0.82rem;
+  }
+  #hud-group-combat {
+    grid-template-columns: repeat(4, minmax(34px, 1fr));
+  }
+  .touch-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .gacha-canvas {
+    height: 190px;
+  }
+  .gacha-result-card {
+    flex-direction: column !important;
+    align-items: flex-start;
+  }
+  .gacha-actions-row .chunky-btn {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-height: 540px) and (max-width: 960px), (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 560px) {
+  .gacha-canvas {
+    height: 140px;
+  }
+  .gacha-modal-card {
+    gap: 7px !important;
+  }
+}
+
+@media (min-width: 1400px) {
+  .modal-card {
+    width: min(980px, 88vw);
+  }
+  .dino-modal,
+  .modal-card:has(.dino-selector-row) {
+    width: min(1060px, 90vw);
+  }
+  .preview-split {
+    grid-template-columns: 330px 1fr;
+    gap: 20px;
+  }
+}

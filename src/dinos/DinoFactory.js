@@ -2,8 +2,11 @@
 // padrões de cores, acessórios cúbicos e evolução visual.
 import * as THREE from 'three';
 import { getDinoSpec } from './DinoCatalog.js';
-import { applySkinVariantToColors } from './DinoCustomization.js';
+import { applySkinVariantToColors, getMutationActiveLevel, getMutationComputedProfile } from './DinoCustomization.js';
 import { buildClaudeAccessoryGroup } from '../models/ClaudeVoxelModels.js';
+
+const AQUATIC_SPECIES = ['mosasaurus', 'elasmosaurus', 'dunkleosteus', 'liopleurodon'];
+const FLYING_SPECIES = ['quetzalcoatlus', 'pteranodon', 'tapejara', 'dimorphodon'];
 
 const SHARED_BOX = new THREE.BoxGeometry(1, 1, 1);
 
@@ -52,6 +55,7 @@ export class DinoFactory {
     const pattern = colors?.pattern || customConfig?.pattern || 'solid';
     const accessory = customConfig?.accessory || 'none';
     const mutationId = customConfig?.mutation || options?.mutation || null;
+    const mutationTier = options?.mutationTier ?? (mutationId ? getMutationActiveLevel(mutationId) : 1);
     const evolutionTier = options.evolutionTier || 0;
     const isGhost = dinoId === 'ghostgold' || options.ghost;
     const isMecha = !!spec.mecha || skinVariant === 'mecha' || !!colors.isMecha;
@@ -114,8 +118,9 @@ export class DinoFactory {
 
     // Proporções por espécie (suporta híbridos cabeça/corpo/cauda!)
     const isQuadruped = ['triceratops', 'styracosaurus', 'stegosaurus', 'ankylosaurus', 'brachiosaurus', 'kentrosaurus', 'diplodocus', 'argentinosaurus'].includes(bodyId);
-    const isAquatic = ['mosasaurus', 'elasmosaurus', 'dunkleosteus', 'liopleurodon'].includes(bodyId);
-    const isFlying = ['quetzalcoatlus', 'pteranodon', 'tapejara', 'dimorphodon'].includes(bodyId);
+    const isAquatic = AQUATIC_SPECIES.includes(bodyId);
+    const isFlying = FLYING_SPECIES.includes(bodyId);
+    const isTailAquatic = AQUATIC_SPECIES.includes(tailId);
     const bodyScale = bodyId === 'compsognathus' || bodyId === 'dimorphodon' ? 0.68
       : bodyId === 'oviraptor' ? 0.8
       : bodyId === 'gallimimus' || bodyId === 'tapejara' ? 0.86
@@ -134,7 +139,7 @@ export class DinoFactory {
     root.add(rig);
 
     const torso = new THREE.Group();
-    torso.position.set(0, isAquatic ? 0.72 : (isQuadruped ? 0.88 : 1.08), 0);
+    torso.position.set(0, isAquatic ? 0.62 : (isFlying ? 0.96 : (isQuadruped ? 0.88 : 1.08)), 0);
     rig.add(torso);
 
     // Corpo principal (vários blocos para textura voxel rica)
@@ -208,6 +213,18 @@ export class DinoFactory {
         addVoxel(torso, 0.24, 0.14, 0.28, -0.22, torsoH * 0.54, i * 0.38, matPrimaryDark);
         addVoxel(torso, 0.24, 0.14, 0.28, 0.22, torsoH * 0.54, i * 0.38, matPrimaryDark);
       }
+    } else if (bodyId === 'dunkleosteus') {
+      // Escudo placodermo encouraçado + quilha dorsal
+      addVoxel(torso, torsoW + 0.14, 0.16, 0.62, 0, torsoH * 0.52, -0.22, matPrimaryDark);
+      addVoxel(torso, 0.1, 0.42, 0.28, 0, torsoH * 0.64, 0.18, matSpikes);
+    } else if (bodyId === 'mosasaurus' || bodyId === 'liopleurodon') {
+      // Cristas hidrodinâmicas baixas ao longo da coluna
+      for (let i = 0; i < 4; i++) {
+        addVoxel(torso, 0.08, 0.14, 0.2, 0, torsoH * 0.54, -0.36 + i * 0.24, matSpikes);
+      }
+    } else if (bodyId === 'elasmosaurus') {
+      // Dorso hidrodinâmico liso de plesiossauro
+      addVoxel(torso, torsoW * 0.64, 0.1, torsoD * 0.68, 0, torsoH * 0.52, 0.04, matPrimaryDark);
     } else {
       // Fileira padrão de espinhos dorsais estilizados
       for (let i = 0; i < 3; i++) {
@@ -218,8 +235,14 @@ export class DinoFactory {
     // Pescoço e Cabeça articulados
     const neckPivot = new THREE.Group();
     const neckLen = headId === 'brachiosaurus' || headId === 'argentinosaurus' || headId === 'elasmosaurus' ? 1.32
-      : (headId === 'diplodocus' ? 1.15 : (headId === 'gallimimus' ? 0.72 : (isAquatic ? 0.34 : (isQuadruped ? 0.34 : 0.48))));
-    neckPivot.position.set(0, torsoH * 0.25, -torsoD * 0.45);
+      : (headId === 'diplodocus' ? 1.15 : (headId === 'gallimimus' ? 0.72 : (isAquatic ? 0.26 : (isQuadruped ? 0.34 : 0.48))));
+    neckPivot.position.set(0, isAquatic ? 0.06 : torsoH * 0.25, -torsoD * 0.45);
+    if (isAquatic && headId !== 'elasmosaurus') {
+      // Alinha cabeça hidrodinamicamente para frente na água
+      neckPivot.rotation.x = -0.82;
+    } else if (isAquatic && headId === 'elasmosaurus') {
+      neckPivot.rotation.x = -0.35;
+    }
     torso.add(neckPivot);
 
     addVoxel(neckPivot, 0.42, neckLen, 0.42, 0, neckLen * 0.42, -0.08, matPrimary);
@@ -227,6 +250,11 @@ export class DinoFactory {
 
     const headGroup = new THREE.Group();
     headGroup.position.set(0, neckLen * 0.88, -0.14);
+    if (isAquatic && headId !== 'elasmosaurus') {
+      headGroup.rotation.x = 0.82;
+    } else if (isAquatic && headId === 'elasmosaurus') {
+      headGroup.rotation.x = 0.35;
+    }
     neckPivot.add(headGroup);
 
     const headW = headId === 'triceratops' || headId === 'styracosaurus' ? 0.72
@@ -384,43 +412,89 @@ export class DinoFactory {
         addVoxel(segPivot, 0.4, 0.12, 0.3, 0, 0.14, 0.34, matSecondary);
       } else if (tailId === 'diplodocus' && s === 3) {
         addVoxel(segPivot, 0.12, 0.12, 0.72, 0, 0, 0.42, matSpikes);
-      } else if (isAquatic && s === 3) {
+      } else if (isTailAquatic && s === 3) {
         // Barbatana caudal dupla aquática
-        addVoxel(segPivot, 0.68, 0.1, 0.44, 0, 0, 0.34, matSpikes);
-        addVoxel(segPivot, 0.1, 0.58, 0.36, 0, 0.04, 0.34, matSecondary);
+        addVoxel(segPivot, 0.74, 0.1, 0.48, 0, 0, 0.34, matSpikes);
+        addVoxel(segPivot, 0.1, 0.68, 0.4, 0, 0.04, 0.34, matSecondary);
       }
       tailSegments.push(segPivot);
       tailParent = segPivot;
     }
 
-    // Pernas articuladas (coxas + canelas + pés)
-    const buildLeg = (sideX, zPos, isFront = false) => {
+    // Pernas articuladas (coxas + canelas + pés) — apenas para terrestres e voadores
+    const buildLeg = (sideX, zPos, isFront = false, scale = 1.0) => {
       const hip = new THREE.Group();
       hip.position.set(sideX, -torsoH * 0.32, zPos);
       torso.add(hip);
 
-      const thighH = isQuadruped ? 0.42 : 0.48;
-      const shinH = isQuadruped ? 0.38 : 0.42;
-      addVoxel(hip, 0.26, thighH, 0.3, 0, -thighH * 0.4, 0, matPrimaryDark);
+      const thighH = (isQuadruped ? 0.42 : 0.48) * scale;
+      const shinH = (isQuadruped ? 0.38 : 0.42) * scale;
+      addVoxel(hip, 0.26 * scale, thighH, 0.3 * scale, 0, -thighH * 0.4, 0, matPrimaryDark);
 
       const knee = new THREE.Group();
       knee.position.set(0, -thighH * 0.8, 0);
       hip.add(knee);
-      addVoxel(knee, 0.2, shinH, 0.22, 0, -shinH * 0.45, 0.02, matPrimary);
+      addVoxel(knee, 0.2 * scale, shinH, 0.22 * scale, 0, -shinH * 0.45, 0.02, matPrimary);
 
       const foot = new THREE.Group();
       foot.position.set(0, -shinH * 0.85, 0);
       knee.add(foot);
-      addVoxel(foot, 0.26, 0.12, isFront ? 0.26 : 0.36, 0, -0.04, -0.07, matSecondary);
-      // Dedos/garras voxel
-      addVoxel(foot, 0.07, 0.08, 0.12, -0.07, -0.05, -0.26, matTooth);
-      addVoxel(foot, 0.07, 0.08, 0.12, 0.07, -0.05, -0.26, matTooth);
+      addVoxel(foot, 0.26 * scale, 0.12 * scale, (isFront ? 0.26 : 0.36) * scale, 0, -0.04 * scale, -0.07 * scale, matSecondary);
+      addVoxel(foot, 0.07 * scale, 0.08 * scale, 0.12 * scale, -0.07 * scale, -0.05 * scale, -0.26 * scale, matTooth);
+      addVoxel(foot, 0.07 * scale, 0.08 * scale, 0.12 * scale, 0.07 * scale, -0.05 * scale, -0.26 * scale, matTooth);
 
       return { hip, knee, foot };
     };
 
-    const legL = buildLeg(-torsoW * 0.44, isQuadruped ? 0.38 : 0.08);
-    const legR = buildLeg(torsoW * 0.44, isQuadruped ? 0.38 : 0.08);
+    // Hidronadadeiras articuladas (ombro/quadril + pá distal) para dinos aquáticos (ZERO patas terrestres)
+    const buildFlipper = (sideX, zPos, scale = 1.0) => {
+      const hip = new THREE.Group();
+      hip.position.set(sideX, -torsoH * 0.2, zPos);
+      torso.add(hip);
+      const dir = sideX < 0 ? -1 : 1;
+      addVoxel(hip, 0.56 * scale, 0.09, 0.34 * scale, dir * 0.3 * scale, -0.02, 0.06, matPrimaryDark);
+
+      const outer = new THREE.Group();
+      outer.position.set(dir * 0.54 * scale, -0.02, 0.08);
+      hip.add(outer);
+      addVoxel(outer, 0.42 * scale, 0.07, 0.24 * scale, dir * 0.2 * scale, 0, 0.08, matSpikes);
+      return { hip, outer, isFlipper: true };
+    };
+
+    // Patas finas e garras posteriores aerodinâmicas para pterossauros voadores
+    const buildPterosaurTalon = (sideX) => {
+      const hip = new THREE.Group();
+      hip.position.set(sideX * 0.72, -torsoH * 0.26, 0.34);
+      hip.rotation.x = 0.65;
+      torso.add(hip);
+      addVoxel(hip, 0.12, 0.28, 0.14, 0, -0.12, 0.04, matPrimaryDark);
+      const knee = new THREE.Group();
+      knee.position.set(0, -0.24, 0.04);
+      knee.rotation.x = 0.35;
+      hip.add(knee);
+      addVoxel(knee, 0.09, 0.26, 0.1, 0, -0.12, 0.04, matPrimary);
+      const foot = new THREE.Group();
+      foot.position.set(0, -0.24, 0.04);
+      knee.add(foot);
+      addVoxel(foot, 0.14, 0.07, 0.22, 0, -0.02, -0.06, matSecondary);
+      addVoxel(foot, 0.04, 0.05, 0.12, -0.04, -0.03, -0.18, matTooth);
+      addVoxel(foot, 0.04, 0.05, 0.12, 0.04, -0.03, -0.18, matTooth);
+      return { hip, knee, foot, isPteroTalon: true };
+    };
+
+    let legL;
+    let legR;
+    if (isAquatic) {
+      // Aquáticos não têm pés nem patas: nadadeiras pélvicas traseiras reais!
+      legL = buildFlipper(-torsoW * 0.44, torsoD * 0.28, 0.92);
+      legR = buildFlipper(torsoW * 0.44, torsoD * 0.28, 0.92);
+    } else if (isFlying) {
+      legL = buildPterosaurTalon(-torsoW * 0.42);
+      legR = buildPterosaurTalon(torsoW * 0.42);
+    } else {
+      legL = buildLeg(-torsoW * 0.44, isQuadruped ? 0.38 : 0.08);
+      legR = buildLeg(torsoW * 0.44, isQuadruped ? 0.38 : 0.08);
+    }
 
     let armL;
     let armR;
@@ -428,49 +502,39 @@ export class DinoFactory {
       armL = buildLeg(-torsoW * 0.44, -0.44, true);
       armR = buildLeg(torsoW * 0.44, -0.44, true);
     } else if (isAquatic) {
-      // Nadadeiras dianteiras para dinos aquáticos (Mosassauro, Elasmossauro, Dunkleosteus, Liopleurodon)
-      const buildFin = (sideX) => {
-        const shoulder = new THREE.Group();
-        shoulder.position.set(sideX, -torsoH * 0.25, -torsoD * 0.24);
-        torso.add(shoulder);
-        const dir = sideX < 0 ? -1 : 1;
-        addVoxel(shoulder, 0.66, 0.1, 0.38, dir * 0.38, -0.04, 0.04, matPrimaryDark);
-        addVoxel(shoulder, 0.42, 0.08, 0.26, dir * 0.72, -0.06, 0.12, matSpikes);
-        return { hip: shoulder };
-      };
-      armL = buildFin(-torsoW * 0.46);
-      armR = buildFin(torsoW * 0.46);
+      // Nadadeiras peitorais dianteiras largas para nado veloz
+      armL = buildFlipper(-torsoW * 0.46, -torsoD * 0.24, 1.32);
+      armR = buildFlipper(torsoW * 0.46, -torsoD * 0.24, 1.32);
     } else {
       const buildArm = (sideX) => {
         const shoulder = new THREE.Group();
-        shoulder.position.set(sideX, -0.1, -torsoD * 0.32);
+        shoulder.position.set(sideX, isFlying ? 0.08 : -0.1, -torsoD * 0.3);
         torso.add(shoulder);
         const dir = sideX < 0 ? -1 : 1;
         if (isFlying) {
-          // Asas grandes de pterossauro
-          addVoxel(shoulder, 0.92, 0.1, 0.38, dir * 0.5, 0.06, 0.06, matPrimaryDark);
-          addVoxel(shoulder, 0.74, 0.06, 0.44, dir * 0.98, 0.02, 0.14, matSpikes);
-          addVoxel(shoulder, 0.12, 0.08, 0.18, dir * 0.14, -0.1, -0.18, matTooth);
-          return { hip: shoulder };
+          // Asa articulada em 2 estágios (braço interno + ponta longa da membrana)
+          addVoxel(shoulder, 0.96, 0.09, 0.42, dir * 0.48, 0.04, 0.06, matPrimaryDark);
+          addVoxel(shoulder, 0.14, 0.09, 0.22, dir * 0.88, -0.02, -0.16, matTooth); // garra do punho
+          const outer = new THREE.Group();
+          outer.position.set(dir * 0.94, 0.03, 0.04);
+          shoulder.add(outer);
+          addVoxel(outer, 0.86, 0.06, 0.38, dir * 0.44, 0.0, 0.12, matSpikes);
+          addVoxel(outer, 0.48, 0.05, 0.2, dir * 0.96, -0.02, 0.22, matSecondary);
+          return { hip: shoulder, outer, isWing: true };
         }
         const armLen = bodyId === 'therizinosaurus' ? 0.46 : bodyId === 'baryonyx' ? 0.38 : 0.28;
         addVoxel(shoulder, 0.14, armLen, 0.16, 0, -armLen * 0.4, -0.06, matPrimaryDark);
         if (bodyId === 'therizinosaurus' || bodyId === 'utahraptor') {
-          // Garras gigantes icônicas
           addVoxel(shoulder, 0.05, 0.08, 0.46, -0.04, -armLen * 0.85, -0.28, matTooth);
           addVoxel(shoulder, 0.05, 0.08, 0.46, 0.04, -armLen * 0.85, -0.28, matTooth);
         } else if (bodyId === 'baryonyx') {
-          // Garra curva espessa de pescador
           addVoxel(shoulder, 0.12, 0.12, 0.32, 0, -armLen * 0.88, -0.22, matTooth);
         } else if (bodyId === 'oviraptor') {
-          // Penas laterais nos braços
           addVoxel(shoulder, 0.08, 0.24, 0.36, dir * 0.06, -armLen * 0.45, 0.08, matSpikes);
           addVoxel(shoulder, 0.1, 0.08, 0.18, 0, -armLen * 0.85, -0.1, matTooth);
         } else if (bodyId === 'iguanodon') {
-          // Espigão de polegar característico
           addVoxel(shoulder, 0.12, 0.12, 0.36, 0, -armLen * 0.85, -0.24, matTooth);
         } else if (bodyId === 'deinonychus') {
-          // Penas e garra dupla
           addVoxel(shoulder, 0.08, 0.26, 0.38, dir * 0.06, -armLen * 0.45, 0.08, matSpikes);
           addVoxel(shoulder, 0.09, 0.1, 0.32, 0, -armLen * 0.88, -0.22, matTooth);
         } else {
@@ -482,9 +546,19 @@ export class DinoFactory {
       armR = buildArm(torsoW * 0.48);
     }
 
-    // Acessórios cúbicos + Mutações 3D + skins sazonais & comemorativas LAN
+    // Acessórios cúbicos + Mutações 3D (incluindo +2/+4/+6/+8 Patas articuladas) + skins sazonais
+    const extraLegs = [];
     DinoFactory._attachAccessory(accessory, headGroup, torso, torsoW, torsoH, torsoD);
-    DinoFactory._attachMutation(mutationId, headGroup, torso, torsoW, torsoH, torsoD);
+    DinoFactory._attachMutation(mutationId, headGroup, torso, torsoW, torsoH, torsoD, {
+      mutationTier,
+      matPrimary,
+      matPrimaryDark,
+      matSecondary,
+      matTooth,
+      extraLegs,
+      isAquatic,
+      isFlying
+    });
     if (customConfig?.partyCrown && accessory !== 'crown') {
       DinoFactory._attachAccessory('crown', headGroup, torso, torsoW, torsoH, torsoD);
     }
@@ -521,7 +595,15 @@ export class DinoFactory {
       legR,
       armL,
       armR,
+      extraLegs,
+      bodyId,
       isQuadruped,
+      isAquatic,
+      isFlying,
+      hasBaseLegs: !isAquatic,
+      hasLegs: !isAquatic || extraLegs.length > 0,
+      mutationId,
+      mutationTier,
       baseScale: bodyScale,
       allMeshes,
       spec,
@@ -811,34 +893,117 @@ export class DinoFactory {
     }
   }
 
-  static _attachMutation(mutationId, headGroup, torso, torsoW, torsoH, torsoD = 1.08) {
+  static _attachMutation(mutationId, headGroup, torso, torsoW, torsoH, torsoD = 1.08, ctx = {}) {
     if (!mutationId) return;
+    const tier = Math.max(1, Math.min(4, ctx.mutationTier ?? getMutationActiveLevel(mutationId) ?? 1));
+    if (mutationId === 'extra_limbs') {
+      const profile = getMutationComputedProfile('extra_limbs', tier);
+      const pairs = Math.max(1, Math.min(4, profile?.extraPairs || tier));
+      const matThigh = ctx.matPrimaryDark || createMat('#1f7a3e', { roughness: 0.55 });
+      const matShin = ctx.matPrimary || createMat('#34d399', { roughness: 0.5 });
+      const matFoot = ctx.matSecondary || createMat('#fef3c7', { roughness: 0.55 });
+      const matClaw = ctx.matTooth || createMat('#f7f4e8', { roughness: 0.35 });
+      const bioNode = createMat('#10b981', { emissive: '#059669', emissiveIntensity: 0.85, roughness: 0.25 });
+
+      for (let p = 0; p < pairs; p++) {
+        const zOff = pairs === 1 ? 0.04 : (-0.36 + (p / (pairs - 1)) * 0.72);
+        const yOff = -torsoH * 0.28;
+        [-1, 1].forEach((dir) => {
+          const hip = new THREE.Group();
+          const splay = dir * (0.24 + (p % 2) * 0.08);
+          hip.position.set(dir * (torsoW * 0.5 + 0.08), yOff, zOff);
+          hip.rotation.z = splay;
+          torso.add(hip);
+
+          // Nó biológico de mutação no quadril
+          addVoxel(hip, 0.14, 0.14, 0.14, dir * 0.02, 0.02, 0, bioNode);
+
+          const thighH = ctx.isAquatic ? 0.36 : 0.38;
+          const shinH = ctx.isAquatic ? 0.32 : 0.34;
+          addVoxel(hip, 0.19, thighH, 0.22, dir * 0.06, -thighH * 0.4, 0, matThigh);
+
+          const knee = new THREE.Group();
+          knee.position.set(dir * 0.08, -thighH * 0.78, 0);
+          hip.add(knee);
+          addVoxel(knee, 0.15, shinH, 0.17, 0, -shinH * 0.45, 0.02, matShin);
+
+          const foot = new THREE.Group();
+          foot.position.set(0, -shinH * 0.84, 0);
+          knee.add(foot);
+          addVoxel(foot, 0.2, 0.1, 0.28, 0, -0.04, -0.06, matFoot);
+          addVoxel(foot, 0.06, 0.07, 0.11, -0.06, -0.05, -0.22, matClaw);
+          addVoxel(foot, 0.06, 0.07, 0.11, 0.06, -0.05, -0.22, matClaw);
+
+          if (Array.isArray(ctx.extraLegs)) {
+            ctx.extraLegs.push({ hip, knee, foot, baseRotZ: splay, side: dir, pairIndex: p });
+          }
+        });
+      }
+      return;
+    }
     if (mutationId === 'glow' || mutationId === 'cosmic_dna') {
       const col = mutationId === 'cosmic_dna' ? '#c084fc' : '#5eead4';
-      const glowM = createMat(col, { emissive: col, emissiveIntensity: 0.95 });
-      for (let i = -1; i <= 1; i++) {
-        addVoxel(torso, 0.14, 0.22, 0.18, 0, torsoH * 0.58, i * 0.28, glowM);
+      const glowM = createMat(col, { emissive: col, emissiveIntensity: 0.75 + tier * 0.15 });
+      const count = 1 + Math.min(2, Math.floor((tier + 1) / 2));
+      for (let i = -count; i <= count; i++) {
+        addVoxel(torso, 0.14, 0.2 + tier * 0.03, 0.16, 0, torsoH * 0.58, i * 0.2, glowM);
       }
-      if (mutationId === 'cosmic_dna') {
-        addVoxel(headGroup, 0.16, 0.28, 0.16, 0, 0.54, -0.18, glowM);
+      if (mutationId === 'cosmic_dna' || tier >= 3) {
+        addVoxel(headGroup, 0.16, 0.24 + tier * 0.04, 0.16, 0, 0.54, -0.18, glowM);
       }
     } else if (mutationId === 'fire_trail') {
-      const fireM = createMat('#f97316', { emissive: '#ea580c', emissiveIntensity: 0.95 });
-      addVoxel(torso, 0.18, 0.22, 0.22, -torsoW * 0.52, 0.1, 0.22, fireM);
-      addVoxel(torso, 0.18, 0.22, 0.22, torsoW * 0.52, 0.1, 0.22, fireM);
+      const fireM = createMat('#f97316', { emissive: '#ea580c', emissiveIntensity: 0.8 + tier * 0.12 });
+      addVoxel(torso, 0.18, 0.22 + tier * 0.04, 0.22, -torsoW * 0.52, 0.1, 0.22, fireM);
+      addVoxel(torso, 0.18, 0.22 + tier * 0.04, 0.22, torsoW * 0.52, 0.1, 0.22, fireM);
+      if (tier >= 2) {
+        addVoxel(torso, 0.14, 0.24, 0.18, 0, torsoH * 0.58, 0.34, fireM);
+      }
     } else if (mutationId === 'venom_spines') {
-      const toxM = createMat('#84cc16', { emissive: '#65a30d', emissiveIntensity: 0.85 });
-      for (let i = 0; i < 3; i++) {
-        addVoxel(torso, 0.12, 0.3, 0.12, -0.18, torsoH * 0.62, -0.32 + i * 0.3, toxM);
-        addVoxel(torso, 0.12, 0.3, 0.12, 0.18, torsoH * 0.62, -0.32 + i * 0.3, toxM);
+      const toxM = createMat('#84cc16', { emissive: '#65a30d', emissiveIntensity: 0.7 + tier * 0.12 });
+      const rows = 2 + Math.min(2, tier);
+      for (let i = 0; i < rows; i++) {
+        const zOff = -0.36 + i * (0.72 / Math.max(1, rows - 1));
+        addVoxel(torso, 0.12, 0.26 + tier * 0.04, 0.12, -0.18, torsoH * 0.62, zOff, toxM);
+        addVoxel(torso, 0.12, 0.26 + tier * 0.04, 0.12, 0.18, torsoH * 0.62, zOff, toxM);
       }
     } else if (mutationId === 'mecha_core') {
-      const mechM = createMat('#38bdf8', { emissive: '#0284c7', emissiveIntensity: 0.95 });
-      addVoxel(torso, 0.3, 0.3, 0.16, 0, 0.12, -torsoD * 0.53, mechM);
-    } else if (mutationId === 'turbo_tail' || mutationId === 'bouncy' || mutationId === 'amber_core' || mutationId === 'lucky_eggs') {
-      const c = mutationId === 'amber_core' ? '#f59e0b' : mutationId === 'lucky_eggs' ? '#fde047' : '#22d3ee';
-      const m = createMat(c, { emissive: c, emissiveIntensity: 0.78 });
-      addVoxel(torso, 0.2, 0.18, 0.2, 0, torsoH * 0.54, 0.42, m);
+      const mechM = createMat('#38bdf8', { emissive: '#0284c7', emissiveIntensity: 0.8 + tier * 0.15 });
+      addVoxel(torso, 0.28 + tier * 0.03, 0.28 + tier * 0.03, 0.16, 0, 0.12, -torsoD * 0.53, mechM);
+    } else if (mutationId === 'turbo_tail' || mutationId === 'bouncy' || mutationId === 'amber_core' || mutationId === 'lucky_eggs' || mutationId === 'tiny_core') {
+      const c = mutationId === 'amber_core' ? '#f59e0b' : mutationId === 'lucky_eggs' ? '#fde047' : mutationId === 'tiny_core' ? '#a855f7' : '#22d3ee';
+      const m = createMat(c, { emissive: c, emissiveIntensity: 0.65 + tier * 0.12 });
+      addVoxel(torso, 0.18 + tier * 0.02, 0.18 + tier * 0.02, 0.2, 0, torsoH * 0.54, 0.42, m);
     }
+  }
+
+  static buildAccessoryStandalone(accessoryId, fallbackHex = '#ffd447') {
+    const root = new THREE.Group();
+    const inner = new THREE.Group();
+    const headGroup = new THREE.Group();
+    const torso = new THREE.Group();
+    DinoFactory._attachAccessory(accessoryId, headGroup, torso, 1.0, 1.0, 1.08);
+    if (headGroup.children.length > 0) inner.add(headGroup);
+    if (torso.children.length > 0) inner.add(torso);
+
+    const box = new THREE.Box3().setFromObject(inner);
+    if (box.isEmpty()) {
+      const m = createMat(fallbackHex, { emissive: fallbackHex, emissiveIntensity: 0.55, metalness: 0.4 });
+      addVoxel(inner, 0.72, 0.22, 0.56, 0, 0, 0, m);
+      addVoxel(inner, 0.2, 0.34, 0.2, -0.24, 0.24, 0, m);
+      addVoxel(inner, 0.22, 0.44, 0.22, 0, 0.29, 0, m);
+      addVoxel(inner, 0.2, 0.34, 0.2, 0.24, 0.24, 0, m);
+      box.setFromObject(inner);
+    }
+
+    const center = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    box.getCenter(center);
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z, 0.35);
+    const scale = 1.15 / maxDim;
+    inner.position.sub(center);
+    root.add(inner);
+    root.scale.setScalar(scale);
+    return root;
   }
 }

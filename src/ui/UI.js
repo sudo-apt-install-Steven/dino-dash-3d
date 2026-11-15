@@ -47,6 +47,7 @@ export class UIManager {
       onRecordClip: () => this.game.toggleClipRecording(),
       onBasicAttack: () => this.game.triggerManualAttack(0),
       onTriggerFury: () => this.game.input.triggerVirtualPulse('p1', 'fury', 100),
+      onTransmute: () => this.game.input.triggerVirtualPulse('p1', 'transmute', 100),
       onTouchAction: (act, active) => this.game.input.setVirtualAction('p1', act, active)
     });
 

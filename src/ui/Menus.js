@@ -224,23 +224,63 @@ export class Menus {
   static renderCreditsModal(container, onClose) {
     container.innerHTML = `
       <div class="overlay-center">
-        <div class="chunky-panel modal-card" style="max-width: 560px;">
+        <div class="chunky-panel modal-card" style="max-width: 640px;">
           <div class="modal-header">
             <h2>📜 Créditos — Dino Dash 3D</h2>
             <button class="chunky-btn secondary" id="cred-close">Voltar</button>
           </div>
-          <div class="item-card">
-            <strong style="color:#ffd447;">DINO DASH 3D</strong>
-            <p style="font-size:0.86rem; color:#ffe8b5;">Corredor jurássico 3D procedural em tempo real construído com Three.js, modelos voxel autorais, síntese de áudio via WebAudio API e Multiplayer LAN / Supabase Realtime.</p>
+          <div class="item-card" style="border-color:#ff9a24; background:linear-gradient(145deg, rgba(43,23,11,0.92), rgba(20,11,6,0.94));">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+              <div>
+                <small style="color:#ffd447; font-weight:900; letter-spacing:0.06em; text-transform:uppercase;">Criador &amp; Idealizador</small>
+                <h3 style="margin:2px 0 0; color:#fff9eb; font-size:1.32rem;">Steven Tayllon</h3>
+              </div>
+              <a
+                href="https://github.com/sudo-apt-install-Steven/dino-dash-3d"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="chunky-btn orange"
+                style="padding:8px 14px; font-size:0.82rem; text-decoration:none; display:inline-flex; align-items:center; gap:6px;"
+              >
+                🐙 GitHub do Projeto
+              </a>
+            </div>
+            <p style="font-size:0.86rem; color:#ffe8b5; line-height:1.45;">
+              <strong>Ideia do Projeto &amp; Conceito do Jogo:</strong> Idealizado por <strong>Steven Tayllon</strong> como um corredor infinito pré-histórico em 3D com biomas reativos, dinossauros terrestres, aquáticos e voadores realistas, mutações evolutivas, sistema de gacha 3D, híbridos adaptativos, chefes, sobrevivência contra predadores e multiplayer em tempo real.
+            </p>
+            <div style="font-size:0.78rem; color:#fde68a;">
+              Repositório: <a href="https://github.com/sudo-apt-install-Steven/dino-dash-3d" target="_blank" rel="noopener noreferrer" style="color:#38bdf8; text-decoration:underline; word-break:break-all;">github.com/sudo-apt-install-Steven/dino-dash-3d</a>
+            </div>
           </div>
+
           <div class="item-card">
-            <strong>Controles Principais</strong>
-            <p style="font-size:0.82rem; color:#d8c2a6;"><strong>W/↑</strong> Pular • <strong>S/↓</strong> Abaixar/Deslizar • <strong>A/D</strong> Trocar de Faixa • <strong>Q</strong> Ataque Direto • <strong>Espaço</strong> Habilidade • <strong>E</strong> Item • <strong>F</strong> Fúria • <strong>Shift</strong> Bullet-Time • <strong>C</strong> Câmera • <strong>R</strong> Reiniciar.</p>
+            <strong style="color:#58d63a;">🛠️ Ferramentas &amp; Tecnologias Utilizadas</strong>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
+              <span class="hud-pill" style="font-size:0.76rem; color:#fde047;">Three.js (WebGL 3D)</span>
+              <span class="hud-pill" style="font-size:0.76rem; color:#93c5fd;">JavaScript (ES Modules)</span>
+              <span class="hud-pill" style="font-size:0.76rem; color:#a78bfa;">Vite</span>
+              <span class="hud-pill" style="font-size:0.76rem; color:#f97316;">HTML5 &amp; CSS3 Responsivo</span>
+              <span class="hud-pill" style="font-size:0.76rem; color:#34d399;">WebAudio API Procedural</span>
+              <span class="hud-pill" style="font-size:0.76rem; color:#2dd4bf;">Supabase Realtime &amp; WebSockets</span>
+              <span class="hud-pill" style="font-size:0.76rem; color:#fbbf24;">PWA &amp; Node.js</span>
+              <span class="hud-pill" style="font-size:0.76rem; color:#f472b6;">Antigravity • Claude • Gemini</span>
+            </div>
+            <p style="font-size:0.8rem; color:#d8c2a6; margin-top:4px;">
+              Todos os modelos voxel procedurais, mecânicas de biomas (Terra, Sobre a Água, Submerso, Céu e Terra Oca), síntese de áudio e efeitos climáticos rodam nativamente no navegador.
+            </p>
+          </div>
+
+          <div class="item-card">
+            <strong style="color:#ffd447;">🎮 Controles Principais</strong>
+            <p style="font-size:0.81rem; color:#d8c2a6; line-height:1.45;">
+              <strong>W/↑</strong> Pular • <strong>S/↓</strong> Abaixar / Mergulhar na água • <strong>A/D</strong> Trocar de Faixa • <strong>X</strong> Transmutação Adaptativa (Híbridos) • <strong>Q</strong> Ataque Direto • <strong>Espaço</strong> Habilidade • <strong>E</strong> Item • <strong>F</strong> Fúria • <strong>Shift</strong> Bullet-Time • <strong>C</strong> Câmera • <strong>R</strong> Reiniciar.<br/>
+              <strong>Celular:</strong> Arraste o dedo para esquerda/direita/cima/baixo + botões táticos na tela.
+            </p>
           </div>
         </div>
       </div>
     `;
-    attachModalHelp(container, 'Informações técnicas e atalhos rápidos do Dino Dash 3D.');
+    attachModalHelp(container, 'Créditos oficiais de Steven Tayllon, conceito do projeto, link do GitHub, tecnologias e controles.');
     container.querySelector('#cred-close').addEventListener('click', onClose);
   }
 

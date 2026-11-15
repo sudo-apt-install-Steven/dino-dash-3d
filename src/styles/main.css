@@ -114,6 +114,14 @@ body,
   color: var(--text-light);
 }
 
+.chunky-btn:disabled,
+.tab-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  filter: grayscale(0.4);
+  transform: none !important;
+}
+
 .chunky-panel {
   pointer-events: auto;
   background: var(--panel-bg);

@@ -17,8 +17,8 @@ export class InputSystem {
 
     // Estado virtual (celular / toque / rede para p1..p8)
     this.virtualState = {
-      p1: { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false },
-      p2: { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false }
+      p1: { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false, transmute: false },
+      p2: { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false, transmute: false }
     };
     this.virtualJustPressed = { p1: new Set(), p2: new Set() };
     this._virtualPulseTimers = new Map();
@@ -90,7 +90,7 @@ export class InputSystem {
 
   setVirtualAction(playerKey, action, active) {
     if (!this.virtualState[playerKey]) {
-      this.virtualState[playerKey] = { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false };
+      this.virtualState[playerKey] = { left: false, right: false, jump: false, duck: false, ability: false, item: false, bullet: false, attack: false, fury: false, transmute: false };
       this.virtualJustPressed[playerKey] = new Set();
     }
     const prev = this.virtualState[playerKey][action];
@@ -150,6 +150,8 @@ export class InputSystem {
     const bind = this.getBindings(playerKey)?.[action];
     if (bind && this.keysDown.has(bind)) return true;
     if (playerKey === 'p1' && action === 'attack' && this.keysDown.has('KeyQ')) return true;
+    if (playerKey === 'p1' && action === 'transmute' && this.keysDown.has('KeyX')) return true;
+    if (playerKey === 'p2' && action === 'transmute' && this.keysDown.has('Slash')) return true;
 
     if (playerKey === 'p1' && allowClassicAliases) {
       if (action === 'jump' && this.keysDown.has('ArrowUp')) return true;
@@ -173,6 +175,8 @@ export class InputSystem {
     const bind = this.getBindings(playerKey)?.[action];
     if (bind && this.justPressed.has(bind)) return true;
     if (playerKey === 'p1' && action === 'attack' && this.justPressed.has('KeyQ')) return true;
+    if (playerKey === 'p1' && action === 'transmute' && this.justPressed.has('KeyX')) return true;
+    if (playerKey === 'p2' && action === 'transmute' && this.justPressed.has('Slash')) return true;
 
     if (playerKey === 'p1' && allowClassicAliases) {
       if (action === 'jump' && this.justPressed.has('ArrowUp')) return true;

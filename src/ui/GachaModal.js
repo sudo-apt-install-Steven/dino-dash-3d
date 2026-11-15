@@ -3,9 +3,9 @@ import * as THREE from 'three';
 import { Save } from '../systems/Save.js';
 import { GACHA_EGG_ROLL_COST, GACHA_RARITIES, GachaSystem } from '../systems/GachaSystem.js';
 import { DinoFactory } from '../dinos/DinoFactory.js';
-import { getDinoSpec } from '../dinos/DinoCatalog.js';
+import { DinoAnimator } from '../dinos/DinoAnimator.js';
+import { getDinoSpec, getDinoHabitat } from '../dinos/DinoCatalog.js';
 import { applySkinVariantToColors } from '../dinos/DinoCustomization.js';
-import { buildClaudeAccessoryGroup } from '../models/ClaudeVoxelModels.js';
 
 function buildDnaCapsuleMini(hexColor = '#5eead4') {
   const g = new THREE.Group();
@@ -57,51 +57,53 @@ export class GachaModal {
     this._renderer = null;
     this._onPointerUp = null;
     this._onPointerMove = null;
+    this._onResize = null;
+    this._resizeObserver = null;
   }
 
   open() {
     this.close(true);
     const wrap = document.createElement('div');
-    wrap.className = 'modal-backdrop';
+    wrap.className = 'overlay-center';
     wrap.id = 'gacha-modal';
     wrap.innerHTML = `
-      <div class="modal-card gacha-card" style="max-width:680px;width:94vw;background:linear-gradient(160deg,rgba(9,9,11,0.96),rgba(24,24,27,0.95));border:1px solid rgba(161,161,170,0.22);box-shadow:0 24px 64px rgba(0,0,0,0.75);">
-        <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div class="chunky-panel modal-card gacha-modal-card">
+        <div class="modal-header">
           <div>
-            <h2 style="margin:0;color:#fde047;display:flex;align-items:center;gap:8px;">🥚 Gacha Fóssil 3D</h2>
-            <p class="small-note" style="margin:4px 0 0;color:#a1a1aa;">Choque ovos antigos para liberar Dinos, Mutações de DNA, Cores Únicas, Shiny, Mecânico e Segredos!</p>
+            <h2>🎲 Gacha Fóssil 3D</h2>
+            <p class="gacha-subtitle">Choque ovos antigos para liberar Dinos, Mutações de DNA, Cores Únicas, Shiny, Mecânico e Segredos!</p>
           </div>
-          <button id="gacha-close" class="btn-ghost" type="button">✕ Fechar</button>
+          <button id="gacha-close" class="chunky-btn secondary" type="button" style="padding:8px 14px; font-size:0.84rem;">✕ Fechar</button>
         </div>
 
-        <div class="gacha-meta-row" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center;justify-content:space-between;">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <span id="gacha-crates-pill" class="badge" style="background:rgba(245,158,11,0.18);border:1px solid rgba(245,158,11,0.45);color:#fde047;">📦 Caixas Fósseis: ${GachaSystem.getCrateCount()}</span>
-            <span id="gacha-eggs-pill" class="badge" style="background:rgba(16,185,129,0.16);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7;">🥚 ${Math.floor(Save.data.eggs || 0)}</span>
+        <div class="gacha-meta-row">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <span id="gacha-crates-pill" class="hud-pill" style="color:#ffd447;">📦 Caixas Fósseis: <strong>${GachaSystem.getCrateCount()}</strong></span>
+            <span id="gacha-eggs-pill" class="hud-pill" style="color:#6ee7b7;">🥚 Ovos: <strong>${Math.floor(Save.data.eggs || 0)}</strong></span>
           </div>
-          <span id="gacha-pity-pill" class="small-note" style="color:#c4b5fd;">✨ Garantia Épica+: ${(Save.data.gachaPity || 0)}/9 • Shiny+: ${(Save.data.gachaPity || 0)}/15</span>
+          <span id="gacha-pity-pill" class="hud-pill" style="color:#d8b4fe; font-size:0.76rem;">✨ Garantia Épica+: <strong>${Save.data.gachaPity || 0}/9</strong> • Shiny+: <strong>${Save.data.gachaPity || 0}/15</strong></span>
         </div>
 
-        <div style="position:relative;margin-top:10px;border-radius:14px;overflow:hidden;background:radial-gradient(circle at 50% 45%, rgba(99,102,241,0.16), rgba(9,9,11,0.88));border:1px solid rgba(255,255,255,0.08);">
-          <canvas id="gacha-canvas" style="width:100%;height:270px;display:block;touch-action:pan-y;cursor:grab;"></canvas>
-          <div id="gacha-drop-badge" style="position:absolute;top:10px;left:12px;font-size:11px;color:#d4d4d8;background:rgba(9,9,11,0.7);padding:4px 9px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);">Arraste para girar 3D</div>
+        <div class="gacha-stage-box">
+          <canvas id="gacha-canvas" class="gacha-canvas"></canvas>
+          <div id="gacha-drop-badge" class="gacha-stage-badge">Arraste para girar 3D</div>
         </div>
 
-        <div id="gacha-result-box" style="margin-top:10px;min-height:52px;padding:10px 12px;border-radius:12px;background:rgba(24,24,27,0.85);border:1px solid rgba(63,63,70,0.8);display:flex;align-items:center;justify-content:space-between;gap:10px;">
-          <div>
-            <div id="gacha-res-title" style="font-weight:700;color:#fafafa;font-size:14px;">Clique abaixo para chocar seu Ovo Fóssil!</div>
-            <div id="gacha-res-desc" class="small-note" style="color:#a1a1aa;margin-top:2px;">Pontuações altas em dificuldades maiores (Difícil/Supremo) concedem mais Caixas grátis por corrida.</div>
+        <div id="gacha-result-box" class="item-card gacha-result-card">
+          <div style="flex:1; min-width:0;">
+            <div id="gacha-res-title" style="font-weight:900; color:#ffd447; font-size:0.98rem;">Escolha abaixo para chocar seu Ovo Fóssil!</div>
+            <div id="gacha-res-desc" style="color:#e5d3bc; font-size:0.8rem; margin-top:3px;">Pontuações altas em dificuldades maiores (Difícil/Supremo) concedem mais Caixas grátis por corrida.</div>
           </div>
-          <span id="gacha-res-tier" class="badge" style="display:none;"></span>
+          <span id="gacha-res-tier" class="hud-pill" style="display:none; flex-shrink:0;"></span>
         </div>
 
-        <div class="btn-row" style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;">
-          <button id="gacha-open-crate" class="btn-primary" type="button" style="flex:1;min-width:190px;">📦 Chocar Caixa Grátis (<span id="gacha-crate-btn-num">${GachaSystem.getCrateCount()}</span>)</button>
-          <button id="gacha-open-eggs" class="btn-secondary" type="button" style="flex:1;min-width:190px;">🥚 Chocar por ${GACHA_EGG_ROLL_COST} Ovos</button>
+        <div class="gacha-actions-row">
+          <button id="gacha-open-crate" class="chunky-btn" type="button">📦 Chocar Caixa Grátis (<span id="gacha-crate-btn-num">${GachaSystem.getCrateCount()}</span>)</button>
+          <button id="gacha-open-eggs" class="chunky-btn orange" type="button">🥚 Chocar por ${GACHA_EGG_ROLL_COST} Ovos</button>
         </div>
 
-        <div class="gacha-odds" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;justify-content:center;">
-          ${GACHA_RARITIES.map((r) => `<span style="font-size:11px;padding:3px 8px;border-radius:999px;background:${r.bg};color:${r.fg};border:1px solid ${r.hex}55;">${r.name}: ${r.weight}%</span>`).join('')}
+        <div class="gacha-odds">
+          ${GACHA_RARITIES.map((r) => `<span class="gacha-odd-pill" style="background:${r.bg}; color:${r.fg}; border-color:${r.hex}88;">${r.name}: ${r.weight}%</span>`).join('')}
         </div>
       </div>
     `;
@@ -110,7 +112,10 @@ export class GachaModal {
 
     this._init3D(wrap);
 
-    wrap.querySelector('#gacha-close')?.addEventListener('click', () => this.close());
+    wrap.querySelector('#gacha-close')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.close();
+    });
     wrap.addEventListener('click', (e) => {
       if (e.target === wrap) this.close();
     });
@@ -119,18 +124,32 @@ export class GachaModal {
   _init3D(wrap) {
     const canvas = wrap.querySelector('#gacha-canvas');
     if (!canvas) return;
-    const W = canvas.clientWidth || 560;
-    const H = 270;
+    const stageBox = canvas.parentElement;
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     this._renderer = renderer;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.setSize(W, H, false);
     renderer.setClearColor(0x000000, 0);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(36, W / H, 0.1, 50);
+    const camera = new THREE.PerspectiveCamera(36, 560 / 240, 0.1, 50);
     camera.position.set(0, 1.35, 5.8);
     camera.lookAt(0, 0.65, 0);
+
+    const syncCanvasSize = () => {
+      if (!canvas || !renderer) return;
+      const w = Math.max(220, stageBox?.clientWidth || canvas.clientWidth || 560);
+      const h = Math.max(165, canvas.clientHeight || 240);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+    };
+    syncCanvasSize();
+    this._onResize = () => syncCanvasSize();
+    window.addEventListener('resize', this._onResize);
+    if (typeof ResizeObserver === 'function' && stageBox) {
+      this._resizeObserver = new ResizeObserver(() => syncCanvasSize());
+      this._resizeObserver.observe(stageBox);
+    }
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 1.15));
     const dl = new THREE.DirectionalLight(0xffffff, 0.95);
@@ -261,11 +280,15 @@ export class GachaModal {
     let curReward = null;
     let parts = [];
 
+    let rewardAnimator = null;
+    let rewardLocomotion = 'land';
+
     const clearRewardPivot = () => {
       while (rewardPivot.children.length > 0) {
         rewardPivot.remove(rewardPivot.children[0]);
       }
       rewardPivot.visible = false;
+      rewardAnimator = null;
     };
 
     const buildRealMiniReward = (reward) => {
@@ -279,12 +302,17 @@ export class GachaModal {
         obj = built.root;
         obj.scale.setScalar(0.54);
         obj.position.y = -0.22;
+        rewardAnimator = new DinoAnimator(built);
+        rewardLocomotion = getDinoHabitat(spec);
       } else if (pv.modelKind === 'accessory') {
-        obj = buildClaudeAccessoryGroup(pv.accessoryId || 'crown');
-        obj.scale.setScalar(1.35);
+        obj = DinoFactory.buildAccessoryStandalone(pv.accessoryId || 'crown', reward?.tier?.hex || '#ffd447');
+        if (obj) obj.scale.multiplyScalar(0.95);
       } else {
         obj = buildDnaCapsuleMini(pv.colorHex || reward?.tier?.hex || '#c084fc');
         obj.scale.setScalar(0.9);
+      }
+      if (!obj) {
+        obj = buildDnaCapsuleMini(pv.colorHex || reward?.tier?.hex || '#ffd447');
       }
       rewardPivot.add(obj);
       rewardPivot.position.set(0, 0.85, 0);
@@ -332,10 +360,10 @@ export class GachaModal {
       const pityEl = wrap.querySelector('#gacha-pity-pill');
       const crateBtn = wrap.querySelector('#gacha-open-crate');
       const eggsBtn = wrap.querySelector('#gacha-open-eggs');
-      if (cratesEl) cratesEl.textContent = `📦 Caixas Fósseis: ${c}`;
+      if (cratesEl) cratesEl.innerHTML = `📦 Caixas Fósseis: <strong>${c}</strong>`;
       if (btnNum) btnNum.textContent = `${c}`;
-      if (eggsEl) eggsEl.textContent = `🥚 ${Math.floor(Save.data.eggs || 0)}`;
-      if (pityEl) pityEl.textContent = `✨ Garantia Épica+: ${Save.data.gachaPity || 0}/9 • Shiny+: ${Save.data.gachaPity || 0}/15`;
+      if (eggsEl) eggsEl.innerHTML = `🥚 Ovos: <strong>${Math.floor(Save.data.eggs || 0)}</strong>`;
+      if (pityEl) pityEl.innerHTML = `✨ Garantia Épica+: <strong>${Save.data.gachaPity || 0}/9</strong> • Shiny+: <strong>${Save.data.gachaPity || 0}/15</strong>`;
       if (crateBtn) crateBtn.disabled = c <= 0 || state === 'shake' || state === 'burst';
       if (eggsBtn) eggsBtn.disabled = (Save.data.eggs || 0) < GACHA_EGG_ROLL_COST || state === 'shake' || state === 'burst';
     };
@@ -432,7 +460,10 @@ export class GachaModal {
           refreshCounters();
         }
       }
-      if (rewardPivot.visible) rewardPivot.rotation.y += 0.032;
+      if (rewardPivot.visible) {
+        rewardPivot.rotation.y += 0.032;
+        if (rewardAnimator) rewardAnimator.update(dt, { speed: 10, grounded: rewardLocomotion === 'land', locomotion: rewardLocomotion });
+      }
       for (let i = parts.length - 1; i >= 0; i--) {
         const p = parts[i];
         p.v.y -= 6 * dt;
@@ -459,8 +490,16 @@ export class GachaModal {
     }
     if (this._onPointerUp) window.removeEventListener('pointerup', this._onPointerUp);
     if (this._onPointerMove) window.removeEventListener('pointermove', this._onPointerMove);
+    if (this._onResize) window.removeEventListener('resize', this._onResize);
+    if (this._resizeObserver) {
+      try {
+        this._resizeObserver.disconnect();
+      } catch {}
+      this._resizeObserver = null;
+    }
     this._onPointerUp = null;
     this._onPointerMove = null;
+    this._onResize = null;
     if (this._renderer) {
       try {
         this._renderer.dispose();

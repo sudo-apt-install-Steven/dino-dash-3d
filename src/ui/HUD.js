@@ -22,6 +22,7 @@ export class HUD {
   _render() {
     this.root.innerHTML = `
       <div class="damage-vignette hidden" id="dmg-vignette"></div>
+      <div class="submerged-hud-tint hidden" id="hud-submerged-tint"></div>
       <div class="edge-flash-vignette" id="edge-flash"></div>
       <div class="hud-tooltip hidden" id="hud-tooltip"></div>
 
@@ -121,6 +122,9 @@ export class HUD {
             <div class="meter-pill" id="hud-backpack" style="cursor:pointer; pointer-events:auto;" data-tip="Mochila (E): clique ou aperte E para usar o próximo item guardado.">
               🎒 <span class="kb-only">(E) </span><strong id="lbl-backpack">Vazia</strong>
             </div>
+            <div class="meter-pill hidden" id="btn-transmute-mode" style="cursor:pointer; pointer-events:auto;" data-tip="Transmutação Adaptativa (X): alterna entre Terra, Água e Céu em Híbridos!">
+              🔄 <span id="lbl-transmute-mode">Terra</span> <span class="kb-only">(X)</span>
+            </div>
             <div class="meter-pill hidden" id="btn-mp-revive" style="cursor:pointer; pointer-events:auto; border-color:#34d399; background:rgba(6, 78, 59, 0.85);" data-tip="Reviver amigo caído no Multiplayer (V): salva o grupo na pista!">
               💖 <strong id="lbl-mp-revive">Reviver (V)</strong>
             </div>
@@ -128,7 +132,7 @@ export class HUD {
         </div>
 
         <div class="controls-hint" id="hud-controls-hint">
-          <kbd>W</kbd>/<kbd>↑</kbd> Pular (segure=alto) • <kbd>S</kbd>/<kbd>↓</kbd> Abaixar • <kbd>A</kbd>/<kbd>D</kbd> Faixas • <kbd>Q</kbd> Ataque • <kbd>Espaço</kbd> Habilidade • <kbd>F</kbd> Fúria • <kbd>C</kbd> Câmera • <kbd>F9</kbd> Debug
+          <kbd>W</kbd>/<kbd>↑</kbd> Pular (segure=alto) • <kbd>S</kbd>/<kbd>↓</kbd> Abaixar/Mergulhar • <kbd>A</kbd>/<kbd>D</kbd> Faixas • <kbd>Q</kbd> Ataque • <kbd>Espaço</kbd> Habilidade • <kbd>F</kbd> Fúria • <kbd>X</kbd> Transmutar • <kbd>C</kbd> Câmera
         </div>
       </div>
 
@@ -139,7 +143,8 @@ export class HUD {
           <button class="touch-btn" data-tact="right" aria-label="Faixa Direita">▶</button>
         </div>
         <div class="touch-cluster touch-cluster-right">
-          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar">▼</button>
+          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar">▼</button>
+          <button class="touch-btn touch-btn-action hidden" id="touch-transmute-btn" data-tact="transmute" aria-label="Transmutação Adaptativa" style="border-color:#c084fc;">🔄</button>
           <button class="touch-btn touch-btn-action" data-tact="attack" aria-label="Ataque">⚔️</button>
           <button class="touch-btn touch-btn-action" data-tact="ability" aria-label="Habilidade">⚡</button>
           <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular">▲</button>
@@ -288,6 +293,7 @@ export class HUD {
     this.floatsEl = q('#hud-floats');
     this.narratorEl = q('#hud-narrator');
     this.dmgVignette = q('#dmg-vignette');
+    this.submergedTint = q('#hud-submerged-tint');
     this.edgeFlash = q('#edge-flash');
     this.debugBtn = q('#btn-debug');
     this.sharedRolesEl = q('#hud-shared-roles');
@@ -329,6 +335,9 @@ export class HUD {
     this.pillBullet = q('#bar-bullet')?.closest('.meter-pill') || null;
     this.mpReviveBtn = q('#btn-mp-revive');
     this.mpReviveLbl = q('#lbl-mp-revive');
+    this.transmuteBtn = q('#btn-transmute-mode');
+    this.transmuteLbl = q('#lbl-transmute-mode');
+    this.touchTransmuteBtn = q('#touch-transmute-btn');
     this.goGachaBox = q('#go-gacha-box');
     this.goGachaText = q('#go-gacha-text');
     this.restartConfirmOverlay = q('#restart-confirm-overlay');
@@ -346,6 +355,7 @@ export class HUD {
     this.root.querySelector('#btn-go-gacha')?.addEventListener('click', () => this.callbacks.onOpenGacha?.());
     this.root.querySelector('#btn-go-menu').addEventListener('click', () => this.callbacks.onGoMenu?.());
     this.root.querySelector('#btn-mp-revive')?.addEventListener('click', () => this.callbacks.onMpRevive?.());
+    this.root.querySelector('#btn-transmute-mode')?.addEventListener('click', () => this.callbacks.onTransmute?.());
     this.root.querySelector('#btn-pause').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-resume').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-pause-cam')?.addEventListener('click', () => this.callbacks.onCycleCamera?.());
@@ -437,6 +447,9 @@ export class HUD {
     this.setTutorialHud(null);
     this.setMpRankHud('');
     this.dmgVignette.classList.add('hidden');
+    this.submergedTint?.classList.add('hidden');
+    this.transmuteBtn?.classList.add('hidden');
+    this.touchTransmuteBtn?.classList.add('hidden');
     this.bannerEl.classList.add('hidden');
     this.narratorEl.classList.add('hidden');
     this.elementEl?.classList.add('hidden');
@@ -589,11 +602,25 @@ export class HUD {
       const invHtml = (player.invulnTimer || 0) > 0.15
         ? `<span class="status-badge" style="color:#7dd3fc;">✨ Imune ${player.invulnTimer.toFixed(1)}s</span>`
         : '';
-      this.statusPillsEl.innerHTML = invHtml + activeList.map((st) => {
+      const diveHtml = (player.diveDepth || 0) > 0.2
+        ? `<span class="status-badge" style="color:#22d3ee;">🤿 Submerso (${player.inWater ? 'W/▲ emerge' : 'Subindo'})</span>`
+        : '';
+      this.statusPillsEl.innerHTML = diveHtml + invHtml + activeList.map((st) => {
         const tm = st.permanentElement ? '' : ` ${st.timeLeft.toFixed(0)}s`;
         return `<span class="status-badge" style="color:${st.color};">${st.icon} ${st.name}${tm}</span>`;
       }).join('');
     }
+
+    const canTransmute = Array.isArray(player.availableHabitats) && player.availableHabitats.length > 1;
+    this.transmuteBtn?.classList.toggle('hidden', !canTransmute);
+    this.touchTransmuteBtn?.classList.toggle('hidden', !canTransmute);
+    if (canTransmute && this.transmuteLbl) {
+      const m = player.habitatMode || 'land';
+      this.transmuteLbl.textContent = m === 'aquatic' ? '🌊 Água' : (m === 'flying' ? '🪽 Céu' : '🌿 Terra');
+    }
+
+    const submergedNow = !!(player.inSubmerged || (player.diveDepth || 0) > 0.25);
+    this.submergedTint?.classList.toggle('hidden', !submergedNow);
 
     if (player.backpack?.slots?.length > 0) {
       this.lblBackpack.textContent = player.backpack.slots.map((id) => BACKPACK_ITEMS[id]?.icon || '📦').join(' ');
@@ -658,9 +685,9 @@ export class HUD {
     const active = Boolean(info && info.spec);
     this.predIntroEl.classList.toggle('hidden', !active);
     if (!active) return;
-    const { spec, remaining } = info;
+    const { spec, remaining, actLabel } = info;
     this.predIntroEl.style.borderColor = spec.accent || '#fb923c';
-    this.predIntroArch.textContent = `🐾 ${spec.archetype || 'Predador Alfa'} • Espaço/W/Clique pula`;
+    this.predIntroArch.textContent = actLabel || `🐾 ${spec.archetype || 'Predador Alfa'} • Espaço/W/Clique pula`;
     this.predIntroName.textContent = spec.name;
     this.predIntroTitle.textContent = spec.title;
     this.predIntroTitle.style.color = spec.accent || '#fb923c';

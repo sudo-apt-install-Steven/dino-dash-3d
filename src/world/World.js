@@ -359,6 +359,136 @@ export class World {
       crackGroup.add(c);
       this.earthquakeCracks.push({ mesh: c, active: false, z: 0, x: 0 });
     }
+
+    // 6. Cristas de onda e espuma translúcida na superfície do oceano/água ("Sobre a Água")
+    this.waterSurfaceGroup = new THREE.Group();
+    this.waterSurfaceGroup.visible = false;
+    const crestMat = new THREE.MeshBasicMaterial({
+      color: '#bae6fd',
+      transparent: true,
+      opacity: 0.42
+    });
+    const deepCrestMat = new THREE.MeshBasicMaterial({
+      color: '#0284c7',
+      transparent: true,
+      opacity: 0.34
+    });
+    this.oceanWaveSlats = [];
+    for (let i = 0; i < 24; i++) {
+      const w = new THREE.Mesh(
+        new THREE.BoxGeometry(i % 2 === 0 ? 7.6 : 10.4, 0.08, 0.55),
+        i % 2 === 0 ? crestMat : deepCrestMat
+      );
+      w.position.set(i % 3 === 0 ? -0.4 : (i % 3 === 1 ? 0.4 : 0), 0.06, -150 + i * 7.2);
+      this.waterSurfaceGroup.add(w);
+      this.oceanWaveSlats.push(w);
+    }
+    this.worldGroup.add(this.waterSurfaceGroup);
+
+    // 7. Ambiente 3D real SUBMERSO ("Submerso" & mergulho ativo: teto oceânico, raios de sol, bolhas e algas)
+    this.underwaterEnvGroup = new THREE.Group();
+    this.underwaterEnvGroup.visible = false;
+    this.submergedActive = false;
+
+    const surfaceCeilingMat = new THREE.MeshBasicMaterial({
+      color: '#22d3ee',
+      transparent: true,
+      opacity: 0.34,
+      side: THREE.DoubleSide,
+      fog: false
+    });
+    const surfaceCeiling = new THREE.Mesh(new THREE.PlaneGeometry(82, 200), surfaceCeilingMat);
+    surfaceCeiling.rotation.x = Math.PI / 2;
+    surfaceCeiling.position.set(4, 12.6, -70);
+    this.underwaterEnvGroup.add(surfaceCeiling);
+
+    this.ceilingWaveSlats = [];
+    const ceilRibMat = new THREE.MeshBasicMaterial({
+      color: '#a5f3fc',
+      transparent: true,
+      opacity: 0.32,
+      fog: false
+    });
+    for (let i = 0; i < 14; i++) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(28, 0.14, 1.4), ceilRibMat);
+      rib.position.set(4, 12.42, -145 + i * 11.5);
+      this.underwaterEnvGroup.add(rib);
+      this.ceilingWaveSlats.push(rib);
+    }
+
+    this.underwaterGodRays = [];
+    const rayMat = new THREE.MeshBasicMaterial({
+      color: '#7dd3fc',
+      transparent: true,
+      opacity: 0.14,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    for (let i = 0; i < 7; i++) {
+      const ray = new THREE.Mesh(new THREE.BoxGeometry(1.9, 15.5, 4.2), rayMat);
+      const sideX = (i % 2 === 0 ? -5.8 : 6.2) + (i % 3) * 1.4;
+      ray.position.set(sideX, 5.8, -125 + i * 19);
+      ray.rotation.z = 0.24;
+      this.underwaterEnvGroup.add(ray);
+      this.underwaterGodRays.push(ray);
+    }
+
+    this.underwaterBubbleMat = new THREE.MeshBasicMaterial({
+      color: '#e0f2fe',
+      transparent: true,
+      opacity: 0.72
+    });
+    this.underwaterBubblesMesh = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(0.16, 0.16, 0.16),
+      this.underwaterBubbleMat,
+      96
+    );
+    this.underwaterBubbles = [];
+    for (let i = 0; i < 96; i++) {
+      this.underwaterBubbles.push({
+        x: -10 + ((i * 3.17) % 26),
+        y: 0.2 + ((i * 1.73) % 11.5),
+        z: -140 + (i / 96) * 155,
+        vy: 1.4 + (i % 4) * 0.45,
+        scale: 0.65 + (i % 3) * 0.45
+      });
+    }
+    this.underwaterEnvGroup.add(this.underwaterBubblesMesh);
+
+    this.kelpColumns = [];
+    const kelpMat = new THREE.MeshStandardMaterial({
+      color: '#0d9488',
+      emissive: '#115e59',
+      emissiveIntensity: 0.35,
+      roughness: 0.75
+    });
+    for (let i = 0; i < 16; i++) {
+      const kelp = new THREE.Group();
+      const side = i % 2 === 0 ? -1 : 1;
+      const baseX = i >= 10 ? (side < 0 ? 6.2 : 14.2) : side * 5.4;
+      const segs = 3 + (i % 2);
+      for (let s = 0; s < segs; s++) {
+        const frond = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.45, 0.22), kelpMat);
+        frond.position.set((s % 2 === 0 ? 0.08 : -0.08), 0.72 + s * 1.25, 0);
+        kelp.add(frond);
+      }
+      kelp.position.set(baseX, -0.1, -135 + i * 9.5);
+      this.underwaterEnvGroup.add(kelp);
+      this.kelpColumns.push(kelp);
+    }
+
+    this.worldGroup.add(this.underwaterEnvGroup);
+  }
+
+  setWaterTrackVisuals(active) {
+    const on = !!active;
+    if (this.waterSurfaceGroup) this.waterSurfaceGroup.visible = on;
+  }
+
+  setSubmergedVisuals(active) {
+    const on = !!active;
+    this.submergedActive = on;
+    if (this.underwaterEnvGroup) this.underwaterEnvGroup.visible = on;
   }
 
   setAquaticChannelActive(active) {
@@ -436,6 +566,46 @@ export class World {
           slot.mesh.visible = false;
         }
       }
+    }
+    if (this.waterSurfaceGroup?.visible && this.oceanWaveSlats) {
+      for (let i = 0; i < this.oceanWaveSlats.length; i++) {
+        const w = this.oceanWaveSlats[i];
+        w.position.z += speed * dt * 1.1;
+        w.position.y = 0.05 + Math.sin(this.time * 4.5 + i * 0.7) * 0.045;
+        if (w.position.z > 18) w.position.z -= 172;
+      }
+    }
+    if (this.submergedActive && this.underwaterEnvGroup?.visible) {
+      for (let i = 0; i < this.ceilingWaveSlats.length; i++) {
+        const rib = this.ceilingWaveSlats[i];
+        rib.position.z += speed * dt * 0.72;
+        rib.position.y = 12.42 + Math.sin(this.time * 2.8 + i) * 0.16;
+        if (rib.position.z > 20) rib.position.z -= 161;
+      }
+      for (let i = 0; i < this.underwaterGodRays.length; i++) {
+        const ray = this.underwaterGodRays[i];
+        ray.position.z += speed * dt * 0.85;
+        if (ray.position.z > 22) ray.position.z -= 133;
+      }
+      for (let i = 0; i < this.kelpColumns.length; i++) {
+        const k = this.kelpColumns[i];
+        k.position.z += speed * dt;
+        k.rotation.z = Math.sin(this.time * 2.4 + i) * 0.12;
+        if (k.position.z > 18) k.position.z -= 152;
+      }
+      for (let i = 0; i < this.underwaterBubbles.length; i++) {
+        const b = this.underwaterBubbles[i];
+        b.y += b.vy * dt;
+        b.z += speed * dt * 0.92;
+        if (b.y > 12.1) b.y = 0.25;
+        if (b.z > 16) b.z -= 155;
+        this._dummy.position.set(b.x + Math.sin(this.time * 3.2 + i) * 0.18, b.y, b.z);
+        this._dummy.rotation.set(0, 0, 0);
+        this._dummy.scale.setScalar(b.scale);
+        this._dummy.updateMatrix();
+        this.underwaterBubblesMesh.setMatrixAt(i, this._dummy.matrix);
+      }
+      this.underwaterBubblesMesh.instanceMatrix.needsUpdate = true;
     }
   }
 

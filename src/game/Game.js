@@ -12,8 +12,16 @@ import { DinoFactory } from '../dinos/DinoFactory.js';
 import { buildVoxelGoldenEgg, buildVoxelDebris } from '../models/VoxelLibrary.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { DinoAbilities } from '../dinos/DinoAbilities.js';
-import { getDinoSpec, getDinoHabitat } from '../dinos/DinoCatalog.js';
-import { getActivePreset, rollRandomMutation, getMutationDef, getEquippedSkinVariant, applySkinVariantToColors } from '../dinos/DinoCustomization.js';
+import { getDinoSpec, getDinoHabitat, getEffectiveDinoHabitat } from '../dinos/DinoCatalog.js';
+import {
+  getActivePreset,
+  rollRandomMutation,
+  getMutationDef,
+  getMutationActiveLevel,
+  getMutationComputedProfile,
+  getEquippedSkinVariant,
+  applySkinVariantToColors
+} from '../dinos/DinoCustomization.js';
 import { GachaSystem } from '../systems/GachaSystem.js';
 import { CompanionManager } from '../dinos/Companion.js';
 import { Spawner } from '../systems/Spawner.js';
@@ -525,25 +533,29 @@ export class Game {
       p.stamina = Math.max(0, (p.stamina ?? 100) - 20);
       p._staminaRegenDelay = 0.6;
     }
+    const attackPower = p.attackPowerMult || 1;
     p.attackTimer = 0.24;
     p.attackCooldown = (p.attackMaxCooldown || 1.25) * (p.attackCdMult || 1);
     p.animator.triggerRoar(0.25);
     this.sfx.melee();
-    this.particles.emitDust(p.x, 0.8, p.z - 0.9, 6, '#ffd447', 2.4);
+    this.particles.emitDust(p.x, (p.baseY || 0) + 0.8, p.z - 0.9, 6, '#ffd447', 2.4);
 
     let brokeAny = false;
+    const reachX = 1.35 * (attackPower > 1.1 ? 1.15 : 1);
+    const reachZ = 4.8 * Math.min(1.4, attackPower);
+    const smashPts = Math.round(35 * attackPower);
     for (const obs of this.spawner.getActiveObstacles()) {
       if (obs.hit || !obs.breakable) continue;
       const dx = Math.abs(obs.group.position.x - p.x);
       const dz = obs.group.position.z - p.z;
-      if (dx < 1.35 && dz > -4.8 && dz < 1.3) {
+      if (dx < reachX && dz > -reachZ && dz < 1.35) {
         obs.hit = true;
         obs.pool?.release(obs);
-        this.particles.emitExplosion(obs.group.position.x, 0.8, obs.group.position.z, obs.color, 12, true);
+        this.particles.emitExplosion(obs.group.position.x, (obs.group.position.y || 0) + 0.8, obs.group.position.z, obs.color, 12, true);
         this._spawnImpactDebris(obs.group.position.x, obs.group.position.z, obs.color);
         p.wantedStars = Math.min(5, (p.wantedStars || 0) + 0.3);
-        this.addScore(35 * this.combo, p);
-        this.ui.hud.showFloatText('💥 QUEBROU! +35', '#ffd447');
+        this.addScore(smashPts * this.combo, p);
+        this.ui.hud.showFloatText(`💥 QUEBROU! +${smashPts}`, '#ffd447');
         brokeAny = true;
       }
     }
@@ -690,14 +702,24 @@ export class Game {
       const localCustom = (pKey === 'p1' || pKey === 'p2') ? getActivePreset(pKey) : {};
       const eqSkinVariant = i === 0 ? getEquippedSkinVariant(dinoId) : (slot.skinVariant || localCustom.skinVariant || 'normal');
       const eqMutationId = i === 0 ? (Save.data.equippedMutation || 'amber_core') : null;
+      const eqMutationTier = (i === 0 && eqMutationId) ? getMutationActiveLevel(eqMutationId) : 1;
+      const mutProfile = eqMutationId ? getMutationComputedProfile(eqMutationId, eqMutationTier) : null;
+      const hybridCfg = i === 0 ? Save.data.hybrid : null;
+      const habInfo = getEffectiveDinoHabitat(spec, { hybrid: hybridCfg, mutationId: eqMutationId });
+      const initialHabitat = habInfo.primary === 'amphibious' ? 'land' : (habInfo.primary || 'land');
       const modelCfg = {
         ...localCustom,
         skinVariant: eqSkinVariant,
         mutation: eqMutationId,
+        mutationTier: eqMutationTier,
         ...(slot.color ? { useCustomColors: true, primary: slot.color } : {}),
-        ...(i === 0 ? { hybrid: Save.data.hybrid, season: activeSeason, partyCrown: hasCrown } : { season: activeSeason })
+        ...(i === 0 ? { hybrid: hybridCfg, season: activeSeason, partyCrown: hasCrown } : { season: activeSeason })
       };
-      const model = DinoFactory.build(dinoId, modelCfg, { allowHybrid: i === 0 && !!Save.data.hybrid?.enabled, skinVariant: eqSkinVariant });
+      const model = DinoFactory.build(dinoId, modelCfg, {
+        allowHybrid: i === 0 && !!hybridCfg?.enabled,
+        skinVariant: eqSkinVariant,
+        mutationTier: eqMutationTier
+      });
       const startLane = count === 1 ? 1 : (i % 3);
       const laneOffset = count > 3 ? ((Math.floor(i / 3) - 0.5) * 0.45) : 0;
       model.root.position.set(LANE_X[startLane] + laneOffset, 0, Math.floor(i / 3) * 0.65);
@@ -792,10 +814,18 @@ export class Game {
         captureEggTime: 0,
         holdingGoldenEgg: i === 0 && this.modeId === 'capture_egg',
         smallHitbox: dinoId === 'compsognathus',
-        habitat: getDinoHabitat(spec),
+        habitat: initialHabitat,
+        habitatMode: initialHabitat,
+        baseHabitat: habInfo.primary,
+        availableHabitats: habInfo.availableModes,
+        grantsLandWalk: habInfo.grantsLandWalk,
+        diveDepth: 0,
+        inWater: false,
+        inSubmerged: false,
         skinVariant: eqSkinVariant,
         mutationId: eqMutationId,
-        mutationMods: (eqMutationId ? getMutationDef(eqMutationId)?.mods : null) || null,
+        mutationTier: eqMutationTier,
+        mutationMods: (mutProfile?.mods) || (eqMutationId ? getMutationDef(eqMutationId)?.mods : null) || null,
         inShopLane: null,
         _staminaRegenDelay: 0,
         _unlockAll: Boolean(this.isTestTrack || this.modeId === 'tutorial')
@@ -810,6 +840,12 @@ export class Game {
         if (mutMods.magnetBonus) built.permanentMagnet = (built.permanentMagnet || 0) + mutMods.magnetBonus;
         if (mutMods.hitboxScale) built.hitboxScale = (built.hitboxScale || 1) * mutMods.hitboxScale;
         if (mutMods.attackCdMult) built.attackCdMult = mutMods.attackCdMult;
+        if (mutMods.laneSpeedMult) built.laneSpeedMult = (built.laneSpeedMult || 1) * mutMods.laneSpeedMult;
+        if (mutMods.stabilityBonus) built.stabilityBonus = (built.stabilityBonus || 0) + mutMods.stabilityBonus;
+        if (mutMods.attackPowerMult) built.attackPowerMult = (built.attackPowerMult || 1) * mutMods.attackPowerMult;
+        if (mutMods.waterSpeedMult) built.waterSpeedMult = (built.waterSpeedMult || 1) * mutMods.waterSpeedMult;
+        if (mutMods.airStaminaCostMult) built.airStaminaCostMult = (built.airStaminaCostMult || 1) * mutMods.airStaminaCostMult;
+        if (mutMods.eggBonus) built.eggValueMult = (built.eggValueMult || 1) * (1 + mutMods.eggBonus);
       }
       if (built && (eqSkinVariant === 'shiny' || eqSkinVariant === 'secret')) {
         built.scoreMultBonus = (built.scoreMultBonus || 1) * (eqSkinVariant === 'secret' ? 1.25 : 1.15);
@@ -1222,17 +1258,17 @@ export class Game {
     this.spawner.setBiome(this.currentBiome.id);
     if (!isTestTrack) this._discoverCurrentBiomeFossil();
 
-    const aquaBiome = isAquaticBiome(this.currentBiome.id);
-    const anyAquatic = this.players.some((p) => p.habitat === 'aquatic') || aquaBiome;
-    const anyFlying = this.players.some((p) => p.habitat === 'flying');
-    this.world.setAquaticChannelActive(anyAquatic);
-    this.world.setSkyCorridorActive(anyFlying);
-    this.spawner.setHabitatMode(this.players[0]?.habitat || 'land', aquaBiome);
+    const aquaBiome = isAquaticBiome(this.currentBiome);
+    this._syncEnvironmentHabitat(this.players[0]);
     for (const pl of this.players) {
-      if (pl.habitat === 'aquatic' && !aquaBiome) {
+      const mode = pl.habitatMode || pl.habitat;
+      pl.diveDepth = this.currentBiome?.submerged ? 1 : 0;
+      pl.inWater = Boolean(aquaBiome || mode === 'aquatic');
+      pl.inSubmerged = Boolean(this.currentBiome?.submerged);
+      if (mode === 'aquatic' && !aquaBiome) {
         pl.x = RIVER_LANE_X[pl.lane] ?? RIVER_LANE_X[1];
         pl.baseY = 0;
-      } else if (pl.habitat === 'flying') {
+      } else if (mode === 'flying') {
         pl.x = LANE_X[pl.lane] ?? 0;
         pl.baseY = SKY_CORRIDOR_Y - 1.15;
       } else {
@@ -1543,6 +1579,84 @@ export class Game {
     this.ui.hud.showFloatText(text, color);
   }
 
+  _syncEnvironmentHabitat(leadPlayer = this.players[0]) {
+    const biome = this.currentBiome;
+    const aquaBiome = isAquaticBiome(biome);
+    const anyAquatic = this.players.some((p) => (p.habitatMode || p.habitat) === 'aquatic') || aquaBiome;
+    const anyFlying = this.players.some((p) => (p.habitatMode || p.habitat) === 'flying');
+    const leadMode = leadPlayer ? (leadPlayer.habitatMode || leadPlayer.habitat) : 'land';
+    const isSubmergedBiome = !!biome?.submerged;
+    const isWaterSurfaceTrack = Boolean(aquaBiome && !isSubmergedBiome);
+    const leadDive = leadPlayer?.diveDepth || 0;
+    this.world.setAquaticChannelActive(anyAquatic);
+    this.world.setSkyCorridorActive(anyFlying);
+    this.world.setWaterTrackVisuals(isWaterSurfaceTrack);
+    this.world.setSubmergedVisuals(isSubmergedBiome || (Boolean(aquaBiome || leadMode === 'aquatic') && leadDive > 0.25));
+    this.spawner.setHabitatMode(leadMode, aquaBiome);
+  }
+
+  _buildCameraEnvOpts(lead = this.players[0]) {
+    const aquaBiome = isAquaticBiome(this.currentBiome);
+    const leadMode = lead ? (lead.habitatMode || lead.habitat) : 'land';
+    const trackCenterX = (!aquaBiome && leadMode === 'aquatic') ? (RIVER_LANE_X[1] ?? 10) : 0;
+    const inWater = Boolean(aquaBiome || leadMode === 'aquatic');
+    const diveDepth = lead?.diveDepth || 0;
+    const isSubmerged = Boolean(this.currentBiome?.submerged || (inWater && diveDepth > 0.25));
+    const isWaterSurface = Boolean(inWater && !isSubmerged);
+    return { trackCenterX, inWater, isWaterSurface, isSubmerged, diveDepth };
+  }
+
+  _transmutePlayerHabitat(p) {
+    if (!p || p.dead || !Array.isArray(p.availableHabitats) || p.availableHabitats.length <= 1) return false;
+    const cur = p.habitatMode || p.habitat || 'land';
+    const idx = p.availableHabitats.indexOf(cur);
+    const nextMode = p.availableHabitats[(idx + 1) % p.availableHabitats.length];
+    if (nextMode === cur) return false;
+
+    const aquaBiome = isAquaticBiome(this.currentBiome);
+    const oldX = p.x;
+    const oldY = (p.baseY || 0) + p.y;
+    p.habitatMode = nextMode;
+    p.habitat = nextMode;
+    p.diveDepth = this.currentBiome?.submerged ? 1 : 0;
+    p.inShopLane = null;
+    p.sliding = false;
+    p.ducking = false;
+    p.grounded = nextMode !== 'flying';
+
+    if (nextMode === 'aquatic') {
+      const lanes = aquaBiome ? LANE_X : RIVER_LANE_X;
+      p.baseY = 0;
+      p.y = 0;
+      p.vy = 0;
+      p.x = lanes[p.lane] ?? lanes[1];
+    } else if (nextMode === 'flying') {
+      p.baseY = SKY_CORRIDOR_Y - 1.15;
+      p.y = 0;
+      p.vy = 2.2;
+      p.x = LANE_X[p.lane] ?? 0;
+    } else {
+      p.baseY = 0;
+      p.y = 0;
+      p.vy = 0;
+      p.x = LANE_X[p.lane] ?? 0;
+    }
+    p.inWater = Boolean(aquaBiome || nextMode === 'aquatic');
+    p.model.root.position.set(p.x, (p.baseY || 0) + p.y, p.z);
+
+    if (p.index === 0) {
+      this._syncEnvironmentHabitat(p);
+    }
+    this.sfx.evolution?.();
+    this.particles.emitExplosion(oldX, oldY + 0.7, p.z, '#38bdf8', 10, false);
+    this.particles.emitExplosion(p.x, (p.baseY || 0) + p.y + 0.7, p.z, '#c084fc', 14, true);
+    const label = nextMode === 'aquatic'
+      ? '🌊 TRANSMUTAÇÃO: MODO AQUÁTICO!'
+      : (nextMode === 'flying' ? '🪽 TRANSMUTAÇÃO: MODO AÉREO!' : '🌿 TRANSMUTAÇÃO: MODO TERRESTRE!');
+    this.ui.hud.showFloatText(label, nextMode === 'aquatic' ? '#38bdf8' : (nextMode === 'flying' ? '#facc15' : '#4ade80'));
+    return true;
+  }
+
   enterHollowEarth(duration = 14) {
     if (this.hollowEarthState?.active) {
       this.hollowEarthState.timer = Math.max(this.hollowEarthState.timer, duration);
@@ -1554,9 +1668,7 @@ export class Game {
     this.world.applyTheme(this.currentBiome.theme);
     this.world.setHollowEarthVisuals(true);
     this.spawner.setBiome('hollow_earth');
-    const anyAqua = this.players.some((p) => p.habitat === 'aquatic');
-    this.world.setAquaticChannelActive(anyAqua);
-    this.spawner.setHabitatMode(this.players[0]?.habitat || 'land', false);
+    this._syncEnvironmentHabitat(this.players[0]);
     if (!this.isTestTrack) this._discoverCurrentBiomeFossil();
     if (!Save.data.discoveredHollowEarth) {
       Save.data.discoveredHollowEarth = true;
@@ -1575,10 +1687,7 @@ export class Game {
     this.currentBiome = getBiomeById(savedId);
     this.world.applyTheme(this.currentBiome.theme);
     this.spawner.setBiome(this.currentBiome.id);
-    const aqua = isAquaticBiome(this.currentBiome.id);
-    const anyAqua = this.players.some((p) => p.habitat === 'aquatic') || aqua;
-    this.world.setAquaticChannelActive(anyAqua);
-    this.spawner.setHabitatMode(this.players[0]?.habitat || 'land', aqua);
+    this._syncEnvironmentHabitat(this.players[0]);
     this.ui.hud.showBanner(`☀️ RETORNO À SUPERFÍCIE: ${this.currentBiome.name}!`, '#38bdf8', 2.6);
   }
 
@@ -1588,12 +1697,10 @@ export class Game {
     this.currentBiome = nextBiome;
     this.world.applyTheme(this.currentBiome.theme);
     this.spawner.setBiome(this.currentBiome.id);
-    const aqua = isAquaticBiome(this.currentBiome.id);
-    const anyAqua = this.players.some((p) => p.habitat === 'aquatic') || aqua;
-    this.world.setAquaticChannelActive(anyAqua);
-    this.spawner.setHabitatMode(this.players[0]?.habitat || 'land', aqua);
+    const aqua = isAquaticBiome(this.currentBiome);
+    this._syncEnvironmentHabitat(this.players[0]);
     for (const pl of this.players) {
-      if (pl.habitat === 'aquatic') {
+      if ((pl.habitatMode || pl.habitat) === 'aquatic') {
         const lanes = aqua ? LANE_X : RIVER_LANE_X;
         pl.x = lanes[pl.lane] ?? lanes[1];
         pl.model.root.position.x = pl.x;
@@ -1687,6 +1794,7 @@ export class Game {
       sfx: this.sfx,
       narrator: this.narrator,
       currentBiome: this.currentBiome,
+      habitatMode: this.players[0]?.habitatMode || this.players[0]?.habitat || 'land',
       playerCount: this.players.length,
       decoyTimer: this.decoyTimer,
       addScore: (v, p) => this.addScore(v, p),
@@ -2154,6 +2262,7 @@ export class Game {
     let attackJust = false;
     let furyJust = false;
     let itemJust = false;
+    let transmuteJust = false;
 
     const isRemotePeer = !!(this.multiplayerSession?.active && p.peerId && p.peerId !== this.net.peerId);
     const isLocalMain = !this.multiplayerSession?.active ? (p.index === 0) : (this.multiplayerSession.isHost && p.peerId === this.net.peerId);
@@ -2188,6 +2297,7 @@ export class Game {
       attackJust = this.input.wasActionJustPressed(actKey, 'attack', false);
       furyJust = this.input.wasKeyJustPressed('KeyF') || this.input.wasActionJustPressed('p1', 'fury', false);
       itemJust = this.input.wasKeyJustPressed('KeyE');
+      transmuteJust = this.input.wasActionJustPressed(actKey, 'transmute', false);
     } else if (isRemotePeer) {
       leftJust = !!this.input.virtualJustPressed[p.key]?.has('left');
       rightJust = !!this.input.virtualJustPressed[p.key]?.has('right');
@@ -2198,6 +2308,7 @@ export class Game {
       attackJust = !!this.input.virtualJustPressed[p.key]?.has('attack');
       furyJust = !!this.input.virtualJustPressed[p.key]?.has('fury');
       itemJust = !!this.input.virtualJustPressed[p.key]?.has('item');
+      transmuteJust = !!this.input.virtualJustPressed[p.key]?.has('transmute');
     } else {
       const allowClassic = isLocalMain || this.players.length === 1;
       const inKey = isLocalMain ? 'p1' : p.key;
@@ -2210,12 +2321,18 @@ export class Game {
       attackJust = this.input.wasActionJustPressed(inKey, 'attack', false);
       furyJust = isLocalMain && (this.input.wasKeyJustPressed('KeyF') || this.input.wasActionJustPressed('p1', 'fury', false));
       itemJust = isLocalMain ? this.input.wasKeyJustPressed('KeyE') : this.input.wasActionJustPressed(inKey, 'item', false);
+      transmuteJust = this.input.wasActionJustPressed(inKey, 'transmute', false);
     }
 
     if ((this._skipIntroGuardFrames || 0) > 0) {
       jumpJust = false;
       jumpHeld = false;
       abilityJust = false;
+      transmuteJust = false;
+    }
+
+    if (transmuteJust) {
+      this._transmutePlayerHabitat(p);
     }
 
     // Regra do Modo Caos ou Modo Espelhado: controles invertidos!
@@ -2223,8 +2340,9 @@ export class Game {
       [leftJust, rightJust] = [rightJust, leftJust];
     }
 
-    // Vento ou correnteza do bioma empurram suavemente
-    const envWind = (this.weather.windForce || 0) + (this.currentBiome.windBias || 0) + (p.spec.dinoClass === 'aquatic' ? 0 : (this.currentBiome.currentForce || 0));
+    // Vento ou correnteza do bioma empurram suavemente (reduzido por estabilidade / patas extras)
+    const stab = Math.min(0.85, p.stabilityBonus || 0);
+    const envWind = ((this.weather.windForce || 0) + (this.currentBiome.windBias || 0) + (p.spec.dinoClass === 'aquatic' ? 0 : (this.currentBiome.currentForce || 0))) * (1 - stab);
     if ((p._moveComboCd || 0) > 0) p._moveComboCd = Math.max(0, p._moveComboCd - dt);
 
     const progLocked = !p._unlockAll && Save.data.settings?.progressiveUnlocks !== false;
@@ -2233,8 +2351,12 @@ export class Game {
     const attackUnlocked = !progLocked || this.score >= 1800;
     const furyUnlocked = !progLocked || this.score >= 2800;
 
-    const aquaBiome = isAquaticBiome(this.currentBiome?.id);
-    const laneArr = (p.habitat === 'aquatic' && !aquaBiome) ? RIVER_LANE_X : LANE_X;
+    const aquaBiome = isAquaticBiome(this.currentBiome);
+    const curHabitat = p.habitatMode || p.habitat || 'land';
+    const laneArr = (curHabitat === 'aquatic' && !aquaBiome) ? RIVER_LANE_X : LANE_X;
+    const inWater = Boolean(aquaBiome || curHabitat === 'aquatic');
+    p.inWater = inWater;
+    p.inSubmerged = Boolean(this.currentBiome?.submerged);
 
     if (leftJust) {
       if (p.inShopLane === 'right') {
@@ -2291,13 +2413,23 @@ export class Game {
     p.x += (targetX - p.x) * Math.min(1, dt * laneSpeed);
     const laneLean = (p.x - prevX) / Math.max(dt, 0.001) * 0.055;
 
-    // Pulo + Salto Duplo Limitado + Pulo Carregado
+    // Pulo + Salto Duplo Limitado + Pulo Carregado (+ Emersão na água)
     const jumpMult = (p.jumpMult || 1) * (p.spec.stats.jump >= 9 ? 1.1 : 1.0);
     const maxAirJumps = p.id === 'compsognathus' ? 2 : 1;
-    const airJumpCost = Math.round(58 * (1 - (p.mutationMods?.staminaSave || 0)));
+    const airJumpCost = Math.round(58 * (1 - (p.mutationMods?.staminaSave || 0)) * (p.airStaminaCostMult || 1));
     if (jumpJust) {
       if (this.events.ufo.active && this.events.ufo.mashBreak()) {
         // Quebrou o feixe do OVNI!
+      } else if (inWater && !p.inSubmerged && (p.diveDepth || 0) > 0.3) {
+        p.diveDepth = 0;
+        p.diveTimer = 0;
+        p.vy = 11.8 * jumpMult;
+        p.grounded = false;
+        p.ducking = false;
+        p.sliding = false;
+        p.airJumpsUsed = 0;
+        this.sfx.jump(true);
+        this.particles.emitDust(p.x, (p.baseY || 0) + 0.35, p.z, 10, '#67e8f9', 3.0);
       } else if (p.grounded) {
         p.vy = 13.4 * jumpMult;
         p.grounded = false;
@@ -2359,9 +2491,24 @@ export class Game {
       p.vy += 13 * dt;
     }
 
-    // Abaixar / Deslizar (abaixar no chão dá deslizada com impulso gastando estamina após 1200 pts)
+    // Abaixar / Deslizar / Mergulhar na Água (S / ↓)
+    if (p.inSubmerged) {
+      p.diveDepth = 1.0;
+    }
     if (duckHeld) {
-      if (!p.grounded) {
+      if (inWater && !p.inSubmerged) {
+        const prevDive = p.diveDepth || 0;
+        p.diveDepth = Math.min(1, prevDive + dt * 5.2);
+        p.diveTimer = Math.max(p.diveTimer || 0, 0.16);
+        p.ducking = true;
+        if (prevDive <= 0.25 && p.diveDepth > 0.25) {
+          this.sfx.slide?.();
+          this.particles.emitDust(p.x, (p.baseY || 0) + 0.25, p.z, 8, '#67e8f9', 2.6);
+        }
+        if (Math.random() < dt * 8) {
+          this.particles.emitDust(p.x, (p.baseY || 0) - 0.35, p.z + 0.2, 2, '#90e0ef', 1.4);
+        }
+      } else if (!p.grounded) {
         if (p.vy > -18 && (this.runTime - (p._lastJumpAt ?? -99)) <= 0.85 && (p._moveComboCd || 0) <= 0) {
           p._moveCombo = Math.min(8, (p._moveCombo || 0) + 1);
           p._moveComboCd = 1.6;
@@ -2384,6 +2531,9 @@ export class Game {
       p.ducking = true;
     } else {
       p.ducking = false;
+      if (!p.inSubmerged) {
+        p.diveDepth = Math.max(0, (p.diveDepth || 0) - dt * (inWater ? 3.8 : 6.0));
+      }
     }
 
     if (p.sliding) {
@@ -2494,9 +2644,9 @@ export class Game {
       p.vy = 0;
     } else if (!p.grounded) {
       p.vy -= 35.0 * gravMult * dt;
-      // Planar breve consome estamina rapidamente (impede voar)
+      // Planar breve consome estamina rapidamente (impede voar; pesado se +Patas)
       if (jumpHeld && staminaUnlocked && p.vy < -2.6 && (p.stamina ?? 0) > 4) {
-        p.stamina = Math.max(0, (p.stamina ?? 0) - 62 * dt);
+        p.stamina = Math.max(0, (p.stamina ?? 0) - 62 * (p.airStaminaCostMult || 1) * dt);
         p._staminaRegenDelay = 0.5;
         p.vy = Math.max(p.vy, -10.5);
       }
@@ -2579,7 +2729,8 @@ export class Game {
       }
     }
 
-    p.model.root.position.set(p.x, (p.baseY || 0) + p.y - (p.diveTimer > 0 ? 0.55 : 0), p.z);
+    const diveSink = (p.inSubmerged ? 0.32 : (p.diveDepth || 0) * 1.45);
+    p.model.root.position.set(p.x, (p.baseY || 0) + p.y - diveSink, p.z);
     if (p.model.nameTag) {
       p.model.nameTag.visible = !p.dead;
       if (p.model.nameTag.material) p.model.nameTag.material.opacity = p.dead ? 0 : 0.95;
@@ -2590,7 +2741,10 @@ export class Game {
       vy: p.vy,
       ducking: p.ducking,
       sliding: p.sliding,
-      swimming: this.currentBiome.waterTrack,
+      swimming: curHabitat === 'aquatic' || aquaBiome,
+      locomotion: curHabitat,
+      diveDepth: p.inSubmerged ? 1 : (p.diveDepth || 0),
+      forceLand: curHabitat === 'land',
       dead: p.dead,
       invulnActive: p.invulnTimer > 0 && !p.dead,
       furyActive: p.furyTimer > 0,
@@ -2771,13 +2925,15 @@ export class Game {
     }
 
     const camPlayers = this.players.filter((x) => !x.dead);
+    const introCamOpts = this._buildCameraEnvOpts(p0 || camPlayers[0]);
     this.cameraRig.update(
       dt,
       camPlayers.length > 0 ? camPlayers : this.players,
       this.baseSpeed,
       Save.data.settings.accessibility.reduceShake,
       this.photoMode,
-      this.spectatorMode
+      this.spectatorMode,
+      introCamOpts
     );
 
     const chasePos = this.camera.position.clone();
@@ -2787,14 +2943,15 @@ export class Game {
 
     const stillIntro = pred.updateIntro(dt, this.players, this._eventContext());
     if (stillIntro && pred.state === 'intro') {
-      const blendWindow = 0.75;
-      const tOut = pred.introTimer <= blendWindow
-        ? 1 - Math.max(0, pred.introTimer) / blendWindow
-        : 0;
-      const smooth = tOut * tOut * (3 - 2 * tOut);
+      const shot = pred.currentShot;
+      const smooth = shot ? (shot.blendToChase || 0) : 0;
       const subtlePan = Math.sin((pred.introElapsed || 0) * 1.15) * 0.32;
-      const introPos = new THREE.Vector3(px - 2.65 + subtlePan, py + 4.15, 11.4);
-      const introLook = new THREE.Vector3(px + 0.2, py + 1.35, -3.5);
+      const introPos = shot?.pos
+        ? shot.pos.clone()
+        : new THREE.Vector3(px - 2.65 + subtlePan, py + 4.15, 11.4);
+      const introLook = shot?.look
+        ? shot.look.clone()
+        : new THREE.Vector3(px + 0.2, py + 1.35, -3.5);
 
       this.camera.position.lerpVectors(introPos, chasePos, smooth);
       introLook.lerp(chaseLook, smooth);
@@ -2821,13 +2978,15 @@ export class Game {
     if (this.hitStopTimer > 0) {
       this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
       const camPlayers = this.players.filter((x) => !x.dead);
+      const hitOpts = this._buildCameraEnvOpts(camPlayers[0] || this.players[0]);
       this.cameraRig.update(
         dt,
         camPlayers.length > 0 ? camPlayers : this.players,
         this.speed,
         Save.data.settings.accessibility.reduceShake,
         this.photoMode,
-        this.spectatorMode
+        this.spectatorMode,
+        hitOpts
       );
       return;
     }
@@ -2867,7 +3026,10 @@ export class Game {
     }
 
     // Soft-cap nos multiplicadores de velocidade para evitar aceleração insana com buffs empilhados
-    let speedMult = adaptiveMult * (p0 ? StatusSystem.getSpeedMultiplier(p0) : 1);
+    let speedMult = adaptiveMult * (p0 ? StatusSystem.getSpeedMultiplier(p0) : 1) * (p0?.speedBonus || 1);
+    if (p0?.inWater && p0?.mutationMods?.waterSpeedMult) {
+      speedMult *= p0.mutationMods.waterSpeedMult;
+    }
     const hasBoost = Boolean(p0?.turboTimer > 0 || p0?.rocketTimer > 0 || p0?.minecartTimer > 0);
     if (hasBoost) speedMult *= 1.24;
     if (p0?.sliding) speedMult *= 1.07;
@@ -3036,6 +3198,7 @@ export class Game {
         this.currentBiome = targetBiome;
         this.world.applyTheme(targetBiome.theme, false);
         this.spawner.setBiome(targetBiome.id);
+        this._syncEnvironmentHabitat(p0);
         this.ui.hud.showBanner(`🌀 PORTAL! Entrando em: ${targetBiome.name}`, '#00f5d4', 3.5);
         this._discoverCurrentBiomeFossil();
         if (targetBiome.id === 'jurassic_river') Save.unlockAchievement('river_king');
@@ -3056,6 +3219,7 @@ export class Game {
         this.currentBiome = getBiomeById(nextCh.biome);
         this.world.applyTheme(this.currentBiome.theme, false);
         this.spawner.setBiome(this.currentBiome.id);
+        this._syncEnvironmentHabitat(p0);
         this._discoverCurrentBiomeFossil();
         this.ui.hud.showBanner(`📖 ${nextCh.title}: ${nextCh.dialogue}`, '#ffd447', 4.5);
       }
@@ -3197,6 +3361,10 @@ export class Game {
     // Atualiza jogadores
     for (const p of this.players) {
       this._handlePlayerInput(p, dt);
+    }
+    if (p0) {
+      const isSub = Boolean(this.currentBiome?.submerged || (p0.inWater && (p0.diveDepth || 0) > 0.25));
+      this.world.setSubmergedVisuals(isSub);
     }
 
     // Coop: reviver parceiro caído ficando perto por 3s
@@ -3553,6 +3721,7 @@ export class Game {
               this.currentBiome = nextB;
               this.world.applyTheme(nextB.theme, false);
               this.spawner.setBiome(nextB.id);
+              this._syncEnvironmentHabitat(p);
               this._discoverCurrentBiomeFossil();
               this.ui.hud.showBanner(`🌀 PORTAL AZUL → Entrando em: ${nextB.name}!`, '#38bdf8', 3.2);
             }
@@ -3790,16 +3959,20 @@ export class Game {
     if (useSplitCam && this.cameraRigP2) {
       const p1 = this.players[0];
       const p2 = this.players[1];
-      this.cameraRig.update(dt, [!p1.dead ? p1 : (camPlayers[0] || p1)], this.speed, Save.data.settings.accessibility.reduceShake, false, false);
-      this.cameraRigP2.update(dt, [!p2.dead ? p2 : (camPlayers[0] || p2)], this.speed, Save.data.settings.accessibility.reduceShake, false, false);
+      const p1Lead = !p1.dead ? p1 : (camPlayers[0] || p1);
+      const p2Lead = !p2.dead ? p2 : (camPlayers[0] || p2);
+      this.cameraRig.update(dt, [p1Lead], this.speed, Save.data.settings.accessibility.reduceShake, false, false, this._buildCameraEnvOpts(p1Lead));
+      this.cameraRigP2.update(dt, [p2Lead], this.speed, Save.data.settings.accessibility.reduceShake, false, false, this._buildCameraEnvOpts(p2Lead));
     } else {
+      const activeCamList = camPlayers.length > 0 ? camPlayers : this.players;
       this.cameraRig.update(
         dt,
-        camPlayers.length > 0 ? camPlayers : this.players,
+        activeCamList,
         this.speed,
         Save.data.settings.accessibility.reduceShake,
         this.photoMode,
-        this.spectatorMode
+        this.spectatorMode,
+        this._buildCameraEnvOpts(lead || activeCamList[0])
       );
     }
     if ((this._skipIntroGuardFrames || 0) > 0) this._skipIntroGuardFrames--;

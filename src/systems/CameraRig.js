@@ -23,6 +23,7 @@ export class CameraRig {
     this.focusPlayerId = null;
     this.spectatorOrbitAngle = 0;
     this.predatorFocusPos = null;
+    this.predatorCinematic = null;
 
     this.currentPos = new THREE.Vector3(-0.9, 4.9, 9.2);
     this.currentLook = new THREE.Vector3(1.2, 1.3, -11);
@@ -48,11 +49,18 @@ export class CameraRig {
     this.focusPlayerId = playerId;
   }
 
-  setPredatorFocus(pos = null) {
+  setPredatorFocus(pos = null, look = null, snap = false) {
     this.predatorFocusPos = pos ? { x: pos.x || 0, y: pos.y || 0, z: pos.z || 8 } : null;
+    this.predatorCinematic = look && pos ? { pos, look } : null;
+    if (snap && pos && look) {
+      this.currentPos.set(pos.x, pos.y, pos.z);
+      this.currentLook.set(look.x, look.y, look.z);
+      this.camera.position.copy(this.currentPos);
+      this.camera.lookAt(this.currentLook);
+    }
   }
 
-  update(dt, playersOrPos, speed = 18, reduceShake = false, photoMode = false, spectatorMode = false) {
+  update(dt, playersOrPos, speed = 18, reduceShake = false, photoMode = false, spectatorMode = false, envOpts = null) {
     this.cinematicTime += dt;
 
     let fx = 0;
@@ -60,6 +68,7 @@ export class CameraRig {
     let fz = 0;
     let spreadExtra = 0;
     let highlightZoom = 0;
+    let diveDepth = 0;
 
     if (Array.isArray(playersOrPos) && playersOrPos.length > 0) {
       const focused = this.focusPlayerId
@@ -70,6 +79,7 @@ export class CameraRig {
         fx = focused.x;
         fy = (focused.baseY || 0) + focused.y;
         fz = focused.z;
+        diveDepth = focused.diveDepth || 0;
         highlightZoom = -1.35;
       } else {
         const alive = playersOrPos.filter((pl) => !pl.dead);
@@ -80,18 +90,21 @@ export class CameraRig {
           fx += p.x;
           fy += (p.baseY || 0) + p.y;
           fz += p.z;
+          diveDepth += p.diveDepth || 0;
           minX = Math.min(minX, p.x);
           maxX = Math.max(maxX, p.x);
         }
         fx /= list.length;
         fy /= list.length;
         fz /= list.length;
+        diveDepth /= list.length;
         spreadExtra = Math.max(0, (maxX - minX) * 0.65);
 
         // Zoom automático em quem está sofrendo (1 vida/invuln recente) ou brilhando (fúria/habilidade/combo alto)
         const spotlight = list.find((pl) => pl.invulnTimer > 0.6 || pl.furyTimer > 0 || (pl.combo || 0) >= 8);
         if (spotlight && list.length > 1) {
           fx = fx * 0.45 + spotlight.x * 0.55;
+          fz = fz * 0.45 + spotlight.z * 0.55;
           fz = fz * 0.45 + spotlight.z * 0.55;
           highlightZoom = -0.95;
         }
@@ -100,13 +113,22 @@ export class CameraRig {
       fx = playersOrPos.x || 0;
       fy = playersOrPos.y || 0;
       fz = playersOrPos.z || 0;
+      diveDepth = playersOrPos.diveDepth || 0;
     }
 
+    const trackCenterX = envOpts?.trackCenterX ?? (fx > 6 ? 10 : 0);
+    const relFx = fx - trackCenterX;
+    const isSubmerged = !!(envOpts?.isSubmerged || diveDepth > 0.35);
+    const isWaterSurface = !!(envOpts?.isWaterSurface || (envOpts?.inWater && !isSubmerged));
     const aspect = this.camera.aspect || 1;
     const isPortrait = aspect > 0 && aspect < 0.85;
     const portraitDist = isPortrait ? Math.min(2.9, (0.85 - aspect) * 6.4) : 0;
 
-    if (this.predatorFocusPos) {
+    if (this.predatorCinematic) {
+      const { pos, look } = this.predatorCinematic;
+      this.targetPos.set(pos.x, pos.y, pos.z);
+      this.targetLook.set(look.x, look.y, look.z);
+    } else if (this.predatorFocusPos) {
       const px = this.predatorFocusPos.x || 0;
       const py = this.predatorFocusPos.y || 0;
       const pz = this.predatorFocusPos.z || 8.2;
@@ -124,33 +146,46 @@ export class CameraRig {
       this.targetPos.set(fx + Math.sin(this.photoOrbitAngle) * r, 3.6 + fy, fz + Math.cos(this.photoOrbitAngle) * r);
       this.targetLook.set(fx, 1.3 + fy, fz - 1.5);
     } else {
+      const waterYDrop = isSubmerged ? -1.45 - diveDepth * 0.65 : (isWaterSurface ? -0.42 - diveDepth * 0.95 : 0);
+      const waterZPull = isSubmerged ? -1.35 : (isWaterSurface ? -0.45 : 0);
+      const waterDriftX = isSubmerged ? Math.sin(this.cinematicTime * 1.15) * 0.14 : 0;
+      const waterLookYOff = isSubmerged ? -0.45 - diveDepth * 0.6 : (isWaterSurface ? -0.18 - diveDepth * 0.4 : 0);
+
       switch (this.currentMode.id) {
         case 'third':
-          // Leve deslocamento à esquerda no desktop; no celular retrato centraliza e recua para mostrar as 3 faixas e predador atrás
-          this.targetPos.set(fx * (isPortrait ? 0.52 : 0.6) - (isPortrait ? 0.35 : 0.8), 5.05 + fy * 0.35 + spreadExtra * 0.4 + portraitDist * 0.36, fz + 9.4 + spreadExtra + highlightZoom + portraitDist);
-          this.targetLook.set(fx * (isPortrait ? 0.4 : 0.45) + (isPortrait ? 0.45 : 1.1), 1.35 + fy * 0.25, fz - 11.5);
+          // Centralizado em trackCenterX (funciona perfeitamente tanto em x=0 quanto no Canal do Rio x=10!), submerso e retrato
+          this.targetPos.set(
+            trackCenterX + relFx * (isPortrait ? 0.52 : 0.62) - (isPortrait ? 0.2 : 0.52) + waterDriftX,
+            5.0 + fy * 0.35 + spreadExtra * 0.4 + portraitDist * 0.36 + waterYDrop,
+            fz + 9.2 + spreadExtra + highlightZoom + portraitDist + waterZPull
+          );
+          this.targetLook.set(
+            trackCenterX + relFx * (isPortrait ? 0.4 : 0.45) + (isPortrait ? 0.22 : 0.55),
+            1.35 + fy * 0.25 + waterLookYOff,
+            fz - 11.5
+          );
           break;
         case 'side':
-          this.targetPos.set(fx - 13.0, 3.4 + fy * 0.25, fz - 2.5);
-          this.targetLook.set(fx + 1.5, 1.4, fz - 6.0);
+          this.targetPos.set(fx - 13.0, 3.4 + fy * 0.25 + waterYDrop * 0.6, fz - 2.5);
+          this.targetLook.set(fx + 1.5, 1.4 + waterLookYOff * 0.5, fz - 6.0);
           break;
         case 'iso':
-          this.targetPos.set(fx - 8.8, 8.6 + fy * 0.25, fz + 7.8);
-          this.targetLook.set(fx + 0.8, 1.1, fz - 7.5);
+          this.targetPos.set(fx - 8.8, 8.6 + fy * 0.25 + waterYDrop * 0.8, fz + 7.8);
+          this.targetLook.set(fx + 0.8, 1.1 + waterLookYOff * 0.5, fz - 7.5);
           break;
         case 'top':
-          this.targetPos.set(fx * 0.5 + 1.2, 17.0, fz + 3.0);
-          this.targetLook.set(fx * 0.4 + 1.0, 0.5, fz - 9.5);
+          this.targetPos.set(trackCenterX + relFx * 0.5 + 0.8, 17.0 + waterYDrop, fz + 3.0);
+          this.targetLook.set(trackCenterX + relFx * 0.4 + 0.6, 0.5 + waterLookYOff, fz - 9.5);
           break;
         case 'first':
           // Posicionada logo à frente do focinho para evitar colisão interna com a cabeça do dino
-          this.targetPos.set(fx, 1.85 + fy * 0.9, fz - 1.75);
-          this.targetLook.set(fx, 1.35 + fy * 0.5, fz - 22);
+          this.targetPos.set(fx, 1.85 + fy * 0.9 - diveDepth * 1.1, fz - 1.75);
+          this.targetLook.set(fx, 1.35 + fy * 0.5 - diveDepth * 1.0, fz - 22);
           break;
         case 'cinematic': {
           const orbit = Math.sin(this.cinematicTime * 0.65) * 4.4;
-          this.targetPos.set(fx * 0.5 + orbit, 4.4 + Math.cos(this.cinematicTime * 0.5) * 1.1, fz + 8.5);
-          this.targetLook.set(fx * 0.5 + 0.6, 1.4 + fy * 0.3, fz - 10.5);
+          this.targetPos.set(trackCenterX + relFx * 0.5 + orbit, 4.4 + Math.cos(this.cinematicTime * 0.5) * 1.1 + waterYDrop, fz + 8.5 + waterZPull);
+          this.targetLook.set(trackCenterX + relFx * 0.5 + 0.4, 1.4 + fy * 0.3 + waterLookYOff, fz - 10.5);
           break;
         }
         default:

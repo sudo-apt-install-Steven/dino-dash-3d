@@ -2,11 +2,12 @@
 
 export class PhysicsCollision {
   static getPlayerBox(player) {
-    const scale = player.giantScale || 1;
+    const scale = (player.giantScale || 1) * (player.hitboxScale || 1);
     const height = (player.ducking || player.sliding ? 0.96 : 1.85) * scale;
     const halfW = 0.38 * scale * (player.smallHitbox ? 0.75 : 1);
     const halfD = 0.44 * scale * (player.smallHitbox ? 0.75 : 1);
-    const wy = (player.baseY || 0) + player.y;
+    const diveOffset = (player.diveDepth || 0) * 1.45;
+    const wy = (player.baseY || 0) + player.y - diveOffset;
     return {
       minX: player.x - halfW,
       maxX: player.x + halfW,

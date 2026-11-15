@@ -576,3 +576,59 @@ export function getDinoHabitat(specOrId) {
   }
   return 'land';
 }
+
+export function getHybridAvailableModes(hybridCfg = null, mutationId = null) {
+  const modes = new Set();
+  if (hybridCfg && (hybridCfg.enabled || hybridCfg.body || hybridCfg.head || hybridCfg.tail || hybridCfg.bodyId || hybridCfg.headId || hybridCfg.tailId)) {
+    const partIds = [
+      hybridCfg.body || hybridCfg.bodyId,
+      hybridCfg.head || hybridCfg.headId,
+      hybridCfg.tail || hybridCfg.tailId,
+      hybridCfg.limbsId
+    ].filter(Boolean);
+    for (const pid of partIds) {
+      const h = getDinoHabitat(pid);
+      if (h === 'amphibious') {
+        modes.add('land');
+        modes.add('aquatic');
+      } else {
+        modes.add(h);
+      }
+    }
+  }
+  if (mutationId === 'extra_limbs') {
+    modes.add('land');
+  }
+  if (modes.size === 0) modes.add('land');
+  const order = ['land', 'aquatic', 'flying'];
+  return order.filter((m) => modes.has(m));
+}
+
+export function getEffectiveDinoHabitat(specOrId, { hybrid = null, mutationId = null } = {}) {
+  const base = getDinoHabitat(specOrId);
+  const grantsLandWalk = mutationId === 'extra_limbs';
+  const order = ['land', 'aquatic', 'flying'];
+  if (hybrid?.enabled) {
+    const availableModes = getHybridAvailableModes(hybrid, mutationId);
+    const bodyHab = getDinoHabitat(hybrid.body || hybrid.bodyId || 'trex');
+    const normBodyHab = bodyHab === 'amphibious' ? 'aquatic' : bodyHab;
+    const primary = availableModes.includes(normBodyHab) ? normBodyHab : (availableModes[0] || 'land');
+    return { primary, availableModes, grantsLandWalk };
+  }
+  const modes = new Set();
+  if (base === 'amphibious') {
+    modes.add('land');
+    modes.add('aquatic');
+  } else {
+    modes.add(base);
+  }
+  if (grantsLandWalk) {
+    modes.add('land');
+  }
+  const availableModes = order.filter((m) => modes.has(m));
+  return {
+    primary: base,
+    availableModes,
+    grantsLandWalk
+  };
+}
