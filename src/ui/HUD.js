@@ -4,6 +4,7 @@ import { BACKPACK_ITEMS } from '../systems/Items.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
 import { StatusSystem } from '../systems/StatusSystem.js';
 import { Save } from '../systems/Save.js';
+import { OrientationManager } from '../systems/OrientationManager.js';
 import { renderSkillSvg, renderEggSvg, renderBossObsSvg } from './SvgIcons.js';
 
 export function formatScoreValue(val) {
@@ -16,6 +17,7 @@ export class HUD {
     this.callbacks = callbacks;
     this.bannerTimer = 0;
     this.subTimer = 0;
+    this.isEditingTouchLayout = false;
     this._render();
   }
 
@@ -35,12 +37,18 @@ export class HUD {
           <div class="hud-pill" id="hud-crystals" style="color:#7dd3fc; border-color:#38bdf8;" data-tip="Diamantes: servem para Catalisador Gacha (3 💎), Forja de Mutações, Reroll na Loja (2 💎) e Revive (2 💎).">💎 <strong>0</strong></div>
           <div class="hud-pill hidden" id="hud-combo" style="color:#ffd447;" data-tip="Multiplicador por quase-colisões e pisões seguidos.">Combo: <strong>x1</strong></div>
           <div class="hud-pill hidden" id="hud-mp-rank" style="color:#fde047; border-color:#ffd447;" data-tip="Sua posição atual contra outros jogadores.">🏆 #1</div>
+          <div class="hud-pill hidden" id="hud-ctrl-status" style="color:#86efac; border-color:#22c55e; display:inline-flex; align-items:center; gap:6px;" data-tip="Indicador de Controle Celular conectado em tempo real.">
+            <span class="hud-ctrl-led" id="hud-ctrl-led"></span>
+            <span id="hud-ctrl-text">📱 Controle</span>
+          </div>
           <div class="hud-pill hidden" id="hud-element" style="color:#38bdf8;" data-tip="Elemento ativo: combine com outro ou acerte a fraqueza do Chefe!">✨ Nenhum</div>
           <div class="hud-pill hidden" id="hud-wanted" style="color:#ff4757;" data-tip="Nível de Caçada: aumenta recompensa e atenção de predadores.">🚨 ★</div>
         </div>
 
         <div class="hud-top-right" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
           <div class="hud-top-actions" style="display:flex; gap:8px; align-items:center;">
+            <button class="chunky-btn secondary mob-only" id="btn-mob-rotate" style="padding:5px 8px; font-size:0.75rem;" data-tip="Deitar / alternar tela em Paisagem no celular.">🔄</button>
+            <button class="chunky-btn secondary mob-only" id="btn-mob-edit-hud" style="padding:5px 8px; font-size:0.75rem;" data-tip="Editar tamanho e posição dos botões touch.">🛠️</button>
             <button class="chunky-btn secondary" id="btn-guide" style="padding:5px 10px; font-size:0.75rem;" data-tip="Abre o Guia Visual de obstáculos, status e chefes.">📖<span class="btn-label"> Guia</span></button>
             <button class="chunky-btn secondary" id="btn-clip-rec" style="padding:5px 10px; font-size:0.75rem;" data-tip="Gravar clipe curto da corrida (.webm).">🎥<span class="btn-label"> Clipe</span></button>
             ${import.meta.env.DEV ? `<button class="chunky-btn secondary ${Save.data.devMode ? '' : 'hidden'}" id="btn-debug" style="padding:5px 10px; font-size:0.75rem;" data-tip="Painel de Depuração e Testes (F9).">🛠️<span class="btn-label"> Debug</span></button>` : ''}
@@ -149,11 +157,11 @@ export class HUD {
 
       <!-- Controles touch para celular (Swipe livre por padrão + botões ⚔️/⚡/🧭/🔥/🔄/🎒 ergonômicos com rótulo claro) -->
       <div class="touch-controls" id="touch-controls">
-        <div class="touch-cluster touch-cluster-left touch-dpad-only">
+        <div class="touch-cluster touch-cluster-left touch-dpad-only" id="touch-cluster-left">
           <button class="touch-btn" data-tact="left" aria-label="Faixa Esquerda">◀</button>
           <button class="touch-btn" data-tact="right" aria-label="Faixa Direita">▶</button>
         </div>
-        <div class="touch-cluster touch-cluster-right">
+        <div class="touch-cluster touch-cluster-right" id="touch-cluster-right">
           <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar"><span class="touch-btn-ico" id="touch-duck-ico">▼</span><span class="touch-btn-lbl" id="touch-duck-lbl">Baixo</span></button>
           <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular"><span class="touch-btn-ico">▲</span><span class="touch-btn-lbl">Pulo</span></button>
           <button class="touch-btn touch-btn-action hidden touch-btn-fury" id="touch-fury-btn" data-tact="fury" aria-label="Modo Fúria"><span class="touch-btn-ico">🔥</span><span class="touch-btn-lbl">Fúria!</span></button>
@@ -195,11 +203,27 @@ export class HUD {
         </div>
       </div>
 
+      <!-- Barra Flutuante de Edição dos Botões Touch (Player no Celular) -->
+      <div class="hud-layout-editor-bar chunky-panel hidden" id="hud-touch-editor-bar">
+        <strong style="color:#ffd447; font-size:0.8rem;">🛠️ Editar Botões Touch (Arraste esquerda/direita!)</strong>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center;">
+          <label style="font-size:0.74rem; display:flex; align-items:center; gap:5px;">
+            Tamanho: <input type="range" id="hud-touch-scale" min="80" max="135" value="100" style="width:84px; accent-color:#f59e0b;" />
+          </label>
+          <label style="font-size:0.74rem; display:flex; align-items:center; gap:5px;">
+            Opacidade: <input type="range" id="hud-touch-opacity" min="50" max="100" value="92" style="width:84px; accent-color:#f59e0b;" />
+          </label>
+          <button class="chunky-btn secondary" id="hud-touch-reset" style="padding:5px 10px; font-size:0.74rem;">🔄 Padrão</button>
+          <button class="chunky-btn" id="hud-touch-done" style="padding:5px 12px; font-size:0.74rem;">✅ Salvar</button>
+        </div>
+      </div>
+
       <!-- Pause Overlay -->
       <div class="overlay-center hidden" id="pause-overlay">
         <div class="chunky-panel gameover-card">
           <h2>⏸ PAUSADO</h2>
           <button class="chunky-btn" id="btn-resume">Continuar</button>
+          <button class="chunky-btn secondary mob-only" id="btn-pause-rotate">🔄 Deitar / Alternar Paisagem</button>
           <button class="chunky-btn secondary" id="btn-pause-cam">📷 Trocar Câmera (C)</button>
           <button class="chunky-btn orange" id="btn-pause-restart">Reiniciar (R)</button>
           <button class="chunky-btn secondary" id="btn-pause-menu">Menu Principal</button>
@@ -370,6 +394,12 @@ export class HUD {
     this.ufoFill = q('#ufo-fill');
     this.ufoLabel = q('#ufo-label');
     this.touchControls = q('#touch-controls');
+    this.touchClusterLeft = q('#touch-cluster-left');
+    this.touchClusterRight = q('#touch-cluster-right');
+    this.touchEditorBar = q('#hud-touch-editor-bar');
+    this.ctrlStatusPill = q('#hud-ctrl-status');
+    this.ctrlLed = q('#hud-ctrl-led');
+    this.ctrlText = q('#hud-ctrl-text');
     this.hudBottom = q('#hud-bottom-bar');
 
     this.pauseOverlay = q('#pause-overlay');
@@ -450,6 +480,27 @@ export class HUD {
     });
     this.root.querySelector('#btn-pause').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-resume').addEventListener('click', () => this.callbacks.onTogglePause?.());
+    this.root.querySelector('#btn-mob-rotate')?.addEventListener('click', () => OrientationManager.toggleForceLandscape());
+    this.root.querySelector('#btn-pause-rotate')?.addEventListener('click', () => OrientationManager.toggleForceLandscape());
+    this.root.querySelector('#btn-mob-edit-hud')?.addEventListener('click', () => this.toggleTouchLayoutEditor());
+    this.root.querySelector('#hud-touch-done')?.addEventListener('click', () => this.toggleTouchLayoutEditor(false));
+    this.root.querySelector('#hud-touch-reset')?.addEventListener('click', () => {
+      Save.data.settings.mobileHudLayout = { scale: 1.0, opacity: 0.92, positions: {} };
+      Save.save();
+      this._applyMobileTouchLayout();
+    });
+    this.root.querySelector('#hud-touch-scale')?.addEventListener('input', (e) => {
+      if (!Save.data.settings.mobileHudLayout) Save.data.settings.mobileHudLayout = { scale: 1, opacity: 0.92, positions: {} };
+      Save.data.settings.mobileHudLayout.scale = Number(e.target.value) / 100;
+      Save.save();
+      this._applyMobileTouchLayout();
+    });
+    this.root.querySelector('#hud-touch-opacity')?.addEventListener('input', (e) => {
+      if (!Save.data.settings.mobileHudLayout) Save.data.settings.mobileHudLayout = { scale: 1, opacity: 0.92, positions: {} };
+      Save.data.settings.mobileHudLayout.opacity = Number(e.target.value) / 100;
+      Save.save();
+      this._applyMobileTouchLayout();
+    });
     this.root.querySelector('#btn-pause-cam')?.addEventListener('click', () => this.callbacks.onCycleCamera?.());
     this.root.querySelector('#btn-pause-restart').addEventListener('click', () => this.callbacks.onRequestRestart?.());
     this.root.querySelector('#btn-confirm-restart').addEventListener('click', () => this.callbacks.onConfirmRestart?.());
@@ -504,20 +555,136 @@ export class HUD {
     this.root.querySelectorAll('[data-tact]').forEach((btn) => {
       const act = btn.getAttribute('data-tact');
       btn.addEventListener('pointerdown', (e) => {
+        if (this.isEditingTouchLayout) return;
         e.preventDefault();
         e.stopPropagation();
         this.callbacks.onTouchAction?.(act, true);
       });
-      const release = () => this.callbacks.onTouchAction?.(act, false);
+      const release = () => {
+        if (this.isEditingTouchLayout) return;
+        this.callbacks.onTouchAction?.(act, false);
+      };
       btn.addEventListener('pointerup', release);
       btn.addEventListener('pointercancel', release);
       btn.addEventListener('pointerleave', release);
     });
+
+    this._bindTouchClusterDrag(this.touchClusterLeft, 'left');
+    this._bindTouchClusterDrag(this.touchClusterRight, 'right');
+    this._applyMobileTouchLayout();
+  }
+
+  _bindTouchClusterDrag(clusterEl, key) {
+    if (!clusterEl) return;
+    let dragging = false;
+    let pid = null;
+    let startPt = null;
+    let startOffset = { dx: 0, dy: 0 };
+
+    clusterEl.addEventListener('pointerdown', (e) => {
+      if (!this.isEditingTouchLayout) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      pid = e.pointerId;
+      startPt = OrientationManager.mapPointerCoords(e.clientX, e.clientY);
+      const saved = Save.data.settings?.mobileHudLayout?.positions?.[key] || { dx: 0, dy: 0 };
+      startOffset = { dx: saved.dx || 0, dy: saved.dy || 0 };
+      clusterEl.setPointerCapture?.(e.pointerId);
+    });
+
+    clusterEl.addEventListener('pointermove', (e) => {
+      if (!dragging || e.pointerId !== pid || !this.isEditingTouchLayout) return;
+      const pt = OrientationManager.mapPointerCoords(e.clientX, e.clientY);
+      const dx = Math.max(-140, Math.min(140, Math.round(startOffset.dx + (pt.x - startPt.x))));
+      const dy = Math.max(-160, Math.min(80, Math.round(startOffset.dy + (pt.y - startPt.y))));
+      if (!Save.data.settings.mobileHudLayout) Save.data.settings.mobileHudLayout = { scale: 1, opacity: 0.92, positions: {} };
+      if (!Save.data.settings.mobileHudLayout.positions) Save.data.settings.mobileHudLayout.positions = {};
+      Save.data.settings.mobileHudLayout.positions[key] = { dx, dy };
+      this._applyMobileTouchLayout();
+    });
+
+    const endDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      pid = null;
+      Save.save();
+    };
+    clusterEl.addEventListener('pointerup', endDrag);
+    clusterEl.addEventListener('pointercancel', endDrag);
+  }
+
+  _applyMobileTouchLayout() {
+    const cfg = Save.data.settings?.mobileHudLayout || {};
+    const scale = Math.max(0.8, Math.min(1.35, Number(cfg.scale || 1)));
+    const opacity = Math.max(0.5, Math.min(1.0, Number(cfg.opacity ?? 0.92)));
+    const applyCluster = (el, key, origin) => {
+      if (!el) return;
+      const pos = cfg.positions?.[key] || { dx: 0, dy: 0 };
+      el.style.transformOrigin = origin;
+      el.style.transform = `translate(${pos.dx || 0}px, ${pos.dy || 0}px) scale(${scale})`;
+      el.style.opacity = String(opacity);
+    };
+    applyCluster(this.touchClusterLeft, 'left', 'bottom left');
+    applyCluster(this.touchClusterRight, 'right', 'bottom right');
+
+    const scIn = this.root.querySelector('#hud-touch-scale');
+    const opIn = this.root.querySelector('#hud-touch-opacity');
+    if (scIn) scIn.value = String(Math.round(scale * 100));
+    if (opIn) opIn.value = String(Math.round(opacity * 100));
+  }
+
+  toggleTouchLayoutEditor(force = null) {
+    this.isEditingTouchLayout = force !== null ? !!force : !this.isEditingTouchLayout;
+    this.touchControls?.classList.toggle('editing-touch-layout', this.isEditingTouchLayout);
+    this.touchEditorBar?.classList.toggle('hidden', !this.isEditingTouchLayout);
+    if (!this.isEditingTouchLayout) {
+      Save.save();
+    }
+  }
+
+  syncRoomControllers(room, selfPeerId = null, pingMs = 0) {
+    if (!this.ctrlStatusPill) return;
+    const ctrls = (room?.peers || []).filter((p) => p.role === 'controller' && p.peerId !== selfPeerId);
+    const mobPlayers = (room?.peers || []).filter((p) => p.role === 'mobile_player' && p.peerId !== selfPeerId);
+    if (ctrls.length === 0 && mobPlayers.length === 0) {
+      this.ctrlStatusPill.classList.add('hidden');
+      return;
+    }
+    this.ctrlStatusPill.classList.remove('hidden');
+    if (this.ctrlText) {
+      if (ctrls.length > 0) {
+        const c = ctrls[0];
+        const modeLbl = c.controlMode === 'own_dino' ? '2-8P' : '1P';
+        this.ctrlText.textContent = ctrls.length > 1
+          ? `🎮 ${ctrls.length} Controles (${c.pingMs || pingMs || 12}ms)`
+          : `🎮 ${c.name} (${modeLbl} • ${c.pingMs || pingMs || 12}ms)`;
+      } else {
+        this.ctrlText.textContent = `📱 ${mobPlayers.length} Player 3D`;
+      }
+    }
+  }
+
+  setControllerStatusHud({ connected = false, peerName = 'Controle', pingMs = 12, activeInputs = {}, controlMode = 'p1_remote' } = {}) {
+    if (!this.ctrlStatusPill) return;
+    this.ctrlStatusPill.classList.toggle('hidden', !connected);
+    if (!connected) return;
+    const anyDown = Object.values(activeInputs || {}).some(Boolean);
+    if (this.ctrlLed) {
+      this.ctrlLed.classList.toggle('pulse', anyDown);
+    }
+    if (this.ctrlText) {
+      const modeLbl = controlMode === 'own_dino' ? '2-8P' : '1P';
+      const activeList = Object.entries(activeInputs || {}).filter(([, v]) => v).map(([k]) => k.toUpperCase());
+      const actTag = activeList.length > 0 ? ` • ${activeList[0]}` : '';
+      this.ctrlText.textContent = `🎮 ${peerName} (${modeLbl} • ${pingMs}ms)${actTag}`;
+    }
   }
 
   applyTouchMode(mode = 'swipe') {
     if (!this.touchControls) return;
     this.touchControls.classList.toggle('touch-mode-buttons', mode === 'buttons');
+    this._applyMobileTouchLayout();
   }
 
   setPlayingUI(isPlaying) {

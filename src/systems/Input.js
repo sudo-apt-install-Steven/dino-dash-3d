@@ -120,7 +120,7 @@ export class InputSystem {
   }
 
   applyRemoteInputMap(playerKey, inputs = {}) {
-    for (const action of ['left', 'right', 'jump', 'duck', 'ability', 'item', 'bullet', 'attack', 'fury']) {
+    for (const action of ['left', 'right', 'jump', 'duck', 'ability', 'item', 'bullet', 'attack', 'fury', 'transmute']) {
       if (inputs[action] !== undefined) {
         this.setVirtualAction(playerKey, action, !!inputs[action]);
       }

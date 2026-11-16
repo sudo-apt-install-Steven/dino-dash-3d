@@ -62,7 +62,14 @@ export class RoomClient {
   }
 
   get isHost() {
-    return !!this.room && this.room.hostPeerId === this.peerId;
+    if (!this.room) return false;
+    if (this.room.hostPeerId === this.peerId) return true;
+    const selfPeer = this.room.peers?.find((p) => p.peerId === this.peerId);
+    const hostPeer = this.room.peers?.find((p) => p.peerId === this.room.hostPeerId);
+    if (selfPeer && (selfPeer.role === 'screen' || selfPeer.role === 'mobile_player') && (!hostPeer || hostPeer.role === 'controller')) {
+      return true;
+    }
+    return false;
   }
 
   _handleMessage(msg) {
@@ -229,7 +236,7 @@ export class RoomClient {
   }
 
   // Envia comandos apenas quando algum botão muda (economiza cota Supabase e largura de banda LAN!)
-  sendInputState(stateObj) {
+  sendInputState(stateObj, force = false) {
     if (!this.isConnected) return;
     const compact = {
       left: !!stateObj.left,
@@ -240,14 +247,20 @@ export class RoomClient {
       item: !!stateObj.item,
       bullet: !!stateObj.bullet,
       attack: !!stateObj.attack,
-      fury: !!stateObj.fury
+      fury: !!stateObj.fury,
+      transmute: !!stateObj.transmute
     };
     const prev = this.lastSentInputs;
-    if (prev && Object.keys(compact).every((k) => compact[k] === prev[k])) {
+    if (!force && prev && Object.keys(compact).every((k) => compact[k] === prev[k])) {
       return;
     }
     this.lastSentInputs = compact;
     this.activeTransport.send({ type: 'input', inputs: compact });
+  }
+
+  requestStartMatch(opts = {}) {
+    if (!this.isConnected) return false;
+    return this.activeTransport.send({ type: 'request_start_match', peerId: this.peerId, ...opts });
   }
 
   requestRoomSync() {

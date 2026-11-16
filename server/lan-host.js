@@ -110,6 +110,7 @@ function serializeRoom(room) {
       color: p.color,
       ready: p.ready,
       role: p.role,
+      controlMode: p.controlMode || 'p1_remote',
       slot: p.slot,
       pingMs: p.pingMs
     }))
@@ -350,7 +351,8 @@ wss.on('connection', (ws) => {
         dinoId: cleanId(msg.dinoId, 'trex', 28),
         color: cleanHexColor(msg.color, '#58d63a'),
         ready: true,
-        role: ['screen', 'controller', 'spectator'].includes(msg.role) ? msg.role : 'screen',
+        role: ['screen', 'controller', 'mobile_player', 'spectator'].includes(msg.role) ? msg.role : 'screen',
+        controlMode: ['p1_remote', 'own_dino'].includes(msg.controlMode) ? msg.controlMode : 'p1_remote',
         slot: 0,
         pingMs: 0
       });
@@ -385,17 +387,24 @@ wss.on('connection', (ws) => {
       }
 
       const palette = ['#58d63a', '#38bdf8', '#ff9a24', '#f43f5e', '#a855f7', '#ffd447', '#14b8a6', '#ec4899'];
+      const joinedRole = ['screen', 'controller', 'mobile_player', 'spectator'].includes(msg.role) ? msg.role : 'controller';
       room.peers.set(peerId, {
         peerId,
         ws,
         name: cleanStr(msg.name || existing?.name, `Dino ${nextSlot + 1}`, 18),
         dinoId: cleanId(msg.dinoId || existing?.dinoId, 'raptor', 28),
         color: cleanHexColor(msg.color || existing?.color, palette[nextSlot % palette.length]),
-        ready: existing?.ready ?? false,
-        role: ['screen', 'controller', 'spectator'].includes(msg.role) ? msg.role : 'controller',
+        ready: existing?.ready ?? true,
+        role: joinedRole,
+        controlMode: ['p1_remote', 'own_dino'].includes(msg.controlMode) ? msg.controlMode : (existing?.controlMode || 'p1_remote'),
         slot: nextSlot,
         pingMs: 0
       });
+      // Se o host atual era apenas um controle de celular e este novo peer é Telão ('screen'/'mobile_player'), promove o Telão a Host
+      const curHost = room.peers.get(room.hostPeerId);
+      if ((!curHost || curHost.role === 'controller') && (joinedRole === 'screen' || joinedRole === 'mobile_player')) {
+        room.hostPeerId = peerId;
+      }
       ws._roomCode = code;
       ws._peerId = peerId;
       send(ws, { type: 'joined', code, peerId, room: serializeRoom(room) });
@@ -457,8 +466,15 @@ wss.on('connection', (ws) => {
           if (msg.name) peer.name = cleanStr(msg.name, peer.name, 18);
           if (msg.dinoId) peer.dinoId = cleanId(msg.dinoId, peer.dinoId, 28);
           if (msg.color) peer.color = cleanHexColor(msg.color, peer.color);
-          if (['screen', 'controller', 'spectator'].includes(msg.role)) peer.role = msg.role;
+          if (['screen', 'controller', 'mobile_player', 'spectator'].includes(msg.role)) peer.role = msg.role;
+          if (['p1_remote', 'own_dino'].includes(msg.controlMode)) peer.controlMode = msg.controlMode;
           if (msg.ready !== undefined) peer.ready = !!msg.ready;
+          if (peer.role === 'controller' && room.hostPeerId === peer.peerId) {
+            const screenCandidate = Array.from(room.peers.values()).find((c) => c.peerId !== peer.peerId && (c.role === 'screen' || c.role === 'mobile_player'));
+            if (screenCandidate) {
+              room.hostPeerId = screenCandidate.peerId;
+            }
+          }
           broadcast(room, { type: 'room_state', room: serializeRoom(room) });
         }
         break;
@@ -488,6 +504,9 @@ wss.on('connection', (ws) => {
       case 'spectator_action':
       case 'trivia_answer':
       case 'bet':
+      case 'mp_revive':
+      case 'round_vote':
+      case 'request_start_match':
         broadcast(room, { ...msg, peerId: ws._peerId }, ws._peerId);
         break;
       case 'start_match':

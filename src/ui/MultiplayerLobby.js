@@ -62,10 +62,10 @@ export class MultiplayerLobby {
             <div class="modal-header">
               <div>
                 <h2>🌐 Sala Multiplayer LAN / Online (2–8 Jogadores)</h2>
-                <div style="font-size:0.82rem; color:#ffd447;">PC/TV como Telão Principal • Celulares via QR Code como Controles Jurássicos</div>
+                <div style="font-size:0.8rem; color:#ffd447;">PC/TV como Telão • Celular funciona como 🎮 Controle Sem Fio OU 📱 Jogador 3D!</div>
               </div>
-              <div style="display:flex; gap:8px;">
-                <button class="chunky-btn secondary" id="mp-open-ctrl">📱 Abrir Controle Celular</button>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="chunky-btn secondary" id="mp-open-ctrl" style="border-color:#38bdf8; color:#bae6fd;">🎮 Usar como Controle</button>
                 <button class="chunky-btn secondary" id="mp-close">Voltar</button>
               </div>
             </div>
@@ -85,7 +85,7 @@ export class MultiplayerLobby {
                 </div>
               ` : ''}
 
-              <div class="cards-grid" style="grid-template-columns:1.1fr 1fr;">
+              <div class="cards-grid mp-create-grid">
                 <div class="item-card">
                   <strong style="color:#58d63a;">📺 Criar Sala (Telão PC/TV)</strong>
                   <label style="font-size:0.84rem;">Apelido do Host:
@@ -157,20 +157,22 @@ export class MultiplayerLobby {
                 </div>
               </div>
             ` : `
-              <div class="cards-grid" style="grid-template-columns:220px 1fr;">
-                <div class="item-card" style="align-items:center; text-align:center;">
+              <div class="cards-grid mp-connected-grid">
+                <div class="item-card mp-qr-card" style="align-items:center; text-align:center;">
                   <div style="font-size:0.78rem; font-weight:800; color:#58d63a;">📲 ESCANEIE PARA JOGAR</div>
                   <div style="font-size:1.9rem; font-weight:900; letter-spacing:5px; color:#ffd447;">${escapeHtml(room.code)}</div>
                   <canvas id="mp-qr-canvas" width="168" height="168" style="border-radius:10px; background:#fff6e5;"></canvas>
                   <button class="chunky-btn secondary" id="mp-copy-url" style="font-size:0.75rem; padding:6px 10px; width:100%;">🔗 Copiar Link do Celular</button>
-                  <div style="font-size:0.72rem; color:#d8c2a6; word-break:break-all;">${escapeHtml(shareUrl)}</div>
+                  <div style="font-size:0.68rem; color:#d8c2a6; word-break:break-all;">${escapeHtml(shareUrl)}</div>
                 </div>
 
-                <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; flex-direction:column; gap:10px; min-width:0;">
                   ${(() => {
                     const selfPeer = room.peers.find((p) => p.peerId === net.peerId);
                     const selfReady = !!selfPeer?.ready;
-                    const hostPeer = room.peers.find((p) => p.peerId === room.hostPeerId) || room.peers[0];
+                    const hostPeer = room.peers.find((p) => p.peerId === room.hostPeerId && p.role !== 'controller')
+                      || room.peers.find((p) => p.peerId === room.hostPeerId)
+                      || room.peers[0];
                     const readyCount = room.peers.filter((p) => p.ready).length;
                     const trLabel = net.transportType === 'supabase' ? '☁️ Online Global' : '📡 LAN Wi-Fi';
                     const resolvedCfg = net.resolveRoomConfig(room);
@@ -184,6 +186,17 @@ export class MultiplayerLobby {
                       : BIOMES.find((b) => b.id === resolvedCfg.biomeId);
                     const biomeLabel = biomeObj?.name || 'Deserto Dourado';
                     const selfVote = room.votes?.[net.peerId] || {};
+                    const describeRoleBadge = (p) => {
+                      if (p.role === 'controller') {
+                        return p.controlMode === 'own_dino'
+                          ? `<span class="mp-role-pill ctrl">🦖 Controle 2–8P (Telão)</span>`
+                          : `<span class="mp-role-pill ctrl">🎮 Controle 1P (Dino do PC)</span>`;
+                      }
+                      if (p.role === 'mobile_player') {
+                        return `<span class="mp-role-pill mob3d">📱 Jogador no Celular (3D)</span>`;
+                      }
+                      return `<span class="mp-role-pill screen">🖥️ Telão PC/TV</span>`;
+                    };
                     return `
                   <div class="item-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
@@ -203,7 +216,7 @@ export class MultiplayerLobby {
                     ${net.isHost ? `
                       <div style="margin-top:8px; padding:8px; border-radius:10px; background:rgba(24,24,27,0.72); border:1px solid rgba(255,212,71,0.3); display:flex; flex-direction:column; gap:6px;">
                         <strong style="font-size:0.78rem; color:#ffd447;">👑 Painel do Dono da Sala (Regras & Permissões)</strong>
-                        <div style="display:grid; grid-template-columns:repeat(3, minmax(110px, 1fr)); gap:6px;">
+                        <div class="mp-rules-grid">
                           <select class="select-input" id="mp-cfg-mode" style="font-size:0.76rem;">
                             <option value="race" ${(room.mpMode || 'race') === 'race' ? 'selected' : ''}>🏁 Corrida</option>
                             <option value="duel" ${room.mpMode === 'duel' ? 'selected' : ''}>⚔️ Duelo PvP</option>
@@ -227,7 +240,7 @@ export class MultiplayerLobby {
                     ${resolvedCfg.allowVoting ? `
                       <div style="margin-top:6px; padding:8px; border-radius:10px; background:rgba(15,23,42,0.55); border:1px solid rgba(56,189,248,0.35); display:flex; flex-direction:column; gap:6px;">
                         <strong style="font-size:0.78rem; color:#7dd3fc;">🗳️ Seu Voto (Maioria decide se empatar ganha o Dono!)</strong>
-                        <div style="display:grid; grid-template-columns:repeat(3, minmax(95px, 1fr)); gap:6px;">
+                        <div class="mp-rules-grid">
                           <select class="select-input" id="mp-vote-mode" style="font-size:0.76rem;">
                             <option value="race" ${(selfVote.mpMode || roomMpMode) === 'race' ? 'selected' : ''}>🏁 Corrida</option>
                             <option value="duel" ${(selfVote.mpMode || roomMpMode) === 'duel' ? 'selected' : ''}>⚔️ Duelo PvP</option>
@@ -245,9 +258,13 @@ export class MultiplayerLobby {
                     ` : ''}
                     <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(175px, 1fr)); gap:6px; margin-top:6px;">
                       ${room.peers.map((p) => `
-                        <div style="padding:6px 8px; border-radius:10px; background:rgba(0,0,0,0.35); border:1px solid ${sanitizeHexColor(p.color, '#ffd447')}; font-size:0.82rem;">
-                          <div style="font-weight:800;">${p.peerId === room.hostPeerId ? '👑 ' : ''}${escapeHtml(p.name)}${p.peerId === net.peerId ? ' (Você)' : ''}</div>
-                          <div style="font-size:0.74rem; color:#d8c2a6;">${escapeHtml(getDinoSpec(p.dinoId).name)} • ${p.ready ? '✅ Pronto' : '⏳ Aguardando'}</div>
+                        <div style="padding:7px 9px; border-radius:10px; background:rgba(0,0,0,0.38); border:1.5px solid ${sanitizeHexColor(p.color, '#ffd447')}; font-size:0.82rem; display:flex; flex-direction:column; gap:3px;">
+                          <div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">
+                            <span style="font-weight:800;">${p.peerId === hostPeer?.peerId ? '👑 ' : ''}${escapeHtml(p.name)}${p.peerId === net.peerId ? ' (Você)' : ''}</span>
+                            <span style="font-size:0.68rem; color:#a7f3d0;">🟢 ${p.pingMs || net.pingMs || 12}ms</span>
+                          </div>
+                          <div>${describeRoleBadge(p)}</div>
+                          <div style="font-size:0.74rem; color:#d8c2a6;">🦖 ${escapeHtml(getDinoSpec(p.dinoId).name)} • ${p.ready ? '✅ Pronto' : '⏳ Aguardando'}</div>
                         </div>
                       `).join('')}
                     </div>
@@ -255,9 +272,7 @@ export class MultiplayerLobby {
                       <div style="margin-top:8px; padding:7px 10px; border-radius:8px; background:rgba(255,212,71,0.1); border:1px solid ${selfReady ? '#58d63a' : '#ffd447'}; font-size:0.8rem; color:${selfReady ? '#90ee90' : '#ffe6a7'};">
                         ${room.status === 'playing'
                           ? `🔥 A corrida já começou! Clique em <strong>ENTRAR NA CORRIDA AGORA!</strong> abaixo.`
-                          : (selfReady
-                              ? `✅ Você está <strong>PRONTO</strong>! Aguardando <strong>👑 ${escapeHtml(hostPeer?.name || 'o Dono da Sala')}</strong> clicar em <em>INICIAR CORRIDA MULTIPLAYER</em> (iniciará automaticamente aqui na sua tela).`
-                              : `👉 Clique em <strong>👍 MARCAR PRONTO</strong> abaixo para sinalizar a <strong>👑 ${escapeHtml(hostPeer?.name || 'o Dono da Sala')}</strong>. Quando ele iniciar, a corrida abrirá automaticamente!`)}
+                          : `✅ Conectado! Você pode marcar <strong>PRONTO</strong> ou clicar em <strong>🚀 INICIAR CORRIDA</strong> abaixo para começar!`}
                       </div>
                     ` : ''}
                   </div>
@@ -277,10 +292,13 @@ export class MultiplayerLobby {
 
                   <div style="display:flex; gap:8px; flex-wrap:wrap;">
                     ${net.isHost
-                      ? `<button class="chunky-btn" id="mp-start" style="flex:1; font-size:1.1rem;">🚀 INICIAR CORRIDA MULTIPLAYER (${room.peers.length + botCount} DINOS)</button>`
+                      ? `<button class="chunky-btn" id="mp-start" style="flex:1; font-size:1.05rem;">🚀 INICIAR CORRIDA MULTIPLAYER</button>`
                       : `
-                        <button class="chunky-btn ${selfReady ? 'orange' : ''}" id="mp-ready-self" style="flex:1; font-size:0.98rem;">
-                          ${selfReady ? '✅ ESTOU PRONTO! (Clique p/ cancelar)' : '👍 MARCAR PRONTO'}
+                        <button class="chunky-btn ${selfReady ? 'orange' : ''}" id="mp-ready-self" style="flex:1; font-size:0.95rem;">
+                          ${selfReady ? '✅ ESTOU PRONTO!' : '👍 MARCAR PRONTO'}
+                        </button>
+                        <button class="chunky-btn" id="mp-request-start" style="flex:1; font-size:0.95rem;">
+                          🚀 INICIAR PARTIDA AGORA!
                         </button>
                         ${room.status === 'playing' && room.activeMatch ? `<button class="chunky-btn" id="mp-join-live" style="flex:1;">🎮 ENTRAR NA CORRIDA AGORA!</button>` : ''}
                       `}
@@ -451,6 +469,12 @@ export class MultiplayerLobby {
         container.querySelector('#mp-start')?.addEventListener('click', () => {
           cleanupListeners();
           callbacks.onStartMatch?.({ room, botCount });
+        });
+        container.querySelector('#mp-request-start')?.addEventListener('click', () => {
+          net.sendPlayerMeta({ ready: true });
+          net.requestStartMatch({ botCount });
+          statusMsg = '🚀 Solicitando início imediato da partida...';
+          render();
         });
       }
       attachModalHelp(container, 'Crie uma sala no PC/TV para compartilhar o QR Code no Wi-Fi ou Online, ou entre pelo código de 4 letras no celular.');

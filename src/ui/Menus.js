@@ -48,7 +48,13 @@ export class Menus {
       <div class="main-menu-wrap">
         <div class="chunky-panel main-menu-panel" style="width:min(420px, 92vw); padding:20px; gap:12px;">
           <div>
-            <div class="dino-logo" id="main-dino-logo" style="font-size:2.15rem; cursor:pointer; user-select:none;" title="Dino Dash 3D">DINO <span class="dash-accent">DASH 3D</span></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+              <div class="dino-logo" id="main-dino-logo" style="font-size:2.15rem; cursor:pointer; user-select:none;" title="Dino Dash 3D">DINO <span class="dash-accent">DASH 3D</span></div>
+              <div class="mob-only" style="display:flex; gap:5px; align-items:center;">
+                <button type="button" class="inline-change-btn" id="menu-rotate-btn" style="padding:4px 8px; border-color:#38bdf8; color:#7dd3fc;">🔄 ${state.isLandscape ? 'Paisagem' : 'Deitar'}</button>
+                <button type="button" class="inline-change-btn" id="menu-ctrl-btn" style="padding:4px 8px; border-color:#58d63a; color:#86efac;">🎮 Controle</button>
+              </div>
+            </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
               <span class="hud-pill">🏆 HI: <strong>${Save.getHighScore()}</strong></span>
               <span class="hud-pill">🥚 Ovos: <strong>${Save.data.eggs}</strong></span>
@@ -135,6 +141,8 @@ export class Menus {
       if (pop) pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
     });
     container.querySelector('#menu-play').addEventListener('click', actions.onPlay);
+    container.querySelector('#menu-rotate-btn')?.addEventListener('click', () => actions.onToggleLandscape?.());
+    container.querySelector('#menu-ctrl-btn')?.addEventListener('click', () => actions.onOpenController?.());
     container.querySelector('#menu-lowspec-suggest')?.addEventListener('click', actions.onToggleLowSpec);
     container.querySelectorAll('[data-nav]').forEach((btn) => {
       btn.addEventListener('click', () => actions.onNavigate(btn.getAttribute('data-nav')));

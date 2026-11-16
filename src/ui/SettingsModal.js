@@ -1,5 +1,6 @@
 // Modal de Configurações em 5 abas: Geral, Gráficos, Áudio, Controles e Acessibilidade.
 import { Save } from '../systems/Save.js';
+import { OrientationManager } from '../systems/OrientationManager.js';
 import { attachModalHelp } from './Menus.js';
 
 export class SettingsModal {
@@ -186,6 +187,14 @@ export class SettingsModal {
                 <option value="buttons" ${s.touchMode === 'buttons' ? 'selected' : ''}>Botões Direcionais (◀ ▶ ▲ ▼)</option>
               </select>
             </div>
+            <div class="field-row">
+              <span>🔄 Deitar Tela Automaticamente ao Virar o Celular</span>
+              <input type="checkbox" id="set-autorotate-tilt" ${s.autoRotateTilt !== false ? 'checked' : ''} />
+            </div>
+            <div class="field-row" style="margin-bottom:8px;">
+              <span>📺 Forçar Modo Paisagem no Celular</span>
+              <input type="checkbox" id="set-force-landscape" ${s.forceLandscape ? 'checked' : ''} />
+            </div>
             <p style="font-size: 0.85rem; color: #d8c2a6; margin-bottom: 8px;">Clique num botão para remapear a tecla desejada.</p>
             <div class="cards-grid" style="grid-template-columns: repeat(2, 1fr);">
               <div class="item-card">
@@ -280,6 +289,12 @@ export class SettingsModal {
       s.mpCameraMode = container.querySelector('#set-mp-cam')?.value || 'shared';
       s.narrator = container.querySelector('#set-narrator').checked;
       s.touchMode = container.querySelector('#set-touchmode')?.value || 'swipe';
+      s.autoRotateTilt = container.querySelector('#set-autorotate-tilt')?.checked !== false;
+      const wantLand = !!container.querySelector('#set-force-landscape')?.checked;
+      if (wantLand !== !!s.forceLandscape) {
+        s.forceLandscape = wantLand;
+        OrientationManager.toggleForceLandscape(wantLand);
+      }
       s.introMode = container.querySelector('#set-intromode')?.value || 'first_time';
       s.disableIntro = s.introMode === 'off';
       Save.data.introModeCustom = true;

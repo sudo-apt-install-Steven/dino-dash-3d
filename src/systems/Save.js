@@ -119,6 +119,21 @@ const DEFAULT_SAVE = {
     narrator: false,
     obstacleHints: true,
     touchMode: 'swipe',
+    forceLandscape: false,
+    autoRotateTilt: true,
+    controllerLayout: {
+      preset: 'default',
+      leftHanded: false,
+      useJoystick: false,
+      scale: 1.0,
+      opacity: 0.96,
+      positions: {}
+    },
+    mobileHudLayout: {
+      scale: 1.0,
+      opacity: 0.92,
+      positions: {}
+    },
     disableGachaVoluntary: false,
     audio: { music: 0.45, sfx: 0.75, muted: false },
     accessibility: {

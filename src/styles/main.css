@@ -271,3 +271,18 @@ body,
 .hidden {
   display: none !important;
 }
+
+/* Rotação forçada para Paisagem no Celular (funciona mesmo com bloqueio de rotação no Android/iOS) */
+html.force-landscape-rot body {
+  overflow: hidden;
+}
+
+html.force-landscape-rot #app {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100dvh;
+  height: 100dvw;
+  transform: rotate(90deg) translateY(-100%);
+  transform-origin: top left;
+}

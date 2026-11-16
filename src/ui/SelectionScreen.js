@@ -6,6 +6,7 @@ import { getDinoSkins, getEquippedSkinVariant, SKIN_VARIANTS } from '../dinos/Di
 import { DinoFactory } from '../dinos/DinoFactory.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { Save } from '../systems/Save.js';
+import { OrientationManager } from '../systems/OrientationManager.js';
 import { ProgressionManager } from '../systems/Progression.js';
 import { attachModalHelp } from './Menus.js';
 import { renderSkillSvg } from './SvgIcons.js';
@@ -154,12 +155,14 @@ export class DinoPreview3D {
   _bindDrag(el) {
     this._onDown = (e) => {
       this.dragging = true;
-      this.lastX = e.clientX;
+      const pt = OrientationManager.mapPointerCoords(e.clientX, e.clientY);
+      this.lastX = pt.x;
     };
     this._onMove = (e) => {
       if (!this.dragging) return;
-      const dx = e.clientX - this.lastX;
-      this.lastX = e.clientX;
+      const pt = OrientationManager.mapPointerCoords(e.clientX, e.clientY);
+      const dx = pt.x - this.lastX;
+      this.lastX = pt.x;
       this.rotY += dx * 0.015;
     };
     this._onUp = () => {

@@ -16,6 +16,7 @@ import { GachaModal } from './GachaModal.js';
 import { LegalModal } from './LegalModal.js';
 import { GachaSystem } from '../systems/GachaSystem.js';
 import { PerfMonitor } from '../systems/PerfMonitor.js';
+import { OrientationManager } from '../systems/OrientationManager.js';
 import { getModeDef } from '../game/Modes.js';
 import { getDinoSpec, getEffectiveDinoHabitat } from '../dinos/DinoCatalog.js';
 import { getBiomeById, isAquaticBiome } from '../world/Biomes.js';
@@ -145,6 +146,7 @@ export class UIManager {
         benchmarkFps: Save.data.benchmarkFps || 0,
         benchmarkTier: Save.data.benchmarkTier || '',
         tutorialDone: !!Save.data.tutorialDone,
+        isLandscape: OrientationManager.isEffectiveLandscape(),
         devMode: import.meta.env.DEV ? !!Save.data.devMode : false
       },
       {
@@ -152,6 +154,15 @@ export class UIManager {
           this.game.sfx.click();
           this._clearModal();
           this.game.startRun();
+        },
+        onToggleLandscape: () => {
+          this.game.sfx.click();
+          OrientationManager.toggleForceLandscape();
+          this.showMainMenu();
+        },
+        onOpenController: () => {
+          this.game.sfx.click();
+          this.openController({ deferredInstall: window.__DINO_DEFERRED_INSTALL__ });
         },
         onToggleLowSpec: () => {
           this.game.sfx.click();
@@ -180,6 +191,19 @@ export class UIManager {
     this.hud.showPause(false);
     const ctrl = new MobileController(this.hud.modalLayer, this.game.net, {
       ...opts,
+      onSwitchToPlayer3D: () => {
+        this.controllerInstance = null;
+        if (this.game.net.isConnected) {
+          this.game.net.sendPlayerMeta({ role: 'mobile_player', ready: true });
+          if (this.game.net.room?.status === 'playing' && this.game.net.room?.activeMatch) {
+            this.game.startMultiplayerGuestMatch(this.game.net.room.activeMatch);
+            return;
+          }
+          this.openSection('multiplayer');
+        } else {
+          this.showMainMenu();
+        }
+      },
       onExit: () => {
         this.controllerInstance = null;
         this.showMainMenu();

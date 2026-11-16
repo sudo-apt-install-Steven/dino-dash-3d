@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { Save } from '../systems/Save.js';
 import { InputSystem } from '../systems/Input.js';
+import { OrientationManager } from '../systems/OrientationManager.js';
 import { CameraRig } from '../systems/CameraRig.js';
 import { ParticleSystem } from '../systems/Particles.js';
 import { World, LANE_X, RIVER_LANE_X, SHOP_LANE_X, SKY_CORRIDOR_Y } from '../world/World.js';
@@ -51,11 +52,13 @@ export class Game {
   constructor(canvas, uiRoot) {
     this.canvas = canvas;
     this.uiRoot = uiRoot;
+    OrientationManager.init();
+    const initVp = OrientationManager.getViewportSize();
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setClearColor('#f78c4f', 1);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(initVp.width, initVp.height);
     this.renderer.shadowMap.enabled = Save.data.settings.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -71,8 +74,8 @@ export class Game {
     canvas.addEventListener('webglcontextrestored', this._onContextRestored);
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(Save.data.settings.fov || 58, window.innerWidth / window.innerHeight, 0.1, 260);
-    this.cameraP2 = new THREE.PerspectiveCamera(Save.data.settings.fov || 58, window.innerWidth / window.innerHeight, 0.1, 260);
+    this.camera = new THREE.PerspectiveCamera(Save.data.settings.fov || 58, initVp.width / Math.max(1, initVp.height), 0.1, 260);
+    this.cameraP2 = new THREE.PerspectiveCamera(Save.data.settings.fov || 58, initVp.width / Math.max(1, initVp.height), 0.1, 260);
 
     this.input = new InputSystem();
     this.cameraRig = new CameraRig(this.camera);
@@ -162,13 +165,17 @@ export class Game {
 
   _bindEvents() {
     this._onResize = () => {
-      this.camera.aspect = window.innerWidth / window.innerHeight;
+      const vp = OrientationManager.getViewportSize();
+      const w = Math.max(1, vp.width);
+      const h = Math.max(1, vp.height);
+      this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
-      this.cameraP2.aspect = window.innerWidth / window.innerHeight;
+      this.cameraP2.aspect = w / h;
       this.cameraP2.updateProjectionMatrix();
-      this.renderer.setSize(window.innerWidth, window.innerHeight);
+      this.renderer.setSize(w, h);
     };
     window.addEventListener('resize', this._onResize);
+    this._unsubOrientation = OrientationManager.onChange(() => this._onResize());
 
     // Desbloqueio WebAudio + Gestos Touch (Swipe) + Toque OVNI / Pular Intro + Konami
     this._unlockAudio = () => this.audio.ensureContext();
@@ -176,10 +183,11 @@ export class Game {
     this._swipeSurface = document.getElementById('app') || this.canvas;
     const isInteractiveTarget = (t) => {
       if (!t || !t.closest) return false;
-      return !!t.closest('button, a, input, select, textarea, [data-tact], #btn-fury-melee, #btn-attack-melee, #hud-backpack, #hud-camera, #btn-radial-wheel, #btn-transmute-mode, #touch-radial-btn, #hud-radial-wheel, .chunky-panel, .modal-card, .overlay-center');
+      return !!t.closest('button, a, input, select, textarea, [data-tact], #btn-fury-melee, #btn-attack-melee, #hud-backpack, #hud-camera, #btn-radial-wheel, #btn-transmute-mode, #touch-radial-btn, #hud-radial-wheel, .chunky-panel, .modal-card, .overlay-center, .hud-layout-editor-bar');
     };
     this._onCanvasPointer = (e) => {
       if (this.state !== 'playing') return;
+      if (this.ui?.hud?.isEditingTouchLayout) return;
       if (this.events.predators?.state === 'intro') {
         if (!isInteractiveTarget(e.target) && (this.events.predators.introElapsed || 0) >= 1.0) {
           this.events.predators.skipIntro(this._eventContext());
@@ -192,10 +200,11 @@ export class Game {
         this.events.ufo.mashBreak();
       }
       if (e.isPrimary !== false) {
+        const pt = OrientationManager.mapPointerCoords(e.clientX, e.clientY);
         this._canvasSwipe = {
           id: e.pointerId,
-          startX: e.clientX,
-          startY: e.clientY,
+          startX: pt.x,
+          startY: pt.y,
           lastAxis: null,
           lastTriggerAt: 0
         };
@@ -204,10 +213,12 @@ export class Game {
     this._onCanvasPointerMove = (e) => {
       const sw = this._canvasSwipe;
       if (!sw || sw.id !== e.pointerId || this.state !== 'playing') return;
+      if (this.ui?.hud?.isEditingTouchLayout) return;
       if (this.events.predators?.state === 'intro') return;
       if (e.pointerType === 'touch' && e.cancelable) e.preventDefault();
-      const dx = e.clientX - sw.startX;
-      const dy = e.clientY - sw.startY;
+      const pt = OrientationManager.mapPointerCoords(e.clientX, e.clientY);
+      const dx = pt.x - sw.startX;
+      const dy = pt.y - sw.startY;
       const dist = Math.hypot(dx, dy);
       if (dist < 20) return;
 
@@ -216,8 +227,8 @@ export class Game {
       const minChainWait = axis === sw.lastAxis ? 145 : 75;
       if (sw.lastTriggerAt && (now - sw.lastTriggerAt) < minChainWait) return;
 
-      sw.startX = e.clientX;
-      sw.startY = e.clientY;
+      sw.startX = pt.x;
+      sw.startY = pt.y;
       sw.lastAxis = axis;
       sw.lastTriggerAt = now;
 
@@ -306,22 +317,73 @@ export class Game {
   }
 
   _bindNetworkEvents() {
+    this.net.on('room_state', (room) => {
+      if (this.ui?.controllerInstance) return;
+      this.ui?.hud?.syncRoomControllers?.(room, this.net.peerId, this.net.pingMs);
+    });
+
+    this.net.on('request_start_match', (msg) => {
+      if (this.ui?.controllerInstance) return;
+      if (!this.net.isHost) return;
+      if (this.state === 'playing' && this.multiplayerSession?.active) return;
+      this.ui?._clearModal?.();
+      this.startMultiplayerMatch(this.net.room, Number(msg?.botCount) || 0);
+    });
+
     this.net.on('input', (msg) => {
-      if (!this.multiplayerSession?.active || !this.multiplayerSession.isHost) return;
-      const target = this.players.find((p) => p.peerId === msg.peerId);
+      if (this.ui?.controllerInstance) return;
+      const peer = this.net.room?.peers?.find((pr) => pr.peerId === msg.peerId);
+      const peerName = peer?.name || msg.name || 'Controle Celular';
+      this.ui?.hud?.setControllerStatusHud?.({
+        connected: true,
+        peerName,
+        pingMs: peer?.pingMs || this.net.pingMs || 12,
+        activeInputs: msg.inputs || {},
+        controlMode: peer?.controlMode || 'p1_remote'
+      });
+
+      if (this.state === 'playing' && this.events.predators?.state === 'intro') {
+        if ((msg.inputs?.jump || msg.inputs?.ability) && (this.events.predators.introElapsed || 0) >= 0.8) {
+          this.events.predators.skipIntro(this._eventContext());
+          this._skipIntroGuardFrames = 3;
+        }
+      } else if (this.state === 'gameover' && (msg.inputs?.jump || msg.inputs?.ability)) {
+        if (!this._ctrlRestartDebounce || performance.now() - this._ctrlRestartDebounce > 1200) {
+          this._ctrlRestartDebounce = performance.now();
+          this.restartRun();
+          return;
+        }
+      }
+
+      if (this.multiplayerSession?.active && !this.multiplayerSession.isHost && !this.net.isHost) return;
+      let target = this.players.find(
+        (p) => p.peerId === msg.peerId || (Array.isArray(p.controllerPeerIds) && p.controllerPeerIds.includes(msg.peerId))
+      );
+      if (!target && (!this.multiplayerSession?.active || peer?.controlMode === 'p1_remote' || this.players.length === 1)) {
+        target = this.players[0];
+      }
       if (target) {
         this.input.applyRemoteInputMap(target.key, msg.inputs || {});
       }
     });
 
     this.net.on('card_pick', (msg) => {
-      if (!this.multiplayerSession?.active || !this.multiplayerSession.isHost) return;
-      const target = this.players.find((p) => p.peerId === msg.peerId);
+      if (this.ui?.controllerInstance) return;
+      if (this.multiplayerSession?.active && !this.multiplayerSession.isHost && !this.net.isHost) return;
+      const target = this.players.find(
+        (p) => p.peerId === msg.peerId || (Array.isArray(p.controllerPeerIds) && p.controllerPeerIds.includes(msg.peerId))
+      ) || this.players[0];
       const card = CARD_POOL.find((c) => c.id === msg.cardId);
       if (target && card) {
         card.apply(target, this);
         this.sfx.card(card.rarity === 'lendária');
         this.ui.hud.showFloatText(`${target.name}: ${card.name}!`, '#ffd447');
+        if (this.state === 'paused' && !this.photoMode && !this.pendingRestart) {
+          this.ui.cardModal?.close?.();
+          this.state = 'playing';
+          this.lastTime = performance.now();
+          if (this.music.enabled) this.music.setPlaying(true);
+        }
       }
     });
 
@@ -755,6 +817,7 @@ export class Game {
         id: dinoId,
         name: slot.name || spec.name,
         peerId: slot.peerId || null,
+        controllerPeerIds: Array.isArray(slot.controllerPeerIds) ? slot.controllerPeerIds : [],
         peerColor: slot.color || spec.colors.primary,
         isBot: !!slot.isBot,
         botThinkTimer: 0,
@@ -912,19 +975,62 @@ export class Game {
 
   startMultiplayerMatch(room, botCount = 0) {
     const peers = Array.isArray(room?.peers) ? room.peers : [];
+    const p1RemoteControllers = peers.filter(
+      (pr) => pr.role === 'controller' && pr.controlMode === 'p1_remote'
+    );
+    const screenPeers = peers.filter((pr) => pr.role !== 'controller');
+    const standaloneControllers = peers.filter(
+      (pr) => pr.role === 'controller' && pr.controlMode !== 'p1_remote'
+    );
+
     const roster = [];
     let keyIdx = 1;
-    for (const pr of peers) {
+
+    // Se houver 1 Telão PC e controles em modo "Controlar Dino do PC (1P)", vincula os controles ao P1!
+    for (let sIdx = 0; sIdx < screenPeers.length; sIdx++) {
+      if (roster.length >= 8) break;
+      const pr = screenPeers[sIdx];
+      const attachedCtrls = sIdx === 0 ? p1RemoteControllers : [];
+      const primaryCtrl = attachedCtrls[0] || null;
+      roster.push({
+        key: `p${keyIdx++}`,
+        dinoId: primaryCtrl?.dinoId || pr.dinoId || 'trex',
+        name: primaryCtrl ? `${primaryCtrl.name} 🎮` : (pr.name || `Dino ${roster.length + 1}`),
+        peerId: pr.peerId,
+        controllerPeerIds: attachedCtrls.map((c) => c.peerId),
+        color: primaryCtrl?.color || pr.color || null,
+        isBot: false
+      });
+    }
+
+    // Se não havia peer 'screen' explícito mas havia controles p1_remote
+    if (screenPeers.length === 0 && p1RemoteControllers.length > 0) {
+      const c0 = p1RemoteControllers[0];
+      roster.push({
+        key: `p${keyIdx++}`,
+        dinoId: c0.dinoId || Save.data.selectedDino || 'trex',
+        name: `${c0.name || 'Controle'} 🎮`,
+        peerId: c0.peerId,
+        controllerPeerIds: p1RemoteControllers.map((c) => c.peerId),
+        color: c0.color || null,
+        isBot: false
+      });
+    }
+
+    // Adiciona controles que escolheram "Meu Próprio Dino no Telão (2–8P)"
+    for (const pr of standaloneControllers) {
       if (roster.length >= 8) break;
       roster.push({
         key: `p${keyIdx++}`,
         dinoId: pr.dinoId || 'trex',
         name: pr.name || `Dino ${roster.length + 1}`,
         peerId: pr.peerId,
+        controllerPeerIds: [pr.peerId],
         color: pr.color || null,
         isBot: false
       });
     }
+
     const botNames = ['Rex Bot', 'Raptor IA', 'Spino Turbo', 'Trike Guard', 'Stego Alfa', 'Carno Flash', 'Ankylo Titan'];
     const botDinos = ['raptor', 'triceratops', 'spinosaurus', 'stegosaurus', 'carnotaurus', 'ankylosaurus', 'trex'];
     for (let b = 0; b < botCount && roster.length < 8; b++) {
@@ -947,7 +1053,7 @@ export class Game {
     const isElim = mpMode === 'elimination' || !!room?.elimination;
     const matchDiffId = resolvedCfg.difficulty || Save.data.difficulty || 'normal';
     const matchBiomeId = resolvedCfg.biomeId || this.startBiomeId || 'random_portal';
-    this.diffMgr.setPreset(matchDiffId);
+    this.difficultyMgr.setPreset(matchDiffId);
     this.multiplayerSession = {
       active: true,
       isHost: this.net.isHost,
@@ -1015,7 +1121,7 @@ export class Game {
     const mpMode = payload.mpMode || room.mpMode || (payload.elim ? 'elimination' : 'race');
     const isElim = mpMode === 'elimination' || !!payload.elim;
     if (payload.difficultyId) {
-      this.diffMgr.setPreset(payload.difficultyId);
+      this.difficultyMgr.setPreset(payload.difficultyId);
     }
     this.multiplayerSession = {
       active: true,
@@ -3703,8 +3809,10 @@ export class Game {
         for (const pl of this.players) {
           if (pl.dead || pl.isBot) continue;
           const choices = drawThreeCards(this.difficultyMgr.getConfig().allowCurses);
-          if (pl.peerId && pl.peerId !== this.net.peerId) {
-            this.net.broadcastCardOffer(pl.peerId, choices.map((c) => ({
+          const remoteTargetId = (Array.isArray(pl.controllerPeerIds) && pl.controllerPeerIds[0])
+            || (pl.peerId && pl.peerId !== this.net.peerId ? pl.peerId : null);
+          if (remoteTargetId) {
+            this.net.broadcastCardOffer(remoteTargetId, choices.map((c) => ({
               id: c.id, name: c.name, desc: c.desc, rarity: c.rarity, rarityColor: rarityColors[c.rarity] || '#ffd447'
             })));
           } else {
@@ -4427,7 +4535,7 @@ export class Game {
 
     // Atualiza HUD & Música & Câmera & Multiplayer Snapshot (~18 Hz)
     const lead = (this.multiplayerSession?.active
-      ? this.players.find((x) => x.peerId === this.net.peerId)
+      ? this.players.find((x) => !x.dead && (x.peerId === this.net.peerId || (Array.isArray(x.controllerPeerIds) && x.controllerPeerIds.includes(this.net.peerId))))
       : null) || this.players.find((x) => !x.dead) || p0;
     if (lead) {
       this.world.updatePlayerFocus(lead.x, (lead.baseY || 0) + lead.y, lead.z, this.currentBiome?.theme?.edgeGlow || '#fde047');
@@ -4504,21 +4612,29 @@ export class Game {
     }
     if ((this._skipIntroGuardFrames || 0) > 0) this._skipIntroGuardFrames--;
 
-    if (this.multiplayerSession?.active) {
-      this.tvHud.updatePlayers(this.players, this.multiplayerSession.elimTimer, this.spectatorMode);
-      this.multiplayerSession.netSnapAccum += dt;
-      if (this.multiplayerSession.isHost && this.multiplayerSession.netSnapAccum >= 0.055) {
-        this.multiplayerSession.netSnapAccum = 0;
+    const hasConnectedController = this.net.isConnected && !this.ui?.controllerInstance &&
+      this.net.room?.peers?.some((pr) => pr.role === 'controller');
+    if (this.multiplayerSession?.active || hasConnectedController) {
+      if (this.multiplayerSession?.active) {
+        this.tvHud.updatePlayers(this.players, this.multiplayerSession.elimTimer, this.spectatorMode);
+      }
+      this._ctrlSnapAccum = (this._ctrlSnapAccum || 0) + dt;
+      if (this.multiplayerSession) this.multiplayerSession.netSnapAccum = this._ctrlSnapAccum;
+      const canBroadcastSnap = (this.multiplayerSession?.active ? this.multiplayerSession.isHost : this.net.isHost) && this._ctrlSnapAccum >= 0.055;
+      if (canBroadcastSnap) {
+        this._ctrlSnapAccum = 0;
+        if (this.multiplayerSession) this.multiplayerSession.netSnapAccum = 0;
         this.net.broadcastHostSnapshot({
           score: Math.floor(this.score),
           distance: Math.floor(this.distance),
           speed: Math.round(this.speed * 10) / 10,
           biome: this.currentBiome.id,
-          mpMode: this.multiplayerSession.mpMode,
-          suddenDeath: !!this.multiplayerSession.suddenDeath,
-          elimTimer: this.multiplayerSession.elimTimer,
+          mpMode: this.multiplayerSession?.mpMode || 'race',
+          suddenDeath: !!this.multiplayerSession?.suddenDeath,
+          elimTimer: this.multiplayerSession?.elimTimer || null,
           players: this.players.map((pl) => ({
             peerId: pl.peerId,
+            controllerPeerIds: pl.controllerPeerIds || [],
             name: pl.name,
             lane: pl.lane,
             x: Math.round(pl.x * 100) / 100,
@@ -4532,6 +4648,14 @@ export class Game {
             lives: pl.hp,
             maxLives: pl.maxHp,
             shields: pl.shields,
+            stamina: Math.round(pl.stamina ?? 100),
+            oxygen: Math.round(pl.oxygen ?? 100),
+            inWater: !!pl.inWater,
+            inSubmerged: !!pl.inSubmerged,
+            diveTarget: pl.diveTarget ?? 0,
+            habitatMode: pl.habitatMode || pl.habitat || 'land',
+            canTransmute: Array.isArray(pl.availableHabitats) && pl.availableHabitats.length > 1,
+            abilityCharge: Math.round(pl.abilityCharge ?? 100),
             attackCd: Math.round((pl.attackCooldown || 0) * 100) / 100,
             attackMaxCd: pl.attackMaxCooldown || 1.25,
             rank: pl.rank || 1,
@@ -4950,8 +5074,9 @@ export class Game {
       this.cameraP2;
 
     if (useSplitRender) {
-      const w = window.innerWidth;
-      const h = Math.max(1, window.innerHeight);
+      const vp = OrientationManager.getViewportSize();
+      const w = Math.max(1, vp.width);
+      const h = Math.max(1, vp.height);
       this._wasSplitRender = true;
       this.renderer.setScissorTest(true);
       if (camMode === 'split_h') {
@@ -4995,8 +5120,9 @@ export class Game {
       this.renderer.setViewport(0, 0, w, h);
     } else {
       if (this._wasSplitRender) {
-        const w = window.innerWidth;
-        const h = Math.max(1, window.innerHeight);
+        const vp = OrientationManager.getViewportSize();
+        const w = Math.max(1, vp.width);
+        const h = Math.max(1, vp.height);
         this.camera.aspect = w / h;
         this.camera.updateProjectionMatrix();
         this.renderer.setScissorTest(false);

@@ -107,27 +107,68 @@ export class TransportSupabase {
           dinoId: String(info.dinoId || 'trex').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 28) || 'trex',
           color: sanitizeHexColor(info.color, palette[idx % palette.length]),
           ready: !!info.ready,
-          role: ['screen', 'controller', 'spectator'].includes(info.role) ? info.role : 'controller',
+          role: ['screen', 'controller', 'mobile_player', 'spectator'].includes(info.role) ? info.role : 'controller',
+          controlMode: ['p1_remote', 'own_dino'].includes(info.controlMode) ? info.controlMode : 'p1_remote',
           slot: info.slot ?? idx,
           joinedAt: info.joinedAt || 0,
           pingMs: Math.max(0, Math.min(9999, Number(info.pingMs || 0)))
         });
         idx++;
       }
-      entries.sort((a, b) => (a.isHost === b.isHost ? a.joinedAt - b.joinedAt : (a.isHost ? -1 : 1)));
+      // Garante que o próprio peer continue na lista durante micro-atualizações de channel.track()
+      if (this.selfPeerId && this.myMeta && !entries.some((e) => e.peerId === this.selfPeerId)) {
+        entries.push({
+          peerId: this.selfPeerId,
+          isHost: !!this.myMeta.isHost,
+          name: sanitizeNickname(this.myMeta.name || 'Jogador', 'Jogador', 18),
+          dinoId: String(this.myMeta.dinoId || 'trex').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 28) || 'trex',
+          color: sanitizeHexColor(this.myMeta.color, palette[0]),
+          ready: !!this.myMeta.ready,
+          role: ['screen', 'controller', 'mobile_player', 'spectator'].includes(this.myMeta.role) ? this.myMeta.role : 'controller',
+          controlMode: ['p1_remote', 'own_dino'].includes(this.myMeta.controlMode) ? this.myMeta.controlMode : 'p1_remote',
+          slot: 0,
+          joinedAt: this.myMeta.joinedAt || 0,
+          pingMs: this.pingMs || 0
+        });
+      }
+      entries.sort((a, b) => {
+        const aScreen = a.role === 'screen' || a.role === 'mobile_player';
+        const bScreen = b.role === 'screen' || b.role === 'mobile_player';
+        if (aScreen !== bScreen) return aScreen ? -1 : 1;
+        return a.isHost === b.isHost ? a.joinedAt - b.joinedAt : (a.isHost ? -1 : 1);
+      });
       entries.forEach((p, i) => { p.slot = i; });
       this.room.peers = entries.slice(0, 8);
 
-      // Identifica host real por isHost antes de fallback/migração
-      const explicitHost = this.room.peers.find((p) => p.isHost);
+      // Identifica host real: dispositivos Telão/Jogador 3D ('screen' / 'mobile_player') SEMPRE têm prioridade sobre 'controller'
+      const screenPeers = this.room.peers.filter((p) => p.role === 'screen' || p.role === 'mobile_player');
+      const explicitScreenHost = screenPeers.find((p) => p.isHost);
+      const explicitAnyHost = this.room.peers.find((p) => p.isHost);
       const prevHost = this.room.hostPeerId;
-      const hostAlive = prevHost && this.room.peers.some((p) => p.peerId === prevHost);
+      const prevHostPeer = prevHost ? this.room.peers.find((p) => p.peerId === prevHost) : null;
+      const hostAlive = !!prevHostPeer;
+      const hostIsControllerWithScreenAvailable = prevHostPeer?.role === 'controller' && screenPeers.length > 0;
 
-      if (explicitHost) {
-        this.room.hostPeerId = explicitHost.peerId;
+      if (explicitScreenHost) {
+        this.room.hostPeerId = explicitScreenHost.peerId;
+      } else if (screenPeers.length > 0 && (!hostAlive || hostIsControllerWithScreenAvailable)) {
+        const chosenScreen = screenPeers.find((p) => p.role === 'screen') || screenPeers[0];
+        this.room.hostPeerId = chosenScreen.peerId;
+        if (chosenScreen.peerId === this.selfPeerId && this.myMeta && !this.myMeta.isHost) {
+          this.myMeta.isHost = true;
+          this.channel?.track(this.myMeta).catch(() => {});
+        }
+        if (prevHost && prevHost !== chosenScreen.peerId) {
+          this._emit('message', {
+            type: 'host_migrated',
+            hostPeerId: chosenScreen.peerId,
+            hostName: chosenScreen.name
+          });
+        }
+      } else if (explicitAnyHost && screenPeers.length === 0) {
+        this.room.hostPeerId = explicitAnyHost.peerId;
       } else if (!hostAlive && this.room.peers.length > 0 && (opts.isCreate || this.room.peers.length > 1 || presenceSyncedOnce)) {
-        // Só assume host se o anterior realmente caiu (ou houver mais peers) — nunca quando guest chega em sala vazia
-        const nonSelf = this.room.peers.find((p) => p.peerId !== this.selfPeerId && p.role === 'screen')
+        const nonSelf = this.room.peers.find((p) => p.peerId !== this.selfPeerId && (p.role === 'screen' || p.role === 'mobile_player'))
           || this.room.peers.find((p) => p.peerId !== this.selfPeerId)
           || (opts.isCreate ? this.room.peers[0] : null);
         if (nonSelf) {
@@ -192,8 +233,15 @@ export class TransportSupabase {
         if (patch.config && typeof patch.config === 'object') {
           this.room.config = { ...(this.room.config || {}), ...patch.config };
         }
-        const { config: _cfg, ...rest } = patch;
+        const { config: _cfg, hostPeerId: patchHostId, ...rest } = patch;
         Object.assign(this.room, rest);
+        if (patchHostId) {
+          const patchHostPeer = this.room.peers.find((p) => p.peerId === patchHostId);
+          const hasScreenPeer = this.room.peers.some((p) => p.role === 'screen' || p.role === 'mobile_player');
+          if (!hasScreenPeer || (patchHostPeer && patchHostPeer.role !== 'controller')) {
+            this.room.hostPeerId = patchHostId;
+          }
+        }
         this._emit('message', { type: 'room_state', room: this.room });
         return;
       }
@@ -225,12 +273,13 @@ export class TransportSupabase {
         if (status === 'SUBSCRIBED' && !settled) {
           this.connected = true;
           this.myMeta = {
-            isHost: !!opts.isCreate,
+            isHost: !!opts.isCreate && opts.role !== 'controller',
             name: String(opts.name || 'Jogador').slice(0, 18),
             dinoId: opts.dinoId || 'trex',
             color: opts.color || '#58d63a',
-            ready: !!opts.isCreate,
+            ready: !!opts.isCreate || opts.ready !== false,
             role: opts.role || 'controller',
+            controlMode: opts.controlMode || 'p1_remote',
             joinedAt: Date.now(),
             pingMs: 0
           };
@@ -316,23 +365,36 @@ export class TransportSupabase {
   send(payload) {
     if (!this.channel || !this.connected) return false;
     if (payload.type === 'player_meta' && this.myMeta) {
+      const nextRole = payload.role ?? this.myMeta.role;
+      const hasOtherScreen = this.room?.peers?.some((p) => p.peerId !== this.selfPeerId && (p.role === 'screen' || p.role === 'mobile_player'));
+      const nextIsHost = nextRole === 'controller' && hasOtherScreen
+        ? false
+        : (payload.isHost ?? this.myMeta.isHost);
       Object.assign(this.myMeta, {
+        isHost: nextIsHost,
         name: payload.name ?? this.myMeta.name,
         dinoId: payload.dinoId ?? this.myMeta.dinoId,
         color: payload.color ?? this.myMeta.color,
-        role: payload.role ?? this.myMeta.role,
+        role: nextRole,
+        controlMode: payload.controlMode ?? this.myMeta.controlMode ?? 'p1_remote',
         ready: payload.ready ?? this.myMeta.ready,
         pingMs: this.pingMs
       });
       const localPeer = this.room?.peers?.find((p) => p.peerId === this.selfPeerId);
       if (localPeer) {
         Object.assign(localPeer, {
+          isHost: this.myMeta.isHost,
           name: this.myMeta.name,
           dinoId: this.myMeta.dinoId,
           color: this.myMeta.color,
           role: this.myMeta.role,
+          controlMode: this.myMeta.controlMode,
           ready: this.myMeta.ready
         });
+        if (this.myMeta.role === 'controller' && this.room.hostPeerId === this.selfPeerId) {
+          const otherScreen = this.room.peers.find((p) => p.peerId !== this.selfPeerId && (p.role === 'screen' || p.role === 'mobile_player'));
+          if (otherScreen) this.room.hostPeerId = otherScreen.peerId;
+        }
         this._emit('message', { type: 'room_state', room: this.room });
       }
       this.channel.send({
