@@ -317,6 +317,12 @@ export class Game {
   }
 
   _bindNetworkEvents() {
+    this.net.on('kicked', (msg) => {
+      if (this.ui?.controllerInstance) return;
+      this.openMainMenu();
+      this.ui?.hud?.showBanner?.(msg?.reason || '👢 Você foi removido da sala.', '#ff4757', 4.5);
+    });
+
     this.net.on('room_state', (room) => {
       if (this.ui?.controllerInstance) return;
       this.ui?.hud?.syncRoomControllers?.(room, this.net.peerId, this.net.pingMs);
@@ -330,16 +336,62 @@ export class Game {
       this.startMultiplayerMatch(this.net.room, Number(msg?.botCount) || 0);
     });
 
+    this.net.on('pause_request', (msg) => {
+      if (this.ui?.controllerInstance) return;
+      if (this.state !== 'playing' && this.state !== 'paused') return;
+      const room = this.net.room;
+      const peer = room?.peers?.find((p) => p.peerId === msg.peerId);
+      const pausePolicy = room?.config?.pausePolicy || 'all_limited';
+      if (pausePolicy === 'host_only' && msg.peerId !== room?.hostPeerId) {
+        if (this.net.isHost) {
+          this.ui?.hud?.showBanner?.(`⏸ ${peer?.name || 'Jogador'} pediu Pausa (Somente o Dono pode pausar)`, '#fbbf24', 2.4);
+        }
+        return;
+      }
+      this.togglePause();
+    });
+
+    this.net.on('radial_action', (msg) => {
+      if (this.ui?.controllerInstance) return;
+      if (this.state !== 'playing') return;
+      if (msg.slot) {
+        this.executeRadialAction?.(msg.slot);
+      } else {
+        this.toggleRadialWheel?.();
+      }
+    });
+
+    this.net.on('control_request', (msg) => {
+      if (this.ui?.controllerInstance) return;
+      if (msg.targetPlayerPeerId && msg.targetPlayerPeerId !== this.net.peerId) return;
+      this.ui?.showControlConfirmationPopup?.({
+        requesterPeerId: msg.requesterPeerId,
+        requesterName: msg.requesterName || 'Celular',
+        onAccept: () => {
+          this.net.sendControlResponse(msg.requesterPeerId, true);
+          this.ui?.hud?.showBanner?.(`🎮 ${msg.requesterName || 'Celular'} agora controla seu dino!`, '#58d63a', 3.0);
+        },
+        onReject: (reason = '') => {
+          this.net.sendControlResponse(msg.requesterPeerId, false, reason);
+        }
+      });
+    });
+
     this.net.on('input', (msg) => {
       if (this.ui?.controllerInstance) return;
       const peer = this.net.room?.peers?.find((pr) => pr.peerId === msg.peerId);
+      const boundTargetId = peer?.targetPlayerPeerId || msg.targetPlayerPeerId || null;
+      if (peer?.role === 'controller' && !boundTargetId) {
+        return; // Ignora comandos de controle ainda não confirmado pelo jogador alvo
+      }
       const peerName = peer?.name || msg.name || 'Controle Celular';
       this.ui?.hud?.setControllerStatusHud?.({
         connected: true,
         peerName,
+        controllerPeerId: peer?.peerId || msg.peerId,
         pingMs: peer?.pingMs || this.net.pingMs || 12,
         activeInputs: msg.inputs || {},
-        controlMode: peer?.controlMode || 'p1_remote'
+        controlMode: boundTargetId ? 'bound' : (peer?.controlMode || 'p1_remote')
       });
 
       if (this.state === 'playing' && this.events.predators?.state === 'intro') {
@@ -357,9 +409,11 @@ export class Game {
 
       if (this.multiplayerSession?.active && !this.multiplayerSession.isHost && !this.net.isHost) return;
       let target = this.players.find(
-        (p) => p.peerId === msg.peerId || (Array.isArray(p.controllerPeerIds) && p.controllerPeerIds.includes(msg.peerId))
+        (p) => (boundTargetId && p.peerId === boundTargetId) ||
+          (Array.isArray(p.controllerPeerIds) && p.controllerPeerIds.includes(msg.peerId)) ||
+          (!peer?.role && p.peerId === msg.peerId)
       );
-      if (!target && (!this.multiplayerSession?.active || peer?.controlMode === 'p1_remote' || this.players.length === 1)) {
+      if (!target && !this.multiplayerSession?.active && boundTargetId === this.net.peerId) {
         target = this.players[0];
       }
       if (target) {
@@ -771,12 +825,14 @@ export class Game {
       const pKey = slot.key || `p${i + 1}`;
       const dinoId = slot.dinoId || 'trex';
       const spec = getDinoSpec(dinoId);
-      const localCustom = (pKey === 'p1' || pKey === 'p2') ? getActivePreset(pKey) : {};
-      const eqSkinVariant = i === 0 ? getEquippedSkinVariant(dinoId) : (slot.skinVariant || localCustom.skinVariant || 'normal');
+      const slotCustom = slot.customization && typeof slot.customization === 'object' ? slot.customization : null;
+      const localCustom = slotCustom || ((pKey === 'p1' || pKey === 'p2') ? getActivePreset(pKey) : {});
+      const eqSkinVariant = slotCustom?.skinVariant || (i === 0 ? getEquippedSkinVariant(dinoId) : (slot.skinVariant || localCustom.skinVariant || 'normal'));
       const eqMutationId = i === 0 ? (Save.data.equippedMutation || 'amber_core') : null;
       const eqMutationTier = (i === 0 && eqMutationId) ? getMutationActiveLevel(eqMutationId) : 1;
       const mutProfile = eqMutationId ? getMutationComputedProfile(eqMutationId, eqMutationTier) : null;
-      const hybridCfg = i === 0 ? Save.data.hybrid : null;
+      const hybridsAllowed = !this.multiplayerSession?.active || this.multiplayerSession.allowHybrids !== false;
+      const hybridCfg = hybridsAllowed ? (slotCustom?.hybrid || (i === 0 ? Save.data.hybrid : null)) : null;
       const habInfo = getEffectiveDinoHabitat(spec, { hybrid: hybridCfg, mutationId: eqMutationId });
       const swimCaps = getDinoSwimCapabilities(spec, { hybrid: hybridCfg, mutationId: eqMutationId });
       const initialHabitat = habInfo.primary === 'amphibious' ? 'land' : (habInfo.primary || 'land');
@@ -785,11 +841,11 @@ export class Game {
         skinVariant: eqSkinVariant,
         mutation: eqMutationId,
         mutationTier: eqMutationTier,
-        ...(slot.color ? { useCustomColors: true, primary: slot.color } : {}),
-        ...(i === 0 ? { hybrid: hybridCfg, season: activeSeason, partyCrown: hasCrown } : { season: activeSeason })
+        ...(slot.color && !slotCustom?.useCustomColors ? { useCustomColors: true, primary: slot.color } : {}),
+        ...(i === 0 ? { hybrid: hybridCfg, season: activeSeason, partyCrown: hasCrown } : { hybrid: hybridCfg, season: activeSeason })
       };
       const model = DinoFactory.build(dinoId, modelCfg, {
-        allowHybrid: i === 0 && !!hybridCfg?.enabled,
+        allowHybrid: hybridsAllowed && !!hybridCfg?.enabled,
         skinVariant: eqSkinVariant,
         mutationTier: eqMutationTier
       });
@@ -975,58 +1031,24 @@ export class Game {
 
   startMultiplayerMatch(room, botCount = 0) {
     const peers = Array.isArray(room?.peers) ? room.peers : [];
-    const p1RemoteControllers = peers.filter(
-      (pr) => pr.role === 'controller' && pr.controlMode === 'p1_remote'
-    );
-    const screenPeers = peers.filter((pr) => pr.role !== 'controller');
-    const standaloneControllers = peers.filter(
-      (pr) => pr.role === 'controller' && pr.controlMode !== 'p1_remote'
-    );
+    const screenPeers = peers.filter((pr) => pr.role !== 'controller' && pr.role !== 'spectator');
+    const confirmedControllers = peers.filter((pr) => pr.role === 'controller' && !!pr.targetPlayerPeerId);
 
     const roster = [];
     let keyIdx = 1;
 
-    // Se houver 1 Telão PC e controles em modo "Controlar Dino do PC (1P)", vincula os controles ao P1!
     for (let sIdx = 0; sIdx < screenPeers.length; sIdx++) {
       if (roster.length >= 8) break;
       const pr = screenPeers[sIdx];
-      const attachedCtrls = sIdx === 0 ? p1RemoteControllers : [];
-      const primaryCtrl = attachedCtrls[0] || null;
-      roster.push({
-        key: `p${keyIdx++}`,
-        dinoId: primaryCtrl?.dinoId || pr.dinoId || 'trex',
-        name: primaryCtrl ? `${primaryCtrl.name} 🎮` : (pr.name || `Dino ${roster.length + 1}`),
-        peerId: pr.peerId,
-        controllerPeerIds: attachedCtrls.map((c) => c.peerId),
-        color: primaryCtrl?.color || pr.color || null,
-        isBot: false
-      });
-    }
-
-    // Se não havia peer 'screen' explícito mas havia controles p1_remote
-    if (screenPeers.length === 0 && p1RemoteControllers.length > 0) {
-      const c0 = p1RemoteControllers[0];
-      roster.push({
-        key: `p${keyIdx++}`,
-        dinoId: c0.dinoId || Save.data.selectedDino || 'trex',
-        name: `${c0.name || 'Controle'} 🎮`,
-        peerId: c0.peerId,
-        controllerPeerIds: p1RemoteControllers.map((c) => c.peerId),
-        color: c0.color || null,
-        isBot: false
-      });
-    }
-
-    // Adiciona controles que escolheram "Meu Próprio Dino no Telão (2–8P)"
-    for (const pr of standaloneControllers) {
-      if (roster.length >= 8) break;
+      const attachedCtrls = confirmedControllers.filter((c) => c.targetPlayerPeerId === pr.peerId);
       roster.push({
         key: `p${keyIdx++}`,
         dinoId: pr.dinoId || 'trex',
         name: pr.name || `Dino ${roster.length + 1}`,
         peerId: pr.peerId,
-        controllerPeerIds: [pr.peerId],
+        controllerPeerIds: attachedCtrls.map((c) => c.peerId),
         color: pr.color || null,
+        customization: pr.customization || (pr.peerId === this.net.peerId ? { ...getActivePreset('p1'), skinVariant: getEquippedSkinVariant(pr.dinoId || Save.data.selectedDino), hybrid: Save.data.hybrid } : null),
         isBot: false
       });
     }
@@ -1063,6 +1085,13 @@ export class Game {
       seed: matchSeed,
       mpMode,
       difficultyId: matchDiffId,
+      multiHabitats: room?.config?.multiHabitats !== false,
+      allowHybrids: room?.config?.allowHybrids !== false,
+      allowEvents: room?.config?.allowEvents !== false,
+      allowBosses: room?.config?.allowBosses !== false,
+      allowPowerups: room?.config?.allowPowerups !== false,
+      allowHandicap: !!room?.config?.allowHandicap,
+      pausePolicy: room?.config?.pausePolicy || 'host_only',
       allowRevive: resolvedCfg.allowRevive !== false,
       elimination: isElim,
       elimTimer: isElim ? 30 : null,
@@ -1082,6 +1111,13 @@ export class Game {
       seed: matchSeed,
       mpMode,
       difficultyId: matchDiffId,
+      multiHabitats: this.multiplayerSession.multiHabitats,
+      allowHybrids: this.multiplayerSession.allowHybrids,
+      allowEvents: this.multiplayerSession.allowEvents,
+      allowBosses: this.multiplayerSession.allowBosses,
+      allowPowerups: this.multiplayerSession.allowPowerups,
+      allowHandicap: this.multiplayerSession.allowHandicap,
+      pausePolicy: this.multiplayerSession.pausePolicy,
       allowRevive: this.multiplayerSession.allowRevive,
       elim: isElim,
       partyMode: this.multiplayerSession.partyMode,
@@ -1399,12 +1435,20 @@ export class Game {
     this.spawner.setDifficultyId(this.difficultyMgr.activeId);
     this.spawner.setDifficultyConfig(diff);
     this.spawner.setBossManager(this.events.bosses);
+    const mpCfg = this.multiplayerSession?.active ? this.multiplayerSession : null;
     this.spawner.setDensity(diff.density * (this.activeCustomTrack?.obstacleRate || 1.0));
-    this.events.configure(diff.eventFreq, diff.enabledEvents);
+    const evFreq = mpCfg && mpCfg.allowEvents === false ? 0 : diff.eventFreq;
+    this.events.configure(evFreq, diff.enabledEvents);
+    if (this.events?.bosses) {
+      this.events.bosses.disabled = Boolean(mpCfg && mpCfg.allowBosses === false);
+    }
 
     // Bioma inicial (Modo História começa no capítulo 1; Modo Aleatório inicia via Portal Dinâmico)
     const rawStartId = opts.biomeId || (this.modeId === 'story' ? STORY_CHAPTERS[0].biome : this.startBiomeId);
-    this.randomPortalMode = rawStartId === 'random_portal' || !!opts.randomPortal;
+    this.randomPortalMode = (mpCfg && mpCfg.multiHabitats === false) ? false : (rawStartId === 'random_portal' || !!opts.randomPortal);
+    if (mpCfg && mpCfg.multiHabitats === false) {
+      this.sequenceBiomes = false;
+    }
     let startId = rawStartId === 'random_portal'
       ? getRandomNextBiome(null).id
       : rawStartId;
@@ -1418,6 +1462,13 @@ export class Game {
     if (!isTestTrack) this._discoverCurrentBiomeFossil();
 
     const isSubmergedStart = Boolean(this.currentBiome?.submerged);
+    if (this.multiplayerSession?.active && this.multiplayerSession?.allowHandicap) {
+      for (const pl of this.players) {
+        if ((pl.skillLevel || 1) <= 2) {
+          pl.shields = Math.min(4, (pl.shields || 0) + 1);
+        }
+      }
+    }
     this._syncEnvironmentHabitat(this.players[0]);
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat;
@@ -2520,7 +2571,7 @@ export class Game {
       return;
     }
 
-    const gachaEligible = !this.isTestTrack && this.modeId !== 'zen' && this.modeId !== 'tutorial';
+    const gachaEligible = !this.isTestTrack && !this.multiplayerSession?.active && this.modeId !== 'zen' && this.modeId !== 'tutorial';
     const gachaCrates = GachaSystem.computeRunCrates(finalScore, this.difficultyMgr.getConfig(), gachaEligible);
     if (gachaCrates > 0) GachaSystem.addCrates(gachaCrates);
     const totalCrates = GachaSystem.getCrateCount();

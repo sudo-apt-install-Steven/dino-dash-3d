@@ -13,11 +13,62 @@ export class RoomClient {
     this.chatLog = [];
     this.roundVotes = new Map();
     this.lastSentInputs = null;
+    this._inputSeq = 0;
+    this._lastRemoteSeq = new Map();
     this.listeners = new Map();
     this.lastLanInfo = { ips: [], port: 5174 };
+    this.sessionToken = this._initSessionToken();
 
     this._wireTransport(this.lan, 'lan');
     this._wireTransport(this.supabase, 'supabase');
+  }
+
+  _initSessionToken() {
+    try {
+      const key = 'dino_mp_session_token_v1';
+      let tok = window.sessionStorage?.getItem(key);
+      if (!tok) {
+        tok = `st_${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36).slice(-4)}`;
+        window.sessionStorage?.setItem(key, tok);
+      }
+      return tok;
+    } catch {
+      return `st_${Math.random().toString(36).slice(2, 12)}`;
+    }
+  }
+
+  saveSessionSnapshot(patch = {}) {
+    try {
+      const data = {
+        roomCode: this.room?.code || patch.roomCode || '',
+        transport: this.transportType || patch.transport || 'lan',
+        role: patch.role || 'controller',
+        targetPlayerPeerId: patch.targetPlayerPeerId || null,
+        nickname: patch.nickname || '',
+        dinoId: patch.dinoId || 'trex',
+        expiresAt: Date.now() + 60000
+      };
+      window.sessionStorage?.setItem('dino_mp_resume_v1', JSON.stringify(data));
+    } catch {}
+  }
+
+  loadSessionSnapshot() {
+    try {
+      const raw = window.sessionStorage?.getItem('dino_mp_resume_v1');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || Number(parsed.expiresAt || 0) < Date.now()) {
+        window.sessionStorage?.removeItem('dino_mp_resume_v1');
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  clearSessionSnapshot() {
+    try { window.sessionStorage?.removeItem('dino_mp_resume_v1'); } catch {}
   }
 
   _wireTransport(tr, name) {
@@ -108,6 +159,17 @@ export class RoomClient {
       this._emit('end_match', msg);
       return;
     }
+    if (msg.type === 'kicked') {
+      this.leaveRoom();
+      this._emit('kicked', msg);
+      return;
+    }
+    if (msg.type === 'input' && msg.peerId) {
+      const seq = Number(msg.seq || 0);
+      const prevSeq = this._lastRemoteSeq.get(msg.peerId) || 0;
+      if (seq > 0 && seq < prevSeq) return; // ignora pacotes fora de ordem / replay
+      if (seq > 0) this._lastRemoteSeq.set(msg.peerId, seq);
+    }
     if (msg.type === 'chat' || msg.type === 'emote') {
       const peer = this.room?.peers?.find((p) => p.peerId === msg.peerId);
       const label = peer?.name || msg.name || 'Dino';
@@ -169,8 +231,54 @@ export class RoomClient {
     if (!ok) {
       return { ok: false, message: 'Servidor LAN não encontrado! Confirme se o PC executou "npm run host".' };
     }
-    this.lan.send({ type: 'join_room', code: cleanCode, peerId: this.peerId, ...opts });
+    this.lan.send({ type: 'join_room', code: cleanCode, peerId: this.peerId, sessionToken: this.sessionToken, ...opts });
     return { ok: true };
+  }
+
+  getPlayerPeers() {
+    return (this.room?.peers || []).filter((p) => p.role !== 'controller' && p.role !== 'spectator');
+  }
+
+  sendControlRequest(targetPlayerPeerId) {
+    if (!this.isConnected || !targetPlayerPeerId) return false;
+    return this.activeTransport.send({
+      type: 'control_request',
+      targetPlayerPeerId,
+      requesterPeerId: this.peerId,
+      requesterName: this.room?.peers?.find((p) => p.peerId === this.peerId)?.name || 'Celular'
+    });
+  }
+
+  sendControlResponse(requesterPeerId, accepted, reason = '') {
+    if (!this.isConnected || !requesterPeerId) return false;
+    if (this.transportType === 'supabase' && this.room) {
+      const reqPeer = this.room.peers?.find((p) => p.peerId === requesterPeerId);
+      if (reqPeer) {
+        reqPeer.targetPlayerPeerId = accepted ? this.peerId : null;
+        if (accepted) reqPeer.ready = true;
+      }
+      this._emit('room_state', this.room);
+    }
+    return this.activeTransport.send({
+      type: 'control_response',
+      requesterPeerId,
+      targetPlayerPeerId: this.peerId,
+      accepted: !!accepted,
+      reason
+    });
+  }
+
+  sendControlRevoke(controllerPeerId) {
+    if (!this.isConnected || !controllerPeerId) return false;
+    if (this.transportType === 'supabase' && this.room) {
+      const ctrlPeer = this.room.peers?.find((p) => p.peerId === controllerPeerId);
+      if (ctrlPeer) ctrlPeer.targetPlayerPeerId = null;
+      this._emit('room_state', this.room);
+    }
+    return this.activeTransport.send({
+      type: 'control_revoke',
+      controllerPeerId
+    });
   }
 
   async listRooms(transport = this.transportType) {
@@ -255,12 +363,43 @@ export class RoomClient {
       return;
     }
     this.lastSentInputs = compact;
-    this.activeTransport.send({ type: 'input', inputs: compact });
+    this._inputSeq += 1;
+    this.activeTransport.send({ type: 'input', seq: this._inputSeq, inputs: compact });
+  }
+
+  kickPeer(targetPeerId, ban = false) {
+    if (!this.isConnected || !this.isHost) return false;
+    return this.activeTransport.send({ type: 'kick_peer', targetPeerId, ban: !!ban });
+  }
+
+  transferHost(targetPeerId) {
+    if (!this.isConnected || !this.isHost) return false;
+    return this.activeTransport.send({ type: 'transfer_host', targetPeerId });
+  }
+
+  reportPlayer(targetPeerId, reason = 'Comportamento inadequado') {
+    if (!this.isConnected) return false;
+    return this.activeTransport.send({ type: 'report_player', targetPeerId, reason });
+  }
+
+  broadcastCountdown(seconds = 3) {
+    if (!this.isConnected || !this.isHost) return false;
+    return this.activeTransport.send({ type: 'start_countdown', seconds });
   }
 
   requestStartMatch(opts = {}) {
     if (!this.isConnected) return false;
     return this.activeTransport.send({ type: 'request_start_match', peerId: this.peerId, ...opts });
+  }
+
+  sendPauseRequest() {
+    if (!this.isConnected) return false;
+    return this.activeTransport.send({ type: 'pause_request', peerId: this.peerId });
+  }
+
+  sendRadialAction(slot = 'focus') {
+    if (!this.isConnected) return false;
+    return this.activeTransport.send({ type: 'radial_action', peerId: this.peerId, slot });
   }
 
   requestRoomSync() {

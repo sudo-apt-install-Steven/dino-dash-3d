@@ -109,6 +109,7 @@ export class TransportSupabase {
           ready: !!info.ready,
           role: ['screen', 'controller', 'mobile_player', 'spectator'].includes(info.role) ? info.role : 'controller',
           controlMode: ['p1_remote', 'own_dino'].includes(info.controlMode) ? info.controlMode : 'p1_remote',
+          targetPlayerPeerId: info.targetPlayerPeerId || null,
           slot: info.slot ?? idx,
           joinedAt: info.joinedAt || 0,
           pingMs: Math.max(0, Math.min(9999, Number(info.pingMs || 0)))
@@ -255,6 +256,45 @@ export class TransportSupabase {
           };
           this._emit('message', { type: 'room_state', room: this.room });
         }
+        return;
+      }
+      if (payload.type === 'control_response' && payload.requesterPeerId === this.selfPeerId) {
+        if (payload.accepted) {
+          if (this.myMeta) {
+            this.myMeta.targetPlayerPeerId = payload.targetPlayerPeerId || payload.peerId;
+            this.myMeta.role = 'controller';
+            this.myMeta.ready = true;
+            this.channel?.track(this.myMeta).catch(() => {});
+          }
+          const targetPeer = this.room.peers.find((p) => p.peerId === (payload.targetPlayerPeerId || payload.peerId));
+          this._emit('message', {
+            type: 'control_granted',
+            targetPlayerPeerId: payload.targetPlayerPeerId || payload.peerId,
+            targetPlayerName: targetPeer?.name || 'Jogador',
+            room: this.room
+          });
+        } else {
+          if (this.myMeta) {
+            this.myMeta.targetPlayerPeerId = null;
+            this.channel?.track(this.myMeta).catch(() => {});
+          }
+          this._emit('message', {
+            type: 'control_rejected',
+            targetPlayerPeerId: payload.targetPlayerPeerId || payload.peerId,
+            reason: payload.reason || 'Pedido de controle recusado.'
+          });
+        }
+        return;
+      }
+      if (payload.type === 'control_revoke' && payload.controllerPeerId === this.selfPeerId) {
+        if (this.myMeta) {
+          this.myMeta.targetPlayerPeerId = null;
+          this.channel?.track(this.myMeta).catch(() => {});
+        }
+        this._emit('message', {
+          type: 'control_revoked',
+          reason: 'O jogador removeu o vínculo do controle.'
+        });
         return;
       }
       if (payload.type === 'start_match') {

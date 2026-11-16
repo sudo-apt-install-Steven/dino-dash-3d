@@ -4,6 +4,7 @@ import './styles/controller.css';
 import { Game } from './game/Game.js';
 import { Save } from './systems/Save.js';
 import { PerfMonitor } from './systems/PerfMonitor.js';
+import { isMobileDevice } from './systems/DeviceDetector.js';
 import { verifyAuthorizedDomain, renderUnauthorizedDomainNotice } from './security/DomainGuard.js';
 import { attachForensicMeta } from './security/Watermark.js';
 
@@ -78,7 +79,9 @@ function showSplashAndBoot() {
   }
   attachForensicMeta();
   const params = new URLSearchParams(window.location.search);
-  const isControllerUrl = params.get('controller') === '1' || (Boolean(params.get('room')) && params.get('screen') !== '1');
+  const roomParam = (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  const onMobile = isMobileDevice();
+  const isMobileRoomEntry = onMobile && (params.get('controller') === '1' || Boolean(roomParam)) && params.get('screen') !== '1';
 
   let splash = null;
   let skipped = false;
@@ -90,7 +93,7 @@ function showSplashAndBoot() {
     setTimeout(() => splash?.remove(), 260);
   };
 
-  if (!isControllerUrl) {
+  if (!isMobileRoomEntry) {
     splash = document.createElement('div');
     splash.id = 'dino-loading-splash';
     splash.style.cssText = [
@@ -129,11 +132,21 @@ function showSplashAndBoot() {
       }
     }).catch(() => {});
 
-    if (isControllerUrl) {
+    if (isMobileRoomEntry) {
       game.ui.openController({
-        initialRoom: (params.get('room') || '').toUpperCase().trim(),
+        initialRoom: roomParam,
         initialTransport: params.get('transport') === 'supabase' ? 'supabase' : 'lan',
+        showEntryChoice: true,
         deferredInstall: window.__DINO_DEFERRED_INSTALL__
+      });
+      return;
+    }
+
+    if (roomParam && !onMobile) {
+      dismissSplash();
+      game.ui.openSection('multiplayer', {
+        initialRoom: roomParam,
+        initialTransport: params.get('transport') === 'supabase' ? 'supabase' : 'lan'
       });
       return;
     }

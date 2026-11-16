@@ -18,16 +18,32 @@ export function escapeHtml(value) {
   return String(value).replace(/[&<>"'/`]/g, (ch) => HTML_ESCAPE_MAP[ch] || ch);
 }
 
+const BLOCKED_NICK_PATTERNS = [
+  /p[u\*]t[ao]/i, /c[a@]r[a@]lh/i, /f[o0]d[ae]/i, /p[o0]rr[a@]/i,
+  /b[u\*]c[e3]t/i, /m[e3]rd[a@]/i, /v[i1][a@]d[o0]/i, /f[u\*]ck/i,
+  /sh[i1]t/i, /b[i1]tch/i, /n[i1]gg/i, /r[a@]p[e3]/i
+];
+
 /**
- * Normaliza apelidos de jogadores/hosts removendo caracteres de controle e HTML.
+ * Normaliza apelidos de jogadores/hosts removendo caracteres de controle, HTML e termos impróprios.
  */
 export function sanitizeNickname(value, fallback = 'Dino', maxLen = 18) {
-  const cleaned = String(value ?? '')
+  let cleaned = String(value ?? '')
     .replace(/[\u0000-\u001F\u007F<>`"'\\]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, maxLen);
-  return cleaned || fallback;
+  if (!cleaned) return fallback;
+  if (BLOCKED_NICK_PATTERNS.some((rx) => rx.test(cleaned))) {
+    return fallback;
+  }
+  return cleaned;
+}
+
+export function sanitizeRoomPassword(value, maxLen = 12) {
+  return String(value ?? '')
+    .replace(/[\u0000-\u001F\u007F<>`"'\\\s]/g, '')
+    .slice(0, maxLen);
 }
 
 /**

@@ -19,13 +19,23 @@ const WS_MAX_PAYLOAD_BYTES = 16 * 1024;
 const WS_RATE_LIMIT_PER_SEC = 45;
 const WS_FLOOD_CLOSE_PER_SEC = 160;
 
-function cleanStr(value, fallback = '', maxLen = 32) {
+const BLOCKED_NICK_PATTERNS = [
+  /p[u\*]t[ao]/i, /c[a@]r[a@]lh/i, /f[o0]d[ae]/i, /p[o0]rr[a@]/i,
+  /b[u\*]c[e3]t/i, /m[e3]rd[a@]/i, /v[i1][a@]d[o0]/i, /f[u\*]ck/i,
+  /sh[i1]t/i, /b[i1]tch/i, /n[i1]gg/i, /r[a@]p[e3]/i
+];
+
+function cleanStr(value, fallback = '', maxLen = 32, filterProfanity = false) {
   const s = String(value ?? '')
     .replace(/[\u0000-\u001F\u007F<>`"'\\]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, maxLen);
-  return s || fallback;
+  if (!s) return fallback;
+  if (filterProfanity && BLOCKED_NICK_PATTERNS.some((rx) => rx.test(s))) {
+    return fallback;
+  }
+  return s;
 }
 
 function cleanRoomCode(value) {
@@ -84,8 +94,11 @@ function randomRoomCode() {
 function serializeRoom(room) {
   return {
     code: room.code,
+    roomName: room.roomName || `Sala ${room.code}`,
     hostPeerId: room.hostPeerId,
     isPublic: room.isPublic,
+    hasPassword: !!room.passwordHash,
+    maxPlayers: room.maxPlayers || MAX_PLAYERS,
     mode: room.mode,
     mpMode: room.mpMode || (room.elimination ? 'elimination' : 'race'),
     status: room.status,
@@ -98,8 +111,18 @@ function serializeRoom(room) {
       allowVoting: true,
       difficulty: 'normal',
       biomeId: 'random_portal',
+      multiHabitats: true,
+      allowHybrids: true,
+      uniqueDinos: false,
+      allowControllers: true,
+      allowMultiControllersPerPlayer: false,
+      allowSpectators: true,
+      allowEvents: true,
+      allowBosses: true,
+      allowPowerups: true,
       allowRevive: true,
-      allowPowerups: true
+      allowHandicap: false,
+      pausePolicy: 'host_only'
     },
     votes: room.votes || {},
     activeMatch: room.activeMatch || null,
@@ -108,9 +131,11 @@ function serializeRoom(room) {
       name: p.name,
       dinoId: p.dinoId,
       color: p.color,
+      customization: p.customization || null,
       ready: p.ready,
       role: p.role,
       controlMode: p.controlMode || 'p1_remote',
+      targetPlayerPeerId: p.targetPlayerPeerId || null,
       slot: p.slot,
       pingMs: p.pingMs
     }))
@@ -142,6 +167,20 @@ function cleanupPeer(ws) {
   if (!peer || peer.ws !== ws) return;
 
   room.peers.delete(ws._peerId);
+  if (peer.sessionToken) {
+    room.disconnectedSessions = room.disconnectedSessions || new Map();
+    room.disconnectedSessions.set(peer.sessionToken, {
+      peerId: peer.peerId,
+      name: peer.name,
+      dinoId: peer.dinoId,
+      color: peer.color,
+      role: peer.role,
+      controlMode: peer.controlMode,
+      targetPlayerPeerId: peer.targetPlayerPeerId || null,
+      slot: peer.slot,
+      expiresAt: Date.now() + 60000
+    });
+  }
   if (room.votes) delete room.votes[ws._peerId];
   room.lastActivity = Date.now();
 
@@ -218,10 +257,13 @@ const server = http.createServer((req, res) => {
       const host = room.peers.get(room.hostPeerId);
       publicRooms.push({
         code: cleanRoomCode(room.code) || '0000',
+        roomName: cleanStr(room.roomName, `Sala ${room.code}`, 28),
         hostName: cleanStr(host?.name, 'Host', 18),
-        mode: cleanId(room.mode, 'lan_party', 24),
+        mode: cleanId(room.mpMode || room.mode, 'race', 24),
+        biomeId: cleanId(room.config?.biomeId, 'random_portal', 24),
+        hasPassword: !!room.passwordHash,
         playerCount: room.peers.size,
-        maxPlayers: MAX_PLAYERS,
+        maxPlayers: room.maxPlayers || MAX_PLAYERS,
         status: ['lobby', 'playing', 'finished'].includes(room.status) ? room.status : 'lobby'
       });
     }
@@ -320,10 +362,15 @@ wss.on('connection', (ws) => {
         : randomRoomCode();
       const peerId = cleanId(msg.peerId, `p_${crypto.randomBytes(4).toString('hex')}`, 32);
       const mpMode = cleanId(msg.mpMode || (msg.elimination ? 'elimination' : 'race'), 'race', 24);
+      const rawPass = cleanStr(msg.password, '', 12);
+      const maxPlayers = Math.max(2, Math.min(8, Math.floor(Number(msg.maxPlayers) || MAX_PLAYERS)));
       const room = {
         code,
+        roomName: cleanStr(msg.roomName, `Sala ${code}`, 28, true),
         hostPeerId: peerId,
         isPublic: msg.isPublic !== false,
+        passwordHash: rawPass ? crypto.createHash('sha256').update(rawPass).digest('hex') : null,
+        maxPlayers,
         mode: cleanId(msg.mode, 'lan_party', 24),
         mpMode,
         status: 'lobby',
@@ -336,10 +383,22 @@ wss.on('connection', (ws) => {
           allowVoting: msg.config?.allowVoting !== false,
           difficulty: cleanId(msg.config?.difficulty, 'normal', 16),
           biomeId: cleanId(msg.config?.biomeId, 'random_portal', 24),
+          multiHabitats: msg.config?.multiHabitats !== false,
+          allowHybrids: msg.config?.allowHybrids !== false,
+          uniqueDinos: !!msg.config?.uniqueDinos,
+          allowControllers: msg.config?.allowControllers !== false,
+          allowMultiControllersPerPlayer: !!msg.config?.allowMultiControllersPerPlayer,
+          allowSpectators: msg.config?.allowSpectators !== false,
+          allowEvents: msg.config?.allowEvents !== false,
+          allowBosses: msg.config?.allowBosses !== false,
+          allowPowerups: msg.config?.allowPowerups !== false,
           allowRevive: msg.config?.allowRevive !== false,
-          allowPowerups: msg.config?.allowPowerups !== false
+          allowHandicap: !!msg.config?.allowHandicap,
+          pausePolicy: ['host_only', 'all_limited'].includes(msg.config?.pausePolicy) ? msg.config.pausePolicy : 'host_only'
         },
         votes: {},
+        bannedTokens: new Set(),
+        disconnectedSessions: new Map(),
         lastActivity: Date.now(),
         emptySince: null,
         peers: new Map()
@@ -347,12 +406,15 @@ wss.on('connection', (ws) => {
       room.peers.set(peerId, {
         peerId,
         ws,
-        name: cleanStr(msg.name, 'Host PC', 18),
+        sessionToken: cleanId(msg.sessionToken, crypto.randomBytes(8).toString('hex'), 48),
+        name: cleanStr(msg.name, 'Host PC', 18, true),
         dinoId: cleanId(msg.dinoId, 'trex', 28),
         color: cleanHexColor(msg.color, '#58d63a'),
+        customization: msg.customization && typeof msg.customization === 'object' ? msg.customization : null,
         ready: true,
         role: ['screen', 'controller', 'mobile_player', 'spectator'].includes(msg.role) ? msg.role : 'screen',
         controlMode: ['p1_remote', 'own_dino'].includes(msg.controlMode) ? msg.controlMode : 'p1_remote',
+        targetPlayerPeerId: null,
         slot: 0,
         pingMs: 0
       });
@@ -365,16 +427,51 @@ wss.on('connection', (ws) => {
 
     if (msg.type === 'join_room') {
       cleanupPeer(ws);
+      const nowTry = Date.now();
+      if (ws._joinBlockedUntil && nowTry < ws._joinBlockedUntil) {
+        send(ws, { type: 'error', message: 'Muitas tentativas seguidas. Aguarde 30 segundos.' });
+        return;
+      }
       const code = cleanRoomCode(msg.code);
       const room = code ? rooms.get(code) : null;
       if (!room) {
+        ws._joinFails = (ws._joinFails || 0) + 1;
+        if (ws._joinFails >= 6) {
+          ws._joinBlockedUntil = nowTry + 30000;
+          ws._joinFails = 0;
+        }
         send(ws, { type: 'error', message: `Sala "${cleanStr(msg.code, '????', 8)}" não encontrada ou expirada.` });
         return;
       }
+      if (room.passwordHash) {
+        const tryPass = cleanStr(msg.password, '', 12);
+        const tryHash = tryPass ? crypto.createHash('sha256').update(tryPass).digest('hex') : '';
+        if (tryHash !== room.passwordHash) {
+          ws._joinFails = (ws._joinFails || 0) + 1;
+          if (ws._joinFails >= 6) ws._joinBlockedUntil = nowTry + 30000;
+          send(ws, { type: 'error', message: '🔒 Senha da sala incorreta ou ausente.' });
+          return;
+        }
+      }
+      ws._joinFails = 0;
+
       const peerId = cleanId(msg.peerId, `p_${crypto.randomBytes(4).toString('hex')}`, 32);
+      const sessionToken = cleanId(msg.sessionToken, '', 48);
+      if (room.bannedTokens?.has(peerId) || (sessionToken && room.bannedTokens?.has(sessionToken))) {
+        send(ws, { type: 'error', message: '🚫 Você foi banido desta sala pelo Dono.' });
+        return;
+      }
+
       const existing = room.peers.get(peerId);
-      if (!existing && room.peers.size >= MAX_PLAYERS) {
-        send(ws, { type: 'error', message: 'Sala cheia (máximo 8 jogadores).' });
+      const maxCap = room.maxPlayers || MAX_PLAYERS;
+      if (!existing && room.peers.size >= maxCap) {
+        send(ws, { type: 'error', message: `Sala cheia (máximo ${maxCap} jogadores).` });
+        return;
+      }
+
+      const joinedRole = ['screen', 'controller', 'mobile_player', 'spectator'].includes(msg.role) ? msg.role : 'controller';
+      if (joinedRole === 'spectator' && room.config?.allowSpectators === false) {
+        send(ws, { type: 'error', message: 'Espectadores estão desativados nesta sala.' });
         return;
       }
 
@@ -383,21 +480,27 @@ wss.on('connection', (ws) => {
       const usedSlots = new Set(Array.from(room.peers.values()).map((p) => p.slot));
       let nextSlot = existing ? existing.slot : 0;
       if (!existing) {
-        while (usedSlots.has(nextSlot) && nextSlot < MAX_PLAYERS) nextSlot++;
+        while (usedSlots.has(nextSlot) && nextSlot < maxCap) nextSlot++;
       }
 
       const palette = ['#58d63a', '#38bdf8', '#ff9a24', '#f43f5e', '#a855f7', '#ffd447', '#14b8a6', '#ec4899'];
-      const joinedRole = ['screen', 'controller', 'mobile_player', 'spectator'].includes(msg.role) ? msg.role : 'controller';
+      const savedSess = sessionToken ? room.disconnectedSessions?.get(sessionToken) : null;
+      const validSaved = savedSess && savedSess.expiresAt > Date.now() ? savedSess : null;
+      if (validSaved) room.disconnectedSessions.delete(sessionToken);
+
       room.peers.set(peerId, {
         peerId,
         ws,
-        name: cleanStr(msg.name || existing?.name, `Dino ${nextSlot + 1}`, 18),
-        dinoId: cleanId(msg.dinoId || existing?.dinoId, 'raptor', 28),
-        color: cleanHexColor(msg.color || existing?.color, palette[nextSlot % palette.length]),
-        ready: existing?.ready ?? true,
+        sessionToken: sessionToken || crypto.randomBytes(8).toString('hex'),
+        name: cleanStr(msg.name || existing?.name || validSaved?.name, `Dino ${nextSlot + 1}`, 18, true),
+        dinoId: cleanId(msg.dinoId || existing?.dinoId || validSaved?.dinoId, 'raptor', 28),
+        color: cleanHexColor(msg.color || existing?.color || validSaved?.color, palette[nextSlot % palette.length]),
+        customization: msg.customization && typeof msg.customization === 'object' ? msg.customization : (existing?.customization || null),
+        ready: existing?.ready ?? (joinedRole === 'controller' ? true : false),
         role: joinedRole,
-        controlMode: ['p1_remote', 'own_dino'].includes(msg.controlMode) ? msg.controlMode : (existing?.controlMode || 'p1_remote'),
-        slot: nextSlot,
+        controlMode: ['p1_remote', 'own_dino'].includes(msg.controlMode) ? msg.controlMode : (existing?.controlMode || validSaved?.controlMode || 'p1_remote'),
+        targetPlayerPeerId: existing?.targetPlayerPeerId || (validSaved?.targetPlayerPeerId && room.peers.has(validSaved.targetPlayerPeerId) ? validSaved.targetPlayerPeerId : null),
+        slot: validSaved?.slot ?? nextSlot,
         pingMs: 0
       });
       // Se o host atual era apenas um controle de celular e este novo peer é Telão ('screen'/'mobile_player'), promove o Telão a Host
@@ -463,9 +566,20 @@ wss.on('connection', (ws) => {
         break;
       case 'player_meta':
         if (peer) {
-          if (msg.name) peer.name = cleanStr(msg.name, peer.name, 18);
-          if (msg.dinoId) peer.dinoId = cleanId(msg.dinoId, peer.dinoId, 28);
+          if (msg.name) peer.name = cleanStr(msg.name, peer.name, 18, true);
+          if (msg.dinoId) {
+            const nextDino = cleanId(msg.dinoId, peer.dinoId, 28);
+            const takenByOther = room.config?.uniqueDinos && Array.from(room.peers.values()).some(
+              (other) => other.peerId !== peer.peerId && other.role !== 'controller' && other.dinoId === nextDino
+            );
+            if (takenByOther) {
+              send(ws, { type: 'error', message: 'Este dinossauro já foi escolhido por outro jogador nesta sala!' });
+              break;
+            }
+            peer.dinoId = nextDino;
+          }
           if (msg.color) peer.color = cleanHexColor(msg.color, peer.color);
+          if (msg.customization && typeof msg.customization === 'object') peer.customization = msg.customization;
           if (['screen', 'controller', 'mobile_player', 'spectator'].includes(msg.role)) peer.role = msg.role;
           if (['p1_remote', 'own_dino'].includes(msg.controlMode)) peer.controlMode = msg.controlMode;
           if (msg.ready !== undefined) peer.ready = !!msg.ready;
@@ -478,6 +592,49 @@ wss.on('connection', (ws) => {
           broadcast(room, { type: 'room_state', room: serializeRoom(room) });
         }
         break;
+      case 'kick_peer': {
+        if (ws._peerId !== room.hostPeerId) break;
+        const targetId = cleanId(msg.targetPeerId, '', 32);
+        const target = targetId && targetId !== ws._peerId ? room.peers.get(targetId) : null;
+        if (!target) break;
+        if (msg.ban) {
+          room.bannedTokens = room.bannedTokens || new Set();
+          room.bannedTokens.add(target.peerId);
+          if (target.sessionToken) room.bannedTokens.add(target.sessionToken);
+        }
+        room.peers.delete(targetId);
+        send(target.ws, {
+          type: 'kicked',
+          banned: !!msg.ban,
+          reason: msg.ban ? '🚫 Você foi banido desta sala pelo Dono.' : '👢 Você foi removido da sala pelo Dono.'
+        });
+        broadcast(room, { type: 'room_state', room: serializeRoom(room) });
+        break;
+      }
+      case 'transfer_host': {
+        if (ws._peerId !== room.hostPeerId) break;
+        const targetId = cleanId(msg.targetPeerId, '', 32);
+        const target = targetId ? room.peers.get(targetId) : null;
+        if (!target || target.role === 'controller') break;
+        room.hostPeerId = target.peerId;
+        broadcast(room, { type: 'host_migrated', hostPeerId: target.peerId, hostName: target.name });
+        broadcast(room, { type: 'room_state', room: serializeRoom(room) });
+        break;
+      }
+      case 'report_player': {
+        const hostPeer = room.peers.get(room.hostPeerId);
+        const target = room.peers.get(cleanId(msg.targetPeerId, '', 32));
+        if (hostPeer && target) {
+          send(hostPeer.ws, {
+            type: 'player_reported',
+            reporterName: peer?.name || 'Jogador',
+            targetPeerId: target.peerId,
+            targetName: target.name,
+            reason: cleanStr(msg.reason, 'Comportamento inadequado', 60)
+          });
+        }
+        break;
+      }
       case 'request_room_sync':
         send(ws, { type: 'room_state', room: serializeRoom(room) });
         if (room.status === 'playing' && room.activeMatch) {
@@ -500,6 +657,75 @@ wss.on('connection', (ws) => {
         }, ws._peerId);
         break;
       case 'input':
+        if (peer?.role === 'controller' && !peer.targetPlayerPeerId) {
+          break; // Controle não confirmado não envia comandos
+        }
+        broadcast(room, { ...msg, peerId: ws._peerId, targetPlayerPeerId: peer?.targetPlayerPeerId || null }, ws._peerId);
+        break;
+      case 'control_request': {
+        if (!peer) break;
+        if (room.config?.allowControllers === false) {
+          send(ws, { type: 'control_rejected', targetPlayerPeerId: msg.targetPlayerPeerId, reason: 'Controles de celular estão desativados nesta sala.' });
+          break;
+        }
+        const target = room.peers.get(cleanId(msg.targetPlayerPeerId, '', 32));
+        if (!target || target.role === 'controller' || target.role === 'spectator') {
+          send(ws, { type: 'control_rejected', targetPlayerPeerId: msg.targetPlayerPeerId, reason: 'Jogador não encontrado na sala.' });
+          break;
+        }
+        const alreadyBound = Array.from(room.peers.values()).filter(
+          (p) => p.role === 'controller' && p.targetPlayerPeerId === target.peerId && p.peerId !== peer.peerId
+        );
+        if (alreadyBound.length >= 1 && !room.config?.allowMultiControllersPerPlayer) {
+          send(ws, { type: 'control_rejected', targetPlayerPeerId: target.peerId, reason: `${target.name} já possui um controle vinculado.` });
+          break;
+        }
+        send(target.ws, {
+          type: 'control_request',
+          requesterPeerId: peer.peerId,
+          requesterName: peer.name,
+          targetPlayerPeerId: target.peerId
+        });
+        break;
+      }
+      case 'control_response': {
+        const reqPeer = room.peers.get(cleanId(msg.requesterPeerId, '', 32));
+        if (!reqPeer) break;
+        if (msg.accepted) {
+          reqPeer.role = 'controller';
+          reqPeer.targetPlayerPeerId = ws._peerId;
+          reqPeer.ready = true;
+          send(reqPeer.ws, {
+            type: 'control_granted',
+            targetPlayerPeerId: ws._peerId,
+            targetPlayerName: peer?.name || 'Jogador',
+            room: serializeRoom(room)
+          });
+          broadcast(room, { type: 'room_state', room: serializeRoom(room) });
+        } else {
+          reqPeer.targetPlayerPeerId = null;
+          send(reqPeer.ws, {
+            type: 'control_rejected',
+            targetPlayerPeerId: ws._peerId,
+            reason: cleanStr(msg.reason, `${peer?.name || 'O jogador'} recusou o pedido de controle.`, 80)
+          });
+        }
+        break;
+      }
+      case 'control_revoke': {
+        const ctrlId = cleanId(msg.controllerPeerId, '', 32);
+        const ctrlPeer = room.peers.get(ctrlId);
+        if (!ctrlPeer) break;
+        if (ctrlPeer.targetPlayerPeerId === ws._peerId || ws._peerId === room.hostPeerId) {
+          ctrlPeer.targetPlayerPeerId = null;
+          send(ctrlPeer.ws, {
+            type: 'control_revoked',
+            reason: `${peer?.name || 'O jogador'} removeu o vínculo do controle.`
+          });
+          broadcast(room, { type: 'room_state', room: serializeRoom(room) });
+        }
+        break;
+      }
       case 'card_pick':
       case 'spectator_action':
       case 'trivia_answer':
@@ -507,6 +733,8 @@ wss.on('connection', (ws) => {
       case 'mp_revive':
       case 'round_vote':
       case 'request_start_match':
+      case 'pause_request':
+      case 'radial_action':
         broadcast(room, { ...msg, peerId: ws._peerId }, ws._peerId);
         break;
       case 'start_match':

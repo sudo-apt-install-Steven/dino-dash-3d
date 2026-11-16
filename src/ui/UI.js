@@ -17,6 +17,7 @@ import { LegalModal } from './LegalModal.js';
 import { GachaSystem } from '../systems/GachaSystem.js';
 import { PerfMonitor } from '../systems/PerfMonitor.js';
 import { OrientationManager } from '../systems/OrientationManager.js';
+import { isMobileDevice } from '../systems/DeviceDetector.js';
 import { getModeDef } from '../game/Modes.js';
 import { getDinoSpec, getEffectiveDinoHabitat } from '../dinos/DinoCatalog.js';
 import { getBiomeById, isAquaticBiome } from '../world/Biomes.js';
@@ -185,6 +186,10 @@ export class UIManager {
   }
 
   openController(opts = {}) {
+    if (!isMobileDevice() && !opts.forceMobile) {
+      this.openSection('multiplayer', opts);
+      return;
+    }
     this._clearModal();
     this.hud.setPlayingUI(false);
     this.hud.hideGameOver();
@@ -226,7 +231,61 @@ export class UIManager {
     PartyModals.renderPodiumModal(this.hud.modalLayer, summary, callbacks);
   }
 
-  openSection(section) {
+  showControlConfirmationPopup({ requesterPeerId, requesterName = 'Celular', onAccept, onReject }) {
+    document.getElementById('ctrl-confirm-popup')?.remove();
+    const wrap = document.createElement('div');
+    wrap.id = 'ctrl-confirm-popup';
+    wrap.className = 'overlay-center';
+    wrap.style.zIndex = '120';
+
+    let secondsLeft = 15;
+    let settled = false;
+    wrap.innerHTML = `
+      <div class="chunky-panel gameover-card" style="max-width:420px; border-color:#38bdf8;">
+        <div style="font-size:2rem;">🎮📱</div>
+        <h3 style="margin:0; color:#ffd447; font-size:1.15rem;">Pedido de Controle no Celular</h3>
+        <p style="margin:4px 0; font-size:0.9rem; color:#fef3c7;">
+          <strong>${String(requesterName).replace(/[<>&"']/g, '')}</strong> quer controlar o seu dinossauro pelo celular.
+        </p>
+        <div id="ctrl-confirm-timer" class="hud-pill" style="margin:0 auto; color:#7dd3fc;">⏳ Expira em ${secondsLeft}s</div>
+        <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:6px;">
+          <button class="chunky-btn" id="ctrl-confirm-accept" style="flex:1;">✅ Aceitar</button>
+          <button class="chunky-btn orange" id="ctrl-confirm-reject" style="flex:1;">❌ Recusar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+
+    const cleanup = () => {
+      clearInterval(tid);
+      wrap.remove();
+    };
+    const tid = setInterval(() => {
+      secondsLeft--;
+      const tEl = wrap.querySelector('#ctrl-confirm-timer');
+      if (tEl) tEl.textContent = `⏳ Expira em ${Math.max(0, secondsLeft)}s`;
+      if (secondsLeft <= 0 && !settled) {
+        settled = true;
+        cleanup();
+        onReject?.('Tempo esgotado (15s sem resposta).');
+      }
+    }, 1000);
+
+    wrap.querySelector('#ctrl-confirm-accept')?.addEventListener('click', () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      onAccept?.();
+    });
+    wrap.querySelector('#ctrl-confirm-reject')?.addEventListener('click', () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      onReject?.('Pedido recusado pelo jogador.');
+    });
+  }
+
+  openSection(section, sectionOpts = {}) {
     this._clearModal();
     const back = () => this.showMainMenu();
 
@@ -298,15 +357,23 @@ export class UIManager {
         break;
       case 'multiplayer':
         this.activeCleanup = MultiplayerLobby.renderInto(this.hud.modalLayer, this.game.net, {
+          initialRoom: sectionOpts.initialRoom || '',
+          initialTransport: sectionOpts.initialTransport || '',
           onClose: back,
           onOpenController: (initialRoom, initialTransport) => {
-            if (this.game.net.isConnected) {
-              this.game.net.sendPlayerMeta({ role: 'controller' });
-            }
+            if (!isMobileDevice()) return;
             this.openController({
               initialRoom,
               initialTransport,
+              showEntryChoice: true,
               deferredInstall: window.__DINO_DEFERRED_INSTALL__
+            });
+          },
+          onOpenCustom: () => {
+            this.activeCleanup = CustomizationScreen.renderInto(this.hud.modalLayer, {
+              onClose: () => this.openSection('multiplayer'),
+              onApplyCustom: () => this.game.rebuildPlayers(),
+              onOpenGacha: () => this.openSection('multiplayer')
             });
           },
           onStartMatch: ({ room, botCount }) => {

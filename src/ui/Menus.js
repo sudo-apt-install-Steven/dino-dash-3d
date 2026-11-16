@@ -9,6 +9,7 @@ import { BOSS_DEFS } from '../events/BossManager.js';
 import { PREDATOR_CATALOG } from '../events/PredatorModels.js';
 import { ACHIEVEMENTS_CATALOG, ProgressionManager } from '../systems/Progression.js';
 import { Save } from '../systems/Save.js';
+import { isMobileDevice } from '../systems/DeviceDetector.js';
 import { escapeHtml } from '../security/Sanitize.js';
 
 export function attachModalHelp(container, helpText) {
@@ -52,7 +53,7 @@ export class Menus {
               <div class="dino-logo" id="main-dino-logo" style="font-size:2.15rem; cursor:pointer; user-select:none;" title="Dino Dash 3D">DINO <span class="dash-accent">DASH 3D</span></div>
               <div class="mob-only" style="display:flex; gap:5px; align-items:center;">
                 <button type="button" class="inline-change-btn" id="menu-rotate-btn" style="padding:4px 8px; border-color:#38bdf8; color:#7dd3fc;">🔄 ${state.isLandscape ? 'Paisagem' : 'Deitar'}</button>
-                <button type="button" class="inline-change-btn" id="menu-ctrl-btn" style="padding:4px 8px; border-color:#58d63a; color:#86efac;">🎮 Controle</button>
+                ${isMobileDevice() ? `<button type="button" class="inline-change-btn" id="menu-ctrl-btn" style="padding:4px 8px; border-color:#58d63a; color:#86efac;">🎮 Controle</button>` : ''}
               </div>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
@@ -197,10 +198,12 @@ export class Menus {
               <small style="color:#d8c2a6;">Ritmo Jurássico, Pesca no Rio e Chocadeira de Filhotes.</small>
             </button>
 
+            ${isMobileDevice() ? `
             <button class="item-card" data-ex-nav="controller" style="text-align:left; cursor:pointer;">
               <strong>📱 Controle no Celular</strong>
               <small style="color:#d8c2a6;">Transforme o celular em controle de corrida sem fio.</small>
             </button>
+            ` : ''}
 
             <button class="item-card" data-ex-nav="settings" style="text-align:left; cursor:pointer;">
               <strong>⚙️ Configurações</strong>
