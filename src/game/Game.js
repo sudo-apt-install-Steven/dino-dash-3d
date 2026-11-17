@@ -411,7 +411,7 @@ export class Game {
       let target = this.players.find(
         (p) => (boundTargetId && p.peerId === boundTargetId) ||
           (Array.isArray(p.controllerPeerIds) && p.controllerPeerIds.includes(msg.peerId)) ||
-          (!peer?.role && p.peerId === msg.peerId)
+          (peer?.role !== 'controller' && p.peerId === msg.peerId)
       );
       if (!target && !this.multiplayerSession?.active && boundTargetId === this.net.peerId) {
         target = this.players[0];
@@ -1032,6 +1032,10 @@ export class Game {
   startMultiplayerMatch(room, botCount = 0) {
     const peers = Array.isArray(room?.peers) ? room.peers : [];
     const screenPeers = peers.filter((pr) => pr.role !== 'controller' && pr.role !== 'spectator');
+    if (this.net.isHost) {
+      // o dino do host (teclado local) sempre é p1
+      screenPeers.sort((a, b) => (b.peerId === this.net.peerId) - (a.peerId === this.net.peerId));
+    }
     const confirmedControllers = peers.filter((pr) => pr.role === 'controller' && !!pr.targetPlayerPeerId);
 
     const roster = [];

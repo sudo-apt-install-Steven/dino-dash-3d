@@ -58,6 +58,9 @@ export class TransportSupabase {
     this.room = {
       code,
       hostPeerId: opts.isCreate ? peerId : null,
+      roomName: String(opts.roomName || `Sala ${code}`).slice(0, 28),
+      maxPlayers: Math.max(2, Math.min(8, Number(opts.maxPlayers) || 8)),
+      hasPassword: !!opts.password,
       isPublic: opts.isPublic !== false,
       mode: opts.mode || 'lan_party',
       mpMode: opts.mpMode || (opts.elimination ? 'elimination' : 'race'),
@@ -72,7 +75,17 @@ export class TransportSupabase {
         difficulty: opts.config?.difficulty || 'normal',
         biomeId: opts.config?.biomeId || 'random_portal',
         allowRevive: opts.config?.allowRevive !== false,
-        allowPowerups: opts.config?.allowPowerups !== false
+        allowPowerups: opts.config?.allowPowerups !== false,
+        multiHabitats: opts.config?.multiHabitats !== false,
+        allowHybrids: opts.config?.allowHybrids !== false,
+        uniqueDinos: !!opts.config?.uniqueDinos,
+        allowControllers: opts.config?.allowControllers !== false,
+        allowMultiControllersPerPlayer: !!opts.config?.allowMultiControllersPerPlayer,
+        allowSpectators: opts.config?.allowSpectators !== false,
+        allowEvents: opts.config?.allowEvents !== false,
+        allowBosses: opts.config?.allowBosses !== false,
+        allowHandicap: !!opts.config?.allowHandicap,
+        pausePolicy: opts.config?.pausePolicy || 'host_only'
       },
       votes: {},
       activeMatch: null,
@@ -294,6 +307,46 @@ export class TransportSupabase {
         this._emit('message', {
           type: 'control_revoked',
           reason: 'O jogador removeu o vínculo do controle.'
+        });
+        return;
+      }
+      if (payload.type === 'kick_peer') {
+        const senderIsHost = payload.peerId === this.room.hostPeerId;
+        if (!senderIsHost) return;
+        if (payload.targetPeerId === this.selfPeerId) {
+          this.disconnect();
+          this._emit('message', {
+            type: 'kicked',
+            banned: !!payload.ban,
+            reason: payload.ban ? '🚫 Você foi banido desta sala pelo Dono.' : '👢 Você foi removido da sala pelo Dono.'
+          });
+        } else if (payload.ban) {
+          this.room.bannedIds = this.room.bannedIds || new Set();
+          this.room.bannedIds.add(payload.targetPeerId);
+        }
+        return;
+      }
+      if (payload.type === 'transfer_host') {
+        if (payload.peerId !== this.room.hostPeerId) return;
+        this.room.hostPeerId = payload.targetPeerId;
+        if (this.myMeta) {
+          this.myMeta.isHost = payload.targetPeerId === this.selfPeerId;
+          this.channel?.track(this.myMeta).catch(() => {});
+        }
+        this._emit('message', { type: 'host_migrated', hostPeerId: payload.targetPeerId, hostName: this.room.peers.find((p) => p.peerId === payload.targetPeerId)?.name || 'Jogador' });
+        this._emit('message', { type: 'room_state', room: this.room });
+        return;
+      }
+      if (payload.type === 'report_player') {
+        if (this.room.hostPeerId !== this.selfPeerId) return;
+        const reporter = this.room.peers.find((p) => p.peerId === payload.peerId);
+        const target = this.room.peers.find((p) => p.peerId === payload.targetPeerId);
+        this._emit('message', {
+          type: 'player_reported',
+          reporterName: reporter?.name || 'Jogador',
+          targetPeerId: payload.targetPeerId,
+          targetName: target?.name || 'Jogador',
+          reason: String(payload.reason || '').slice(0, 60)
         });
         return;
       }

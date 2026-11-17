@@ -1,4 +1,4 @@
-// Lobby Multiplayer Completo (LAN WebSocket + Supabase Realtime):
+﻿// Lobby Multiplayer Completo (LAN WebSocket + Supabase Realtime):
 // - Criar sala com Nome, Pública/Privada + Senha opcional, Máx 2–8, Modo TV, Votação, Dificuldade,
 //   Habitat único/múltiplo, Modo de jogo, Híbridos, Dinos únicos, Controles, Espectadores, Eventos/Bosses/Power-ups, Pausa e Handicap
 // - Atalho "🤝 Sala de Amigos" (1 toque) + Botão Engrenagem (⚙️ Config da Sala) para o Dono
@@ -120,9 +120,50 @@ export class MultiplayerLobby {
     net.on('player_reported', onReported);
     net.on('start_countdown', onCountdown);
 
+    const renderPublicRoomsHtml = () => (publicRooms.length === 0
+      ? `<span style="font-size:0.8rem; color:#d8c2a6;">Nenhuma sala pública listada ainda.</span>`
+      : publicRooms.map((r) => {
+        const codeSafe = escapeHtml(sanitizeRoomCode(r.code));
+        return `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; background:rgba(0,0,0,0.34); padding:7px 9px; border-radius:10px; border:1px solid rgba(255,212,71,0.2);">
+          <div style="font-size:0.78rem;">
+            <div><strong>${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.roomName || codeSafe)}</strong> <span style="color:#ffd447;">[${codeSafe}]</span></div>
+            <div style="font-size:0.7rem; color:#d8c2a6;">${escapeHtml(r.hostName)} • ${escapeHtml(r.mode || 'race')} • ${Number(r.playerCount) || 1}/${Number(r.maxPlayers) || 8} • ${r.status === 'playing' ? '🔥 Em jogo' : '🟢 Aberta'}</div>
+          </div>
+          <button class="chunky-btn secondary" data-join-code="${codeSafe}" style="padding:5px 10px; font-size:0.76rem;">Conectar</button>
+        </div>`;
+      }).join(''));
+
+    const bindPublicRoomButtons = (root) => {
+      root.querySelectorAll('[data-join-code]').forEach((b) => {
+        b.onclick = async () => {
+          const c = b.getAttribute('data-join-code');
+          joinPassword = sanitizeRoomPassword(container.querySelector('#mp-join-pass')?.value || '');
+          nickname = sanitizeNickname(container.querySelector('#mp-join-nick')?.value || nickname, 'Dino', 18);
+          try { Save.data.network.nickname = nickname; Save.save(); } catch {}
+          statusMsg = '⏳ Conectando à sala...';
+          render();
+          const res = await net.joinRoom(c, {
+            transport,
+            password: joinPassword,
+            name: nickname,
+            dinoId: Save.data.selectedDino || 'trex',
+            customization: getLocalCustomization(),
+            role: onMobile ? 'mobile_player' : 'screen'
+          });
+          if (!res.ok) statusMsg = `⚠️ ${res.message}`;
+          else if (statusMsg.startsWith('⏳') && net.isConnected) statusMsg = '';
+          render();
+        };
+      });
+    };
     const refreshRooms = async () => {
       publicRooms = await net.listRooms(transport);
-      if (!net.isConnected) render();
+      if (net.isConnected) return;
+      const listEl = container.querySelector('#mp-public-rooms-list');
+      if (!listEl) return; // nunca re-renderiza a tela inteira (preserva campos de texto)
+      listEl.innerHTML = renderPublicRoomsHtml();
+      bindPublicRoomButtons(listEl);
     };
 
     autoRefreshTid = setInterval(() => {
@@ -350,21 +391,7 @@ export class MultiplayerLobby {
                     <strong style="font-size:0.84rem;">🌍 Salas Públicas Abertas (auto-atualiza):</strong>
                     <button class="chunky-btn secondary" id="mp-refresh" style="padding:4px 10px; font-size:0.74rem;">🔄 Atualizar</button>
                   </div>
-                  <div style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto;">
-                    ${publicRooms.length === 0 ? `<span style="font-size:0.8rem; color:#d8c2a6;">Nenhuma sala pública listada ainda.</span>` :
-                      publicRooms.map((r) => {
-                        const codeSafe = escapeHtml(sanitizeRoomCode(r.code));
-                        return `
-                        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; background:rgba(0,0,0,0.34); padding:7px 9px; border-radius:10px; border:1px solid rgba(255,212,71,0.2);">
-                          <div style="font-size:0.78rem;">
-                            <div><strong>${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.roomName || codeSafe)}</strong> <span style="color:#ffd447;">[${codeSafe}]</span></div>
-                            <div style="font-size:0.7rem; color:#d8c2a6;">${escapeHtml(r.hostName)} • ${escapeHtml(r.mode || 'race')} • ${Number(r.playerCount) || 1}/${Number(r.maxPlayers) || 8} • ${r.status === 'playing' ? '🔥 Em jogo' : '🟢 Aberta'}</div>
-                          </div>
-                          <button class="chunky-btn secondary" data-join-code="${codeSafe}" style="padding:5px 10px; font-size:0.76rem;">Conectar</button>
-                        </div>
-                      `;
-                      }).join('')}
-                  </div>
+                  <div id="mp-public-rooms-list" style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto;">${renderPublicRoomsHtml()}</div>
                 </div>
               </div>
             ` : `
@@ -651,27 +678,19 @@ export class MultiplayerLobby {
           else if (statusMsg.startsWith('⏳') && net.isConnected) statusMsg = '';
           render();
         };
-        container.querySelectorAll('[data-join-code]').forEach((b) => {
-          b.onclick = async () => {
-            const c = b.getAttribute('data-join-code');
-            joinPassword = sanitizeRoomPassword(container.querySelector('#mp-join-pass')?.value || '');
-            nickname = sanitizeNickname(container.querySelector('#mp-join-nick')?.value || nickname, 'Dino', 18);
-            try { Save.data.network.nickname = nickname; Save.save(); } catch {}
-            statusMsg = '⏳ Conectando à sala...';
-            render();
-            const res = await net.joinRoom(c, {
-              transport,
-              password: joinPassword,
-              name: nickname,
-              dinoId: Save.data.selectedDino || 'trex',
-              customization: getLocalCustomization(),
-              role: onMobile ? 'mobile_player' : 'screen'
-            });
-            if (!res.ok) statusMsg = `⚠️ ${res.message}`;
-            else if (statusMsg.startsWith('⏳') && net.isConnected) statusMsg = '';
-            render();
-          };
-        });
+        bindPublicRoomButtons(container);
+        const syncNick = (e) => {
+          nickname = String(e.target.value || '').slice(0, 18);
+          const other = e.target.id === 'mp-nick' ? '#mp-join-nick' : '#mp-nick';
+          const o = container.querySelector(other); if (o && o.value !== e.target.value) o.value = e.target.value;
+          try { const clean = sanitizeNickname(nickname, '', 18); if (clean) { Save.data.network.nickname = clean; Save.save(); } } catch {}
+        };
+        container.querySelector('#mp-nick')?.addEventListener('input', syncNick);
+        container.querySelector('#mp-join-nick')?.addEventListener('input', syncNick);
+        container.querySelector('#mp-room-name')?.addEventListener('input', (e) => { roomName = e.target.value; });
+        container.querySelector('#mp-room-pass')?.addEventListener('input', (e) => { roomPassword = e.target.value; });
+        container.querySelector('#mp-code')?.addEventListener('input', (e) => { joinCode = sanitizeRoomCode(e.target.value); });
+        container.querySelector('#mp-join-pass')?.addEventListener('input', (e) => { joinPassword = e.target.value; });
       } else {
         const qrCanvas = container.querySelector('#mp-qr-canvas');
         if (qrCanvas) renderQrToCanvas(qrCanvas, shareUrl, 156);

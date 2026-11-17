@@ -167,7 +167,8 @@ export class RoomClient {
     if (msg.type === 'input' && msg.peerId) {
       const seq = Number(msg.seq || 0);
       const prevSeq = this._lastRemoteSeq.get(msg.peerId) || 0;
-      if (seq > 0 && seq < prevSeq) return; // ignora pacotes fora de ordem / replay
+      // ignora pacotes levemente fora de ordem; se o seq caiu muito, o peer reiniciou (reload) -> aceita
+      if (seq > 0 && seq < prevSeq && prevSeq - seq < 50) return;
       if (seq > 0) this._lastRemoteSeq.set(msg.peerId, seq);
     }
     if (msg.type === 'chat' || msg.type === 'emote') {
