@@ -41,6 +41,168 @@ export function attachModalHelp(container, helpText) {
   });
 }
 
+export function renderHelpBadge(tipText) {
+  if (!tipText) return '';
+  const safe = escapeHtml(tipText);
+  return `<button type="button" class="opt-help-btn" data-opt-tip="${safe}" aria-label="Explicação da opção" title="${safe}">?</button>`;
+}
+
+export function renderGameSwitch(id, label, checked, tip = '', extraAttrs = '') {
+  return `
+    <div class="field-row game-field-row" ${tip ? `data-opt-tip-host="${escapeHtml(tip)}"` : ''}>
+      <span class="game-field-label">${label} ${renderHelpBadge(tip)}</span>
+      <label class="game-switch" for="${id}">
+        <input type="checkbox" class="game-switch-input" id="${id}" ${checked ? 'checked' : ''} ${extraAttrs} />
+        <span class="game-switch-track" aria-hidden="true"><span class="game-switch-thumb"></span></span>
+      </label>
+    </div>
+  `;
+}
+
+export function renderGameStepper(id, options, selectedValue, { disabled = false, tip = '' } = {}) {
+  const optsHtml = options.map((opt) => {
+    const val = String(opt.value);
+    const sel = String(selectedValue) === val ? 'selected' : '';
+    return `<option value="${escapeHtml(val)}" ${sel}>${escapeHtml(opt.label)}</option>`;
+  }).join('');
+  const current = options.find((o) => String(o.value) === String(selectedValue)) || options[0] || { label: '—' };
+  return `
+    <div class="game-stepper ${disabled ? 'is-disabled' : ''}" data-stepper-for="${id}" ${tip ? `data-opt-tip-host="${escapeHtml(tip)}"` : ''}>
+      <button type="button" class="game-stepper-btn" data-step="-1" aria-label="Anterior" ${disabled ? 'disabled' : ''}>◀</button>
+      <span class="game-stepper-val" data-stepper-label>${escapeHtml(current.label)}</span>
+      <button type="button" class="game-stepper-btn" data-step="1" aria-label="Próximo" ${disabled ? 'disabled' : ''}>▶</button>
+      <select class="game-stepper-native" id="${id}" ${disabled ? 'disabled' : ''}>${optsHtml}</select>
+    </div>
+  `;
+}
+
+function playUiClickSound() {
+  try { window.__DINO_DASH_GAME__?.sfx?.click?.(); } catch {}
+}
+
+export function enhanceGameControls(container, { onEscape = null } = {}) {
+  if (!container) return;
+
+  // Tooltip flutuante unificado para hover, toque longo (mobile) e botão '?'
+  let tipEl = container.querySelector('#game-opt-tooltip');
+  if (!tipEl) {
+    tipEl = document.createElement('div');
+    tipEl.id = 'game-opt-tooltip';
+    tipEl.className = 'game-opt-tooltip hidden';
+    container.appendChild(tipEl);
+  }
+
+  let hideTid = null;
+  const showTip = (anchorEl, text) => {
+    if (!text || !anchorEl) return;
+    clearTimeout(hideTid);
+    tipEl.textContent = text;
+    tipEl.classList.remove('hidden');
+    const r = anchorEl.getBoundingClientRect();
+    const maxLeft = Math.max(12, window.innerWidth - 290);
+    const left = Math.max(12, Math.min(maxLeft, r.left));
+    const top = r.top > 110 ? Math.max(10, r.top - 56) : Math.min(window.innerHeight - 72, r.bottom + 8);
+    tipEl.style.left = `${left}px`;
+    tipEl.style.top = `${top}px`;
+  };
+  const hideTip = () => {
+    clearTimeout(hideTid);
+    tipEl.classList.add('hidden');
+  };
+
+  container.querySelectorAll('[data-opt-tip]').forEach((btn) => {
+    const tip = btn.getAttribute('data-opt-tip');
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      playUiClickSound();
+      if (!tipEl.classList.contains('hidden') && tipEl.textContent === tip) {
+        hideTip();
+      } else {
+        showTip(btn, tip);
+        hideTid = setTimeout(hideTip, 3800);
+      }
+    });
+  });
+
+  container.querySelectorAll('[data-opt-tip-host]').forEach((host) => {
+    const tip = host.getAttribute('data-opt-tip-host');
+    let longPressTid = null;
+    host.addEventListener('pointerenter', (e) => {
+      if (e.pointerType === 'mouse') showTip(host, tip);
+    });
+    host.addEventListener('pointerleave', () => hideTip());
+    host.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      clearTimeout(longPressTid);
+      longPressTid = setTimeout(() => {
+        showTip(host, tip);
+        hideTid = setTimeout(hideTip, 3400);
+      }, 450);
+    });
+    const cancelLp = () => clearTimeout(longPressTid);
+    host.addEventListener('pointerup', cancelLp);
+    host.addEventListener('pointercancel', cancelLp);
+    host.addEventListener('pointermove', cancelLp);
+  });
+
+  // Wire game-stepper ◀ ▶ controls to underlying <select>
+  container.querySelectorAll('.game-stepper').forEach((stepper) => {
+    const sel = stepper.querySelector('.game-stepper-native');
+    const lbl = stepper.querySelector('[data-stepper-label]');
+    if (!sel || !lbl) return;
+    const syncLabel = () => {
+      const opt = sel.options[sel.selectedIndex];
+      lbl.textContent = opt ? opt.textContent : '—';
+    };
+    syncLabel();
+    sel.addEventListener('change', syncLabel);
+    stepper.querySelectorAll('[data-step]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (sel.disabled || sel.options.length === 0) return;
+        const delta = Number(btn.getAttribute('data-step') || 1);
+        const len = sel.options.length;
+        sel.selectedIndex = (sel.selectedIndex + delta + len) % len;
+        syncLabel();
+        playUiClickSound();
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    });
+  });
+
+  // Sons táteis nos switches
+  container.querySelectorAll('.game-switch-input').forEach((cb) => {
+    cb.addEventListener('change', () => playUiClickSound());
+  });
+
+  // Navegação por teclado (setas cima/baixo entre controles focáveis + Esc)
+  const panel = container.querySelector('.main-menu-panel, .modal-card');
+  if (panel && !panel.dataset.kbNavWired) {
+    panel.dataset.kbNavWired = '1';
+    panel.addEventListener('keydown', (e) => {
+      const tag = document.activeElement?.tagName;
+      if (e.key === 'Escape' && onEscape) {
+        e.preventDefault();
+        onEscape();
+        return;
+      }
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      if (tag === 'SELECT' || tag === 'TEXTAREA') return;
+      const focusables = Array.from(
+        panel.querySelectorAll('button:not(:disabled), input:not(:disabled):not(.hidden), select:not(:disabled), [tabindex="0"]')
+      ).filter((el) => el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const idx = focusables.indexOf(document.activeElement);
+      const nextIdx = e.key === 'ArrowDown'
+        ? (idx + 1) % focusables.length
+        : (idx - 1 + focusables.length) % focusables.length;
+      e.preventDefault();
+      focusables[nextIdx]?.focus();
+    });
+  }
+}
+
 export class Menus {
   static renderMainMenu(container, state, actions) {
     const title = Save.data.activeTitle || 'Iniciante';
@@ -109,6 +271,12 @@ export class Menus {
             </button>
           </div>
 
+          <div class="menu-account-row" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;">
+            <button class="chunky-btn secondary menu-mini-btn" data-nav="profile" style="padding:8px 6px; font-size:0.78rem;" title="Perfil do Jogador, Dino 3D e Estatísticas">👤 Perfil</button>
+            <button class="chunky-btn secondary menu-mini-btn" data-nav="achievements" style="padding:8px 6px; font-size:0.78rem;" title="Galeria de Conquistas e Troféus">🏆 Conquistas</button>
+            <button class="chunky-btn secondary menu-mini-btn" data-nav="save_data" style="padding:8px 6px; font-size:0.78rem;" title="Exportar, Importar e Backup do Save">💾 Save</button>
+          </div>
+
           <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; font-size:0.74rem; color:#d6d3d1;">
             <button type="button" class="inline-change-btn" data-nav="custom" title="Desbloqueie e equipe cápsulas de DNA em Personalização">🧬 Mutações DNA</button>
             <button type="button" class="inline-change-btn" data-nav="gacha" title="Desbloqueie Variantes Mecânicas, Shiny e Secretas">🤖 Mecânico &amp; Shiny</button>
@@ -148,6 +316,7 @@ export class Menus {
     container.querySelectorAll('[data-nav]').forEach((btn) => {
       btn.addEventListener('click', () => actions.onNavigate(btn.getAttribute('data-nav')));
     });
+    enhanceGameControls(container);
   }
 
   static renderExtrasModal(container, state, actions) {
