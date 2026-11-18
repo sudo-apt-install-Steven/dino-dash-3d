@@ -714,14 +714,14 @@
   display: none;
 }
 
-/* Botões virtuais Touch para celular (Swipe padrão: apenas ações ⚔️/⚡ na direita) */
+/* Botões virtuais Touch para celular (Esquerda: mov/abaixar/roda/item | Direita: pular/hab/atq/fúria/troca) */
 .touch-controls {
   position: fixed;
-  inset: auto 0 12px 0;
+  inset: auto 0 calc(env(safe-area-inset-bottom, 0px) + 10px) 0;
   display: none;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: flex-end;
-  padding: 0 12px;
+  padding: 0 calc(env(safe-area-inset-right, 0px) + 12px) 0 calc(env(safe-area-inset-left, 0px) + 12px);
   pointer-events: none;
   z-index: 24;
 }
@@ -744,6 +744,8 @@
 
 .touch-cluster {
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 8px;
 }
 
@@ -1019,23 +1021,24 @@
     z-index: 15;
   }
 
-  /* HUD Inferior compacta no canto esquerdo (deixa o centro, o dino e o bloco de toque direito 100% livres) */
+  /* HUD Inferior centralizada (deixa o dino e os blocos de toque esquerda/direita livres) */
   .hud-bottom-bar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-    left: calc(env(safe-area-inset-left, 0px) + 8px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
+    left: 50%;
     right: auto;
-    width: auto;
-    max-width: calc(100vw - 180px);
+    transform: translateX(-50%);
+    width: min(360px, calc(100vw - 24px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
+    max-width: calc(100vw - 24px);
     padding: 0;
     gap: 4px;
-    align-items: flex-start;
+    align-items: center;
   }
   .hud-meters {
     width: 100%;
     max-width: 100%;
     gap: 4px;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
   }
   .hud-group-title {
     display: none;
@@ -1095,48 +1098,55 @@
     display: none;
   }
 
-  /* Quando o jogador ativa Setas Direcionais nas Configurações, eleva HUD à esquerda acima de ◀▶ */
+  /* Quando o jogador ativa Setas Direcionais nas Configurações, eleva HUD centralizada acima dos blocos touch */
   #ui-root:has(#touch-controls.touch-mode-buttons) .hud-bottom-bar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 66px);
-    left: calc(env(safe-area-inset-left, 0px) + 8px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 130px);
+    left: 50%;
     right: auto;
-    max-width: calc(100vw - 180px);
-    align-items: flex-start;
+    transform: translateX(-50%);
+    width: min(360px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    align-items: center;
   }
 
   .touch-controls {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
     left: 0;
     right: 0;
-    padding: 0 8px;
+    padding: 0 calc(env(safe-area-inset-right, 0px) + 10px) 0 calc(env(safe-area-inset-left, 0px) + 10px);
   }
   .touch-cluster-left {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-end;
+    justify-content: flex-start;
     gap: 6px;
+    max-width: 46vw;
   }
   .touch-cluster-right {
-    display: grid;
-    grid-template-columns: repeat(3, 58px);
-    justify-items: end;
-    align-items: end;
-    gap: 8px;
+    display: flex;
+    flex-wrap: wrap-reverse;
+    justify-content: flex-end;
+    align-items: flex-end;
+    gap: 6px;
+    max-width: 46vw;
   }
   .touch-controls.touch-mode-buttons .touch-cluster-right {
-    display: grid;
-    grid-template-columns: repeat(3, 56px);
-    gap: 8px;
+    display: flex;
+    flex-wrap: wrap-reverse;
+    justify-content: flex-end;
+    gap: 6px;
   }
   .touch-btn {
-    width: 58px;
-    height: 58px;
-    font-size: 1.15rem;
+    width: 54px;
+    height: 54px;
+    font-size: 1.1rem;
     border-radius: 16px;
     border-width: 2px;
   }
   .touch-controls.touch-mode-buttons .touch-btn {
-    width: 56px;
-    height: 56px;
+    width: 52px;
+    height: 52px;
     border-radius: 15px;
   }
 }
@@ -1169,7 +1179,8 @@
     min-height: 38px;
   }
   html:not(.force-landscape-rot) .hud-bottom-bar {
-    max-width: calc(100vw - 186px);
+    width: min(350px, calc(100vw - 20px));
+    max-width: calc(100vw - 20px);
   }
   #hud-group-combat {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1211,30 +1222,38 @@ html.force-landscape-rot .hud-top {
   padding: 4px 10px;
 }
 html.force-landscape-rot .hud-bottom-bar {
-  bottom: 6px;
-  left: 10px;
-  max-width: calc(100% - 196px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  width: auto;
+  max-width: calc(100% - 310px);
+  align-items: center;
 }
 html.force-landscape-rot .hud-meters {
   flex-direction: row;
   flex-wrap: nowrap;
   align-items: flex-end;
+  justify-content: center;
   gap: 5px;
 }
 html.force-landscape-rot #hud-group-combat {
-  grid-template-columns: repeat(4, minmax(40px, 56px));
+  grid-template-columns: repeat(4, minmax(38px, 52px));
 }
 html.force-landscape-rot .touch-controls {
-  bottom: 6px;
-  padding: 0 8px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  padding: 0 calc(env(safe-area-inset-right, 0px) + 10px) 0 calc(env(safe-area-inset-left, 0px) + 10px);
 }
+html.force-landscape-rot .touch-cluster-left,
 html.force-landscape-rot .touch-cluster-right {
-  grid-template-columns: repeat(3, 50px);
-  gap: 4px;
+  max-width: 140px;
+  gap: 6px;
 }
-html.force-landscape-rot .touch-btn {
-  width: 50px;
-  height: 50px;
+html.force-landscape-rot .touch-btn,
+html.force-landscape-rot .touch-controls.touch-mode-buttons .touch-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
 }
 
 @media (max-height: 540px) and (max-width: 960px), (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 560px) {
@@ -1301,36 +1320,48 @@ html.force-landscape-rot .touch-btn {
     padding: 4px 10px;
   }
   .hud-bottom-bar {
-    bottom: 6px;
-    left: 10px;
-    max-width: calc(100vw - 188px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: calc(100vw - 310px);
+    align-items: center;
   }
   .hud-meters {
     flex-direction: row;
     flex-wrap: nowrap;
     align-items: flex-end;
+    justify-content: center;
     gap: 5px;
   }
   #hud-group-combat {
-    grid-template-columns: repeat(4, minmax(40px, 56px));
+    grid-template-columns: repeat(4, minmax(38px, 52px));
   }
   #ui-root:has(#touch-controls.touch-mode-buttons) .hud-bottom-bar {
-    bottom: 6px;
-    left: 118px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
+    left: 50%;
     right: auto;
-    max-width: calc(100vw - 294px);
+    transform: translateX(-50%);
+    width: auto;
+    max-width: calc(100vw - 320px);
+    align-items: center;
   }
   .touch-controls {
-    bottom: 6px;
-    padding: 0 8px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    padding: 0 calc(env(safe-area-inset-right, 0px) + 10px) 0 calc(env(safe-area-inset-left, 0px) + 10px);
   }
-  .touch-cluster-right {
-    grid-template-columns: repeat(3, 48px);
-    gap: 4px;
+  .touch-cluster-left,
+  .touch-cluster-right,
+  .touch-controls.touch-mode-buttons .touch-cluster-right {
+    max-width: 140px;
+    gap: 6px;
   }
-  .touch-btn {
-    width: 48px;
-    height: 48px;
+  .touch-btn,
+  .touch-controls.touch-mode-buttons .touch-btn {
+    width: clamp(64px, 11vh, 72px);
+    height: clamp(64px, 11vh, 72px);
+    border-radius: 18px;
   }
 }
 
@@ -1547,9 +1578,11 @@ html.force-landscape-rot .touch-btn {
   #hud-group-combat {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
-  .touch-controls .touch-cluster-right {
-    grid-template-columns: repeat(3, 48px);
+  .touch-controls .touch-cluster-left,
+  .touch-controls .touch-cluster-right,
+  .touch-controls.touch-mode-buttons .touch-cluster-right {
     gap: 4px;
+    max-width: 48vw;
   }
   .touch-btn,
   .touch-controls.touch-mode-buttons .touch-btn {
@@ -1557,11 +1590,10 @@ html.force-landscape-rot .touch-btn {
     height: 48px;
     font-size: 0.98rem;
   }
-  .hud-bottom-bar {
-    max-width: calc(100vw - 170px);
-  }
+  .hud-bottom-bar,
   #ui-root:has(#touch-controls.touch-mode-buttons) .hud-bottom-bar {
-    max-width: calc(100vw - 170px);
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
   }
 }
 
