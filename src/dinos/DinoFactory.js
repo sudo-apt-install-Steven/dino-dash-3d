@@ -207,6 +207,24 @@ export class DinoFactory {
       for (let i = 0; i < 5; i++) {
         addVoxel(torso, 0.12, 0.22 + (i % 2) * 0.08, 0.14, 0, torsoH * 0.6, -0.44 + i * 0.22, matSpikes);
       }
+    } else if (bodyId === 'carnotaurus') {
+      // Fileiras duplas de osteodermos dorsais + fileira lateral de tubérculos
+      for (let i = 0; i < 5; i++) {
+        const zOff = -0.42 + i * 0.21;
+        const h = 0.15 + (i % 2) * 0.06;
+        addVoxel(torso, 0.1, h, 0.13, -0.17, torsoH * 0.56, zOff, matSpikes);
+        addVoxel(torso, 0.1, h, 0.13, 0.17, torsoH * 0.56, zOff, matSpikes);
+      }
+      for (let i = 0; i < 3; i++) {
+        const zOff = -0.3 + i * 0.3;
+        addVoxel(torso, 0.08, 0.1, 0.12, -torsoW * 0.52, 0.12, zOff, matPrimaryDark);
+        addVoxel(torso, 0.08, 0.1, 0.12, torsoW * 0.52, 0.12, zOff, matPrimaryDark);
+      }
+    } else if (bodyId === 'trex') {
+      // Dorso musculoso robusto de T-Rex com cristas baixas espaçadas
+      for (let i = 0; i < 3; i++) {
+        addVoxel(torso, 0.14, 0.13, 0.18, 0, torsoH * 0.55, -0.32 + i * 0.32, matPrimaryDark);
+      }
     } else if (bodyId === 'argentinosaurus') {
       // Placas dérmicas largas de titanossauro
       for (let i = -1; i <= 1; i++) {
@@ -258,25 +276,45 @@ export class DinoFactory {
     neckPivot.add(headGroup);
 
     const headW = headId === 'triceratops' || headId === 'styracosaurus' ? 0.72
-      : (headId === 'pachycephalosaurus' || headId === 'dunkleosteus' ? 0.74 : (isFlying ? 0.44 : 0.66));
-    const headH = headId === 'giganotosaurus' || headId === 'dunkleosteus' ? 0.6 : (isFlying ? 0.38 : 0.52);
-    const headD = headId === 'spinosaurus' || headId === 'baryonyx' || headId === 'mosasaurus' ? 1.02
-      : (isFlying ? 1.08 : 0.78);
+      : (headId === 'trex' ? 0.76
+        : (headId === 'carnotaurus' ? 0.64
+          : (headId === 'pachycephalosaurus' || headId === 'dunkleosteus' ? 0.74 : (isFlying ? 0.44 : 0.66))));
+    const headH = headId === 'giganotosaurus' || headId === 'dunkleosteus' ? 0.6
+      : (headId === 'trex' ? 0.6
+        : (headId === 'carnotaurus' ? 0.62 : (isFlying ? 0.38 : 0.52)));
+    const headD = headId === 'spinosaurus' || headId === 'baryonyx' || headId === 'mosasaurus' ? 1.04
+      : (headId === 'trex' ? 0.86
+        : (headId === 'carnotaurus' ? 0.62 : (isFlying ? 1.08 : 0.78)));
     addVoxel(headGroup, headW, headH, headD, 0, 0.16, -0.18, matPrimary);
-    // Focinho
-    addVoxel(headGroup, headW * 0.84, headH * 0.64, headD * 0.46, 0, 0.1, -headD * 0.58, matPrimary);
+    // Focinho (curto/alto no Carnotauro, massivo no T-Rex, estreito/longo nos espinossaurídeos)
+    const snoutW = (headId === 'spinosaurus' || headId === 'baryonyx') ? headW * 0.66
+      : (headId === 'trex' ? headW * 0.88 : (headId === 'carnotaurus' ? headW * 0.8 : headW * 0.84));
+    const snoutH = headId === 'carnotaurus' ? headH * 0.74
+      : (headId === 'trex' ? headH * 0.7 : headH * 0.64);
+    const snoutD = headId === 'carnotaurus' ? headD * 0.34
+      : (headId === 'trex' ? headD * 0.5 : headD * 0.46);
+    const snoutZ = headId === 'carnotaurus' ? -headD * 0.52 : -headD * 0.58;
+    addVoxel(headGroup, snoutW, snoutH, snoutD, 0, headId === 'carnotaurus' ? 0.13 : 0.1, snoutZ, matPrimary);
 
-    // Mandíbula inferior articulada (abre no rugido/vitória)
+    // Mandíbula inferior articulada (abre no rugido/ataque/vitória)
     const jaw = new THREE.Group();
     jaw.position.set(0, -0.02, -0.04);
     headGroup.add(jaw);
-    addVoxel(jaw, headW * 0.76, 0.16, headD * 0.82, 0, -0.06, -headD * 0.34, matSecondary);
-    // Dentes brancos voxel para carnívoros
+    const jawH = headId === 'trex' ? 0.2 : 0.16;
+    addVoxel(jaw, headW * 0.76, jawH, headD * 0.82, 0, -0.06, -headD * 0.34, matSecondary);
+    // Dentes brancos voxel para carnívoros (T-Rex com dentição dupla proeminente)
     if (headSpec.dinoClass === 'carnivore' || headId === 'spinosaurus') {
-      for (let t = 0; t < 3; t++) {
-        const tz = -0.32 - t * 0.18;
-        addVoxel(headGroup, 0.06, 0.1, 0.06, headW * 0.3, -0.04, tz, matTooth);
-        addVoxel(headGroup, 0.06, 0.1, 0.06, -headW * 0.3, -0.04, tz, matTooth);
+      const toothCount = headId === 'trex' ? 4 : 3;
+      const toothStep = headId === 'carnotaurus' ? 0.14 : 0.17;
+      for (let t = 0; t < toothCount; t++) {
+        const tz = -0.26 - t * toothStep;
+        const th = headId === 'trex' ? 0.12 : 0.1;
+        addVoxel(headGroup, 0.06, th, 0.06, snoutW * 0.38, -0.05, tz, matTooth);
+        addVoxel(headGroup, 0.06, th, 0.06, -snoutW * 0.38, -0.05, tz, matTooth);
+        if (headId === 'trex' && t < 3) {
+          addVoxel(jaw, 0.055, 0.09, 0.055, snoutW * 0.32, 0.04, tz + 0.05, matTooth);
+          addVoxel(jaw, 0.055, 0.09, 0.055, -snoutW * 0.32, 0.04, tz + 0.05, matTooth);
+        }
       }
     }
 
@@ -318,14 +356,36 @@ export class DinoFactory {
       addVoxel(headGroup, 0.12, 0.24, 0.36, 0, 0.45, 0.16, matSpikes);
     } else if (headId === 'parasaurolophus') {
       addVoxel(headGroup, 0.16, 0.2, 0.92, 0, 0.46, 0.26, matSpikes);
+    } else if (headId === 'trex') {
+      // Cristas lacrimais robustas e arco nasal retangular do T-Rex
+      addVoxel(headGroup, 0.14, 0.12, 0.34, -0.24, 0.48, -0.32, matPrimaryDark);
+      addVoxel(headGroup, 0.14, 0.12, 0.34, 0.24, 0.48, -0.32, matPrimaryDark);
+      addVoxel(headGroup, 0.32, 0.09, 0.42, 0, 0.47, -0.42, matPrimaryDark);
     } else if (headId === 'carnotaurus') {
-      addVoxel(headGroup, 0.11, 0.28, 0.12, -0.26, 0.48, -0.16, matSpikes);
-      addVoxel(headGroup, 0.11, 0.28, 0.12, 0.26, 0.48, -0.16, matSpikes);
+      // Chifres 3D volumétricos (base larga + meio curvo + ponta afiada) + crista supraorbital
+      for (const side of [-1, 1]) {
+        addVoxel(headGroup, 0.14, 0.1, 0.32, side * 0.24, 0.46, -0.2, matPrimaryDark);
+        const hornPivot = new THREE.Group();
+        hornPivot.position.set(side * 0.28, 0.48, -0.18);
+        hornPivot.rotation.z = -side * 0.36;
+        hornPivot.rotation.x = 0.18;
+        headGroup.add(hornPivot);
+        addVoxel(hornPivot, 0.16, 0.16, 0.18, 0, 0.06, 0, matPrimaryDark);
+        const midPivot = new THREE.Group();
+        midPivot.position.set(0, 0.14, -0.02);
+        midPivot.rotation.z = -side * 0.18;
+        midPivot.rotation.x = -0.24;
+        hornPivot.add(midPivot);
+        addVoxel(midPivot, 0.12, 0.2, 0.13, 0, 0.08, 0, matSpikes);
+        addVoxel(midPivot, 0.07, 0.16, 0.08, side * 0.01, 0.22, -0.02, matTooth);
+      }
     } else if (headId === 'pachycephalosaurus') {
       addVoxel(headGroup, 0.56, 0.3, 0.56, 0, 0.5, -0.2, matSpikes);
     } else if (headId === 'allosaurus' || headId === 'giganotosaurus') {
-      addVoxel(headGroup, 0.1, 0.18, 0.28, -0.24, 0.44, -0.32, matSpikes);
-      addVoxel(headGroup, 0.1, 0.18, 0.28, 0.24, 0.44, -0.32, matSpikes);
+      for (const side of [-1, 1]) {
+        addVoxel(headGroup, 0.11, 0.16, 0.3, side * 0.24, 0.44, -0.32, matPrimaryDark);
+        addVoxel(headGroup, 0.09, 0.14, 0.18, side * 0.25, 0.54, -0.36, matSpikes);
+      }
     } else if (headId === 'styracosaurus') {
       addVoxel(headGroup, 1.12, 0.92, 0.18, 0, 0.46, 0.18, matPrimaryDark);
       for (let i = -2; i <= 2; i++) {
@@ -391,15 +451,16 @@ export class DinoFactory {
       addVoxel(headGroup, 0.18, 0.18, 0.18, 0, 0.64, -0.18, starMat);
     }
 
-    // Cauda segmentada (4 segmentos articulados)
+    // Cauda segmentada (4 segmentos articulados — T-Rex com base pesada para contrabalancear o crânio)
     const tailSegments = [];
     let tailParent = torso;
+    const isHeavyTail = tailId === 'trex' || tailId === 'giganotosaurus';
     for (let s = 0; s < 4; s++) {
       const segPivot = new THREE.Group();
       segPivot.position.set(0, s === 0 ? 0.04 : 0, s === 0 ? torsoD * 0.5 : 0.34);
       tailParent.add(segPivot);
-      const scaleFactor = 1 - s * 0.2;
-      addVoxel(segPivot, 0.42 * scaleFactor, 0.36 * scaleFactor, 0.38, 0, 0, 0.18, s % 2 === 0 ? matPrimary : matPrimaryDark);
+      const scaleFactor = (1 - s * 0.2) * (isHeavyTail && s < 2 ? 1.18 : 1.0);
+      addVoxel(segPivot, 0.42 * scaleFactor, 0.36 * scaleFactor, isHeavyTail ? 0.42 : 0.38, 0, 0, 0.18, s % 2 === 0 ? matPrimary : matPrimaryDark);
       if (tailId === 'ankylosaurus' && s === 3) {
         addVoxel(segPivot, 0.42, 0.34, 0.42, 0, 0, 0.36, matSpikes);
       } else if ((tailId === 'stegosaurus' || tailId === 'kentrosaurus') && s >= 2) {
@@ -442,6 +503,11 @@ export class DinoFactory {
       addVoxel(foot, 0.26 * scale, 0.12 * scale, (isFront ? 0.26 : 0.36) * scale, 0, -0.04 * scale, -0.07 * scale, matSecondary);
       addVoxel(foot, 0.07 * scale, 0.08 * scale, 0.12 * scale, -0.07 * scale, -0.05 * scale, -0.26 * scale, matTooth);
       addVoxel(foot, 0.07 * scale, 0.08 * scale, 0.12 * scale, 0.07 * scale, -0.05 * scale, -0.26 * scale, matTooth);
+      if (!isFront && (bodyId === 'raptor' || bodyId === 'deinonychus' || bodyId === 'utahraptor')) {
+        // Garra em foice erguida característica dos dromeossaurídeos
+        const innerSide = sideX < 0 ? 1 : -1;
+        addVoxel(foot, 0.055 * scale, 0.14 * scale, 0.14 * scale, innerSide * 0.11 * scale, 0.05 * scale, -0.24 * scale, matTooth);
+      }
 
       return { hip, knee, foot };
     };
@@ -522,21 +588,44 @@ export class DinoFactory {
           addVoxel(outer, 0.48, 0.05, 0.2, dir * 0.96, -0.02, 0.22, matSecondary);
           return { hip: shoulder, outer, isWing: true };
         }
-        const armLen = bodyId === 'therizinosaurus' ? 0.46 : bodyId === 'baryonyx' ? 0.38 : 0.28;
+        if (bodyId === 'carnotaurus') {
+          // Braços vestigiais minúsculos e colados ao peito (característica marcante do Carnotauro)
+          addVoxel(shoulder, 0.09, 0.14, 0.1, dir * -0.02, -0.05, -0.03, matPrimaryDark);
+          return { hip: shoulder };
+        }
+        if (bodyId === 'trex') {
+          // Braços curtos articulados com antebraço e 2 dedos/garras
+          addVoxel(shoulder, 0.13, 0.2, 0.13, 0, -0.08, -0.04, matPrimaryDark);
+          addVoxel(shoulder, 0.11, 0.16, 0.12, 0, -0.18, -0.11, matPrimary);
+          addVoxel(shoulder, 0.045, 0.06, 0.13, -0.04, -0.24, -0.18, matTooth);
+          addVoxel(shoulder, 0.045, 0.06, 0.13, 0.04, -0.24, -0.18, matTooth);
+          return { hip: shoulder };
+        }
+        const armLen = bodyId === 'therizinosaurus' ? 0.48 : bodyId === 'baryonyx' ? 0.38 : 0.28;
         addVoxel(shoulder, 0.14, armLen, 0.16, 0, -armLen * 0.4, -0.06, matPrimaryDark);
-        if (bodyId === 'therizinosaurus' || bodyId === 'utahraptor') {
-          addVoxel(shoulder, 0.05, 0.08, 0.46, -0.04, -armLen * 0.85, -0.28, matTooth);
-          addVoxel(shoulder, 0.05, 0.08, 0.46, 0.04, -armLen * 0.85, -0.28, matTooth);
+        if (bodyId === 'therizinosaurus') {
+          // 3 garras gigantes distintas em foice
+          addVoxel(shoulder, 0.045, 0.07, 0.5, -0.06, -armLen * 0.85, -0.32, matTooth);
+          addVoxel(shoulder, 0.05, 0.07, 0.56, 0, -armLen * 0.85, -0.36, matTooth);
+          addVoxel(shoulder, 0.045, 0.07, 0.5, 0.06, -armLen * 0.85, -0.32, matTooth);
+        } else if (bodyId === 'utahraptor' || bodyId === 'raptor' || bodyId === 'deinonychus') {
+          if (bodyId !== 'raptor') {
+            addVoxel(shoulder, 0.08, 0.26, 0.38, dir * 0.06, -armLen * 0.45, 0.08, matSpikes);
+          }
+          addVoxel(shoulder, 0.045, 0.07, 0.26, -0.05, -armLen * 0.86, -0.18, matTooth);
+          addVoxel(shoulder, 0.05, 0.07, 0.3, 0, -armLen * 0.88, -0.22, matTooth);
+          addVoxel(shoulder, 0.045, 0.07, 0.26, 0.05, -armLen * 0.86, -0.18, matTooth);
+        } else if (bodyId === 'allosaurus' || bodyId === 'giganotosaurus') {
+          addVoxel(shoulder, 0.05, 0.07, 0.22, -0.05, -armLen * 0.85, -0.16, matTooth);
+          addVoxel(shoulder, 0.05, 0.07, 0.24, 0, -armLen * 0.87, -0.18, matTooth);
+          addVoxel(shoulder, 0.05, 0.07, 0.22, 0.05, -armLen * 0.85, -0.16, matTooth);
         } else if (bodyId === 'baryonyx') {
-          addVoxel(shoulder, 0.12, 0.12, 0.32, 0, -armLen * 0.88, -0.22, matTooth);
+          addVoxel(shoulder, 0.12, 0.12, 0.34, 0, -armLen * 0.88, -0.24, matTooth);
         } else if (bodyId === 'oviraptor') {
           addVoxel(shoulder, 0.08, 0.24, 0.36, dir * 0.06, -armLen * 0.45, 0.08, matSpikes);
           addVoxel(shoulder, 0.1, 0.08, 0.18, 0, -armLen * 0.85, -0.1, matTooth);
         } else if (bodyId === 'iguanodon') {
           addVoxel(shoulder, 0.12, 0.12, 0.36, 0, -armLen * 0.85, -0.24, matTooth);
-        } else if (bodyId === 'deinonychus') {
-          addVoxel(shoulder, 0.08, 0.26, 0.38, dir * 0.06, -armLen * 0.45, 0.08, matSpikes);
-          addVoxel(shoulder, 0.09, 0.1, 0.32, 0, -armLen * 0.88, -0.22, matTooth);
         } else {
           addVoxel(shoulder, 0.12, 0.08, 0.18, 0, -armLen * 0.85, -0.12, matTooth);
         }
