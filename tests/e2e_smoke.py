@@ -96,6 +96,15 @@ with sync_playwright() as p:
     mpage.wait_for_timeout(800)
     fps_mobile = measure_fps(mpage, 2000)
     mctx.close()
+
+    # 3. Model Gallery route (/?debug=models) check
+    gpage = browser.new_page(viewport={"width": 1280, "height": 720})
+    gpage.on("pageerror", lambda e: errors.append(f"gallery pageerror: {e}"))
+    gpage.goto(URL + "?debug=models", wait_until="domcontentloaded")
+    gpage.wait_for_timeout(800)
+    gallery_open = gpage.evaluate("() => document.body.innerText.includes('Galeria') || document.querySelectorAll('canvas').length >= 1")
+    assert gallery_open is True, "Model Gallery did not render on ?debug=models"
+    gpage.close()
     browser.close()
 
 assert len(errors) == 0, f"Runtime errors detected: {errors}"
