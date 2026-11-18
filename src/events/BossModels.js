@@ -74,6 +74,46 @@ export function buildBossModel(bossId) {
 }
 
 function createCommonState(root, parts, destructibles, rageMaterials = [], auraMesh = null) {
+  const baseAuraOpacity = auraMesh?.material?.opacity ?? 0.38;
+
+  const applyPhaseVisuals = (targetPhase, targetBroken) => {
+    const clampedBroken = Math.max(0, Math.min(destructibles.length, targetBroken));
+    for (let i = 0; i < destructibles.length; i++) {
+      if (destructibles[i]) destructibles[i].visible = i >= clampedBroken;
+    }
+
+    for (const rm of rageMaterials) {
+      if (!rm) continue;
+      if (targetPhase === 1) rm.emissiveIntensity = 0.25;
+      else if (targetPhase === 2) rm.emissiveIntensity = 1.05;
+      else rm.emissiveIntensity = 1.85;
+    }
+
+    if (parts?.cracks) {
+      for (const c of parts.cracks) {
+        if (c) c.visible = targetPhase >= 2;
+      }
+    }
+
+    if (auraMesh) {
+      if (targetPhase === 1) {
+        auraMesh.visible = false;
+      } else if (targetPhase === 2) {
+        auraMesh.visible = true;
+        if (auraMesh.material) {
+          auraMesh.material.transparent = true;
+          auraMesh.material.opacity = baseAuraOpacity * 0.45;
+        }
+      } else {
+        auraMesh.visible = true;
+        if (auraMesh.material) {
+          auraMesh.material.transparent = true;
+          auraMesh.material.opacity = baseAuraOpacity;
+        }
+      }
+    }
+  };
+
   return {
     root,
     parts,
@@ -84,30 +124,25 @@ function createCommonState(root, parts, destructibles, rageMaterials = [], auraM
     animTimer: 0,
     brokenCount: 0,
     phase: 1,
+    setPhase(phase) {
+      const nextPhase = Math.max(1, Math.min(3, Math.round(Number(phase) || 1)));
+      this.phase = nextPhase;
+      const targetBroken = nextPhase === 1
+        ? 0
+        : (nextPhase === 2 ? Math.ceil(this.destructibles.length * 0.5) : this.destructibles.length);
+      this.brokenCount = targetBroken;
+      applyPhaseVisuals(nextPhase, targetBroken);
+    },
     setPhaseVisuals(hpRatio) {
-      this.phase = hpRatio <= 0.34 ? 3 : (hpRatio <= 0.67 ? 2 : 1);
+      const ratio = Math.max(0, Math.min(1, Number(hpRatio) ?? 1));
+      this.phase = ratio <= 0.34 ? 3 : (ratio <= 0.67 ? 2 : 1);
       // Quebra partes destrutíveis conforme perde HP
       const targetBroken = Math.min(
         this.destructibles.length,
-        Math.floor((1 - hpRatio) * (this.destructibles.length + 0.5))
+        Math.floor((1 - ratio) * (this.destructibles.length + 0.5))
       );
-      while (this.brokenCount < targetBroken) {
-        const part = this.destructibles[this.brokenCount];
-        if (part) part.visible = false;
-        this.brokenCount++;
-      }
-      // Ativa rachaduras / olhos / aura na Fase 2 e 3
-      for (const rm of this.rageMaterials) {
-        if (this.phase === 1) rm.emissiveIntensity = 0.25;
-        if (this.phase === 2) rm.emissiveIntensity = 0.95;
-        if (this.phase >= 3) rm.emissiveIntensity = 1.65;
-      }
-      if (this.parts.cracks) {
-        for (const c of this.parts.cracks) c.visible = this.phase >= 2;
-      }
-      if (this.auraMesh) {
-        this.auraMesh.visible = this.phase >= 3;
-      }
+      this.brokenCount = Math.max(this.brokenCount, targetBroken);
+      applyPhaseVisuals(this.phase, this.brokenCount);
     }
   };
 }
