@@ -35,6 +35,7 @@ import { ReplayRecorder, getTodaySeed } from '../systems/Replay.js';
 import { PerfMonitor } from '../systems/PerfMonitor.js';
 import { ClipRecorder } from '../systems/ClipRecorder.js';
 import { Metagame } from '../systems/Metagame.js';
+import { ContentLoader } from '../content/ContentLoader.js';
 import { RoomClient } from '../net/RoomClient.js';
 import { EventManager } from '../events/EventManager.js';
 import { DifficultyManager } from './Difficulty.js';
@@ -115,6 +116,7 @@ export class Game {
     this.teamsState = null;
     this.godMode = false;
     this.spectatorMode = false;
+    this.spectatorFreeOffset = new THREE.Vector3(0, 0, 0);
     this.activeCampaignNode = null;
     this.activeCustomTrack = null;
     this.multiplayerSession = null;
@@ -151,6 +153,7 @@ export class Game {
       onSpectatorAction: (act) => this._applySpectatorAction(act),
       onToggleFreeCam: () => {
         this.spectatorMode = !this.spectatorMode;
+        if (!this.spectatorMode) this.spectatorFreeOffset.set(0, 0, 0);
       }
     });
     this._bindNetworkEvents();
@@ -509,6 +512,10 @@ export class Game {
       this.ui.showPodium(summary, {
         onReplay: () => this.ui.hud.showBanner('🎬 Replay disponível apenas na tela do Host.', '#ffd447', 2.4),
         onVote: (v) => this.net.sendRoundVote(v),
+        onRematch: () => {
+          this.net.sendRoundVote({ rematch: true });
+          this.ui.hud.showBanner('🔄 Pedido de revanche enviado ao Dono da Sala!', '#38bdf8', 2.6);
+        },
         onAgain: () => this.ui.hud.showBanner('⏳ Aguardando o Dono da Sala iniciar a próxima rodada...', '#38bdf8', 2.6),
         onMenu: () => this.openMainMenu()
       });
@@ -1003,6 +1010,7 @@ export class Game {
     this.state = 'menu';
     this.photoMode = false;
     this.spectatorMode = false;
+    this.spectatorFreeOffset = new THREE.Vector3(0, 0, 0);
     this.pendingRestart = false;
     this.radialWheelOpen = false;
     this.radialCooldown = 0;
@@ -1362,6 +1370,7 @@ export class Game {
       this.tvHud.setVisible(false);
     }
     this.spectatorMode = false;
+    this.spectatorFreeOffset = new THREE.Vector3(0, 0, 0);
     this.state = 'playing';
     this.photoMode = false;
     this.ui?._clearModal?.();
@@ -1377,9 +1386,10 @@ export class Game {
     this._clearDebris();
 
     const diff = this.difficultyMgr.getConfig();
-    this.baseSpeed = diff.initialSpeed;
-    this.maxSpeed = diff.maxSpeed;
-    this.speedAccel = diff.accel;
+    const speedCfg = ContentLoader.getBalance().speed || {};
+    this.baseSpeed = diff.initialSpeed * (speedCfg.initialSpeedMultiplier ?? 1.0);
+    this.maxSpeed = diff.maxSpeed * (speedCfg.maxSpeedMultiplier ?? 1.0);
+    this.speedAccel = diff.accel * (speedCfg.accelMultiplier ?? 1.0);
     this.speed = this.baseSpeed;
     if (!isTestTrack && this.net?.supabase?.isConfigured?.()) {
       const firstDinoId = this.players[0]?.id || Save.data.selectedDino || 'trex';
@@ -2379,6 +2389,15 @@ export class Game {
       } else {
         this.particles.emitExplosion(p.x, p.y + 0.8, p.z, '#ffd447', 16, true);
       }
+      if (this.multiplayerSession?.active && this.players.some((pl) => !pl.dead)) {
+        const isLocalSpectatorTrigger = p.peerId === this.net.peerId || p.index === 0;
+        if (isLocalSpectatorTrigger && !this.spectatorMode) {
+          this.spectatorMode = true;
+          this.spectatorFreeOffset.set(0, 0, 0);
+          this.tvHud.setVisible(true);
+          this.ui.hud.showBanner('👻 ELIMINADO! Câmera Livre Espectador ativa (WASD/Setas mover, Q/E altura, Tab alvo)', '#38bdf8', 4.0);
+        }
+      }
       this._checkAllPlayersDead();
     }
   }
@@ -2517,8 +2536,13 @@ export class Game {
       const standings = sorted.map((p, idx) => ({
         peerId: p.peerId,
         name: p.name,
+        dinoId: p.id || p.spec?.id || 'trex',
         score: p.score || finalScore,
+        distance: Math.floor(p.distance || this.distance || 0),
+        eggs: p.eggsCollected ?? this.runEggs ?? 0,
+        stomps: p.stomps || 0,
         pvpHits: p.pvpHits || 0,
+        alive: !p.dead,
         color: p.peerColor,
         eggReward: eligible ? (tierRewards[idx] || 0) : 0,
         pingMs: this.net.pingMs || 2
@@ -2547,6 +2571,11 @@ export class Game {
       const summary = {
         title: displayTitle,
         mpMode: this.multiplayerSession.mpMode || 'race',
+        durationSec: Math.floor(this.runTime || 0),
+        distance: Math.floor(this.distance || 0),
+        biomeName: this.currentBiome?.name || this.currentBiome?.id || 'Deserto',
+        difficulty: diff?.id || 'normal',
+        maxCombo: this.maxCombo || 1,
         eligible,
         rewardEggs,
         standings
@@ -2557,15 +2586,21 @@ export class Game {
       this.ui.showPodium(summary, {
         onReplay: () => this.startReplayPlayback(),
         onVote: (v) => this.net.sendRoundVote(v),
+        onRematch: () => {
+          // Revanche mantendo exatamente a mesma sala e configuração atual
+          this.restartRun();
+        },
         onAgain: (voteRes) => {
-          if (voteRes?.votedBiome) {
-            this.setBiomeConfig(voteRes.votedBiome, this.sequenceBiomes);
-          }
-          if (voteRes?.votedMpMode && this.multiplayerSession) {
-            this.multiplayerSession.mpMode = voteRes.votedMpMode;
-            if (this.multiplayerSession.room) {
-              this.multiplayerSession.room.mpMode = voteRes.votedMpMode;
-              this.multiplayerSession.room.elimination = (voteRes.votedMpMode === 'elimination');
+          if (!voteRes?.keepRoomConfig) {
+            if (voteRes?.votedBiome) {
+              this.setBiomeConfig(voteRes.votedBiome, this.sequenceBiomes);
+            }
+            if (voteRes?.votedMpMode && this.multiplayerSession) {
+              this.multiplayerSession.mpMode = voteRes.votedMpMode;
+              if (this.multiplayerSession.room) {
+                this.multiplayerSession.room.mpMode = voteRes.votedMpMode;
+                this.multiplayerSession.room.elimination = (voteRes.votedMpMode === 'elimination');
+              }
             }
           }
           this.restartRun();
@@ -3915,6 +3950,11 @@ export class Game {
             lastPlace.shields = 0;
             lastPlace.dead = true;
             this.ui.hud.showBanner(`⏳ ELIMINAÇÃO! ${lastPlace.name} caiu em último!`, '#ff4757', 3.0);
+            if ((lastPlace.peerId === this.net.peerId || lastPlace.index === 0) && this.players.some((pl) => !pl.dead)) {
+              this.spectatorMode = true;
+              this.spectatorFreeOffset.set(0, 0, 0);
+              this.tvHud.setVisible(true);
+            }
             this._checkAllPlayersDead();
           }
         }
@@ -4664,6 +4704,9 @@ export class Game {
         this.spectatorMode,
         this._buildCameraEnvOpts(lead || activeCamList[0])
       );
+      if (this.spectatorMode && this.state === 'playing') {
+        this._updateSpectatorFreeCam(dt, activeCamList);
+      }
     }
     if ((this._skipIntroGuardFrames || 0) > 0) this._skipIntroGuardFrames--;
 
@@ -5201,6 +5244,38 @@ export class Game {
     }
     if (!consumedPlayingInput) {
       this.input.endFrame();
+    }
+  }
+
+  _updateSpectatorFreeCam(dt, activeCamList = []) {
+    const panSpeed = 14;
+    const off = this.spectatorFreeOffset;
+    if (this.input.isKeyDown('KeyA') || this.input.isKeyDown('ArrowLeft')) off.x -= panSpeed * dt;
+    if (this.input.isKeyDown('KeyD') || this.input.isKeyDown('ArrowRight')) off.x += panSpeed * dt;
+    if (this.input.isKeyDown('KeyW') || this.input.isKeyDown('ArrowUp')) off.z -= panSpeed * dt;
+    if (this.input.isKeyDown('KeyS') || this.input.isKeyDown('ArrowDown')) off.z += panSpeed * dt;
+    if (this.input.isKeyDown('KeyE') || this.input.isKeyDown('Space')) off.y += panSpeed * 0.7 * dt;
+    if (this.input.isKeyDown('KeyQ') || this.input.isKeyDown('ShiftLeft')) off.y -= panSpeed * 0.7 * dt;
+    off.x = Math.max(-18, Math.min(18, off.x));
+    off.y = Math.max(-2, Math.min(18, off.y));
+    off.z = Math.max(-28, Math.min(24, off.z));
+
+    if (this.input.wasKeyJustPressed('Tab') && activeCamList.length > 0) {
+      const curIdx = activeCamList.findIndex((pl) => pl.peerId === this.tvHud.focusedId || pl.id === this.tvHud.focusedId);
+      const next = activeCamList[(curIdx + 1) % activeCamList.length];
+      const nextId = next?.peerId || next?.id || null;
+      this.cameraRig.setFocusPlayer(nextId);
+      off.set(0, 0, 0);
+    }
+
+    this.camera.position.add(off);
+    const focusTarget = activeCamList[0];
+    if (focusTarget) {
+      this.camera.lookAt(
+        (focusTarget.x || 0) + off.x * 0.35,
+        1.4 + (focusTarget.y || 0) + off.y * 0.25,
+        (focusTarget.z || 0) - 4 + off.z * 0.35
+      );
     }
   }
 

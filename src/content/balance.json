@@ -1,0 +1,32 @@
+{
+  "version": "4.0.0",
+  "speed": {
+    "initialSpeedMultiplier": 1.0,
+    "maxSpeedMultiplier": 1.0,
+    "accelMultiplier": 1.0,
+    "warmupSec": 12
+  },
+  "rewards": {
+    "bossRewardMult": 1.0,
+    "bossScoreBonus": 750,
+    "bossDefaultEggs": 55,
+    "bossDefaultCrystals": 3,
+    "eggScoreValue": 10,
+    "prestigeStepMult": 0.25
+  },
+  "xp": {
+    "xpMultiplier": 1.0,
+    "xpPerScoreRatio": 0.12,
+    "xpPerEggRatio": 0.3,
+    "xpPerLevel": 160,
+    "maxPassLevel": 50
+  },
+  "bossCombat": {
+    "baseAttackCooldownSec": 1.85,
+    "minAttackCooldownSec": 0.85,
+    "cooldownReductionPerHpLost": 0.12,
+    "phase2Threshold": 0.66,
+    "phase3Threshold": 0.33,
+    "defaultTelegraphSec": 0.85
+  }
+}

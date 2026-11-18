@@ -16,6 +16,11 @@ export class PartyModals {
     const modeName = summary?.mpMode === 'duel'
       ? '⚔️ Duelo PvP'
       : (summary?.mpMode === 'elimination' ? '⏳ Eliminação 30s' : '🏁 Corrida Competitiva');
+    const durSec = Math.max(0, Math.floor(summary?.durationSec || 0));
+    const durLabel = `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, '0')}`;
+    const matchDist = Math.floor(summary?.distance || 0);
+    const biomeLabel = escapeHtml(summary?.biomeName || 'Bioma Variado');
+    const diffLabel = escapeHtml((summary?.difficulty || 'normal').toUpperCase());
     const voteBiomes = [
       { id: 'desert', label: '🏜️ Deserto' },
       { id: 'volcano', label: '🌋 Vulcão' },
@@ -35,19 +40,38 @@ export class PartyModals {
     const renderView = () => {
       container.innerHTML = `
       <div class="overlay-center">
-        <div class="chunky-panel modal-card" style="max-width:700px; text-align:center;">
-          <h2 style="color:#ffd447; font-size:1.75rem;">🏆 PÓDIO MULTIPLAYER (${modeName})</h2>
-          ${mvp ? `<div class="item-card" style="border-color:#ffd447; margin:10px 0;">
-            <strong style="font-size:1.15rem; color:#58d63a;">🥇 CAMPEÃO &amp; MVP: ${escapeHtml(mvp.name)} (${Math.floor(mvp.score)} pts)</strong>
+        <div class="chunky-panel modal-card" style="max-width:740px; text-align:center;">
+          <h2 style="color:#ffd447; font-size:1.65rem;">🏆 PÓDIO MULTIPLAYER (${modeName})</h2>
+          <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap; font-size:0.8rem; color:#cbd5e1; margin:4px 0 8px;">
+            <span>⏱️ ${durLabel}</span>
+            <span>📏 ${matchDist}m</span>
+            <span>🌍 ${biomeLabel}</span>
+            <span>🎚️ ${diffLabel}</span>
+            ${summary?.maxCombo > 1 ? `<span>🔥 Combo Max ${summary.maxCombo}x</span>` : ''}
+          </div>
+          ${mvp ? `<div class="item-card" style="border-color:#ffd447; margin:8px 0;">
+            <strong style="font-size:1.12rem; color:#58d63a;">🥇 CAMPEÃO &amp; MVP: ${escapeHtml(mvp.name)} (${Math.floor(mvp.score)} pts)</strong>
             <div style="font-size:0.84rem; color:#ffe6a7;">
               ${summary?.rewardEggs > 0 ? `🥚 Prêmio ganho nesta corrida: <strong>+${summary.rewardEggs} Ovos</strong>` : '👑 Coroa de Campeão conquistada! (Prêmios de ovos exigem 2+ humanos na sala)'}
             </div>
           </div>` : ''}
           <div style="display:flex; flex-direction:column; gap:6px; margin-bottom:10px;">
             ${standings.map((p, i) => `
-              <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-radius:10px; background:rgba(0,0,0,0.35); border-left:4px solid ${sanitizeHexColor(p.color, '#ffd447')};">
-                <span><strong>#${i + 1} ${escapeHtml(p.name)}</strong> ${i === 0 ? '👑 MVP' : ''}</span>
-                <span>${Math.floor(p.score)} pts${p.pvpHits ? ` • ⚔️ ${p.pvpHits}` : ''} • 📶 ${p.pingMs || 2}ms</span>
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; padding:8px 12px; border-radius:10px; background:rgba(0,0,0,0.35); border-left:4px solid ${sanitizeHexColor(p.color, '#ffd447')};">
+                <span>
+                  <strong>#${i + 1} ${escapeHtml(p.name)}</strong>
+                  ${i === 0 ? '👑' : ''}
+                  ${p.dinoId ? `<small style="opacity:0.75;">(${escapeHtml(p.dinoId)})</small>` : ''}
+                  ${p.alive === false ? '<small style="color:#ff6b6b;">💀</small>' : ''}
+                </span>
+                <span style="font-size:0.85rem;">
+                  <strong>${Math.floor(p.score)} pts</strong>
+                  ${typeof p.eggs === 'number' ? ` • 🥚 ${p.eggs}` : ''}
+                  ${typeof p.stomps === 'number' && p.stomps > 0 ? ` • 💥 ${p.stomps}` : ''}
+                  ${p.pvpHits ? ` • ⚔️ ${p.pvpHits}` : ''}
+                  ${p.eggReward > 0 ? ` • <span style="color:#58d63a;">+${p.eggReward}🥚</span>` : ''}
+                  • 📶 ${p.pingMs || 2}ms
+                </span>
               </div>
             `).join('')}
           </div>
@@ -60,11 +84,12 @@ export class PartyModals {
               ${voteModes.map((m) => `<button class="tab-btn ${pickedMode === m.id ? 'active' : ''}" data-vmode="${m.id}">${m.label}</button>`).join('')}
             </div>
           </div>
-          <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-            <button class="chunky-btn orange" id="pod-replay">🎬 Replay Melhores Jogadas</button>
-            <button class="chunky-btn" id="pod-again">🔁 Próxima Rodada</button>
+          <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+            <button class="chunky-btn" id="pod-rematch">🔄 Revanche (Mesma Sala)</button>
+            <button class="chunky-btn orange" id="pod-again">🔁 Próxima Rodada</button>
+            <button class="chunky-btn secondary" id="pod-replay">🎬 Replay</button>
             <button class="chunky-btn secondary" id="pod-trivia" ${summary?._triviaDone ? 'disabled' : ''}>
-              ${summary?._triviaDone ? '✔ Trivia Respondida' : '⚡ Pergunta-Relâmpago (+6 🥚)'}
+              ${summary?._triviaDone ? '✔ Trivia OK' : '⚡ Trivia (+6 🥚)'}
             </button>
             <button class="chunky-btn secondary" id="pod-menu">🏠 Menu</button>
           </div>
@@ -87,6 +112,7 @@ export class PartyModals {
           renderView();
         };
       });
+      container.querySelector('#pod-rematch').onclick = () => (actions.onRematch ? actions.onRematch() : actions.onAgain?.({ keepRoomConfig: true }));
       container.querySelector('#pod-replay').onclick = actions.onReplay;
       container.querySelector('#pod-again').onclick = () => actions.onAgain?.({ votedBiome: pickedBiome, votedMpMode: pickedMode });
       container.querySelector('#pod-trivia').onclick = () => {

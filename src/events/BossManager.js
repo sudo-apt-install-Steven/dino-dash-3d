@@ -7,6 +7,15 @@ import { buildBossModel } from './BossModels.js';
 import { StatusSystem } from '../systems/StatusSystem.js';
 import { buildVoxelWeakOrb } from '../models/VoxelLibrary.js';
 import { buildClaudeBossObstacle } from '../models/ClaudeVoxelModels.js';
+import { ContentLoader } from '../content/ContentLoader.js';
+
+export function computeBossPhase(hpRatio, phases = null) {
+  const p2 = phases?.[1]?.hpThreshold ?? 0.66;
+  const p3 = phases?.[2]?.hpThreshold ?? 0.33;
+  if (hpRatio <= p3) return 3;
+  if (hpRatio <= p2) return 2;
+  return 1;
+}
 
 export const BOSS_ATTACK_PROFILES = {
   alpha_trex: ['tronco', 'rocha', 'onda'],
@@ -197,16 +206,41 @@ export class BossManager {
     this.hazardShots = [];
     this.obsWarnCooldown = 0;
     this.shotMat = new THREE.MeshStandardMaterial({ color: '#ff2e63', emissive: '#ff5500', emissiveIntensity: 0.85 });
+
+    this.pendingAttack = null;
+    this.telegraphMarkers = [0, 1, 2].map(() => {
+      const mat = new THREE.MeshBasicMaterial({
+        color: '#ff3b30',
+        transparent: true,
+        opacity: 0.55,
+        side: THREE.DoubleSide
+      });
+      const marker = new THREE.Mesh(new THREE.PlaneGeometry(1.65, 16), mat);
+      marker.rotation.x = -Math.PI / 2;
+      marker.visible = false;
+      this.scene.add(marker);
+      return marker;
+    });
   }
 
   startBoss(bossId = 'alpha_trex', playerCount = 1) {
     this.clear();
-    const def = BOSS_DEFS[bossId] || BOSS_DEFS.alpha_trex;
+    const contentDef = ContentLoader.getBossById(bossId);
+    const legacyDef = BOSS_DEFS[bossId] || BOSS_DEFS.alpha_trex;
+    const def = { ...legacyDef, ...(contentDef || {}) };
+    const phases = Array.isArray(def.phases) && def.phases.length === 3
+      ? def.phases
+      : [
+          { phase: 1, hpThreshold: 1.0, pattern: 'padrao_1', telegraphSec: 0.85 },
+          { phase: 2, hpThreshold: 0.66, pattern: 'padrao_2', telegraphSec: 0.72 },
+          { phase: 3, hpThreshold: 0.33, pattern: 'padrao_3', telegraphSec: 0.58 }
+        ];
     const isTeam = playerCount >= 2;
     const scaledHp = isTeam ? def.hp + Math.min(4, playerCount) : def.hp;
 
     this.activeBoss = {
       ...def,
+      phases,
       weakness: StatusSystem.getBossWeakness(def.id),
       currentHp: scaledHp,
       maxHp: scaledHp,
@@ -216,11 +250,15 @@ export class BossManager {
       teamMode: isTeam,
       teamComboIds: new Set(),
       phase: 1,
+      currentPattern: phases[0]?.pattern || 'padrao_1',
+      telegraphSec: phases[0]?.telegraphSec || 0.85,
       lungeZ: 0
     };
 
     this.bossRig = buildBossModel(def.id);
     this.bossRig.root.rotation.y = Math.PI; // voltado para frente encarando o jogador!
+    this.bossRig.setPhase?.(1);
+    this.bossRig.setPhaseVisuals?.(1);
     this.group.add(this.bossRig.root);
     this.group.position.set(0, 6.5, -42);
     this.group.visible = true;
@@ -301,50 +339,80 @@ export class BossManager {
     const showRedSign = ctx?.difficulty?.showRedHazardSignage ?? true;
 
     if (b.introTimer <= 0) {
-      this.attackTimer -= dt;
-      if (this.attackTimer <= 0) {
-        const hpLost = b.maxHp - b.currentHp;
-        this.attackTimer = Math.max(0.85, 1.85 - hpLost * 0.12);
-        const attackRoll = Math.floor(Math.random() * 3);
-        const profile = BOSS_ATTACK_PROFILES[b.id] || ['rocha', 'onda'];
-        const chosenObs = profile[Math.floor(Math.random() * profile.length)];
+      if (this.pendingAttack) {
+        this.pendingAttack.timer -= dt;
+        const pulse = 0.35 + Math.abs(Math.sin(b.phaseTime * 18)) * 0.45;
+        for (const m of this.telegraphMarkers) {
+          if (m.visible) m.material.opacity = pulse;
+        }
+        if (this.pendingAttack.timer <= 0) {
+          const atk = this.pendingAttack;
+          this.pendingAttack = null;
+          this._hideTelegraphMarkers();
+          this._executeTelegraphedAttack(atk, players, ctx, b);
+        }
+      } else {
+        this.attackTimer -= dt;
+        if (this.attackTimer <= 0) {
+          const combatCfg = ContentLoader.getBalance().bossCombat || {};
+          const hpLost = b.maxHp - b.currentHp;
+          const phaseRate = b.phase === 3 ? 0.8 : (b.phase === 2 ? 0.9 : 1.0);
+          const baseCd = combatCfg.baseAttackCooldownSec ?? 1.85;
+          const minCd = combatCfg.minAttackCooldownSec ?? 0.85;
+          const perHp = combatCfg.cooldownReductionPerHpLost ?? 0.12;
+          this.attackTimer = Math.max(minCd, (baseCd - hpLost * perHp) * phaseRate);
 
-        if (attackRoll === 0) {
-          this.currentAnim = 'bite';
-          this.animCycleTimer = 0.6;
-          b.lungeZ = 4.2;
-          const lane = Math.floor(Math.random() * 3);
-          this._spawnShot(laneXs[lane], baseY, -31, { obsType: chosenObs, laneIdx: lane, laneY: baseY, showRedSign });
-          this._announceObs(chosenObs, players, ctx, b);
-        } else if (attackRoll === 1) {
-          this.currentAnim = 'tail_sweep';
-          this.animCycleTimer = 0.7;
-          const safe = Math.floor(Math.random() * 3);
-          if (minSafePaths >= 2) {
-            // Fácil / Normal: bloqueia 1 faixa inteira e no máximo 1 faixa pulável/abaixável, garantindo >= 2 rotas livres!
-            const jumpableObs = chosenObs === 'raio' || chosenObs === 'feixe' || chosenObs === 'gelo' ? 'onda' : chosenObs;
-            const secondLane = (safe + 1) % 3;
-            const solidLane = (safe + 2) % 3;
-            this._spawnShot(laneXs[solidLane], baseY, -32, { obsType: chosenObs, laneIdx: solidLane, laneY: baseY, showRedSign });
-            if (b.phase >= 2) {
-              this._spawnShot(laneXs[secondLane], baseY, -32, { obsType: jumpableObs, isHigh: true, laneIdx: secondLane, laneY: baseY, showRedSign });
+          const attackRoll = b.phase >= 3 && Math.random() < 0.45 ? 1 : Math.floor(Math.random() * 3);
+          const profile = b.attackProfile || BOSS_ATTACK_PROFILES[b.id] || ['rocha', 'onda'];
+          const chosenObs = profile[Math.floor(Math.random() * profile.length)];
+          const telegraphSec = b.telegraphSec || combatCfg.defaultTelegraphSec || 0.85;
+
+          const lanes = [];
+          let isHigh = false;
+          if (attackRoll === 0) {
+            lanes.push(Math.floor(Math.random() * 3));
+            this.currentAnim = 'bite';
+            this.animCycleTimer = Math.max(0.5, telegraphSec);
+          } else if (attackRoll === 1) {
+            const safe = Math.floor(Math.random() * 3);
+            if (minSafePaths >= 2) {
+              lanes.push((safe + 2) % 3);
+              if (b.phase >= 2) lanes.push((safe + 1) % 3);
+            } else {
+              for (let l = 0; l < 3; l++) {
+                if (l !== safe) lanes.push(l);
+              }
             }
+            this.currentAnim = 'tail_sweep';
+            this.animCycleTimer = Math.max(0.6, telegraphSec);
           } else {
-            // Difícil / Insano / Supremo: bloqueia até 2 faixas, mas SEMPRE deixa >= 1 faixa segura!
-            for (let l = 0; l < 3; l++) {
-              if (l === safe) continue;
-              this._spawnShot(laneXs[l], baseY, -32, { obsType: chosenObs, laneIdx: l, laneY: baseY, showRedSign });
-            }
+            isHigh = true;
+            lanes.push(Math.floor(Math.random() * 3));
+            this.currentAnim = 'roar';
+            this.animCycleTimer = Math.max(0.65, telegraphSec);
           }
-          this._announceObs(chosenObs, players, ctx, b);
-        } else {
-          this.currentAnim = 'roar';
-          this.animCycleTimer = 0.75;
-          ctx.cameraRig?.triggerShake(0.32, 0.25);
-          this._triggerShockwave(this.group.position.x, -32, b.color);
-          const lane = Math.floor(Math.random() * 3);
-          this._spawnShot(laneXs[lane], baseY, -32, { obsType: chosenObs, isHigh: true, laneIdx: lane, laneY: baseY, showRedSign });
-          this._announceObs(chosenObs, players, ctx, b, true);
+
+          this.pendingAttack = {
+            timer: telegraphSec,
+            totalTimer: telegraphSec,
+            attackRoll,
+            chosenObs,
+            lanes,
+            isHigh,
+            minSafePaths,
+            laneXs,
+            baseY,
+            showRedSign
+          };
+          this._showTelegraphMarkers(lanes, laneXs, baseY, isHigh ? '#ffd447' : '#ff3b30');
+          ctx.onBossTelegraph?.({
+            boss: b,
+            phase: b.phase,
+            pattern: b.currentPattern,
+            lanes,
+            isHigh,
+            telegraphSec
+          });
         }
       }
     }
@@ -470,6 +538,55 @@ export class BossManager {
     });
   }
 
+  _showTelegraphMarkers(lanes, laneXs, baseY = 0, color = '#ff3b30') {
+    this._hideTelegraphMarkers();
+    for (let i = 0; i < lanes.length; i++) {
+      const lane = lanes[i];
+      const m = this.telegraphMarkers[lane];
+      if (!m) continue;
+      m.material.color.set(color);
+      m.position.set(laneXs[lane], baseY + 0.08, -24);
+      m.visible = true;
+    }
+  }
+
+  _hideTelegraphMarkers() {
+    for (const m of this.telegraphMarkers) {
+      m.visible = false;
+    }
+  }
+
+  _executeTelegraphedAttack(atk, players, ctx, b) {
+    const { attackRoll, chosenObs, lanes, isHigh, minSafePaths, laneXs, baseY, showRedSign } = atk;
+    if (attackRoll === 0) {
+      b.lungeZ = 4.2;
+      const lane = lanes[0] ?? 1;
+      this._spawnShot(laneXs[lane], baseY, -31, { obsType: chosenObs, laneIdx: lane, laneY: baseY, showRedSign });
+      this._announceObs(chosenObs, players, ctx, b);
+    } else if (attackRoll === 1) {
+      if (minSafePaths >= 2) {
+        const jumpableObs = chosenObs === 'raio' || chosenObs === 'feixe' || chosenObs === 'gelo' ? 'onda' : chosenObs;
+        if (lanes[0] !== undefined) {
+          this._spawnShot(laneXs[lanes[0]], baseY, -32, { obsType: chosenObs, laneIdx: lanes[0], laneY: baseY, showRedSign });
+        }
+        if (lanes[1] !== undefined) {
+          this._spawnShot(laneXs[lanes[1]], baseY, -32, { obsType: jumpableObs, isHigh: true, laneIdx: lanes[1], laneY: baseY, showRedSign });
+        }
+      } else {
+        for (const l of lanes) {
+          this._spawnShot(laneXs[l], baseY, -32, { obsType: chosenObs, laneIdx: l, laneY: baseY, showRedSign });
+        }
+      }
+      this._announceObs(chosenObs, players, ctx, b);
+    } else {
+      ctx.cameraRig?.triggerShake(0.32, 0.25);
+      this._triggerShockwave(this.group.position.x, -32, b.color);
+      const lane = lanes[0] ?? 1;
+      this._spawnShot(laneXs[lane], baseY, -32, { obsType: chosenObs, isHigh, laneIdx: lane, laneY: baseY, showRedSign });
+      this._announceObs(chosenObs, players, ctx, b, true);
+    }
+  }
+
   getBlockedLanesNearZ(zMin, zMax) {
     const blocked = new Set();
     if (!this.activeBoss || !this.hazardShots.length) return blocked;
@@ -519,8 +636,15 @@ export class BossManager {
 
     const hpRatio = b.currentHp / b.maxHp;
     const prevPhase = b.phase;
-    this.bossRig?.setPhaseVisuals(hpRatio);
-    b.phase = this.bossRig?.phase || 1;
+    const nextPhase = computeBossPhase(hpRatio, b.phases);
+    this.bossRig?.setPhase?.(nextPhase);
+    this.bossRig?.setPhaseVisuals?.(hpRatio);
+    b.phase = nextPhase;
+    const phaseCfg = b.phases?.[nextPhase - 1];
+    if (phaseCfg) {
+      b.currentPattern = phaseCfg.pattern;
+      b.telegraphSec = phaseCfg.telegraphSec;
+    }
 
     ctx.sfx?.stomp();
     ctx.cameraRig?.triggerShake(0.55, 0.25);
@@ -531,19 +655,25 @@ export class BossManager {
       this.animCycleTimer = 1.1;
       this._triggerShockwave(this.group.position.x, -32, '#ff2e2e');
       ctx.sfx?.roar(b.id);
-      ctx.showFloatText?.(player, `⚠️ FÚRIA FASE ${b.phase}! PARTE QUEBRADA!`, '#ff4757');
+      ctx.showFloatText?.(player, `⚠️ FÚRIA FASE ${b.phase}! (${b.currentPattern || 'OVERDRIVE'})`, '#ff4757');
     } else {
       ctx.showFloatText?.(player, `PONTO FRACO! -${dmg} HP`, '#ffd447');
     }
 
     if (b.currentHp <= 0) {
       const defeated = b;
+      const rewards = ContentLoader.getBalance().rewards || {};
+      const rewardMult = rewards.bossRewardMult ?? 1.0;
+      const eggReward = Math.round((defeated.rewardEggs || rewards.bossDefaultEggs || 55) * rewardMult);
+      const crystalReward = (defeated.rewardCrystals || rewards.bossDefaultCrystals || 3) + (defeated.bonusCrystals || 0);
+      const scoreBonus = Math.round((rewards.bossScoreBonus || 750) * rewardMult);
+
       ctx.particles?.emitExplosion(this.group.position.x, 2.6, -33, '#ff9a24', 32, true);
       this.clear();
       ctx.onBossHudUpdate?.(null);
-      ctx.addScore?.(750);
-      Save.addEggs(55);
-      Save.data.crystals = (Save.data.crystals || 0) + 3 + (defeated.bonusCrystals || 0);
+      ctx.addScore?.(scoreBonus);
+      Save.addEggs(eggReward);
+      Save.data.crystals = (Save.data.crystals || 0) + crystalReward;
       if (!Save.data.dinoHouse.trophies.includes(defeated.id)) {
         Save.data.dinoHouse.trophies.push(defeated.id);
       }
@@ -553,7 +683,7 @@ export class BossManager {
       Save.save();
       ctx.sfx?.victory();
       ctx.onBossDefeated?.(defeated);
-      ctx.showFloatText?.(player, `🏆 ${defeated.name} DERROTADO! +55 🥚 & +3 💎!`, '#58d63a');
+      ctx.showFloatText?.(player, `🏆 ${defeated.name} DERROTADO! +${eggReward} 🥚 & +${crystalReward} 💎!`, '#58d63a');
     } else {
       this._spawnNextWeakOrb();
     }
@@ -562,6 +692,8 @@ export class BossManager {
   clear() {
     this.activeBoss = null;
     this.bossRig = null;
+    this.pendingAttack = null;
+    this._hideTelegraphMarkers();
     this.weakOrb.visible = false;
     this.shockRing.visible = false;
     this.shockTimer = 0;
