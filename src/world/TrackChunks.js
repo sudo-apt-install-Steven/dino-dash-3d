@@ -15,15 +15,20 @@ export function buildChunkOasis() {
     color: '#2dd4bf',
     emissive: '#0d9488',
     emissiveIntensity: 0.45,
-    roughness: 0.2
+    roughness: 0.2,
+    transparent: true,
+    opacity: 0.84,
+    depthWrite: false,
+    side: THREE.DoubleSide
   });
   const sandMat = new THREE.MeshStandardMaterial({ color: '#fde68a', roughness: 0.85 });
   const palmMat = new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.85 });
   const leafMat = new THREE.MeshStandardMaterial({ color: '#22c55e', emissive: '#15803d', emissiveIntensity: 0.25 });
 
-  // Lago cristalino atravessando as 3 faixas
+  // Lago cristalino atravessando as 3 faixas (sem z-fighting com a areia ou pista)
   addVoxelBox(g, 5.6, 0.08, 3.2, 0, 0.04, 0, sandMat);
-  addVoxelBox(g, 4.9, 0.1, 2.5, 0, 0.08, 0, waterMat);
+  const waterBox = addVoxelBox(g, 4.9, 0.08, 2.5, 0, 0.11, 0, waterMat);
+  if (waterBox) waterBox.renderOrder = 2;
 
   // Palmeiras laterais simétricas com copa em voxel
   for (const sx of [-3.0, 3.0]) {

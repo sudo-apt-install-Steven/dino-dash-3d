@@ -162,6 +162,12 @@ export class Game {
     this.applySettings();
     this.openMainMenu();
 
+    if (import.meta.env.DEV) {
+      import('../ui/DebugModal.js').then((mod) => {
+        mod.DebugModal?.mountIfDev?.(this);
+      }).catch(() => {});
+    }
+
     this.lastTime = performance.now();
     this._rafId = requestAnimationFrame(this._loop.bind(this));
   }
@@ -525,17 +531,31 @@ export class Game {
       if (!this.multiplayerSession?.active) return;
       if (this.multiplayerSession.isHost) {
         if (this.multiplayerSession.allowRevive === false) return;
+        const revCfg = ContentLoader.getBalance().revive || {};
+        const mpRevCfg = this.multiplayerSession.reviveConfig || {};
+        const maxPerRun = mpRevCfg.maxPerRun ?? revCfg.maxPerRun ?? 2;
+        const cooldownSec = mpRevCfg.cooldownSec ?? revCfg.cooldownSec ?? 25;
+        const costType = mpRevCfg.costType || revCfg.costType || 'life_or_shield';
+
         const payerIdx = Math.max(0, this.players.findIndex((p) => p.peerId === (msg.reviverPeerId || msg.peerId)));
         const payer = this.players[payerIdx];
         const ally = (msg.targetPeerId ? this.players.find((pl) => pl.peerId === msg.targetPeerId && pl.dead) : null)
           || this.players.find((pl) => pl.dead && pl !== payer);
         if (!payer || payer.dead || !ally) return;
-        this._revivePlayerEntity(ally, msg.cost || (45 + (this._mpReviveCount || 0) * 35), payer.name || 'Companheiro');
+        if ((payer.reviveCooldown || 0) > 0) return;
+        if ((ally.reviveWindowTimer || 0) <= 0) return;
+        if ((ally.reviveCount || 0) >= maxPerRun) return;
+        if (!this._canPayReviveCost(payer, costType)) return;
+
+        const paidLabel = this._deductReviveCost(payer, costType);
+        payer.reviveCooldown = cooldownSec;
+        this._revivePlayerEntity(ally, paidLabel, payer.name || 'Companheiro');
         this.net.activeTransport?.send?.({
           type: 'mp_revive',
           approved: true,
           allyName: ally.name || ally.spec?.name || 'Aliado',
           reviverName: payer.name || 'Companheiro',
+          paidLabel,
           reviveCount: this._mpReviveCount
         });
       } else if (msg.approved) {
@@ -642,8 +662,35 @@ export class Game {
     this._performMeleeAttack(p);
   }
 
+  breatheOrSurface(idx = 0) {
+    const p = this.players[idx];
+    if (!p || p.dead || this.state !== 'playing') return false;
+    const isSubmergedNow = Boolean(p.inSubmerged || (p.inWater && ((p.diveDepth || 0) > 0.25 || (p.diveTarget || 0) >= 0.5)));
+    if (!p.inWater && !isSubmergedNow) return false;
+    if (!p.inSubmerged) {
+      p.diveTarget = 0;
+      p.diveDepth = 0;
+      p.diveTimer = 0;
+      p.vy = Math.max(p.vy || 0, 11.5);
+      p.grounded = false;
+      p.oxygen = Math.min(100, (p.oxygen ?? 100) + 35);
+      this.sfx.jump(true);
+      this.particles.emitDust(p.x, (p.baseY || 0) + 0.35, p.z, 10, '#67e8f9', 3.0);
+      if (p.index === 0) this.ui.hud.showFloatText('🫧 SUBINDO PARA RESPIRAR (+O₂)!', '#38bdf8');
+      return true;
+    }
+    if ((p._abyssBreatheCd || 0) > 0) return false;
+    p._abyssBreatheCd = 3.0;
+    p.oxygen = Math.min(100, (p.oxygen ?? 100) + 35);
+    this.sfx.heal?.();
+    this.particles.emitDust(p.x, (p.baseY || 0) + 0.8, p.z, 10, '#67e8f9', 2.4);
+    if (p.index === 0) this.ui.hud.showFloatText('🫧 BOLHA DE AR (+35% O₂)!', '#38bdf8');
+    return true;
+  }
+
   _performMeleeAttack(p) {
-    if (!p._unlockAll && !this.isTestTrack && this.score < 1800) {
+    const bossActive = Boolean(this.events?.bosses?.activeBoss);
+    if (!bossActive && !p._unlockAll && !this.isTestTrack && Save.data.settings?.progressiveUnlocks !== false && this.score < 1800) {
       if (!p._lowStamToastCooldown) {
         p._lowStamToastCooldown = 0.8;
         this.ui.hud.showFloatText('🔒 Ataque [Q] libera aos 1.800 pts!', '#94a3b8');
@@ -651,46 +698,144 @@ export class Game {
       return;
     }
     if (p.attackTimer > 0 || (p.attackCooldown || 0) > 0) return;
-    if (!this.isTestTrack && (p.stamina ?? 100) < 20) {
-      if (!p._lowStamToastCooldown) {
-        p._lowStamToastCooldown = 0.8;
-        this.ui.hud.showFloatText('💨 Sem estamina para atacar (20)!', '#fbbf24');
-      }
-      return;
-    }
-    if (!this.isTestTrack) {
-      p.stamina = Math.max(0, (p.stamina ?? 100) - 20);
-      p._staminaRegenDelay = 0.6;
-    }
-    const attackPower = p.attackPowerMult || 1;
-    p.attackTimer = 0.24;
-    p.attackCooldown = (p.attackMaxCooldown || 1.25) * (p.attackCdMult || 1);
-    p.animator.triggerRoar(0.25);
-    this.sfx.melee();
-    this.particles.emitDust(p.x, (p.baseY || 0) + 0.8, p.z - 0.9, 6, '#ffd447', 2.4);
 
-    let brokeAny = false;
-    const reachX = 1.35 * (attackPower > 1.1 ? 1.15 : 1);
-    const reachZ = 4.8 * Math.min(1.4, attackPower);
+    const atkCfg = ContentLoader.getBalance().playerAttack || {};
+    const baseDamage = atkCfg.damage ?? 28;
+    const baseCd = atkCfg.cooldownSec ?? 0.65;
+    const baseRangeZ = atkCfg.rangeZ ?? 18;
+    const baseRangeX = atkCfg.rangeX ?? 2.6;
+    const hitStopSec = atkCfg.hitStopSec ?? 0.045;
+
+    const dinoClass = p.spec?.dinoClass || 'carnivore';
+    let classDmgMult = 1.0;
+    let classCdMult = 1.0;
+    let classRangeXMult = 1.0;
+    let classRangeZMult = 1.0;
+    let fxColor = '#ffd447';
+    if (dinoClass === 'carnivore') {
+      classDmgMult = 1.15;
+      classCdMult = 0.95;
+      fxColor = '#ff5e1a';
+    } else if (dinoClass === 'herbivore') {
+      classDmgMult = 1.05;
+      classRangeXMult = 1.25;
+      fxColor = '#4ade80';
+    } else if (dinoClass === 'aquatic' || dinoClass === 'amphibious') {
+      classRangeZMult = 1.15;
+      fxColor = '#22d3ee';
+    } else if (dinoClass === 'flying') {
+      classCdMult = 0.85;
+      fxColor = '#bae6fd';
+    }
+
+    const attackPower = (p.attackPowerMult || 1) * classDmgMult;
+    const dmg = Math.round(baseDamage * attackPower);
+    p.attackTimer = 0.24;
+    p.attackMaxCooldown = Math.max(0.35, baseCd * classCdMult * (p.attackCdMult || 1));
+    p.attackCooldown = p.attackMaxCooldown;
+    p.animator?.triggerRoar?.(0.25);
+    this.sfx?.melee?.();
+    this.particles?.emitDust?.(p.x, (p.baseY || 0) + 0.8, p.z - 0.9, 8, fxColor, 2.8);
+
+    const trackOffset = p.trackOffsetX || 0;
+    const localX = p.x - trackOffset;
+    const reachX = baseRangeX * classRangeXMult * (attackPower > 1.1 ? 1.1 : 1);
+    const reachZ = baseRangeZ * classRangeZMult;
+    const obsReachZ = Math.min(reachZ, 7.5);
     const smashPts = Math.round(35 * attackPower);
+    let landedHit = false;
+
     for (const obs of this.spawner.getActiveObstacles()) {
       if (obs.hit || !obs.breakable) continue;
-      const dx = Math.abs(obs.group.position.x - p.x);
+      if (obs._hitBy && obs._hitBy.has(p.key)) continue;
+      const dx = Math.abs(obs.group.position.x - localX);
       const dz = obs.group.position.z - p.z;
-      if (dx < reachX && dz > -reachZ && dz < 1.35) {
-        obs.hit = true;
-        obs.pool?.release(obs);
-        this.particles.emitExplosion(obs.group.position.x, (obs.group.position.y || 0) + 0.8, obs.group.position.z, obs.color, 12, true);
-        this._spawnImpactDebris(obs.group.position.x, obs.group.position.z, obs.color);
+      if (dx < reachX && dz > -obsReachZ && dz < 1.6) {
+        if (this.multiplayerSession?.active && this.multiplayerSession.trackMode !== 'classic') {
+          obs._hitBy = obs._hitBy || new Set();
+          obs._hitBy.add(p.key);
+        } else {
+          obs.hit = true;
+          obs.pool?.release(obs);
+        }
+        this.particles?.emitExplosion?.(trackOffset + obs.group.position.x, (obs.group.position.y || 0) + 0.8, obs.group.position.z, obs.color, 12, true);
+        this._spawnImpactDebris(trackOffset + obs.group.position.x, obs.group.position.z, obs.color);
         p.wantedStars = Math.min(5, (p.wantedStars || 0) + 0.3);
-        this.addScore(smashPts * this.combo, p);
-        this.ui.hud.showFloatText(`💥 QUEBROU! +${smashPts}`, '#ffd447');
-        brokeAny = true;
+        this.addScore(smashPts * (this.combo || 1), p);
+        this.ui.hud.showFloatText(`💥 -${dmg} QUEBROU! +${smashPts}`, fxColor);
+        landedHit = true;
       }
     }
 
-    if (brokeAny && this.tutorialState?.active && this.tutorialState.step === 3) {
-      this._advanceTutorialStep();
+    // B2: Ataque Q contra Boss, Orbe de Ponto Fraco e Projéteis do Boss
+    const bosses = this.events?.bosses;
+    const b = bosses?.activeBoss;
+    if (b) {
+      if (bosses.weakOrb?.visible) {
+        const orbDx = Math.abs(bosses.weakOrb.position.x - localX);
+        const orbDz = bosses.weakOrb.position.z - p.z;
+        if (orbDx < reachX && orbDz > -reachZ && orbDz < 2.0) {
+          bosses._hitBossWeakPoint?.(p, this.players, this._eventContext());
+          landedHit = true;
+        }
+      }
+      if (Array.isArray(bosses.hazardShots)) {
+        for (let i = bosses.hazardShots.length - 1; i >= 0; i--) {
+          const s = bosses.hazardShots[i];
+          if (s.hit) continue;
+          const sDx = Math.abs(s.mesh.position.x - localX);
+          const sDz = s.mesh.position.z - p.z;
+          if (sDx < reachX && sDz > -reachZ && sDz < 2.0) {
+            s.hit = true;
+            this.scene.remove(s.mesh);
+            bosses.hazardShots.splice(i, 1);
+            this.particles?.emitExplosion?.(trackOffset + s.mesh.position.x, s.mesh.position.y + 0.6, s.mesh.position.z, fxColor, 10, true);
+            this.addScore(30 * (this.combo || 1), p);
+            this.ui.hud.showFloatText('⚔️ PROJÉTIL DESTRUÍDO! +30', fxColor);
+            landedHit = true;
+          }
+        }
+      }
+      if (b.introTimer <= 0 && b.currentHp > 0) {
+        const bossX = bosses.group?.position?.x ?? 0;
+        const bossZ = bosses.group?.position?.z ?? -33;
+        const bossDx = Math.abs(bossX - localX);
+        const bossDz = bossZ - p.z;
+        if (bossDx <= reachX + 2.4 && bossDz >= -(reachZ + 22) && bossDz <= 2.0) {
+          const ctx = this._eventContext();
+          if (typeof bosses.applyPlayerAttack === 'function') {
+            bosses.applyPlayerAttack(p, dmg, ctx);
+          } else {
+            const appliedDmg = b.maxHp > 25 ? dmg : Math.max(1, Math.round(dmg / 25));
+            b.currentHp = Math.max(0, b.currentHp - appliedDmg);
+            const hpRatio = b.currentHp / Math.max(1, b.maxHp);
+            const nextPhase = hpRatio <= 0.33 ? 3 : (hpRatio <= 0.66 ? 2 : 1);
+            b.phase = nextPhase;
+            bosses.bossRig?.setPhase?.(nextPhase);
+            bosses.bossRig?.setPhaseVisuals?.(hpRatio);
+            this.particles?.emitExplosion?.(bossX, 2.2, bossZ, fxColor, 14, true);
+            this.ui.hud.showFloatText(`⚔️ -${appliedDmg} HP NO CHEFE!`, fxColor);
+            if (b.currentHp <= 0) {
+              bosses.clear();
+              ctx.onBossHudUpdate?.(null);
+              this.addScore(750, p);
+              this.sfx?.victory?.();
+              this.ui.hud.showFloatText(`🏆 ${b.name} DERROTADO!`, '#58d63a');
+            } else {
+              ctx.onBossHudUpdate?.(b);
+            }
+          }
+          this.cameraRig?.triggerShake?.(0.32, 0.16);
+          landedHit = true;
+        }
+      }
+    }
+
+    if (landedHit) {
+      this.hitStopTimer = Math.max(this.hitStopTimer || 0, hitStopSec);
+      if (this.tutorialState?.active && this.tutorialState.step === 3) {
+        this._advanceTutorialStep();
+      }
     }
     if (p.index === 0) {
       this._triggerFirstUseSpotlight('spotlight_attack', {
@@ -804,6 +949,33 @@ export class Game {
     return spr;
   }
 
+  _getTrackOffsetForIndex(idx, trackMode) {
+    if (trackMode !== 'parallel' || idx <= 0) return 0;
+    const ring = Math.ceil(idx / 2);
+    return (idx % 2 === 1 ? 1 : -1) * ring * 24;
+  }
+
+  _applyGhostModeVisuals() {
+    const trackMode = this.multiplayerSession?.active ? (this.multiplayerSession.trackMode || 'parallel') : 'classic';
+    const isGhost = trackMode === 'ghost' && this.players.length > 1;
+    const localPeerId = this.net?.peerId;
+    for (let i = 0; i < this.players.length; i++) {
+      const p = this.players[i];
+      const isLocal = localPeerId ? p.peerId === localPeerId : i === 0;
+      const shouldGhost = isGhost && !isLocal;
+      p.model?.root?.traverse?.((obj) => {
+        if (obj.isMesh && obj.material) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          for (const m of mats) {
+            m.transparent = shouldGhost;
+            m.opacity = shouldGhost ? 0.42 : 1.0;
+            m.depthWrite = !shouldGhost;
+          }
+        }
+      });
+    }
+  }
+
   rebuildPlayers(customRoster = null) {
     this._clearPlayersFromScene();
     const modeDef = getModeDef(this.modeId);
@@ -856,9 +1028,11 @@ export class Game {
         skinVariant: eqSkinVariant,
         mutationTier: eqMutationTier
       });
-      const startLane = count === 1 ? 1 : (i % 3);
-      const laneOffset = count > 3 ? ((Math.floor(i / 3) - 0.5) * 0.45) : 0;
-      model.root.position.set(LANE_X[startLane] + laneOffset, 0, Math.floor(i / 3) * 0.65);
+      const trackMode = this.multiplayerSession?.active ? (this.multiplayerSession.trackMode || 'parallel') : 'classic';
+      const trackOffsetX = (trackMode === 'parallel' && count > 1) ? this._getTrackOffsetForIndex(i, trackMode) : 0;
+      const startLane = (trackMode === 'parallel' || count === 1) ? 1 : (i % 3);
+      const laneOffset = (trackMode === 'classic' && count > 3) ? ((Math.floor(i / 3) - 0.5) * 0.45) : 0;
+      model.root.position.set(trackOffsetX + LANE_X[startLane] + laneOffset, 0, trackMode === 'parallel' ? 0 : Math.floor(i / 3) * 0.65);
       if (count > 1) {
         const nameTag = this._createPlayerNameTag(slot.name || spec.name, slot.color || spec.colors.primary, i === 0);
         nameTag.position.set(0, 2.75, 0);
@@ -892,9 +1066,11 @@ export class Game {
         backpack: new Backpack(3),
         skillLevel: Save.data.dinoLevels[dinoId] || 1,
         lane: startLane,
-        x: LANE_X[startLane] + laneOffset,
+        trackIndex: i,
+        trackOffsetX,
+        x: trackOffsetX + LANE_X[startLane] + laneOffset,
         y: 0,
-        z: Math.floor(i / 3) * 0.65,
+        z: trackMode === 'parallel' ? 0 : Math.floor(i / 3) * 0.65,
         vy: 0,
         grounded: initialHabitat !== 'flying',
         ducking: false,
@@ -909,6 +1085,9 @@ export class Game {
         shields: startShields,
         dead: false,
         reviveProgress: 0,
+        reviveCount: 0,
+        reviveCooldown: 0,
+        reviveWindowTimer: 0,
         invulnTimer: 0,
         fury: 0,
         furyTimer: 0,
@@ -1001,6 +1180,7 @@ export class Game {
         built.scoreMultBonus = (built.scoreMultBonus || 1) * (eqSkinVariant === 'secret' ? 1.25 : 1.15);
       }
     }
+    this._applyGhostModeVisuals();
     if (this.state === 'menu') {
       this._syncMenuEnvironment();
     }
@@ -1087,6 +1267,15 @@ export class Game {
     const isElim = mpMode === 'elimination' || !!room?.elimination;
     const matchDiffId = resolvedCfg.difficulty || Save.data.difficulty || 'normal';
     const matchBiomeId = resolvedCfg.biomeId || this.startBiomeId || 'random_portal';
+    const trackMode = resolvedCfg.trackMode || room?.config?.trackMode || Save.data.settings?.mpTrackMode || 'parallel';
+    const revDefaults = ContentLoader.getBalance().revive || {};
+    const reviveConfig = {
+      costType: resolvedCfg.reviveCostType || room?.config?.reviveCostType || revDefaults.costType || 'life_or_shield',
+      cooldownSec: Number(room?.config?.reviveCooldownSec ?? revDefaults.cooldownSec ?? 25),
+      windowSec: Number(room?.config?.reviveWindowSec ?? revDefaults.windowSec ?? 15),
+      maxPerRun: Number(room?.config?.reviveMaxPerRun ?? revDefaults.maxPerRun ?? 2),
+      invulnSec: Number(room?.config?.reviveInvulnSec ?? revDefaults.invulnSec ?? 2.5)
+    };
     this.difficultyMgr.setPreset(matchDiffId);
     this.multiplayerSession = {
       active: true,
@@ -1096,6 +1285,8 @@ export class Game {
       botCount,
       seed: matchSeed,
       mpMode,
+      trackMode,
+      reviveConfig,
       difficultyId: matchDiffId,
       multiHabitats: room?.config?.multiHabitats !== false,
       allowHybrids: room?.config?.allowHybrids !== false,
@@ -1122,6 +1313,8 @@ export class Game {
       botCount,
       seed: matchSeed,
       mpMode,
+      trackMode,
+      reviveConfig,
       difficultyId: matchDiffId,
       multiHabitats: this.multiplayerSession.multiHabitats,
       allowHybrids: this.multiplayerSession.allowHybrids,
@@ -1179,6 +1372,8 @@ export class Game {
       botCount: payload.botCount || 0,
       seed: payload.seed || room.seed || `MP-${room.code || 'GUEST'}`,
       mpMode,
+      trackMode: payload.trackMode || room?.config?.trackMode || 'parallel',
+      reviveConfig: payload.reviveConfig || ContentLoader.getBalance().revive || {},
       difficultyId: payload.difficultyId || 'normal',
       allowRevive: payload.allowRevive !== false,
       elimination: isElim,
@@ -1484,6 +1679,10 @@ export class Game {
       }
     }
     this._syncEnvironmentHabitat(this.players[0]);
+    const mpTrackMode = this.multiplayerSession?.active ? (this.multiplayerSession.trackMode || 'parallel') : 'classic';
+    this.world.setParallelTracks(
+      mpTrackMode === 'parallel' ? this.players.map((pl) => pl.trackOffsetX || 0) : []
+    );
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat;
       const isFly = mode === 'flying' && !isSubmergedStart;
@@ -1492,14 +1691,15 @@ export class Game {
       pl.inWater = !isFly && Boolean(isSubmergedStart || mode === 'aquatic');
       pl.inSubmerged = isSubmergedStart;
       pl.grounded = !isFly;
+      const tOff = pl.trackOffsetX || 0;
       if (mode === 'aquatic' && !isSubmergedStart) {
-        pl.x = RIVER_LANE_X[pl.lane] ?? RIVER_LANE_X[1];
+        pl.x = tOff + (RIVER_LANE_X[pl.lane] ?? RIVER_LANE_X[1]);
         pl.baseY = 0;
       } else if (isFly) {
-        pl.x = LANE_X[pl.lane] ?? 0;
+        pl.x = tOff + (LANE_X[pl.lane] ?? 0);
         pl.baseY = SKY_CORRIDOR_Y - 1.15;
       } else {
-        pl.x = LANE_X[pl.lane] ?? 0;
+        pl.x = tOff + (LANE_X[pl.lane] ?? 0);
         pl.baseY = 0;
       }
       pl.y = 0;
@@ -1871,7 +2071,8 @@ export class Game {
   _buildCameraEnvOpts(lead = this.players[0]) {
     const isSubmergedBiome = !!this.currentBiome?.submerged;
     const leadMode = lead ? (lead.habitatMode || lead.habitat) : 'land';
-    const trackCenterX = (!isSubmergedBiome && leadMode === 'aquatic') ? (RIVER_LANE_X[1] ?? 10) : 0;
+    const trackOffsetX = lead?.trackOffsetX || 0;
+    const trackCenterX = trackOffsetX + ((!isSubmergedBiome && leadMode === 'aquatic') ? (RIVER_LANE_X[1] ?? 10) : 0);
     const inWater = Boolean(isSubmergedBiome || leadMode === 'aquatic');
     const diveDepth = lead?.diveDepth || 0;
     const isSubmerged = Boolean(isSubmergedBiome || (inWater && diveDepth > 0.25));
@@ -1898,22 +2099,23 @@ export class Game {
     p.ducking = false;
     p.grounded = nextMode !== 'flying' || isSub;
 
+    const tOff = p.trackOffsetX || 0;
     if (nextMode === 'aquatic') {
       const lanes = isSub ? LANE_X : RIVER_LANE_X;
       p.baseY = 0;
       p.y = 0;
       p.vy = 0;
-      p.x = lanes[p.lane] ?? lanes[1];
+      p.x = tOff + (lanes[p.lane] ?? lanes[1]);
     } else if (nextMode === 'flying' && !isSub) {
       p.baseY = SKY_CORRIDOR_Y - 1.15;
       p.y = 0;
       p.vy = 2.2;
-      p.x = LANE_X[p.lane] ?? 0;
+      p.x = tOff + (LANE_X[p.lane] ?? 0);
     } else {
       p.baseY = 0;
       p.y = 0;
       p.vy = 0;
-      p.x = LANE_X[p.lane] ?? 0;
+      p.x = tOff + (LANE_X[p.lane] ?? 0);
     }
     p.inWater = Boolean(isSub || nextMode === 'aquatic');
     p.model.root.position.set(p.x, (p.baseY || 0) + p.y, p.z);
@@ -2085,21 +2287,50 @@ export class Game {
     this.ui.hud.showBanner(`🌀 PORTAL DE BIOMA → ${this.currentBiome.name}!`, '#38bdf8', 3.0);
   }
 
-  _revivePlayerEntity(ally, paidCost = 45, reviverName = '') {
+  _canPayReviveCost(payer, costType = 'life_or_shield') {
+    if (!payer || payer.dead) return false;
+    if (costType === 'shield') return (payer.shields || 0) > 0;
+    if (costType === 'life') return (payer.hp || 0) > 1;
+    // life_or_shield: 1 escudo ou 1 vida (nunca sacrifica a última vida)
+    return (payer.shields || 0) > 0 || (payer.hp || 0) > 1;
+  }
+
+  _deductReviveCost(payer, costType = 'life_or_shield') {
+    if (!payer) return '';
+    if (costType === 'shield' || (costType === 'life_or_shield' && (payer.shields || 0) > 0)) {
+      payer.shields = Math.max(0, (payer.shields || 0) - 1);
+      return '1 🛡️';
+    }
+    payer.hp = Math.max(1, (payer.hp || 1) - 1);
+    return '1 ❤️';
+  }
+
+  _revivePlayerEntity(ally, paidLabel = '1 🛡️', reviverName = '') {
     if (!ally) return;
+    const revCfg = ContentLoader.getBalance().revive || {};
+    const mpRevCfg = this.multiplayerSession?.reviveConfig || {};
+    const invulnSec = mpRevCfg.invulnSec ?? revCfg.invulnSec ?? 2.5;
     ally.dead = false;
-    ally.hp = Math.max(1, Math.min(2, ally.maxHp || 2));
-    ally.shields = (ally.shields || 0) + 1;
-    ally.invulnTimer = 3.2;
+    ally.hp = 1;
+    ally.shields = 0;
+    ally.oxygen = 100;
+    ally.invulnTimer = invulnSec;
+    ally.reviveWindowTimer = 0;
+    ally.reviveCount = (ally.reviveCount || 0) + 1;
+    ally.x = (ally.trackOffsetX || 0) + (LANE_X[ally.lane] ?? 0);
     ally.y = 0;
     ally.vy = 4.5;
-    if (ally.model?.root) ally.model.root.visible = true;
+    ally.grounded = true;
+    if (ally.model?.root) {
+      ally.model.root.visible = true;
+      ally.model.root.position.set(ally.x, ally.baseY || 0, ally.z || 0);
+    }
     this._mpReviveCount = (this._mpReviveCount || 0) + 1;
-    this.particles.emitDust(ally.x, 1, ally.model?.root?.position?.z || 0, 18, '#34d399', 4.5);
-    this.sfx.powerup?.();
+    this.particles?.emitDust?.(ally.x, 1, ally.model?.root?.position?.z || 0, 18, '#34d399', 4.5);
+    this.sfx?.powerup?.();
     this.ui.hud.triggerEdgeFlash('green');
     const byStr = reviverName ? ` por ${reviverName}` : '';
-    this.ui.hud.showBanner(`💖 ${ally.name || 'Aliado'} REVIVIDO${byStr} (${paidCost} 🥚)!`, '#34d399', 3.2);
+    this.ui.hud.showBanner(`💖 ${ally.name || 'Aliado'} REVIVIDO${byStr} (${paidLabel})!`, '#34d399', 3.2);
   }
 
   reviveFallenAlly(payerIdx = 0) {
@@ -2108,42 +2339,51 @@ export class Game {
       this.ui.hud.showBanner('🔒 Revive desativado pelo Dono da Sala!', '#f87171', 2.2);
       return false;
     }
+    const revCfg = ContentLoader.getBalance().revive || {};
+    const mpRevCfg = this.multiplayerSession?.reviveConfig || {};
+    const costType = mpRevCfg.costType || revCfg.costType || 'life_or_shield';
+    const cooldownSec = mpRevCfg.cooldownSec ?? revCfg.cooldownSec ?? 25;
+    const maxPerRun = mpRevCfg.maxPerRun ?? revCfg.maxPerRun ?? 2;
+
     const payer = (this.multiplayerSession?.active && this.net.peerId)
       ? (this.players.find((pl) => pl.peerId === this.net.peerId) || this.players[payerIdx])
       : this.players[payerIdx];
-    const ally = this.players.find((pl) => pl.dead && pl !== payer);
+    const ally = this.players.find(
+      (pl) => pl.dead && pl !== payer && (pl.reviveWindowTimer || 0) > 0 && (pl.reviveCount || 0) < maxPerRun
+    );
     if (!payer || payer.dead || !ally) return false;
 
-    const cost = 45 + (this._mpReviveCount || 0) * 35;
-    const totalAvailable = (this.runEggs || 0) + (Save.data.eggs || 0);
-    if (totalAvailable < cost) {
-      this.ui.hud.showBanner(`🥚 Precisa de ${cost} ovos para reviver ${ally.name || 'aliado'}!`, '#f87171', 2.4);
+    if ((payer.reviveCooldown || 0) > 0) {
+      this.ui.hud.showFloatText(`⏳ Cooldown de reviver: ${Math.ceil(payer.reviveCooldown)}s`, '#fbbf24');
       return false;
     }
 
-    let rem = cost;
-    const takeRun = Math.min(this.runEggs || 0, rem);
-    this.runEggs = Math.max(0, (this.runEggs || 0) - takeRun);
-    rem -= takeRun;
-    if (rem > 0) Save.addEggs(-rem);
+    if (!this._canPayReviveCost(payer, costType)) {
+      this.ui.hud.showBanner('💔 Precisa de 1 Escudo ou 1 Vida extra (>1 ❤️) para reviver!', '#f87171', 2.4);
+      return false;
+    }
 
     if (this.multiplayerSession?.active && !this.multiplayerSession.isHost) {
+      payer.reviveCooldown = cooldownSec;
       this.net.sendMpRevive({
         reviverPeerId: this.net.peerId,
         targetPeerId: ally.peerId || null,
-        cost
+        costType
       });
-      this.ui.hud.showFloatText(`💖 Revivendo ${ally.name || 'Aliado'} (-${cost} 🥚)...`, '#34d399');
+      this.ui.hud.showFloatText(`💖 Revivendo ${ally.name || 'Aliado'}...`, '#34d399');
       return true;
     }
 
-    this._revivePlayerEntity(ally, cost, payer.name || '');
+    const paidLabel = this._deductReviveCost(payer, costType);
+    payer.reviveCooldown = cooldownSec;
+    this._revivePlayerEntity(ally, paidLabel, payer.name || '');
     if (this.multiplayerSession?.active) {
       this.net.activeTransport?.send?.({
         type: 'mp_revive',
         approved: true,
         allyName: ally.name || ally.spec?.name || 'Aliado',
         reviverName: payer.name || 'Host',
+        paidLabel,
         reviveCount: this._mpReviveCount
       });
     }
@@ -2380,6 +2620,21 @@ export class Game {
       p.dead = true;
       p._lastDeathCause = cause;
       this.slowMoTimer = 0.45;
+      if (this.multiplayerSession?.active || this.players.length >= 2) {
+        const revCfg = ContentLoader.getBalance().revive || {};
+        const mpRevCfg = this.multiplayerSession?.reviveConfig || {};
+        const windowSec = mpRevCfg.windowSec ?? revCfg.windowSec ?? 15;
+        const maxPerRun = mpRevCfg.maxPerRun ?? revCfg.maxPerRun ?? 2;
+        p.reviveWindowTimer = (p.reviveCount || 0) < maxPerRun ? windowSec : 0;
+        const nick = p.name || p.spec?.name || 'Aliado';
+        this.ui.hud.showBanner(
+          p.reviveWindowTimer > 0
+            ? `💀 ${nick} caiu! Pressione V para reviver ${nick} (${Math.round(windowSec)}s)`
+            : `💀 ${nick} caiu!`,
+          '#f87171',
+          3.5
+        );
+      }
       const customDeath = getActivePreset(p.key).deathEffect;
       if (customDeath === 'fireworks') {
         this.particles.emitExplosion(p.x, p.y + 1.0, p.z, '#ffbe0b', 18, true);
@@ -2699,12 +2954,17 @@ export class Game {
 
   _handlePlayerInput(p, dt) {
     if (p.dead) {
+      if ((p.reviveWindowTimer || 0) > 0) {
+        p.reviveWindowTimer = Math.max(0, p.reviveWindowTimer - dt);
+      }
       // Sabotagem: fantasma joga cactos apertando pulo!
       if (this.modeId === 'sabotage' && this.input.wasActionJustPressed(p.key, 'jump', false)) {
         this.spawner._acquire('cactus_small', LANE_X[Math.floor(Math.random() * 3)], 0, -55);
       }
       return;
     }
+    if ((p.reviveCooldown || 0) > 0) p.reviveCooldown = Math.max(0, p.reviveCooldown - dt);
+    if ((p._abyssBreatheCd || 0) > 0) p._abyssBreatheCd = Math.max(0, p._abyssBreatheCd - dt);
 
     // No modo Relay, apenas o jogador ativo responde
     if (this.modeId === 'relay' && p.index !== this.relayActiveIdx) return;
@@ -2872,7 +3132,8 @@ export class Game {
 
     const iceLaneMult = p.statuses?.ice ? 0.72 : 1;
     const laneSpeed = 16 * (p.laneSpeedMult || 1) * iceLaneMult;
-    const baseTargetX = p.inShopLane ? (SHOP_LANE_X[p.inShopLane] ?? laneArr[p.lane]) : (laneArr[p.lane] ?? 0);
+    const tOff = p.trackOffsetX || 0;
+    const baseTargetX = tOff + (p.inShopLane ? (SHOP_LANE_X[p.inShopLane] ?? laneArr[p.lane]) : (laneArr[p.lane] ?? 0));
     const targetX = baseTargetX + (p.xOffset || 0) + Math.sin(this.runTime * 2) * (Math.abs(envWind) > 0.2 ? envWind * 0.15 : 0);
     const prevX = p.x;
     p.x += (targetX - p.x) * Math.min(1, dt * laneSpeed);
@@ -3102,21 +3363,30 @@ export class Game {
       }
     }
 
-    // Controle real de Oxigênio (O2 / Brânquias) para mergulho / bioma submerso
+    // Controle real de Oxigênio (O2 / Brânquias) para mergulho / bioma submerso (B6)
+    const o2Cfg = ContentLoader.getBalance().oxygen || {};
+    const o2DrainBase = o2Cfg.drainPerSec ?? 7.5;
+    const o2RechargeBase = o2Cfg.rechargePerSec ?? 38;
+    const o2LowThreshold = o2Cfg.lowThreshold ?? 30;
+    const o2GraceSec = o2Cfg.graceSec ?? 2.0;
+
     if (p._oxygenWarnCd > 0) p._oxygenWarnCd = Math.max(0, p._oxygenWarnCd - dt);
     const isSubmergedDepth = Boolean(p.inSubmerged || (inWater && (p.diveDepth || 0) > 0.32));
     if (isSubmergedDepth && !this.isTestTrack && this.modeId !== 'zen') {
+      if (p.index === 0) {
+        this._hintOnce('submerge_o2', '🫧 Submerso! Suba à superfície (W/↑ ou B) para respirar!', '#22d3ee');
+      }
       const hasDiveGear = p.equippedAccessory === 'diving_mask' || p.equippedAccessory === 'snorkel' || p.equippedAccessory === 'steam_goggles';
-      const baseDrain = p.isAquaticNative ? (p.inSubmerged ? 6.5 : 8.5) : (p.inSubmerged ? 8.5 : 12.0);
-      const drainRate = baseDrain * (hasDiveGear ? 0.45 : 1.0);
+      const habitatMult = p.isAquaticNative ? 0.72 : 1.0;
+      const drainRate = o2DrainBase * habitatMult * (hasDiveGear ? 0.45 : 1.0);
       p.oxygen = Math.max(0, (p.oxygen ?? 100) - drainRate * dt);
-      if (p.oxygen <= 30 && p.oxygen > 0 && p.index === 0 && (p._oxygenWarnCd || 0) <= 0) {
-        p._oxygenWarnCd = 2.8;
-        this.ui.hud.showFloatText('🫧 OXIGÊNIO BAIXO! Suba (W/↑) ou pegue Bolha 🫧!', '#38bdf8');
+      if (p.oxygen <= o2LowThreshold && p.oxygen > 0 && p.index === 0 && (p._oxygenWarnCd || 0) <= 0) {
+        p._oxygenWarnCd = 2.6;
+        this.ui.hud.showFloatText('⚠️ OXIGÊNIO BAIXO! Suba (W/↑ ou B) ou pegue Bolha 🫧!', '#ef4444');
       }
       if (p.oxygen <= 0) {
         p._oxygenDmgTimer = (p._oxygenDmgTimer || 0) + dt;
-        if (p._oxygenDmgTimer >= 2.2) {
+        if (p._oxygenDmgTimer >= o2GraceSec) {
           p._oxygenDmgTimer = 0;
           p.oxygen = 22;
           if (!p.inSubmerged) p.diveTarget = 0;
@@ -3124,7 +3394,7 @@ export class Game {
         }
       }
     } else {
-      const refillRate = p.isAquaticNative ? 36 : 28;
+      const refillRate = p.isAquaticNative ? o2RechargeBase * 1.15 : o2RechargeBase;
       p.oxygen = Math.min(100, (p.oxygen ?? 100) + refillRate * dt);
       p._oxygenDmgTimer = 0;
     }
@@ -3371,15 +3641,28 @@ export class Game {
     if (snap.elimTimer !== undefined) this.multiplayerSession.elimTimer = snap.elimTimer;
     if (snap.suddenDeath !== undefined) this.multiplayerSession.suddenDeath = !!snap.suddenDeath;
     if (snap.mpMode) this.multiplayerSession.mpMode = snap.mpMode;
+    if (snap.trackMode && snap.trackMode !== this.multiplayerSession.trackMode) {
+      this.multiplayerSession.trackMode = snap.trackMode;
+      this._applyGhostModeVisuals();
+    }
 
-    if (snap.biome && snap.biome !== this.currentBiome.id) {
-      const targetBiome = getBiomeById(snap.biome);
+    const nextBiomeId = snap.biomeId || snap.biome;
+    if (nextBiomeId && nextBiomeId !== this.currentBiome?.id) {
+      const targetBiome = getBiomeById(nextBiomeId);
       if (targetBiome) {
         this.currentBiome = targetBiome;
         this.world.applyTheme(targetBiome.theme);
         this.spawner.setBiome(targetBiome.id);
+        this._applyBiomePlayersState(targetBiome);
         this.ui.hud.showBanner(`🌀 PORTAL! Entrando em: ${targetBiome.name}`, '#00f5d4', 3.0);
       }
+    }
+
+    if (Array.isArray(snap.obstacles)) {
+      this.spawner.syncFromHostObstacles(snap.obstacles);
+    }
+    if (snap.boss !== undefined) {
+      this.ui.hud.setBossHud?.(snap.boss);
     }
 
     if (Array.isArray(snap.players)) {
@@ -3395,6 +3678,15 @@ export class Game {
         target.abilityCooldown = sp.abilityCd ?? target.abilityCooldown;
         target.attackCooldown = sp.attackCd ?? target.attackCooldown;
         target.attackMaxCooldown = sp.attackMaxCd ?? target.attackMaxCooldown;
+        target.oxygen = sp.oxygen ?? target.oxygen;
+        target.inWater = sp.inWater ?? target.inWater;
+        target.inSubmerged = sp.inSubmerged ?? target.inSubmerged;
+        target.diveTarget = sp.diveTarget ?? target.diveTarget;
+        target.diveDepth = sp.diveDepth ?? target.diveDepth;
+        target.trackOffsetX = sp.trackOffsetX ?? target.trackOffsetX ?? 0;
+        target.reviveWindowTimer = sp.reviveWindowTimer ?? target.reviveWindowTimer ?? 0;
+        target.reviveCount = sp.reviveCount ?? target.reviveCount ?? 0;
+        target.reviveCooldown = sp.reviveCooldown ?? target.reviveCooldown ?? 0;
         target.rank = sp.rank ?? target.rank;
         target.pvpHits = sp.pvpHits ?? target.pvpHits;
         target.dead = !!sp.dead;
@@ -3457,11 +3749,22 @@ export class Game {
     this.world.update(dt, this.speed);
     this.dayNight.update(dt, this.currentBiome.theme);
     this.weather.update(dt, true);
+    this.spawner.remoteSyncMode = true;
     this.spawner.update(dt, this.speed, this.score, this.players);
+    if (this.multiplayerSession.trackMode === 'parallel') {
+      this.world.syncParallelObstacleProxies(
+        this.players.map((pl) => pl.trackOffsetX || 0),
+        this.spawner.getActiveObstacles()
+      );
+    }
     this.particles.update(dt, this.speed);
     this.narrator.update(dt);
 
     const myDino = this.players.find((p) => p.peerId === this.net.peerId) || this.players[0];
+    if (myDino) {
+      const isSub = Boolean(this.currentBiome?.submerged || (myDino.inWater && (myDino.diveDepth || 0) > 0.25));
+      this.world.setSubmergedVisuals(isSub, !!this.currentBiome?.submerged);
+    }
     if (myDino) {
       this.ui.hud.updatePlayStatus(
         myDino,
@@ -3486,7 +3789,9 @@ export class Game {
     }
     this.ui.hud.updateScore(Math.max(this.hiScore, this.score), this.score, this.speed / Math.max(1, this.baseSpeed));
     this.music.update(dt, this.speed, myDino && myDino.hp <= 1 ? 1 : 0);
-    const camPlayers = myDino && !myDino.dead ? [myDino] : this.players.filter((x) => !x.dead);
+    const camPlayers = (this.multiplayerSession.trackMode === 'parallel' || this.multiplayerSession.trackMode === 'ghost') && myDino && !myDino.dead
+      ? [myDino]
+      : (myDino && !myDino.dead ? [myDino] : this.players.filter((x) => !x.dead));
     const camLead = camPlayers[0] || this.players[0];
     this.cameraRig.update(
       dt,
@@ -4159,6 +4464,9 @@ export class Game {
     this.particles.update(worldDt, this.speed);
     this.events.update(worldDt, this.speed, this.score, this.players, this._eventContext());
     this.cameraRig.setPredatorFocus(null);
+    if (this.events?.bosses?.activeBoss) {
+      this._hintOnce('boss_attack_q', '⚔️ Chefe à frente! Pressione Q para atacar!', '#fb923c');
+    }
 
     this.abilities.update(worldDt, this.spawner, this.particles, () => {
       this.addScore(45 * this.combo);
@@ -4202,12 +4510,26 @@ export class Game {
 
     // Colisões principais do(s) jogador(es)
     const activeObs = this.spawner.getActiveObstacles();
+    const mpTrackMode = this.multiplayerSession?.active ? (this.multiplayerSession.trackMode || 'parallel') : 'classic';
+    if (mpTrackMode === 'parallel' && this.players.length > 1) {
+      this.world.syncParallelObstacleProxies(
+        this.players.map((pl) => pl.trackOffsetX || 0),
+        activeObs
+      );
+    }
+    const perPlayerHitTrack = this.multiplayerSession?.active && mpTrackMode !== 'classic';
+
     for (const p of this.players) {
       if (p.dead) continue;
-      const pBox = PhysicsCollision.getPlayerBox(p);
+      const rawBox = PhysicsCollision.getPlayerBox(p);
+      const tOff = p.trackOffsetX || 0;
+      const pBox = tOff !== 0
+        ? { ...rawBox, minX: rawBox.minX - tOff, maxX: rawBox.maxX - tOff }
+        : rawBox;
 
       for (const obs of activeObs) {
         if (obs.hit) continue;
+        if (perPlayerHitTrack && obs._hitBy && obs._hitBy.has(p.key)) continue;
 
         if (PhysicsCollision.checkNearMiss(pBox, obs)) {
           obs.nearMissed = true;
@@ -4224,6 +4546,10 @@ export class Game {
         }
 
         if (!PhysicsCollision.checkObstacleHit(pBox, obs)) continue;
+        if (perPlayerHitTrack) {
+          obs._hitBy = obs._hitBy || new Set();
+          obs._hitBy.add(p.key);
+        }
 
         // Coletáveis e interativos
         if (obs.kind === 'egg') {
@@ -4646,6 +4972,7 @@ export class Game {
           radialCooldown: this.radialCooldown || 0,
         }
       );
+      let reviveTargetNick = null;
       if (this.multiplayerSession?.active) {
         const modeTag = this.multiplayerSession.mpMode === 'duel'
           ? 'DUELO PvP'
@@ -4655,25 +4982,43 @@ export class Game {
           `🏁 #${lead.rank || 1}/${this.players.length} • ${Math.floor(lead.score || 0)} pts (${modeTag})${sdTag}`,
           lead.rank === 1 ? '#fde047' : '#93c5fd'
         );
+        const revCfg = ContentLoader.getBalance().revive || {};
+        const mpRevCfg = this.multiplayerSession.reviveConfig || {};
+        const maxPerRun = mpRevCfg.maxPerRun ?? revCfg.maxPerRun ?? 2;
+        const costType = mpRevCfg.costType || revCfg.costType || 'life_or_shield';
         const myPlayer = this.players.find((pl) => pl.peerId === this.net.peerId) || lead;
-        const fallenAlly = this.players.find((pl) => pl !== myPlayer && pl.dead);
-        const revCost = 45 + (this._mpReviveCount || 0) * 35;
-        const totalAvailable = (this.runEggs || 0) + (Save.data.eggs || 0);
+        const fallenAlly = this.players.find(
+          (pl) => pl !== myPlayer && pl.dead && (pl.reviveWindowTimer || 0) > 0 && (pl.reviveCount || 0) < maxPerRun
+        );
+        const canAfford = this._canPayReviveCost(myPlayer, costType) && (myPlayer?.reviveCooldown || 0) <= 0;
+        const canShowRevive = Boolean(
+          this.multiplayerSession.allowRevive !== false &&
+          fallenAlly &&
+          myPlayer &&
+          !myPlayer.dead &&
+          this.players.length >= 2
+        );
+        if (canShowRevive && fallenAlly) {
+          reviveTargetNick = fallenAlly.name || fallenAlly.spec?.name || 'Aliado';
+        }
         this.ui.hud.setMpReviveHud({
-          visible: Boolean(
-            this.multiplayerSession.allowRevive !== false &&
-            fallenAlly &&
-            myPlayer &&
-            !myPlayer.dead &&
-            this.players.length >= 2
-          ),
-          canAfford: totalAvailable >= revCost,
-          cost: revCost,
-          allyName: fallenAlly?.name || fallenAlly?.spec?.name || 'Aliado'
+          visible: canShowRevive,
+          canAfford,
+          cost: costType === 'shield' ? '1 🛡️' : (costType === 'life' ? '1 ❤️' : '1 🛡️/❤️'),
+          allyName: reviveTargetNick || 'Aliado'
         });
       } else {
         this.ui.hud.setMpReviveHud({ visible: false });
       }
+      const atkMax = lead.attackMaxCooldown || 0.65;
+      const atkPct = Math.max(0, Math.min(100, 100 * (1 - Math.max(0, lead.attackCooldown || 0) / atkMax)));
+      this.ui.hud.setContextualTouchState?.({
+        canAttackBoss: Boolean(this.events?.bosses?.activeBoss),
+        reviveTargetNick,
+        canBreathe: Boolean(lead.inSubmerged || (lead.inWater && (lead.diveDepth || 0) > 0.25)),
+        attackCooldownPct: atkPct,
+        oxygenPct: Math.round(lead.oxygen ?? 100)
+      });
     }
     this.ui.hud.updateScore(Math.max(this.hiScore, this.score), this.score, this.speed / this.baseSpeed);
     const dangerLevel = (this.events.bosses.activeBoss || this.events.ufo.active || (lead && lead.hp <= 1)) ? 1 : 0;
@@ -4694,7 +5039,10 @@ export class Game {
       this.cameraRig.update(dt, [p1Lead], this.speed, Save.data.settings.accessibility.reduceShake, false, false, this._buildCameraEnvOpts(p1Lead));
       this.cameraRigP2.update(dt, [p2Lead], this.speed, Save.data.settings.accessibility.reduceShake, false, false, this._buildCameraEnvOpts(p2Lead));
     } else {
-      const activeCamList = camPlayers.length > 0 ? camPlayers : this.players;
+      const focusOwnCam = this.multiplayerSession?.active &&
+        (mpTrackMode === 'parallel' || mpTrackMode === 'ghost') &&
+        lead && !lead.dead;
+      const activeCamList = focusOwnCam ? [lead] : (camPlayers.length > 0 ? camPlayers : this.players);
       this.cameraRig.update(
         dt,
         activeCamList,
@@ -4722,19 +5070,33 @@ export class Game {
       if (canBroadcastSnap) {
         this._ctrlSnapAccum = 0;
         if (this.multiplayerSession) this.multiplayerSession.netSnapAccum = 0;
+        const activeBoss = this.events?.bosses?.activeBoss;
         this.net.broadcastHostSnapshot({
           score: Math.floor(this.score),
           distance: Math.floor(this.distance),
           speed: Math.round(this.speed * 10) / 10,
           biome: this.currentBiome.id,
+          biomeId: this.currentBiome.id,
+          trackMode: mpTrackMode,
           mpMode: this.multiplayerSession?.mpMode || 'race',
           suddenDeath: !!this.multiplayerSession?.suddenDeath,
           elimTimer: this.multiplayerSession?.elimTimer || null,
+          obstacles: this.spawner.serializeActiveObstacles(),
+          boss: activeBoss ? {
+            id: activeBoss.id,
+            name: activeBoss.name,
+            title: activeBoss.title,
+            currentHp: activeBoss.currentHp,
+            maxHp: activeBoss.maxHp,
+            phase: activeBoss.phase,
+            color: activeBoss.color
+          } : null,
           players: this.players.map((pl) => ({
             peerId: pl.peerId,
             controllerPeerIds: pl.controllerPeerIds || [],
             name: pl.name,
             lane: pl.lane,
+            trackOffsetX: pl.trackOffsetX || 0,
             x: Math.round(pl.x * 100) / 100,
             y: Math.round(pl.y * 100) / 100,
             vy: Math.round(pl.vy * 100) / 100,
@@ -4751,11 +5113,15 @@ export class Game {
             inWater: !!pl.inWater,
             inSubmerged: !!pl.inSubmerged,
             diveTarget: pl.diveTarget ?? 0,
+            diveDepth: Math.round((pl.diveDepth ?? 0) * 100) / 100,
+            reviveWindowTimer: Math.round((pl.reviveWindowTimer ?? 0) * 10) / 10,
+            reviveCount: pl.reviveCount || 0,
+            reviveCooldown: Math.round((pl.reviveCooldown ?? 0) * 10) / 10,
             habitatMode: pl.habitatMode || pl.habitat || 'land',
             canTransmute: Array.isArray(pl.availableHabitats) && pl.availableHabitats.length > 1,
             abilityCharge: Math.round(pl.abilityCharge ?? 100),
             attackCd: Math.round((pl.attackCooldown || 0) * 100) / 100,
-            attackMaxCd: pl.attackMaxCooldown || 1.25,
+            attackMaxCd: pl.attackMaxCooldown || 0.65,
             rank: pl.rank || 1,
             pvpHits: pl.pvpHits || 0,
             abilityCd: pl.abilityCooldown,
@@ -5062,6 +5428,9 @@ export class Game {
       if (this.input.wasKeyJustPressed('Digit3')) this.ui.hud.showFloatText('🆘 SOCORRO!', '#38bdf8');
       if (this.input.wasKeyJustPressed('KeyV') && (this.multiplayerSession?.active || this.players.length >= 2)) {
         this.reviveFallenAlly(0);
+      }
+      if (this.input.wasKeyJustPressed('KeyB')) {
+        this.breatheOrSurface(0);
       }
     }
   }

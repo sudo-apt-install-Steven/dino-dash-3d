@@ -107,6 +107,8 @@ export class Spawner {
     this.powerupCooldown = 8;
     this.featureCooldown = 7;
     this.collectibleCooldown = 4.5;
+    this._nextUid = 1;
+    this.remoteSyncMode = false;
     this._hintMaterials = new Map();
     this._hintSprites = [];
 
@@ -955,6 +957,7 @@ export class Spawner {
     if (!pool) return null;
     const item = pool.acquire();
     item.pool = pool;
+    item.uid = opts.uid ?? this._nextUid++;
     item.breakable = kind === 'cactus_small' || kind === 'scorpion' || kind === 'rolling_log' || kind === 'cactus_shooter' || kind === 'cactus_spine' || kind === 'amber_crystal' || kind === 'falling_stalactite' || kind === 'spike_barricade' || kind === 'coral_reef' || kind === 'jellyfish_swarm' || kind === 'angler_hazard';
     const baseY = opts.rawY ? y : this._getBaseY(y);
     item.spawnY = baseY;
@@ -1637,7 +1640,7 @@ export class Spawner {
     if (this.powerupCooldown > 0) this.powerupCooldown = Math.max(0, this.powerupCooldown - dt);
     if (this.featureCooldown > 0) this.featureCooldown = Math.max(0, this.featureCooldown - dt);
     if (this.collectibleCooldown > 0) this.collectibleCooldown = Math.max(0, this.collectibleCooldown - dt);
-    if (!this.tutorialMode) {
+    if (!this.tutorialMode && !this.remoteSyncMode) {
       this.chunkCooldown -= dt;
       if (score > 460 && this.habitatMode === 'land' && this.chunkCooldown <= 0) {
         const chunkKinds = ['oasis_zone', 'fragile_bridge', 'rescue_cross'];
@@ -1759,6 +1762,67 @@ export class Spawner {
     }
   }
 
+  serializeActiveObstacles() {
+    const out = [];
+    for (const key of Object.keys(this.pools)) {
+      const active = this.pools[key].active;
+      for (let i = 0; i < active.length; i++) {
+        const obs = active[i];
+        const pos = obs.group.position;
+        if (pos.z < -135 || pos.z > 20) continue;
+        out.push({
+          uid: obs.uid,
+          kind: obs.kind,
+          x: Math.round(pos.x * 100) / 100,
+          y: Math.round(pos.y * 100) / 100,
+          z: Math.round(pos.z * 100) / 100,
+          hit: !!obs.hit
+        });
+      }
+    }
+    return out;
+  }
+
+  syncFromHostObstacles(hostObstacles = []) {
+    this.remoteSyncMode = true;
+    const incomingByUid = new Map();
+    for (let i = 0; i < hostObstacles.length; i++) {
+      const ho = hostObstacles[i];
+      if (ho && ho.uid !== undefined) incomingByUid.set(ho.uid, ho);
+    }
+
+    const existingByUid = new Map();
+    for (const key of Object.keys(this.pools)) {
+      const pool = this.pools[key];
+      for (let i = pool.active.length - 1; i >= 0; i--) {
+        const obs = pool.active[i];
+        const ho = incomingByUid.get(obs.uid);
+        if (!ho || ho.kind !== obs.kind) {
+          pool.releaseAt(i);
+        } else {
+          existingByUid.set(obs.uid, obs);
+        }
+      }
+    }
+
+    for (let i = 0; i < hostObstacles.length; i++) {
+      const ho = hostObstacles[i];
+      if (!ho || ho.uid === undefined) continue;
+      let obs = existingByUid.get(ho.uid);
+      if (!obs) {
+        obs = this._acquire(ho.kind, ho.x, ho.y, ho.z, { rawY: true, uid: ho.uid });
+        if (!obs) continue;
+      } else {
+        obs.group.position.x = ho.x;
+        obs.group.position.y = ho.y;
+        const dz = ho.z - obs.group.position.z;
+        obs.group.position.z = Math.abs(dz) > 1.8 ? ho.z : (obs.group.position.z + dz * 0.55);
+      }
+      obs.hit = !!ho.hit;
+      obs.group.visible = !obs.hit;
+    }
+  }
+
   reset() {
     this.spawnTimer = 1.65;
     this.elapsed = 0;
@@ -1768,6 +1832,8 @@ export class Spawner {
     this.featureCooldown = 7;
     this.collectibleCooldown = 4.5;
     this.tutorialMode = false;
+    this.remoteSyncMode = false;
+    this._nextUid = 1;
     this.habitatMode = 'land';
     this.isAquaticBiome = false;
     this.magneticStormActive = false;
