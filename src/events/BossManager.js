@@ -1,5 +1,5 @@
-// Bosses 3D Redesenhados com barra de vida estilizada, fases visuais, partes destrutíveis,
-// ataques animados (rugido + onda de choque, mordida, rabada, investida), intro e coop em equipe.
+// Bosses 3D com máquina de estados explícita (intro -> idle -> telegraph -> attack -> vulnerable),
+// recepção de ataque [Q] do jogador, fases visuais e simulação headless para balanceamento.
 import * as THREE from 'three';
 import { LANE_X, RIVER_LANE_X, SKY_CORRIDOR_Y } from '../world/World.js';
 import { Save } from '../systems/Save.js';
@@ -10,8 +10,9 @@ import { buildClaudeBossObstacle } from '../models/ClaudeVoxelModels.js';
 import { ContentLoader } from '../content/ContentLoader.js';
 
 export function computeBossPhase(hpRatio, phases = null) {
-  const p2 = phases?.[1]?.hpThreshold ?? 0.66;
-  const p3 = phases?.[2]?.hpThreshold ?? 0.33;
+  const combatCfg = ContentLoader.getBossCombat();
+  const p2 = phases?.[1]?.hpThreshold ?? combatCfg.phase2Threshold ?? 0.66;
+  const p3 = phases?.[2]?.hpThreshold ?? combatCfg.phase3Threshold ?? 0.33;
   if (hpRatio <= p3) return 3;
   if (hpRatio <= p2) return 2;
   return 1;
@@ -48,198 +49,105 @@ export const BOSS_OBS_CFG = {
 };
 
 export const BOSS_DEFS = {
-  scorpion_king: {
-    id: 'scorpion_king',
-    name: 'Rei Escorpião',
-    title: 'Soberano das Dunas',
-    hp: 5,
-    color: '#9b1d42',
-    weakOrder: [0, 2, 1],
-    rewardAccessory: 'crown'
-  },
-  storm_eagle: {
-    id: 'storm_eagle',
-    name: 'Águia Tempestade',
-    title: 'Senhora dos Ventos',
-    hp: 5,
-    color: '#3a86ff',
-    weakOrder: [1, 0, 2],
-    rewardAccessory: 'wings'
-  },
-  mother_ufo: {
-    id: 'mother_ufo',
-    name: 'Mãe OVNI',
-    title: 'Nave-Mãe Extraterrestre',
-    hp: 6,
-    color: '#a855f7',
-    weakOrder: [2, 1, 0],
-    rewardAccessory: 'vr_visor'
-  },
-  alpha_trex: {
-    id: 'alpha_trex',
-    name: 'T-Rex Alfa',
-    title: 'Rei dos Predadores',
-    hp: 6,
-    color: '#dc2626',
-    weakOrder: [1, 2, 0],
-    rewardAccessory: 'spikes'
-  },
-  plesiosaur: {
-    id: 'plesiosaur',
-    name: 'Plesiossauro Gigante',
-    title: 'Leviatã Abissal',
-    hp: 5,
-    color: '#0284c7',
-    weakOrder: [0, 1, 2],
-    rewardAccessory: 'aura_fire'
-  },
-  swamp_hydra: {
-    id: 'swamp_hydra',
-    name: 'Hidra do Pântano',
-    title: 'Terror de Três Cabeças',
-    hp: 5,
-    color: '#65a30d',
-    weakOrder: [0, 2, 1],
-    rewardAccessory: 'leaf_cape'
-  },
-  lava_golem: {
-    id: 'lava_golem',
-    name: 'Golem de Magma',
-    title: 'Titã da Caldeira',
-    hp: 6,
-    color: '#f97316',
-    weakOrder: [1, 0, 2],
-    rewardAccessory: 'aura_fire'
-  },
-  frost_mammoth: {
-    id: 'frost_mammoth',
-    name: 'Mamute Glacial',
-    title: 'Colosso da Tundra',
-    hp: 6,
-    color: '#38bdf8',
-    weakOrder: [2, 1, 0],
-    rewardAccessory: 'aura_ice'
-  },
-  cave_spider: {
-    id: 'cave_spider',
-    name: 'Aranha Cavernosa',
-    title: 'Rainha das Sombras',
-    hp: 5,
-    color: '#84cc16',
-    weakOrder: [0, 1, 0],
-    rewardAccessory: 'bat_wings'
-  },
-  amber_scarab: {
-    id: 'amber_scarab',
-    name: 'Escaravelho de Âmbar',
-    title: 'Guardião Dourado',
-    hp: 5,
-    color: '#f59e0b',
-    weakOrder: [1, 2, 1],
-    rewardAccessory: 'amber_medallion'
-  },
-  crystal_wyrm: {
-    id: 'crystal_wyrm',
-    name: 'Serpe Cristalina',
-    title: 'Dragão de Ametista',
-    hp: 6,
-    color: '#c084fc',
-    weakOrder: [2, 0, 2],
-    rewardAccessory: 'crystal_wings'
-  },
-  cyber_raptor: {
-    id: 'cyber_raptor',
-    name: 'Raptor Cibernético [Mini-Boss]',
-    title: 'Unidade Alfa-X',
-    hp: 4,
-    color: '#22d3ee',
-    weakOrder: [0, 1, 2],
-    rewardAccessory: 'visor_neon'
-  },
-  leviathan_abyssal: {
-    id: 'leviathan_abyssal',
-    name: 'Leviatã Abissal',
-    title: 'Soberano das Fossas',
-    hp: 6,
-    color: '#06b6d4',
-    weakOrder: [0, 2, 1],
-    rewardAccessory: 'diving_mask'
-  },
-  mecha_titan: {
-    id: 'mecha_titan',
-    name: 'Titã Mecânico Ω',
-    title: 'Colosso Cibernético',
-    hp: 7,
-    color: '#f43f5e',
-    weakOrder: [2, 0, 1],
-    rewardAccessory: 'mecha_wings'
-  }
+  scorpion_king: { id: 'scorpion_king', name: 'Rei Escorpião', title: 'Soberano das Dunas', hp: 5, color: '#9b1d42', weakOrder: [0, 2, 1], rewardAccessory: 'crown' },
+  storm_eagle: { id: 'storm_eagle', name: 'Águia Tempestade', title: 'Senhora dos Ventos', hp: 5, color: '#3a86ff', weakOrder: [1, 0, 2], rewardAccessory: 'wings' },
+  mother_ufo: { id: 'mother_ufo', name: 'Mãe OVNI', title: 'Nave-Mãe Extraterrestre', hp: 6, color: '#a855f7', weakOrder: [2, 1, 0], rewardAccessory: 'vr_visor' },
+  alpha_trex: { id: 'alpha_trex', name: 'T-Rex Alfa', title: 'Rei dos Predadores', hp: 6, color: '#dc2626', weakOrder: [1, 2, 0], rewardAccessory: 'spikes' },
+  plesiosaur: { id: 'plesiosaur', name: 'Plesiossauro Gigante', title: 'Leviatã Abissal', hp: 5, color: '#0284c7', weakOrder: [0, 1, 2], rewardAccessory: 'aura_fire' },
+  swamp_hydra: { id: 'swamp_hydra', name: 'Hidra do Pântano', title: 'Terror de Três Cabeças', hp: 5, color: '#65a30d', weakOrder: [0, 2, 1], rewardAccessory: 'leaf_cape' },
+  lava_golem: { id: 'lava_golem', name: 'Golem de Magma', title: 'Titã da Caldeira', hp: 6, color: '#f97316', weakOrder: [1, 0, 2], rewardAccessory: 'aura_fire' },
+  frost_mammoth: { id: 'frost_mammoth', name: 'Mamute Glacial', title: 'Colosso da Tundra', hp: 6, color: '#38bdf8', weakOrder: [2, 1, 0], rewardAccessory: 'aura_ice' },
+  cave_spider: { id: 'cave_spider', name: 'Aranha Cavernosa', title: 'Rainha das Sombras', hp: 5, color: '#84cc16', weakOrder: [0, 1, 0], rewardAccessory: 'bat_wings' },
+  amber_scarab: { id: 'amber_scarab', name: 'Escaravelho de Âmbar', title: 'Guardião Dourado', hp: 5, color: '#f59e0b', weakOrder: [1, 2, 1], rewardAccessory: 'amber_medallion' },
+  crystal_wyrm: { id: 'crystal_wyrm', name: 'Serpe Cristalina', title: 'Dragão de Ametista', hp: 6, color: '#c084fc', weakOrder: [2, 0, 2], rewardAccessory: 'crystal_wings' },
+  cyber_raptor: { id: 'cyber_raptor', name: 'Raptor Cibernético [Mini-Boss]', title: 'Unidade Alfa-X', hp: 4, color: '#22d3ee', weakOrder: [0, 1, 2], rewardAccessory: 'visor_neon' },
+  leviathan_abyssal: { id: 'leviathan_abyssal', name: 'Leviatã Abissal', title: 'Soberano das Fossas', hp: 6, color: '#06b6d4', weakOrder: [0, 2, 1], rewardAccessory: 'diving_mask' },
+  mecha_titan: { id: 'mecha_titan', name: 'Titã Mecânico Ω', title: 'Colosso Cibernético', hp: 7, color: '#f43f5e', weakOrder: [2, 0, 1], rewardAccessory: 'mecha_wings' }
 };
 
 export class BossManager {
-  constructor(scene) {
+  constructor(scene, opts = {}) {
     this.scene = scene;
+    this.headless = !!opts.headless;
     this.activeBoss = null;
     this.bossRig = null;
     this.group = new THREE.Group();
     this.scene.add(this.group);
 
-    this.attackTimer = 2.0;
+    this.state = 'idle'; // 'intro' | 'idle' | 'telegraph' | 'attack' | 'vulnerable' | 'defeated'
+    this.stateTimer = 0;
+    this.attackTimer = 1.4;
     this.animCycleTimer = 0;
     this.currentAnim = 'idle';
 
-    // Orbe Ponto Fraco multi-voxel facetado (cristal cruzado + 4 nodos orbitais)
-    this.weakOrb = buildVoxelWeakOrb();
+    // Orbe Ponto Fraco multi-voxel facetado
+    this.weakOrb = this.headless ? { position: new THREE.Vector3(), rotation: new THREE.Euler(), visible: false } : buildVoxelWeakOrb();
     this.weakOrb.visible = false;
-    this.scene.add(this.weakOrb);
+    if (!this.headless) this.scene.add(this.weakOrb);
 
     // Onda de choque de rugido / ataque
-    this.shockRing = new THREE.Mesh(
-      new THREE.RingGeometry(0.8, 1.5, 24),
-      new THREE.MeshBasicMaterial({ color: '#ff3b30', side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
-    );
-    this.shockRing.rotation.x = -Math.PI / 2;
-    this.shockRing.visible = false;
+    this.shockRing = this.headless
+      ? { position: new THREE.Vector3(), scale: new THREE.Vector3(1, 1, 1), rotation: new THREE.Euler(), material: { color: { set() {} }, opacity: 0.85 }, visible: false }
+      : new THREE.Mesh(
+          new THREE.RingGeometry(0.8, 1.5, 24),
+          new THREE.MeshBasicMaterial({ color: '#ff3b30', side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+        );
+    if (!this.headless) {
+      this.shockRing.rotation.x = -Math.PI / 2;
+      this.shockRing.visible = false;
+      this.scene.add(this.shockRing);
+    }
     this.shockTimer = 0;
-    this.scene.add(this.shockRing);
 
     this.hazardShots = [];
     this.obsWarnCooldown = 0;
-    this.shotMat = new THREE.MeshStandardMaterial({ color: '#ff2e63', emissive: '#ff5500', emissiveIntensity: 0.85 });
-
     this.pendingAttack = null;
-    this.telegraphMarkers = [0, 1, 2].map(() => {
-      const mat = new THREE.MeshBasicMaterial({
-        color: '#ff3b30',
-        transparent: true,
-        opacity: 0.55,
-        side: THREE.DoubleSide
-      });
-      const marker = new THREE.Mesh(new THREE.PlaneGeometry(1.65, 16), mat);
-      marker.rotation.x = -Math.PI / 2;
-      marker.visible = false;
-      this.scene.add(marker);
-      return marker;
-    });
+    this.telegraphMarkers = this.headless
+      ? [0, 1, 2].map(() => ({ visible: false, position: new THREE.Vector3(), material: { color: { set() {} }, opacity: 0.55 } }))
+      : [0, 1, 2].map(() => {
+          const mat = new THREE.MeshBasicMaterial({
+            color: '#ff3b30',
+            transparent: true,
+            opacity: 0.55,
+            side: THREE.DoubleSide
+          });
+          const marker = new THREE.Mesh(new THREE.PlaneGeometry(1.65, 16), mat);
+          marker.rotation.x = -Math.PI / 2;
+          marker.visible = false;
+          this.scene.add(marker);
+          return marker;
+        });
   }
 
-  startBoss(bossId = 'alpha_trex', playerCount = 1) {
+  startBoss(bossId = 'alpha_trex', playerCount = 1, difficultyId = 'normal') {
     this.clear();
     const contentDef = ContentLoader.getBossById(bossId);
     const legacyDef = BOSS_DEFS[bossId] || BOSS_DEFS.alpha_trex;
     const def = { ...legacyDef, ...(contentDef || {}) };
+    const combatCfg = ContentLoader.getBossCombat();
+
     const phases = Array.isArray(def.phases) && def.phases.length === 3
       ? def.phases
       : [
-          { phase: 1, hpThreshold: 1.0, pattern: 'padrao_1', telegraphSec: 0.85 },
-          { phase: 2, hpThreshold: 0.66, pattern: 'padrao_2', telegraphSec: 0.72 },
-          { phase: 3, hpThreshold: 0.33, pattern: 'padrao_3', telegraphSec: 0.58 }
+          { phase: 1, hpThreshold: 1.0, pattern: 'padrao_1', telegraphSec: combatCfg.defaultTelegraphSec ?? 0.85 },
+          { phase: 2, hpThreshold: combatCfg.phase2Threshold ?? 0.66, pattern: 'padrao_2', telegraphSec: 0.72 },
+          { phase: 3, hpThreshold: combatCfg.phase3Threshold ?? 0.33, pattern: 'padrao_3', telegraphSec: 0.58 }
         ];
+
     const isTeam = playerCount >= 2;
-    const scaledHp = isTeam ? def.hp + Math.min(4, playerCount) : def.hp;
+    const tierHp = def.hp || 6;
+    const baseHpPerTier = combatCfg.baseHpPerTier ?? 350;
+    const diffScale = combatCfg.hpScaleByDifficulty?.[difficultyId] ?? 1.0;
+    const teamScale = isTeam ? 1 + Math.min(3, playerCount - 1) * 0.35 : 1.0;
+    const scaledHp = Math.max(100, Math.round(tierHp * baseHpPerTier * diffScale * teamScale));
+
+    this.state = 'intro';
+    this.stateTimer = 1.65;
+    this.attackTimer = combatCfg.idleBetweenAttacksSec ?? 1.4;
 
     this.activeBoss = {
       ...def,
+      difficultyId,
       phases,
       weakness: StatusSystem.getBossWeakness(def.id),
       currentHp: scaledHp,
@@ -250,26 +158,31 @@ export class BossManager {
       teamMode: isTeam,
       teamComboIds: new Set(),
       phase: 1,
+      state: 'intro',
       currentPattern: phases[0]?.pattern || 'padrao_1',
-      telegraphSec: phases[0]?.telegraphSec || 0.85,
-      lungeZ: 0
+      telegraphSec: phases[0]?.telegraphSec || combatCfg.defaultTelegraphSec || 0.85,
+      lungeZ: 0,
+      hitsTaken: 0
     };
 
-    this.bossRig = buildBossModel(def.id);
-    this.bossRig.root.rotation.y = Math.PI; // voltado para frente encarando o jogador!
-    this.bossRig.setPhase?.(1);
-    this.bossRig.setPhaseVisuals?.(1);
-    this.group.add(this.bossRig.root);
-    this.group.position.set(0, 6.5, -42);
+    if (!this.headless) {
+      this.bossRig = buildBossModel(def.id);
+      this.bossRig.root.rotation.y = Math.PI;
+      this.bossRig.setPhase?.(1);
+      this.bossRig.setPhaseVisuals?.(1);
+      this.group.add(this.bossRig.root);
+    }
+    this.group.position.set(0, 6.5, -24);
     this.group.visible = true;
 
     this.currentAnim = 'roar';
     this.animCycleTimer = 1.4;
-    this._triggerShockwave(0, -34, def.color);
+    this._triggerShockwave(0, -22, def.color);
     this._spawnNextWeakOrb();
   }
 
   _triggerShockwave(x, z, color = '#ff3b30') {
+    if (this.headless) return;
     this.shockRing.material.color.set(color);
     this.shockRing.position.set(x, 0.16, z);
     this.shockRing.scale.setScalar(1);
@@ -287,31 +200,93 @@ export class BossManager {
     this.weakOrb.visible = true;
   }
 
-  update(dt, speed, players, ctx) {
+  _setState(nextState, durationSec, boss) {
+    this.state = nextState;
+    this.stateTimer = Math.max(0.05, durationSec);
+    if (boss) {
+      boss.state = nextState;
+    }
+  }
+
+  update(dt, speed, players, ctx = {}) {
     if (!this.activeBoss) return;
     const b = this.activeBoss;
+    const combatCfg = ContentLoader.getBossCombat();
     b.phaseTime += dt;
     this.currentHabitatMode = ctx?.habitatMode || 'land';
     this.currentIsAquaticBiome = !!ctx?.isAquaticBiome;
     const trackCenterX = this.currentHabitatMode === 'aquatic' && !this.currentIsAquaticBiome ? (RIVER_LANE_X[1] ?? 10) : 0;
 
-    // Introdução cinematográfica curta
-    if (b.introTimer > 0) {
-      b.introTimer -= dt;
+    this.obsWarnCooldown = Math.max(0, (this.obsWarnCooldown || 0) - dt);
+    const laneXs = this.currentHabitatMode === 'aquatic' && !ctx?.isAquaticBiome ? RIVER_LANE_X : LANE_X;
+    const baseY = this.currentHabitatMode === 'flying' ? SKY_CORRIDOR_Y - 1.15 : 0;
+    const minSafePaths = Math.max(1, ctx?.difficulty?.minSafePaths ?? 1);
+    const showRedSign = ctx?.difficulty?.showRedHazardSignage ?? true;
+
+    // Máquina de estados determinística: intro -> idle -> telegraph -> attack -> vulnerable -> idle
+    this.stateTimer -= dt;
+
+    if (this.state === 'intro') {
+      b.introTimer = Math.max(0, this.stateTimer);
       const p = Math.max(0, b.introTimer / 1.65);
-      this.group.position.set(trackCenterX, p * 6.5, -34 - p * 8);
+      this.group.position.set(trackCenterX, p * 6.5, -18 - p * 8);
       if (b.introTimer <= 0.8 && this.currentAnim !== 'roar') {
         this.currentAnim = 'roar';
-        ctx.cameraRig?.triggerShake(0.45, 0.35);
-        ctx.sfx?.roar(b.id);
+        ctx.cameraRig?.triggerShake?.(0.45, 0.35);
+        ctx.sfx?.roar?.(b.id);
       }
-    } else {
+      if (this.stateTimer <= 0) {
+        b.introTimer = 0;
+        this._setState('idle', combatCfg.idleBetweenAttacksSec ?? 1.4, b);
+      }
+    } else if (this.state === 'idle') {
       const aggSpeed = b.phase >= 2 ? 1.85 : 1.35;
-      this.group.position.x = trackCenterX + Math.sin(b.phaseTime * aggSpeed) * 2.55;
+      this.group.position.x = trackCenterX + Math.sin(b.phaseTime * aggSpeed) * 1.9;
       this.group.position.y = Math.sin(b.phaseTime * 3.1) * 0.18;
       if (b.lungeZ > 0) b.lungeZ = Math.max(0, b.lungeZ - dt * 14);
-      this.group.position.z = -33 + b.lungeZ;
+      this.group.position.z = -18 + b.lungeZ;
       this.group.rotation.y = Math.sin(b.phaseTime * 0.9) * 0.15;
+
+      if (this.stateTimer <= 0) {
+        this._beginTelegraph(b, laneXs, baseY, minSafePaths, showRedSign, ctx, combatCfg);
+      }
+    } else if (this.state === 'telegraph') {
+      this.group.position.x = trackCenterX + Math.sin(b.phaseTime * 2.2) * 1.4;
+      this.group.position.y = Math.sin(b.phaseTime * 4.5) * 0.22;
+      this.group.position.z = -17.5;
+      const pulse = 0.35 + Math.abs(Math.sin(b.phaseTime * 18)) * 0.45;
+      for (const m of this.telegraphMarkers) {
+        if (m.visible) m.material.opacity = pulse;
+      }
+      if (this.stateTimer <= 0) {
+        const atk = this.pendingAttack;
+        this.pendingAttack = null;
+        this._hideTelegraphMarkers();
+        if (atk) {
+          this._executeTelegraphedAttack(atk, players, ctx, b);
+        }
+        this._setState('attack', combatCfg.attackExecSec ?? 0.55, b);
+      }
+    } else if (this.state === 'attack') {
+      if (b.lungeZ > 0) b.lungeZ = Math.max(0, b.lungeZ - dt * 10);
+      this.group.position.x = trackCenterX;
+      this.group.position.y = 0;
+      this.group.position.z = -14.5 + b.lungeZ;
+      if (this.stateTimer <= 0) {
+        this.currentAnim = 'idle';
+        const vulnSec = combatCfg.vulnerabilityWindowSec ?? 4.5;
+        this._setState('vulnerable', vulnSec, b);
+        ctx.showFloatText?.(players?.[0], '⚔️ CHEFE EXPOSTO! ATACAR [Q]!', '#58d63a');
+      }
+    } else if (this.state === 'vulnerable') {
+      // Boss avança para dentro do alcance corpo a corpo (z = -14.5) e reduz oscilação lateral
+      this.group.position.x += (trackCenterX - this.group.position.x) * Math.min(1, dt * 6);
+      this.group.position.y = Math.sin(b.phaseTime * 5.0) * 0.08 - 0.15;
+      this.group.position.z = -14.5;
+      this.group.rotation.y = Math.sin(b.phaseTime * 1.6) * 0.08;
+      if (this.stateTimer <= 0) {
+        this._setState('idle', combatCfg.idleBetweenAttacksSec ?? 1.4, b);
+      }
     }
 
     if (this.animCycleTimer > 0) {
@@ -319,7 +294,9 @@ export class BossManager {
       if (this.animCycleTimer <= 0) this.currentAnim = 'idle';
     }
 
-    this.bossRig?.updateAnimation(b.phaseTime, dt, this.currentAnim);
+    if (!this.headless) {
+      this.bossRig?.updateAnimation?.(b.phaseTime, dt, this.currentAnim);
+    }
 
     // Anima onda de choque
     if (this.shockTimer > 0) {
@@ -328,93 +305,6 @@ export class BossManager {
       this.shockRing.scale.setScalar(grow);
       this.shockRing.material.opacity = Math.max(0, this.shockTimer / 0.65);
       if (this.shockTimer <= 0) this.shockRing.visible = false;
-    }
-
-    // Dispara ataques variados por fase (rugido, mordida/investida, rabada dupla)
-    this.obsWarnCooldown = Math.max(0, (this.obsWarnCooldown || 0) - dt);
-    this.currentHabitatMode = ctx?.habitatMode || 'land';
-    const laneXs = this.currentHabitatMode === 'aquatic' && !ctx?.isAquaticBiome ? RIVER_LANE_X : LANE_X;
-    const baseY = this.currentHabitatMode === 'flying' ? SKY_CORRIDOR_Y - 1.15 : 0;
-    const minSafePaths = Math.max(1, ctx?.difficulty?.minSafePaths ?? 1);
-    const showRedSign = ctx?.difficulty?.showRedHazardSignage ?? true;
-
-    if (b.introTimer <= 0) {
-      if (this.pendingAttack) {
-        this.pendingAttack.timer -= dt;
-        const pulse = 0.35 + Math.abs(Math.sin(b.phaseTime * 18)) * 0.45;
-        for (const m of this.telegraphMarkers) {
-          if (m.visible) m.material.opacity = pulse;
-        }
-        if (this.pendingAttack.timer <= 0) {
-          const atk = this.pendingAttack;
-          this.pendingAttack = null;
-          this._hideTelegraphMarkers();
-          this._executeTelegraphedAttack(atk, players, ctx, b);
-        }
-      } else {
-        this.attackTimer -= dt;
-        if (this.attackTimer <= 0) {
-          const combatCfg = ContentLoader.getBalance().bossCombat || {};
-          const hpLost = b.maxHp - b.currentHp;
-          const phaseRate = b.phase === 3 ? 0.8 : (b.phase === 2 ? 0.9 : 1.0);
-          const baseCd = combatCfg.baseAttackCooldownSec ?? 1.85;
-          const minCd = combatCfg.minAttackCooldownSec ?? 0.85;
-          const perHp = combatCfg.cooldownReductionPerHpLost ?? 0.12;
-          this.attackTimer = Math.max(minCd, (baseCd - hpLost * perHp) * phaseRate);
-
-          const attackRoll = b.phase >= 3 && Math.random() < 0.45 ? 1 : Math.floor(Math.random() * 3);
-          const profile = b.attackProfile || BOSS_ATTACK_PROFILES[b.id] || ['rocha', 'onda'];
-          const chosenObs = profile[Math.floor(Math.random() * profile.length)];
-          const telegraphSec = b.telegraphSec || combatCfg.defaultTelegraphSec || 0.85;
-
-          const lanes = [];
-          let isHigh = false;
-          if (attackRoll === 0) {
-            lanes.push(Math.floor(Math.random() * 3));
-            this.currentAnim = 'bite';
-            this.animCycleTimer = Math.max(0.5, telegraphSec);
-          } else if (attackRoll === 1) {
-            const safe = Math.floor(Math.random() * 3);
-            if (minSafePaths >= 2) {
-              lanes.push((safe + 2) % 3);
-              if (b.phase >= 2) lanes.push((safe + 1) % 3);
-            } else {
-              for (let l = 0; l < 3; l++) {
-                if (l !== safe) lanes.push(l);
-              }
-            }
-            this.currentAnim = 'tail_sweep';
-            this.animCycleTimer = Math.max(0.6, telegraphSec);
-          } else {
-            isHigh = true;
-            lanes.push(Math.floor(Math.random() * 3));
-            this.currentAnim = 'roar';
-            this.animCycleTimer = Math.max(0.65, telegraphSec);
-          }
-
-          this.pendingAttack = {
-            timer: telegraphSec,
-            totalTimer: telegraphSec,
-            attackRoll,
-            chosenObs,
-            lanes,
-            isHigh,
-            minSafePaths,
-            laneXs,
-            baseY,
-            showRedSign
-          };
-          this._showTelegraphMarkers(lanes, laneXs, baseY, isHigh ? '#ffd447' : '#ff3b30');
-          ctx.onBossTelegraph?.({
-            boss: b,
-            phase: b.phase,
-            pattern: b.currentPattern,
-            lanes,
-            isHigh,
-            telegraphSec
-          });
-        }
-      }
     }
 
     // Move obstáculos & ataques temáticos do boss
@@ -438,17 +328,17 @@ export class BossManager {
           ) {
             s.hit = true;
             if (s.status) StatusSystem.apply(p, s.status, 3.0, ctx);
-            ctx.damagePlayer?.(p);
+            ctx.damagePlayer?.(p, 'boss');
           }
         }
       }
       if (s.mesh.position.z > 16) {
-        this.scene.remove(s.mesh);
+        if (!this.headless) this.scene.remove(s.mesh);
         this.hazardShots.splice(i, 1);
       }
     }
 
-    // Move ponto fraco dourado (em multiplayer de equipe, exige múltiplos jogadores atacando ou dá bônus conjunto!)
+    // Move ponto fraco dourado
     if (this.weakOrb.visible) {
       this.weakOrb.position.z += speed * 0.92 * dt;
       this.weakOrb.rotation.y += dt * 4.5;
@@ -470,6 +360,190 @@ export class BossManager {
     ctx.onBossHudUpdate?.(this.activeBoss);
   }
 
+  _beginTelegraph(b, laneXs, baseY, minSafePaths, showRedSign, ctx, combatCfg) {
+    const attackRoll = b.phase >= 3 && Math.random() < 0.45 ? 1 : Math.floor(Math.random() * 3);
+    const profile = b.attackProfile || BOSS_ATTACK_PROFILES[b.id] || ['rocha', 'onda'];
+    const chosenObs = profile[Math.floor(Math.random() * profile.length)];
+    const telegraphSec = b.telegraphSec || combatCfg.defaultTelegraphSec || 0.85;
+
+    const lanes = [];
+    let isHigh = false;
+    if (attackRoll === 0) {
+      lanes.push(Math.floor(Math.random() * 3));
+      this.currentAnim = 'bite';
+      this.animCycleTimer = Math.max(0.5, telegraphSec);
+    } else if (attackRoll === 1) {
+      const safe = Math.floor(Math.random() * 3);
+      if (minSafePaths >= 2) {
+        lanes.push((safe + 2) % 3);
+        if (b.phase >= 2) lanes.push((safe + 1) % 3);
+      } else {
+        for (let l = 0; l < 3; l++) {
+          if (l !== safe) lanes.push(l);
+        }
+      }
+      this.currentAnim = 'tail_sweep';
+      this.animCycleTimer = Math.max(0.6, telegraphSec);
+    } else {
+      isHigh = true;
+      lanes.push(Math.floor(Math.random() * 3));
+      this.currentAnim = 'roar';
+      this.animCycleTimer = Math.max(0.65, telegraphSec);
+    }
+
+    this.pendingAttack = {
+      attackRoll,
+      chosenObs,
+      lanes,
+      isHigh,
+      minSafePaths,
+      laneXs,
+      baseY,
+      showRedSign
+    };
+    this._showTelegraphMarkers(lanes, laneXs, baseY, isHigh ? '#ffd447' : '#ff3b30');
+    this._setState('telegraph', telegraphSec, b);
+    ctx.onBossTelegraph?.({
+      boss: b,
+      phase: b.phase,
+      pattern: b.currentPattern,
+      lanes,
+      isHigh,
+      telegraphSec
+    });
+  }
+
+  /**
+   * Recebe ataque do jogador (tecla Q / botão touch) com alcance e dano configurados em balance.json.
+   */
+  receivePlayerAttack(player, ctx = {}) {
+    if (!this.activeBoss || this.state === 'defeated') {
+      return { hit: false, reason: 'no_boss' };
+    }
+    if (!player || player.dead) {
+      return { hit: false, reason: 'player_dead' };
+    }
+    if (this.state === 'intro') {
+      return { hit: false, reason: 'boss_intro' };
+    }
+
+    const atkCfg = ContentLoader.getPlayerAttack();
+    const combatCfg = ContentLoader.getBossCombat();
+    const rangeZ = atkCfg.rangeZ ?? 18;
+    const rangeX = atkCfg.rangeX ?? 2.6;
+
+    const bossZ = this.group.position.z;
+    const bossX = this.group.position.x;
+    const dz = Math.abs((player.z || 0) - bossZ);
+    const dx = Math.abs((player.x || 0) - bossX);
+
+    if (dz > rangeZ || dx > rangeX + 1.5) {
+      return { hit: false, reason: 'out_of_range', dx, dz };
+    }
+
+    const b = this.activeBoss;
+    const baseDmg = atkCfg.damage ?? 28;
+    const atkPower = player.attackPowerMult || 1;
+    const weakMatch = b.weakness && player.element === b.weakness.element;
+    const windowMult = this.state === 'vulnerable' ? 1.0 : (combatCfg.offWindowDamageMult ?? 0.45);
+    const elemMult = weakMatch ? (1 + (combatCfg.elementalWeaknessBonusMult ?? 0.5)) : 1.0;
+    const damage = Math.max(1, Math.round(baseDmg * atkPower * windowMult * elemMult));
+
+    this._applyDamageToBoss(damage, player, ctx, {
+      via: 'player_attack',
+      weakMatch,
+      criticalWindow: this.state === 'vulnerable'
+    });
+
+    return {
+      hit: true,
+      damage,
+      remainingHp: this.activeBoss ? this.activeBoss.currentHp : 0,
+      maxHp: b.maxHp,
+      defeated: !this.activeBoss,
+      state: this.state
+    };
+  }
+
+  handlePlayerAttack(player, ctx = {}) {
+    return this.receivePlayerAttack(player, ctx);
+  }
+
+  _applyDamageToBoss(dmg, player, ctx = {}, meta = {}) {
+    const b = this.activeBoss;
+    if (!b) return;
+
+    b.currentHp = Math.max(0, b.currentHp - dmg);
+    b.hitsTaken = (b.hitsTaken || 0) + 1;
+
+    // Hidra do Pântano regenera 1x ao cair abaixo de 50%
+    if (b.id === 'swamp_hydra' && !b.hydraRegenUsed && b.currentHp > 0 && b.currentHp <= Math.floor(b.maxHp * 0.5)) {
+      b.hydraRegenUsed = true;
+      const healAmt = Math.round(b.maxHp * 0.08);
+      b.currentHp = Math.min(b.maxHp, b.currentHp + healAmt);
+      ctx.showFloatText?.(player, `🐍 HIDRA REGENEROU (+${healAmt} HP)!`, '#a3e635');
+      ctx.sfx?.roar?.('swamp_hydra');
+    }
+
+    const hpRatio = b.currentHp / Math.max(1, b.maxHp);
+    const prevPhase = b.phase;
+    const nextPhase = computeBossPhase(hpRatio, b.phases);
+    this.bossRig?.setPhase?.(nextPhase);
+    this.bossRig?.setPhaseVisuals?.(hpRatio);
+    b.phase = nextPhase;
+    const phaseCfg = b.phases?.[nextPhase - 1];
+    if (phaseCfg) {
+      b.currentPattern = phaseCfg.pattern;
+      b.telegraphSec = phaseCfg.telegraphSec;
+    }
+
+    ctx.sfx?.stomp?.();
+    ctx.cameraRig?.triggerShake?.(meta.criticalWindow ? 0.45 : 0.28, 0.18);
+    ctx.particles?.emitExplosion?.(this.group.position.x, 2.0, this.group.position.z, meta.criticalWindow ? '#ffd447' : '#fb923c', 14, true);
+
+    if (b.phase > prevPhase) {
+      this.currentAnim = 'roar';
+      this.animCycleTimer = 1.1;
+      this._triggerShockwave(this.group.position.x, this.group.position.z, '#ff2e2e');
+      ctx.sfx?.roar?.(b.id);
+      ctx.showFloatText?.(player, `⚠️ FÚRIA FASE ${b.phase}! (${b.currentPattern || 'OVERDRIVE'})`, '#ff4757');
+    } else if (meta.via === 'player_attack') {
+      const tag = meta.criticalWindow ? `⚔️ -${dmg} HP!` : `⚔️ -${dmg} HP`;
+      ctx.showFloatText?.(player, tag, meta.criticalWindow ? '#ffd447' : '#fdba74');
+    } else {
+      ctx.showFloatText?.(player, `PONTO FRACO! -${dmg} HP`, '#ffd447');
+    }
+
+    if (b.currentHp <= 0) {
+      const defeated = b;
+      const rewards = ContentLoader.getBalance().rewards || {};
+      const rewardMult = rewards.bossRewardMult ?? 1.0;
+      const eggReward = Math.round((defeated.rewardEggs || rewards.bossDefaultEggs || 55) * rewardMult);
+      const crystalReward = (defeated.rewardCrystals || rewards.bossDefaultCrystals || 3) + (defeated.bonusCrystals || 0);
+      const scoreBonus = Math.round((rewards.bossScoreBonus || 750) * rewardMult);
+
+      ctx.particles?.emitExplosion?.(this.group.position.x, 2.6, this.group.position.z, '#ff9a24', 32, true);
+      this.state = 'defeated';
+      this.clear();
+      ctx.onBossHudUpdate?.(null);
+      ctx.addScore?.(scoreBonus);
+      if (!this.headless) {
+        Save.addEggs(eggReward);
+        Save.data.crystals = (Save.data.crystals || 0) + crystalReward;
+        if (!Save.data.dinoHouse.trophies.includes(defeated.id)) {
+          Save.data.dinoHouse.trophies.push(defeated.id);
+        }
+        if (defeated.rewardAccessory && !Save.data.unlockedAccessories.includes(defeated.rewardAccessory)) {
+          Save.data.unlockedAccessories.push(defeated.rewardAccessory);
+        }
+        Save.save();
+      }
+      ctx.sfx?.victory?.();
+      ctx.onBossDefeated?.(defeated);
+      ctx.showFloatText?.(player, `🏆 ${defeated.name} DERROTADO! +${eggReward} 🥚 & +${crystalReward} 💎!`, '#58d63a');
+    }
+  }
+
   _announceObs(obsType, players, ctx, boss, isHigh = false) {
     boss.lastObsType = obsType;
     if (this.obsWarnCooldown > 0 || !players.length) return;
@@ -481,13 +555,13 @@ export class BossManager {
   }
 
   _spawnShot(x, y, z, opts = {}) {
+    if (this.headless) return;
     const obsType = opts.obsType || 'rocha';
     const cfg = BOSS_OBS_CFG[obsType] || BOSS_OBS_CFG.rocha;
     const isHigh = !!opts.isHigh;
     const laneIdx = opts.laneIdx ?? 1;
     const yBase = typeof opts.laneY === 'number' ? opts.laneY : 0;
 
-    // Ataques altos permitem passar abaixado (rocha/tronco arremessados ou cristal elevado)
     const buildType = isHigh && !['tronco', 'rocha', 'gelo'].includes(obsType) ? 'rocha' : obsType;
     const buildCfg = BOSS_OBS_CFG[buildType] || cfg;
     const showRedSign = opts.showRedSign !== undefined ? !!opts.showRedSign : true;
@@ -540,6 +614,7 @@ export class BossManager {
 
   _showTelegraphMarkers(lanes, laneXs, baseY = 0, color = '#ff3b30') {
     this._hideTelegraphMarkers();
+    if (this.headless) return;
     for (let i = 0; i < lanes.length; i++) {
       const lane = lanes[i];
       const m = this.telegraphMarkers[lane];
@@ -559,30 +634,30 @@ export class BossManager {
   _executeTelegraphedAttack(atk, players, ctx, b) {
     const { attackRoll, chosenObs, lanes, isHigh, minSafePaths, laneXs, baseY, showRedSign } = atk;
     if (attackRoll === 0) {
-      b.lungeZ = 4.2;
+      b.lungeZ = 3.2;
       const lane = lanes[0] ?? 1;
-      this._spawnShot(laneXs[lane], baseY, -31, { obsType: chosenObs, laneIdx: lane, laneY: baseY, showRedSign });
+      this._spawnShot(laneXs[lane], baseY, -28, { obsType: chosenObs, laneIdx: lane, laneY: baseY, showRedSign });
       this._announceObs(chosenObs, players, ctx, b);
     } else if (attackRoll === 1) {
       if (minSafePaths >= 2) {
         const jumpableObs = chosenObs === 'raio' || chosenObs === 'feixe' || chosenObs === 'gelo' ? 'onda' : chosenObs;
         if (lanes[0] !== undefined) {
-          this._spawnShot(laneXs[lanes[0]], baseY, -32, { obsType: chosenObs, laneIdx: lanes[0], laneY: baseY, showRedSign });
+          this._spawnShot(laneXs[lanes[0]], baseY, -28, { obsType: chosenObs, laneIdx: lanes[0], laneY: baseY, showRedSign });
         }
         if (lanes[1] !== undefined) {
-          this._spawnShot(laneXs[lanes[1]], baseY, -32, { obsType: jumpableObs, isHigh: true, laneIdx: lanes[1], laneY: baseY, showRedSign });
+          this._spawnShot(laneXs[lanes[1]], baseY, -28, { obsType: jumpableObs, isHigh: true, laneIdx: lanes[1], laneY: baseY, showRedSign });
         }
       } else {
         for (const l of lanes) {
-          this._spawnShot(laneXs[l], baseY, -32, { obsType: chosenObs, laneIdx: l, laneY: baseY, showRedSign });
+          this._spawnShot(laneXs[l], baseY, -28, { obsType: chosenObs, laneIdx: l, laneY: baseY, showRedSign });
         }
       }
       this._announceObs(chosenObs, players, ctx, b);
     } else {
-      ctx.cameraRig?.triggerShake(0.32, 0.25);
-      this._triggerShockwave(this.group.position.x, -32, b.color);
+      ctx.cameraRig?.triggerShake?.(0.32, 0.25);
+      this._triggerShockwave(this.group.position.x, -26, b.color);
       const lane = lanes[0] ?? 1;
-      this._spawnShot(laneXs[lane], baseY, -32, { obsType: chosenObs, isHigh, laneIdx: lane, laneY: baseY, showRedSign });
+      this._spawnShot(laneXs[lane], baseY, -28, { obsType: chosenObs, isHigh, laneIdx: lane, laneY: baseY, showRedSign });
       this._announceObs(chosenObs, players, ctx, b, true);
     }
   }
@@ -605,11 +680,10 @@ export class BossManager {
     const b = this.activeBoss;
     const aliveCount = players.filter((pl) => !pl.dead).length;
 
-    // Mecânica de ataque em equipe no multiplayer (2+ vivos): o primeiro jogador carrega o golpe e outro precisa atacar junto (ou ataque com habilidade quebra direto!)
     if (b.teamMode && aliveCount >= 2 && !player.abilityDuration) {
       b.teamComboIds.add(player.id);
       if (b.teamComboIds.size < Math.min(2, aliveCount)) {
-        ctx.sfx?.click();
+        ctx.sfx?.click?.();
         ctx.showFloatText?.(player, `ATAQUE EM EQUIPE (${b.teamComboIds.size}/2)!`, '#38bdf8');
         this._spawnNextWeakOrb();
         return;
@@ -617,89 +691,146 @@ export class BossManager {
       b.teamComboIds.clear();
     }
 
+    const atkCfg = ContentLoader.getPlayerAttack();
+    const combatCfg = ContentLoader.getBossCombat();
     const weakMatch = b.weakness && player.element === b.weakness.element;
-    const baseDmg = (player.abilityDuration > 0 || player.attackTimer > 0) ? 2 : 1;
-    const dmg = baseDmg + (weakMatch ? 1 : 0);
+    const baseOrbDmg = (atkCfg.damage ?? 28) * (combatCfg.weakOrbDamageMult ?? 2.5);
+    const activeBonus = (player.abilityDuration > 0 || player.attackTimer > 0) ? 1.25 : 1.0;
+    const elemBonus = weakMatch ? (1 + (combatCfg.elementalWeaknessBonusMult ?? 0.5)) : 1.0;
+    const dmg = Math.max(1, Math.round(baseOrbDmg * activeBonus * elemBonus));
+
     if (weakMatch) {
       ctx.showFloatText?.(player, `${b.weakness.icon} FRAQUEZA ELEMENTAL! +DANO!`, '#fde047');
     }
-    b.currentHp = Math.max(0, b.currentHp - dmg);
     b.stepIndex++;
-
-    // Mecânica especial da Hidra do Pântano: regenera +1 cabeça/HP na primeira vez que cai abaixo de 50%!
-    if (b.id === 'swamp_hydra' && !b.hydraRegenUsed && b.currentHp > 0 && b.currentHp <= Math.ceil(b.maxHp * 0.5)) {
-      b.hydraRegenUsed = true;
-      b.currentHp = Math.min(b.maxHp, b.currentHp + 1);
-      ctx.showFloatText?.(player, '🐍 HIDRA REGENEROU +1 CABEÇA (+1 HP)!', '#a3e635');
-      ctx.sfx?.roar('swamp_hydra');
-    }
-
-    const hpRatio = b.currentHp / b.maxHp;
-    const prevPhase = b.phase;
-    const nextPhase = computeBossPhase(hpRatio, b.phases);
-    this.bossRig?.setPhase?.(nextPhase);
-    this.bossRig?.setPhaseVisuals?.(hpRatio);
-    b.phase = nextPhase;
-    const phaseCfg = b.phases?.[nextPhase - 1];
-    if (phaseCfg) {
-      b.currentPattern = phaseCfg.pattern;
-      b.telegraphSec = phaseCfg.telegraphSec;
-    }
-
-    ctx.sfx?.stomp();
-    ctx.cameraRig?.triggerShake(0.55, 0.25);
-    ctx.particles?.emitExplosion(this.group.position.x, 2.2, -33, '#ffd447', 18, true);
-
-    if (b.phase > prevPhase) {
-      this.currentAnim = 'roar';
-      this.animCycleTimer = 1.1;
-      this._triggerShockwave(this.group.position.x, -32, '#ff2e2e');
-      ctx.sfx?.roar(b.id);
-      ctx.showFloatText?.(player, `⚠️ FÚRIA FASE ${b.phase}! (${b.currentPattern || 'OVERDRIVE'})`, '#ff4757');
-    } else {
-      ctx.showFloatText?.(player, `PONTO FRACO! -${dmg} HP`, '#ffd447');
-    }
-
-    if (b.currentHp <= 0) {
-      const defeated = b;
-      const rewards = ContentLoader.getBalance().rewards || {};
-      const rewardMult = rewards.bossRewardMult ?? 1.0;
-      const eggReward = Math.round((defeated.rewardEggs || rewards.bossDefaultEggs || 55) * rewardMult);
-      const crystalReward = (defeated.rewardCrystals || rewards.bossDefaultCrystals || 3) + (defeated.bonusCrystals || 0);
-      const scoreBonus = Math.round((rewards.bossScoreBonus || 750) * rewardMult);
-
-      ctx.particles?.emitExplosion(this.group.position.x, 2.6, -33, '#ff9a24', 32, true);
-      this.clear();
-      ctx.onBossHudUpdate?.(null);
-      ctx.addScore?.(scoreBonus);
-      Save.addEggs(eggReward);
-      Save.data.crystals = (Save.data.crystals || 0) + crystalReward;
-      if (!Save.data.dinoHouse.trophies.includes(defeated.id)) {
-        Save.data.dinoHouse.trophies.push(defeated.id);
-      }
-      if (defeated.rewardAccessory && !Save.data.unlockedAccessories.includes(defeated.rewardAccessory)) {
-        Save.data.unlockedAccessories.push(defeated.rewardAccessory);
-      }
-      Save.save();
-      ctx.sfx?.victory();
-      ctx.onBossDefeated?.(defeated);
-      ctx.showFloatText?.(player, `🏆 ${defeated.name} DERROTADO! +${eggReward} 🥚 & +${crystalReward} 💎!`, '#58d63a');
-    } else {
+    this._applyDamageToBoss(dmg, player, ctx, { via: 'weak_orb', weakMatch });
+    if (this.activeBoss) {
       this._spawnNextWeakOrb();
     }
+  }
+
+  getDebugState() {
+    if (!this.activeBoss) {
+      return { active: false, state: 'none', phase: 0, hp: 0, maxHp: 0 };
+    }
+    return {
+      active: true,
+      id: this.activeBoss.id,
+      name: this.activeBoss.name,
+      hp: this.activeBoss.currentHp,
+      maxHp: this.activeBoss.maxHp,
+      phase: this.activeBoss.phase,
+      state: this.state,
+      stateTimer: Number(this.stateTimer.toFixed(2)),
+      z: Number(this.group.position.z.toFixed(2)),
+      x: Number(this.group.position.x.toFixed(2))
+    };
   }
 
   clear() {
     this.activeBoss = null;
     this.bossRig = null;
     this.pendingAttack = null;
+    this.state = 'idle';
+    this.stateTimer = 0;
     this._hideTelegraphMarkers();
     this.weakOrb.visible = false;
     this.shockRing.visible = false;
     this.shockTimer = 0;
     this.group.visible = false;
     while (this.group.children.length > 0) this.group.remove(this.group.children[0]);
-    for (const s of this.hazardShots) this.scene.remove(s.mesh);
+    if (!this.headless) {
+      for (const s of this.hazardShots) this.scene.remove(s.mesh);
+    }
     this.hazardShots = [];
+  }
+
+  /**
+   * Simulação headless determinística da luta contra o boss com bot que ataca [Q] na janela de dano.
+   * Prova a meta de duração (Fácil ~45-60s, Normal 60-90s, Difícil ~90-120s) sem travamentos.
+   */
+  static simulateBossFightHeadless(difficultyId = 'normal', bossId = 'alpha_trex', options = {}) {
+    const mockScene = { add() {}, remove() {} };
+    const mgr = new BossManager(mockScene, { headless: true });
+    mgr.startBoss(bossId, options.playerCount || 1, difficultyId);
+
+    const atkCfg = ContentLoader.getPlayerAttack();
+    const atkCooldownSec = atkCfg.cooldownSec ?? 0.65;
+    const dt = options.dt || 0.05;
+    const maxSimSec = options.maxSimSec || 240;
+
+    const bot = {
+      id: 'trex',
+      dead: false,
+      x: 0,
+      z: 0,
+      y: 0,
+      baseY: 0,
+      element: null,
+      attackPowerMult: 1,
+      attackTimer: 0,
+      abilityDuration: 0
+    };
+
+    const phasesVisited = new Set([1]);
+    const statesVisited = new Set([mgr.state]);
+    let elapsed = 0;
+    let cooldown = 0;
+    let hitsLanded = 0;
+    let totalDamage = 0;
+    let defeated = false;
+    let lastState = mgr.state;
+    let sameStateDuration = 0;
+    let stuckDetected = false;
+
+    const mockCtx = {
+      onBossDefeated: () => {
+        defeated = true;
+      }
+    };
+
+    while (elapsed < maxSimSec && mgr.activeBoss) {
+      mgr.update(dt, 24, [bot], mockCtx);
+      elapsed += dt;
+      if (cooldown > 0) cooldown = Math.max(0, cooldown - dt);
+
+      if (mgr.activeBoss) {
+        phasesVisited.add(mgr.activeBoss.phase);
+        statesVisited.add(mgr.state);
+        if (mgr.state === lastState) {
+          sameStateDuration += dt;
+          if (sameStateDuration > 15) {
+            stuckDetected = true;
+            break;
+          }
+        } else {
+          lastState = mgr.state;
+          sameStateDuration = 0;
+        }
+
+        // Bot ataca com [Q] sempre que o boss está na janela de dano ('vulnerable')
+        if (mgr.state === 'vulnerable' && cooldown <= 0) {
+          const res = mgr.receivePlayerAttack(bot, mockCtx);
+          if (res.hit) {
+            hitsLanded++;
+            totalDamage += res.damage;
+            cooldown = atkCooldownSec;
+          }
+        }
+      }
+    }
+
+    return {
+      ok: defeated && !stuckDetected,
+      difficulty: difficultyId,
+      bossId,
+      durationSec: Number(elapsed.toFixed(2)),
+      hitsLanded,
+      totalDamage,
+      phasesVisited: [...phasesVisited].sort(),
+      statesVisited: [...statesVisited],
+      finalState: mgr.state,
+      stuckDetected
+    };
   }
 }
