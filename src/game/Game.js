@@ -1,4 +1,4 @@
-// Motor completo do DINO DASH 3D: integra Essencial, Avançado e Bônus em arquitetura modular.
+﻿// Motor completo do DINO DASH 3D: integra Essencial, Avançado e Bônus em arquitetura modular.
 import * as THREE from 'three';
 import { Save } from '../systems/Save.js';
 import { InputSystem } from '../systems/Input.js';
@@ -2734,7 +2734,7 @@ export class Game {
       itemJust = !!this.input.virtualJustPressed[p.key]?.has('item');
       transmuteJust = !!this.input.virtualJustPressed[p.key]?.has('transmute');
     } else {
-      const allowClassic = isLocalMain || this.players.length === 1;
+      const allowClassic = this.players.length === 1 || (!!this.multiplayerSession?.active && isLocalMain);
       const inKey = isLocalMain ? 'p1' : p.key;
       leftJust = this.input.wasActionJustPressed(inKey, 'left', allowClassic);
       rightJust = this.input.wasActionJustPressed(inKey, 'right', allowClassic);
@@ -5055,6 +5055,7 @@ export class Game {
       return;
     }
 
+    let consumedPlayingInput = false;
     if (this.state === 'menu') {
       this.world.update(dt, 14);
       this.dayNight.update(dt, this.currentBiome.theme);
@@ -5080,7 +5081,19 @@ export class Game {
       const focusY = (pMenu?.baseY || 0) + 0.2;
       this.cameraRig.update(dt, { x: focusX, y: focusY, z: 0, diveDepth: pMenu?.diveDepth || 0 }, 14, true, false, false, envMenu);
     } else if (this.state === 'playing') {
-      this._updatePlaying(dt);
+      const FIXED_STEP = 1 / 60;
+      this._fixedAcc = Math.min(0.1, (this._fixedAcc || 0) + dt);
+      let steps = 0;
+      while (this._fixedAcc >= FIXED_STEP && steps < 4) {
+        this._updatePlaying(FIXED_STEP);
+        if (steps === 0) {
+          this.input.endFrame();
+          consumedPlayingInput = true;
+        }
+        this._fixedAcc -= FIXED_STEP;
+        steps++;
+      }
+      if (steps === 0) consumedPlayingInput = true; // preserva justPressed até o próximo passo fixo
     } else if (this.state === 'gameover') {
       for (const p of this.players) {
         if (p.dead) p.animator.update(dt, { dead: true });
@@ -5186,7 +5199,9 @@ export class Game {
       }
       this.renderer.render(this.scene, this.camera);
     }
-    this.input.endFrame();
+    if (!consumedPlayingInput) {
+      this.input.endFrame();
+    }
   }
 
   destroy() {

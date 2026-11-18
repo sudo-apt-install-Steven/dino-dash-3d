@@ -15,7 +15,8 @@
     "dev": "vite --host",
     "host": "node server/lan-host.js",
     "build": "vite build",
-    "preview": "vite preview --host"
+    "preview": "vite preview --host",
+    "test:unit": "node --test tests/unit.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",

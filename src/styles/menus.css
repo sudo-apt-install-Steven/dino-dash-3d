@@ -994,11 +994,12 @@
     padding: 5px 12px;
   }
   #hud-predator-intro {
-    top: calc(env(safe-area-inset-top, 0px) + 66px) !important;
+    top: calc(env(safe-area-inset-top, 0px) + 60px) !important;
     left: 50% !important;
     transform: translateX(-50%);
-    width: min(350px, calc(100vw - 20px)) !important;
-    padding: 7px 10px !important;
+    width: min(310px, calc(100vw - 24px)) !important;
+    padding: 6px 9px !important;
+    font-size: 0.78rem !important;
   }
   .float-callouts {
     top: 26%;
@@ -1116,27 +1117,27 @@
   }
   .touch-cluster-right {
     display: grid;
-    grid-template-columns: repeat(3, 54px);
+    grid-template-columns: repeat(3, 58px);
     justify-items: end;
     align-items: end;
-    gap: 6px;
+    gap: 8px;
   }
   .touch-controls.touch-mode-buttons .touch-cluster-right {
     display: grid;
-    grid-template-columns: repeat(3, 52px);
-    gap: 6px;
+    grid-template-columns: repeat(3, 56px);
+    gap: 8px;
   }
   .touch-btn {
-    width: 54px;
-    height: 54px;
-    font-size: 1.1rem;
+    width: 58px;
+    height: 58px;
+    font-size: 1.15rem;
     border-radius: 16px;
     border-width: 2px;
   }
   .touch-controls.touch-mode-buttons .touch-btn {
-    width: 52px;
-    height: 52px;
-    border-radius: 14px;
+    width: 56px;
+    height: 56px;
+    border-radius: 15px;
   }
 }
 
