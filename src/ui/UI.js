@@ -14,6 +14,9 @@ import { PartyModals } from './PartyModals.js';
 import { GuideModal } from './GuideModal.js';
 import { GachaModal } from './GachaModal.js';
 import { LegalModal } from './LegalModal.js';
+import { ProfileModal } from './ProfileModal.js';
+import { AchievementsModal } from './AchievementsModal.js';
+import { SaveModal } from './SaveModal.js';
 import { GachaSystem } from '../systems/GachaSystem.js';
 import { PerfMonitor } from '../systems/PerfMonitor.js';
 import { OrientationManager } from '../systems/OrientationManager.js';
@@ -470,6 +473,32 @@ export class UIManager {
         break;
       case 'credits':
         Menus.renderCreditsModal(this.hud.modalLayer, () => this.openSection('extras'));
+        break;
+      case 'profile':
+        this.activeCleanup = ProfileModal.renderInto(this.hud.modalLayer, {
+          onClose: back,
+          onOpenAchievements: () => this.openSection('achievements'),
+          onOpenSave: () => this.openSection('save_data'),
+          onOpenLegal: () => this.openSection('legal'),
+          onProfileUpdated: () => {
+            this.game.rebuildPlayers?.();
+          }
+        });
+        break;
+      case 'achievements':
+        AchievementsModal.renderInto(this.hud.modalLayer, {
+          onClose: back
+        });
+        break;
+      case 'save_data':
+        SaveModal.renderInto(this.hud.modalLayer, {
+          onClose: back,
+          onOpenLegal: () => this.openSection('legal'),
+          onAfterImport: () => {
+            this.applyVisualSettings();
+            this.game.rebuildPlayers?.();
+          }
+        });
         break;
       case 'legal':
       case 'report':

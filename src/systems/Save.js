@@ -1,13 +1,21 @@
 // Persistência resiliente em 3 camadas (localStorage + IndexedDB + Cookie técnico de recuperação),
-// sem vínculo com IP ou Wi-Fi (LGPD Art. 6º / Art. 18).
+// com versionamento de schema, checksum, backup automático, migração e proteção anti-prototype-pollution.
+
+import { sanitizeNickname } from '../security/Sanitize.js';
 
 const STORAGE_KEY = 'dino_dash_3d_save_v1';
+const BACKUP_KEY = 'dino_dash_3d_save_backup_v1';
 const IDB_NAME = 'DinoDash3DDB';
 const IDB_STORE = 'saves';
 const IDB_KEY = 'primary';
 const CHECKPOINT_COOKIE = 'dd3d_chk';
 
+export const SAVE_SCHEMA_VERSION = 4;
+export const MAX_SAVE_IMPORT_BYTES = 512 * 1024;
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 const DEFAULT_SAVE = {
+  schemaVersion: SAVE_SCHEMA_VERSION,
   highScore: 0,
   bestScoresByMode: {},
   eggs: 0,
@@ -47,6 +55,8 @@ const DEFAULT_SAVE = {
   activeCompanion: null,
   missions: { date: '', list: [] },
   achievements: [],
+  achievementProgress: {},
+  achievementUnlockedAt: {},
   records: [],
   rivalry: { p1Wins: 0, p2Wins: 0 },
   ghostRuns: {},
@@ -58,7 +68,7 @@ const DEFAULT_SAVE = {
   campaign: { completedNodes: [], currentNode: 'desert_start' },
   season: 'auto',
   team: { name: 'Dino Squad', color: '#58d63a', emblem: '🦖' },
-  stats: { runs: 0, totalDist: 0, totalEggs: 0, deathsBy: {}, skillsUsed: {}, victoriesLan: 0 },
+  stats: { runs: 0, totalDist: 0, totalEggs: 0, bossesDefeated: 0, playTimeSec: 0, deathsBy: {}, skillsUsed: {}, victoriesLan: 0 },
   weekly: { weekId: '', progress: 0, claimed: false },
   customTracks: [],
   activeCustomTrackId: null,
@@ -74,10 +84,12 @@ const DEFAULT_SAVE = {
   benchmarkDone: false,
   benchmarkVersion: 3,
   benchmarkGpu: '',
-    introModeCustom: false,
-    devMode: false,
-    playerActorId: '',
-    savedAt: 0,
+  introModeCustom: false,
+  devMode: false,
+  playerActorId: '',
+  savedAt: 0,
+  imported: false,
+  importedAt: 0,
   crystals: 0,
   fossilCrates: 2,
   gachaPity: 0,
@@ -99,6 +111,25 @@ const DEFAULT_SAVE = {
   discoveredFossils: {},
   perfectMode: false,
   network: { nickname: '', lastRoom: '', tvScale: false, mpCameraMode: 'shared' },
+  profile: {
+    nickname: '',
+    bio: '',
+    isPublic: true,
+    avatar: {
+      dinoId: 'trex',
+      angleY: -0.55,
+      angleX: 0.12,
+      zoom: 1.0,
+      pose: 'idle',
+      skinId: 'original'
+    },
+    showcaseAchievements: [],
+    bannerId: 'amber_classic',
+    frameId: 'default',
+    nicknameChangedAt: 0,
+    xp: 0,
+    level: 1
+  },
   settings: {
     quality: 'medium',
     shadows: true,
@@ -155,11 +186,74 @@ function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+/**
+ * Remove chaves perigosas (__proto__, constructor, prototype) recursivamente contra prototype pollution.
+ */
+export function sanitizePlainObject(value, depth = 0) {
+  if (depth > 16) return null;
+  if (value === null || typeof value !== 'object') {
+    if (typeof value === 'number' && !Number.isFinite(value)) return 0;
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, 500).map((item) => sanitizePlainObject(item, depth + 1));
+  }
+  const out = {};
+  for (const key of Object.keys(value)) {
+    if (FORBIDDEN_KEYS.has(key)) continue;
+    out[key] = sanitizePlainObject(value[key], depth + 1);
+  }
+  return out;
+}
+
+function canonicalStringify(value) {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => canonicalStringify(v)).join(',')}]`;
+  }
+  const keys = Object.keys(value).filter((k) => !FORBIDDEN_KEYS.has(k)).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalStringify(value[k])}`).join(',')}}`;
+}
+
+/**
+ * Calcula checksum determinístico FNV-1a duplo (64-bit hex) para integridade do JSON exportado.
+ */
+export function computeSaveChecksum(dataObj) {
+  const canonical = canonicalStringify(sanitizePlainObject(dataObj));
+  let h1 = 0x811c9dc5;
+  let h2 = 0x9e3779b9;
+  for (let i = 0; i < canonical.length; i++) {
+    const c = canonical.charCodeAt(i);
+    h1 ^= c;
+    h1 = Math.imul(h1, 0x01000193) >>> 0;
+    h2 ^= (c + (i & 0xff));
+    h2 = Math.imul(h2, 0x85ebca6b) >>> 0;
+  }
+  return `dd3d_${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`;
+}
+
+function sanitizeBioText(raw, maxLen = 160) {
+  return String(raw ?? '')
+    .replace(/[\u0000-\u001F\u007F<>`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+}
+
+function clampInt(val, min, max, fallback = 0) {
+  const n = Number(val);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(n)));
+}
+
 function mergeDefaults(target, defaults) {
   for (const key of Object.keys(defaults)) {
+    if (FORBIDDEN_KEYS.has(key)) continue;
     const val = defaults[key];
     if (val && typeof val === 'object' && !Array.isArray(val)) {
-      if (!target[key] || typeof target[key] !== 'object') {
+      if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key])) {
         target[key] = deepClone(val);
       } else {
         mergeDefaults(target[key], val);
@@ -171,6 +265,35 @@ function mergeDefaults(target, defaults) {
   return target;
 }
 
+/**
+ * Migra saves de versões antigas (v1/v2/v3 ou campos legados) para o schema atual v4.
+ */
+export function migrateSaveData(rawObj, sourceVersion = 1) {
+  const clean = sanitizePlainObject(rawObj) || {};
+  const migrated = deepClone(clean);
+
+  // Migrações de campos legados (v1/v2)
+  if (migrated.scores && !migrated.bestScoresByMode) {
+    migrated.bestScoresByMode = typeof migrated.scores === 'object' ? migrated.scores : {};
+  }
+  if (typeof migrated.coins === 'number' && migrated.eggs === undefined) {
+    migrated.eggs = migrated.coins;
+  }
+  if (typeof migrated.dino === 'string' && !migrated.selectedDino) {
+    migrated.selectedDino = migrated.dino;
+  }
+  if (migrated.gachaPity !== undefined && migrated.gachaPityEpic === undefined) {
+    migrated.gachaPityEpic = migrated.gachaPity;
+  }
+  if (migrated.network?.nickname && (!migrated.profile || !migrated.profile.nickname)) {
+    migrated.profile = { ...(migrated.profile || {}), nickname: migrated.network.nickname };
+  }
+  if (sourceVersion < 4) {
+    migrated.schemaVersion = SAVE_SCHEMA_VERSION;
+  }
+  return migrated;
+}
+
 function readCheckpointCookie() {
   if (typeof document === 'undefined') return null;
   try {
@@ -179,7 +302,7 @@ function readCheckpointCookie() {
     if (!hit) return null;
     const raw = decodeURIComponent(hit.slice(CHECKPOINT_COOKIE.length + 1));
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    return parsed && typeof parsed === 'object' ? sanitizePlainObject(parsed) : null;
   } catch {
     return null;
   }
@@ -283,18 +406,44 @@ async function idbDeleteAll() {
 class SaveSystem {
   constructor() {
     this.memoryFallback = null;
+    this.lastBackup = null;
     this.storageAvailable = true;
     this._wipedAt = 0;
     this.data = this.load();
   }
 
   _normalizeLoaded(parsed) {
-    const prevBenchVer = parsed?.benchmarkVersion || 1;
-    const loaded = mergeDefaults(deepClone(parsed), DEFAULT_SAVE);
+    const clean = sanitizePlainObject(parsed) || {};
+    const prevBenchVer = clean?.benchmarkVersion || 1;
+    const loaded = mergeDefaults(deepClone(clean), DEFAULT_SAVE);
+    loaded.schemaVersion = SAVE_SCHEMA_VERSION;
+
     const freeStarters = DEFAULT_SAVE.unlockedDinos;
+    if (!Array.isArray(loaded.unlockedDinos)) loaded.unlockedDinos = [...freeStarters];
     for (const id of freeStarters) {
       if (!loaded.unlockedDinos.includes(id)) loaded.unlockedDinos.push(id);
     }
+    if (!Array.isArray(loaded.achievements)) loaded.achievements = [];
+    loaded.achievements = Array.from(new Set(loaded.achievements.filter((a) => typeof a === 'string').slice(0, 200)));
+    if (!loaded.achievementProgress || typeof loaded.achievementProgress !== 'object') loaded.achievementProgress = {};
+    if (!loaded.achievementUnlockedAt || typeof loaded.achievementUnlockedAt !== 'object') loaded.achievementUnlockedAt = {};
+
+    loaded.highScore = clampInt(loaded.highScore, 0, 10_000_000, 0);
+    loaded.eggs = clampInt(loaded.eggs, 0, 5_000_000, 0);
+    loaded.crystals = clampInt(loaded.crystals, 0, 500_000, 0);
+    loaded.fossilCrates = clampInt(loaded.fossilCrates, 0, 10_000, 2);
+
+    if (loaded.network) {
+      loaded.network.nickname = loaded.network.nickname ? sanitizeNickname(loaded.network.nickname, '', 16) : '';
+    }
+    if (loaded.profile) {
+      loaded.profile.nickname = loaded.profile.nickname ? sanitizeNickname(loaded.profile.nickname, '', 16) : (loaded.network?.nickname || '');
+      loaded.profile.bio = sanitizeBioText(loaded.profile.bio || '', 160);
+      loaded.profile.isPublic = loaded.profile.isPublic !== false;
+      loaded.profile.level = clampInt(loaded.profile.level, 1, 999, 1);
+      loaded.profile.xp = clampInt(loaded.profile.xp, 0, 10_000_000, 0);
+    }
+
     if (prevBenchVer < 3) {
       const wasLowTier = loaded.benchmarkTier === 'Baixo';
       loaded.benchmarkVersion = 3;
@@ -311,10 +460,10 @@ class SaveSystem {
       loaded.settings.introMode = 'always';
     }
     const legacyPity = Math.max(0, Math.floor(Number(loaded.gachaPity || 0)));
-    loaded.gachaPityEpic = parsed?.gachaPityEpic == null
+    loaded.gachaPityEpic = clean?.gachaPityEpic == null
       ? Math.min(8, legacyPity)
       : Math.max(0, Math.min(8, Math.floor(Number(loaded.gachaPityEpic || 0))));
-    loaded.gachaPityShiny = parsed?.gachaPityShiny == null
+    loaded.gachaPityShiny = clean?.gachaPityShiny == null
       ? Math.min(14, legacyPity)
       : Math.max(0, Math.min(14, Math.floor(Number(loaded.gachaPityShiny || 0))));
     loaded.gachaPity = loaded.gachaPityEpic;
@@ -327,9 +476,9 @@ class SaveSystem {
   load() {
     let parsed = null;
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        parsed = JSON.parse(raw);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (raw) parsed = JSON.parse(raw);
       }
     } catch {
       this.storageAvailable = false;
@@ -337,9 +486,7 @@ class SaveSystem {
 
     if (!parsed) {
       const cookieChk = readCheckpointCookie();
-      if (cookieChk) {
-        parsed = cookieChk;
-      }
+      if (cookieChk) parsed = cookieChk;
     }
 
     if (!parsed) {
@@ -347,7 +494,7 @@ class SaveSystem {
       this.memoryFallback = deepClone(DEFAULT_SAVE);
       return this.memoryFallback;
     }
-    return this._normalizeLoaded(parsed);
+    return this._normalizeLoaded(migrateSaveData(parsed, Number(parsed.schemaVersion || 1)));
   }
 
   async hydrateAsync() {
@@ -359,15 +506,17 @@ class SaveSystem {
     const curSavedAt = Number(this.data?.savedAt || 0);
     let hasLocal = false;
     try {
-      hasLocal = !!window.localStorage.getItem(STORAGE_KEY);
+      hasLocal = !!(typeof window !== 'undefined' && window.localStorage?.getItem(STORAGE_KEY));
     } catch {}
     const shouldRestore = !hasLocal || idbSavedAt > curSavedAt || (Number(idbData.highScore || 0) > Number(this.data?.highScore || 0) && curSavedAt === 0);
     if (!shouldRestore) return false;
-    this.data = this._normalizeLoaded(idbData);
+    this.data = this._normalizeLoaded(migrateSaveData(idbData, Number(idbData.schemaVersion || 1)));
     this.memoryFallback = this.data;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
-      this.storageAvailable = true;
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+        this.storageAvailable = true;
+      }
     } catch {}
     writeCheckpointCookie(this.data);
     return true;
@@ -375,11 +524,14 @@ class SaveSystem {
 
   save() {
     this.data.savedAt = Date.now();
+    this.data.schemaVersion = SAVE_SCHEMA_VERSION;
     if (!import.meta.env?.DEV) this.data.devMode = false;
     this.memoryFallback = this.data;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
-      this.storageAvailable = true;
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.data));
+        this.storageAvailable = true;
+      }
     } catch {
       this.storageAvailable = false;
     }
@@ -387,29 +539,192 @@ class SaveSystem {
     idbWriteSave(deepClone(this.data)).catch(() => {});
   }
 
-  exportJson() {
-    return JSON.stringify(this.data, null, 2);
+  exportSavePackage() {
+    const cleanData = sanitizePlainObject(deepClone(this.data));
+    cleanData.schemaVersion = SAVE_SCHEMA_VERSION;
+    const checksum = computeSaveChecksum(cleanData);
+    return {
+      game: 'dino-dash-3d',
+      schemaVersion: SAVE_SCHEMA_VERSION,
+      exportedAt: new Date().toISOString(),
+      checksum,
+      data: cleanData
+    };
   }
 
-  importJson(rawText) {
-    try {
-      const parsed = JSON.parse(String(rawText || ''));
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return { ok: false, error: 'Arquivo JSON inválido.' };
-      }
-      this.data = this._normalizeLoaded(parsed);
-      this.save();
-      return { ok: true };
-    } catch {
-      return { ok: false, error: 'Não foi possível ler este JSON de save.' };
+  exportJson() {
+    return JSON.stringify(this.exportSavePackage(), null, 2);
+  }
+
+  /**
+   * Valida JSON importado (tamanho, prototype pollution, tipos, checksum e migração)
+   * e retorna pré-visualização antes de sobrescrever o save atual.
+   */
+  previewImport(rawText) {
+    if (typeof rawText !== 'string' || !rawText.trim()) {
+      return { ok: false, error: 'Arquivo vazio ou formato inválido.' };
     }
+    if (rawText.length > MAX_SAVE_IMPORT_BYTES) {
+      return { ok: false, error: `Arquivo muito grande (máximo ${Math.round(MAX_SAVE_IMPORT_BYTES / 1024)} KB).` };
+    }
+    // Detecção rápida de payload malicioso de prototype pollution no texto bruto
+    if (/"__proto__"\s*:|"constructor"\s*:|"prototype"\s*:/i.test(rawText)) {
+      return { ok: false, error: 'Arquivo rejeitado por conter chaves inválidas de segurança.' };
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return { ok: false, error: 'Não foi possível ler este JSON (arquivo corrompido ou sintaxe inválida).' };
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ok: false, error: 'Estrutura de save inválida (esperado objeto JSON).' };
+    }
+
+    const warnings = [];
+    let isLegacy = false;
+    let sourceVersion = 1;
+    let checksumValid = true;
+    let rawData = null;
+    let exportedAt = null;
+
+    if (parsed.game === 'dino-dash-3d' && parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)) {
+      sourceVersion = clampInt(parsed.schemaVersion, 1, 99, 1);
+      exportedAt = typeof parsed.exportedAt === 'string' ? parsed.exportedAt : null;
+      rawData = parsed.data;
+      if (parsed.checksum) {
+        const expected = computeSaveChecksum(rawData);
+        if (expected !== parsed.checksum) {
+          checksumValid = false;
+          return { ok: false, error: 'Checksum inválido: o arquivo foi alterado ou está corrompido.' };
+        }
+      } else {
+        warnings.push('Arquivo sem checksum de integridade.');
+      }
+    } else {
+      // Suporte a saves antigos (v1-v3) exportados antes do wrapper
+      isLegacy = true;
+      sourceVersion = clampInt(parsed.schemaVersion, 1, 3, 1);
+      rawData = parsed;
+      const hasAnyKnownField = (
+        typeof rawData.highScore === 'number' ||
+        typeof rawData.eggs === 'number' ||
+        Array.isArray(rawData.unlockedDinos) ||
+        typeof rawData.selectedDino === 'string' ||
+        typeof rawData.scores === 'object'
+      );
+      if (!hasAnyKnownField) {
+        return { ok: false, error: 'Este JSON não parece ser um save válido do Dino Dash 3D.' };
+      }
+      warnings.push(`Save legado (v${sourceVersion}) será migrado automaticamente para v${SAVE_SCHEMA_VERSION}.`);
+    }
+
+    const migrated = migrateSaveData(rawData, sourceVersion);
+    const normalized = this._normalizeLoaded(migrated);
+
+    return {
+      ok: true,
+      schemaVersion: sourceVersion,
+      isLegacy,
+      checksumValid,
+      exportedAt,
+      warnings,
+      normalizedData: normalized,
+      summary: {
+        highScore: normalized.highScore,
+        level: normalized.seasonPass?.level || normalized.profile?.level || 1,
+        eggs: normalized.eggs,
+        crystals: normalized.crystals,
+        unlockedDinosCount: normalized.unlockedDinos.length,
+        achievementsCount: normalized.achievements.length,
+        nickname: normalized.profile?.nickname || normalized.network?.nickname || 'Convidado'
+      }
+    };
+  }
+
+  createAutoBackup() {
+    const backup = {
+      backedUpAt: Date.now(),
+      data: deepClone(this.data)
+    };
+    this.lastBackup = backup;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(BACKUP_KEY, JSON.stringify(backup));
+      }
+    } catch {}
+    return backup;
+  }
+
+  getAutoBackupInfo() {
+    let backup = this.lastBackup;
+    if (!backup) {
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          const raw = window.localStorage.getItem(BACKUP_KEY);
+          if (raw) backup = JSON.parse(raw);
+        }
+      } catch {}
+    }
+    if (!backup || !backup.data) return null;
+    return {
+      backedUpAt: backup.backedUpAt || 0,
+      highScore: Math.floor(backup.data.highScore || 0),
+      eggs: Math.floor(backup.data.eggs || 0),
+      unlockedDinosCount: Array.isArray(backup.data.unlockedDinos) ? backup.data.unlockedDinos.length : 0,
+      achievementsCount: Array.isArray(backup.data.achievements) ? backup.data.achievements.length : 0
+    };
+  }
+
+  restoreAutoBackup() {
+    let backup = this.lastBackup;
+    if (!backup) {
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          const raw = window.localStorage.getItem(BACKUP_KEY);
+          if (raw) backup = JSON.parse(raw);
+        }
+      } catch {}
+    }
+    if (!backup || !backup.data) {
+      return { ok: false, error: 'Nenhum backup automático disponível.' };
+    }
+    this.data = this._normalizeLoaded(backup.data);
+    this.save();
+    return { ok: true };
+  }
+
+  importJson(rawText, { skipBackup = false } = {}) {
+    const check = this.previewImport(rawText);
+    if (!check.ok) {
+      return { ok: false, error: check.error };
+    }
+    if (!skipBackup) {
+      this.createAutoBackup();
+    }
+    const nextData = check.normalizedData;
+    nextData.imported = true;
+    nextData.importedAt = Date.now();
+    this.data = nextData;
+    this.save();
+    return { ok: true, preview: check.summary, warnings: check.warnings };
+  }
+
+  isImportedSave() {
+    return !!this.data?.imported;
   }
 
   async wipeAllLocalData() {
     this._wipedAt = Date.now();
     try {
-      window.localStorage.removeItem(STORAGE_KEY);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.removeItem(STORAGE_KEY);
+        window.localStorage.removeItem(BACKUP_KEY);
+      }
     } catch {}
+    this.lastBackup = null;
     clearCheckpointCookie();
     await idbDeleteAll();
     this.data = deepClone(DEFAULT_SAVE);
@@ -447,9 +762,13 @@ class SaveSystem {
     return this.data.crystals;
   }
 
-  unlockAchievement(id) {
+  unlockAchievement(id, { bypassAntiExploit = false } = {}) {
+    if (!id || typeof id !== 'string') return false;
+    if (!bypassAntiExploit && this.data.devMode) return false;
     if (!this.data.achievements.includes(id)) {
       this.data.achievements.push(id);
+      if (!this.data.achievementUnlockedAt) this.data.achievementUnlockedAt = {};
+      this.data.achievementUnlockedAt[id] = Date.now();
       this.save();
       return true;
     }

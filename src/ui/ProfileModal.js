@@ -1,0 +1,545 @@
+// Tela de Perfil do Jogador & Contas (D2 + D3): Foto 3D customizável por ângulo/zoom/pose,
+// login por nick+senha ou email+senha, cadastro, recuperação, OAuth Google/Discord,
+// migração convidado->conta, bio sanitizada, vitrine de troféus, estatísticas e privacidade.
+import * as THREE from 'three';
+import { DINO_CATALOG, getDinoSpec } from '../dinos/DinoCatalog.js';
+import { getEquippedSkinVariant } from '../dinos/DinoCustomization.js';
+import { DinoFactory } from '../dinos/DinoFactory.js';
+import { DinoAnimator } from '../dinos/DinoAnimator.js';
+import { Save } from '../systems/Save.js';
+import { Achievements, TROPHY_TIERS } from '../systems/Achievements.js';
+import {
+  AuthProfile,
+  PROFILE_BANNERS,
+  PROFILE_FRAMES
+} from '../systems/AuthProfile.js';
+import { escapeHtml } from '../security/Sanitize.js';
+import { attachModalHelp } from './Menus.js';
+
+class ProfileAvatar3D {
+  constructor(containerEl, avatarCfg) {
+    this.container = containerEl;
+    this.cfg = { ...avatarCfg };
+    this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: false });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.domElement.style.width = '100%';
+    this.renderer.domElement.style.height = '100%';
+    this.renderer.domElement.style.display = 'block';
+
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(40, 1, 0.1, 30);
+    this.scene.add(new THREE.HemisphereLight('#fff2d6', '#5e2c14', 1.15));
+    const key = new THREE.DirectionalLight('#ffdca8', 1.8);
+    key.position.set(3, 5, 4);
+    this.scene.add(key);
+
+    this.model = null;
+    this.animator = null;
+    this.dragging = false;
+    this.lastX = 0;
+
+    containerEl.innerHTML = '';
+    containerEl.appendChild(this.renderer.domElement);
+    this._syncSize();
+    this.setAvatarConfig(this.cfg);
+    this._bindEvents();
+
+    this.lastTime = performance.now();
+    this._raf = requestAnimationFrame(this._tick.bind(this));
+  }
+
+  _syncSize() {
+    if (!this.container) return;
+    const w = Math.max(140, this.container.clientWidth || 180);
+    const h = Math.max(140, this.container.clientHeight || 180);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h, false);
+  }
+
+  _clearModel() {
+    if (!this.model) return;
+    this.scene.remove(this.model.root);
+    const disposed = new Set();
+    for (const m of this.model.allMeshes || []) {
+      if (m.material && !disposed.has(m.material)) {
+        disposed.add(m.material);
+        m.material.dispose();
+      }
+    }
+    this.model = null;
+  }
+
+  setAvatarConfig(cfg) {
+    const prevDino = this.cfg?.dinoId;
+    this.cfg = { ...this.cfg, ...cfg };
+    if (!this.model || prevDino !== this.cfg.dinoId) {
+      this._clearModel();
+      const baseCustom = Save.data.customization?.p1?.presets?.[Save.data.customization?.p1?.activePreset || 0] || {};
+      this.model = DinoFactory.build(this.cfg.dinoId || 'trex', {
+        ...baseCustom,
+        skinVariant: getEquippedSkinVariant(this.cfg.dinoId || 'trex')
+      }, { allowHybrid: false });
+      this.scene.add(this.model.root);
+      this.animator = new DinoAnimator(this.model);
+    }
+    const dist = 4.6 / Math.max(0.65, Math.min(1.65, Number(this.cfg.zoom || 1.0)));
+    this.camera.position.set(0, 1.45 + (Number(this.cfg.angleX || 0) * 1.4), dist);
+    this.camera.lookAt(0, 1.0, 0);
+  }
+
+  _bindEvents() {
+    const el = this.renderer.domElement;
+    this._onDown = (e) => {
+      this.dragging = true;
+      this.lastX = e.clientX;
+    };
+    this._onMove = (e) => {
+      if (!this.dragging) return;
+      const dx = e.clientX - this.lastX;
+      this.lastX = e.clientX;
+      this.cfg.angleY = (this.cfg.angleY || 0) + dx * 0.015;
+    };
+    this._onUp = () => {
+      this.dragging = false;
+    };
+    el.addEventListener('pointerdown', this._onDown);
+    window.addEventListener('pointermove', this._onMove);
+    window.addEventListener('pointerup', this._onUp);
+  }
+
+  _tick(now) {
+    this._raf = requestAnimationFrame(this._tick.bind(this));
+    const dt = Math.min(0.05, (now - this.lastTime) / 1000);
+    this.lastTime = now;
+    if (this.model) {
+      this.model.root.rotation.y = Number(this.cfg.angleY ?? -0.55);
+      const pose = this.cfg.pose || 'idle';
+      this.animator?.update(dt, {
+        speed: pose === 'run' ? 14 : (pose === 'idle' ? 2 : 8),
+        grounded: pose !== 'jump',
+        jumping: pose === 'jump',
+        roaring: pose === 'roar',
+        locomotion: 'land'
+      });
+    }
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  destroy() {
+    cancelAnimationFrame(this._raf);
+    this.renderer.domElement.removeEventListener('pointerdown', this._onDown);
+    window.removeEventListener('pointermove', this._onMove);
+    window.removeEventListener('pointerup', this._onUp);
+    this._clearModel();
+    this.renderer.dispose();
+  }
+}
+
+export class ProfileModal {
+  static renderInto(container, { onClose, onOpenAchievements, onOpenSave, onOpenLegal, onProfileUpdated } = {}) {
+    let activeTab = 'profile'; // 'profile' | 'account' | 'showcase'
+    let authSubTab = 'login'; // 'login' | 'register' | 'recover'
+    let statusMsg = '';
+    let statusTone = '#6ee7b7';
+    let currentUser = null;
+    let avatarPreview = null;
+
+    const cleanupAvatar = () => {
+      if (avatarPreview) {
+        avatarPreview.destroy();
+        avatarPreview = null;
+      }
+    };
+
+    const render = async () => {
+      cleanupAvatar();
+      currentUser = await AuthProfile.getCurrentUser();
+      const prof = AuthProfile.getLocalProfile();
+      const stats = AuthProfile.getStatsSnapshot();
+      const favSpec = getDinoSpec(stats.favoriteDino);
+      const banner = PROFILE_BANNERS.find((b) => b.id === prof.bannerId) || PROFILE_BANNERS[0];
+      const frame = PROFILE_FRAMES.find((f) => f.id === prof.frameId) || PROFILE_FRAMES[0];
+      const unlockedDinos = DINO_CATALOG.filter((d) => Save.data.unlockedDinos.includes(d.id) || (d.unlockCost || 0) === 0);
+      const unlockedAchievements = Achievements.getAll().filter((a) => Achievements.isUnlocked(a.id));
+
+      container.innerHTML = `
+        <div class="overlay-center">
+          <div class="chunky-panel modal-card" style="max-width: 840px;">
+            <div class="modal-header">
+              <h2>👤 Perfil do Jogador</h2>
+              <button class="chunky-btn secondary" id="prof-close">Voltar</button>
+            </div>
+
+            ${statusMsg ? `
+              <div class="item-card" style="border-color:${statusTone}; color:${statusTone}; font-size:0.84rem; padding:10px 12px;">
+                ${escapeHtml(statusMsg)}
+              </div>
+            ` : ''}
+
+            <!-- Cabeçalho Visual do Perfil -->
+            <div class="item-card" style="background:${banner.gradient}; border-color:${frame.border}; border-width:2px; padding:14px; display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
+              <div id="prof-avatar-box" style="width:150px; height:150px; border-radius:16px; border:3px solid ${frame.border}; background:rgba(15,10,5,0.55); overflow:hidden; flex-shrink:0; cursor:grab;" title="Arraste para girar seu Dino 3D"></div>
+              <div style="flex:1; min-width:210px; display:flex; flex-direction:column; gap:6px;">
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                  <strong style="font-size:1.35rem; color:#fff9eb;">${escapeHtml(prof.nickname)}</strong>
+                  <span class="hud-pill" style="font-size:0.75rem; color:#ffd447;">🎖️ ${escapeHtml(prof.activeTitle)}</span>
+                  <span class="hud-pill" style="font-size:0.74rem; color:${currentUser ? '#6ee7b7' : '#fcd34d'};">
+                    ${currentUser ? '☁️ Conta Conectada' : '💾 Modo Convidado (Local)'}
+                  </span>
+                </div>
+                <div style="font-size:0.82rem; color:#fef3c7;">
+                  Nível <strong>${prof.level}</strong> • XP ${prof.xp}/200 • Perfil ${prof.isPublic ? '🌐 Público' : '🔒 Privado'}
+                </div>
+                <p style="font-size:0.82rem; color:#fde68a; margin:0; font-style:${prof.bio ? 'normal' : 'italic'};">
+                  ${prof.bio ? escapeHtml(prof.bio) : 'Sem biografia ainda. Personalize na aba Perfil!'}
+                </p>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+                  ${prof.showcaseAchievements.length === 0
+                    ? '<span style="font-size:0.74rem; color:#e5d3bc;">Vitrine vazia — destaque até 4 conquistas!</span>'
+                    : prof.showcaseAchievements.map((aid) => {
+                      const a = Achievements.getById(aid);
+                      if (!a) return '';
+                      const t = TROPHY_TIERS[a.trophy] || TROPHY_TIERS.bronze;
+                      return `<span class="hud-pill" style="font-size:0.74rem; border-color:${t.color}; color:${t.color};">${a.icon} ${escapeHtml(a.name)}</span>`;
+                    }).join('')}
+                </div>
+              </div>
+            </div>
+
+            <div class="tabs-row" id="prof-tabs">
+              <button class="tab-btn ${activeTab === 'profile' ? 'active' : ''}" data-ptab="profile">🦖 Perfil &amp; Foto 3D</button>
+              <button class="tab-btn ${activeTab === 'account' ? 'active' : ''}" data-ptab="account">${currentUser ? '☁️ Conta &amp; Nuvem' : '🔑 Entrar / Criar Conta'}</button>
+              <button class="tab-btn ${activeTab === 'showcase' ? 'active' : ''}" data-ptab="showcase">🏆 Vitrine &amp; Estatísticas</button>
+            </div>
+
+            <div style="max-height:46vh; overflow-y:auto; padding-right:4px; display:flex; flex-direction:column; gap:10px;">
+              ${activeTab === 'profile' ? `
+                <div class="cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+                  <div class="item-card" style="gap:8px;">
+                    <strong style="color:#ffd447;">📸 Customizar Foto 3D</strong>
+                    <div class="field-row">
+                      <span>Dinossauro</span>
+                      <select id="prof-av-dino" class="select-input">
+                        ${unlockedDinos.map((d) => `<option value="${d.id}" ${prof.avatar.dinoId === d.id ? 'selected' : ''}>${escapeHtml(d.name)}</option>`).join('')}
+                      </select>
+                    </div>
+                    <div class="field-row">
+                      <span>Pose</span>
+                      <select id="prof-av-pose" class="select-input">
+                        <option value="idle" ${prof.avatar.pose === 'idle' ? 'selected' : ''}>Parado (Idle)</option>
+                        <option value="run" ${prof.avatar.pose === 'run' ? 'selected' : ''}>Correndo</option>
+                        <option value="jump" ${prof.avatar.pose === 'jump' ? 'selected' : ''}>Saltando</option>
+                        <option value="roar" ${prof.avatar.pose === 'roar' ? 'selected' : ''}>Rugindo</option>
+                      </select>
+                    </div>
+                    <div class="field-row">
+                      <span>Ângulo (${Math.round((prof.avatar.angleY || 0) * 57.3)}°)</span>
+                      <input type="range" id="prof-av-angle" min="-314" max="314" value="${Math.round((prof.avatar.angleY || -0.55) * 100)}" />
+                    </div>
+                    <div class="field-row">
+                      <span>Zoom (${(prof.avatar.zoom || 1).toFixed(2)}x)</span>
+                      <input type="range" id="prof-av-zoom" min="65" max="165" value="${Math.round((prof.avatar.zoom || 1) * 100)}" />
+                    </div>
+                  </div>
+
+                  <div class="item-card" style="gap:8px;">
+                    <strong style="color:#6ee7b7;">✏️ Identidade &amp; Aparência</strong>
+                    <label style="display:flex; flex-direction:column; gap:3px; font-size:0.8rem;">
+                      <span>Apelido (3–16 caracteres, 1 troca a cada 7 dias)</span>
+                      <input type="text" id="prof-nick" class="text-input" maxlength="16" value="${escapeHtml(prof.nickname)}" />
+                    </label>
+                    <label style="display:flex; flex-direction:column; gap:3px; font-size:0.8rem;">
+                      <span>Biografia (máx. 160 caracteres)</span>
+                      <textarea id="prof-bio" class="text-input" rows="2" maxlength="160" placeholder="Conte sua história no mundo jurássico...">${escapeHtml(prof.bio)}</textarea>
+                    </label>
+                    <div class="field-row">
+                      <span>Título Ativo</span>
+                      <select id="prof-title" class="select-input">
+                        ${(Save.data.unlockedTitles || ['Iniciante']).map((t) => `<option value="${escapeHtml(t)}" ${prof.activeTitle === t ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('')}
+                      </select>
+                    </div>
+                    <div class="field-row">
+                      <span>Banner / Moldura</span>
+                      <div style="display:flex; gap:6px;">
+                        <select id="prof-banner" class="select-input">
+                          ${PROFILE_BANNERS.map((b) => `<option value="${b.id}" ${prof.bannerId === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}
+                        </select>
+                        <select id="prof-frame" class="select-input">
+                          ${PROFILE_FRAMES.map((f) => `<option value="${f.id}" ${prof.frameId === f.id ? 'selected' : ''}>${f.name}</option>`).join('')}
+                        </select>
+                      </div>
+                    </div>
+                    <div class="field-row">
+                      <span>🌐 Perfil Público (visível para outros jogadores)</span>
+                      <input type="checkbox" id="prof-public" ${prof.isPublic ? 'checked' : ''} />
+                    </div>
+                    <button type="button" class="chunky-btn" id="prof-save-btn">💾 Salvar Perfil</button>
+                  </div>
+                </div>
+              ` : ''}
+
+              ${activeTab === 'account' ? `
+                ${currentUser ? `
+                  <div class="item-card" style="gap:8px; border-color:#22c55e;">
+                    <strong style="color:#6ee7b7;">☁️ Conta Conectada</strong>
+                    <div style="font-size:0.82rem; color:#f5ead7;">
+                      ID: <code>${escapeHtml(currentUser.id.slice(0, 12))}...</code> • E-mail: <strong>${escapeHtml(currentUser.email || 'OAuth')}</strong>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                      <button type="button" class="chunky-btn" id="prof-sync-now">🔄 Migrar / Sincronizar Progresso Local</button>
+                      <button type="button" class="chunky-btn secondary" id="prof-link-google">🔗 Vincular Google</button>
+                      <button type="button" class="chunky-btn secondary" id="prof-link-discord">🔗 Vincular Discord</button>
+                      <button type="button" class="chunky-btn orange" id="prof-logout-all">🚪 Sair (Todos Dispositivos)</button>
+                    </div>
+                  </div>
+                ` : `
+                  <div class="item-card" style="gap:10px;">
+                    <div class="tabs-row" style="gap:6px;">
+                      <button type="button" class="tab-btn ${authSubTab === 'login' ? 'active' : ''}" data-asub="login">Entrar</button>
+                      <button type="button" class="tab-btn ${authSubTab === 'register' ? 'active' : ''}" data-asub="register">Criar Conta</button>
+                      <button type="button" class="tab-btn ${authSubTab === 'recover' ? 'active' : ''}" data-asub="recover">Recuperar Senha</button>
+                    </div>
+
+                    ${authSubTab === 'login' ? `
+                      <form id="auth-login-form" style="display:flex; flex-direction:column; gap:8px;">
+                        <input type="text" id="auth-login-id" class="text-input" placeholder="Apelido (nick) ou E-mail" required />
+                        <input type="password" id="auth-login-pw" class="text-input" placeholder="Senha" required />
+                        <button type="submit" class="chunky-btn">🔑 Entrar</button>
+                      </form>
+                    ` : ''}
+
+                    ${authSubTab === 'register' ? `
+                      <form id="auth-reg-form" style="display:flex; flex-direction:column; gap:8px;">
+                        <input type="text" id="auth-reg-nick" class="text-input" maxlength="16" placeholder="Apelido único (3–16 chars)" required />
+                        <input type="email" id="auth-reg-email" class="text-input" placeholder="Seu e-mail (para confirmação e recuperação)" required />
+                        <input type="password" id="auth-reg-pw" class="text-input" placeholder="Senha (mín. 8 chars, letras e números)" required />
+                        <input type="password" id="auth-reg-pw2" class="text-input" placeholder="Confirmar senha" required />
+                        <label style="font-size:0.78rem; color:#fde68a; display:flex; align-items:center; gap:6px;">
+                          <input type="checkbox" id="auth-reg-terms" checked />
+                          <span>Aceito os Termos de Uso e Política de Privacidade (LGPD / ECA Digital).</span>
+                        </label>
+                        <label style="font-size:0.76rem; color:#d8c2a6; display:flex; align-items:center; gap:6px;">
+                          <input type="checkbox" id="auth-reg-minor" />
+                          <span>Sou menor de 18 anos e possuo consentimento dos pais/responsáveis.</span>
+                        </label>
+                        <button type="submit" class="chunky-btn">✨ Criar Conta e Migrar Progresso</button>
+                      </form>
+                    ` : ''}
+
+                    ${authSubTab === 'recover' ? `
+                      <form id="auth-rec-form" style="display:flex; flex-direction:column; gap:8px;">
+                        <input type="text" id="auth-rec-id" class="text-input" placeholder="Informe seu Apelido ou E-mail" required />
+                        <button type="submit" class="chunky-btn secondary">📧 Enviar Link de Recuperação</button>
+                      </form>
+                    ` : ''}
+
+                    <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                      <span style="font-size:0.78rem; color:#d8c2a6;">Login rápido:</span>
+                      <button type="button" class="chunky-btn secondary" id="auth-oauth-google">G Google</button>
+                      <button type="button" class="chunky-btn secondary" id="auth-oauth-discord">💬 Discord</button>
+                    </div>
+                  </div>
+                `}
+
+                <div class="item-card" style="display:flex; flex-direction:row; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                  <span style="font-size:0.8rem; color:#d8c2a6;">Gerenciar backup JSON local ou exclusão LGPD:</span>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button type="button" class="chunky-btn secondary" id="prof-open-save">💾 Dados &amp; Save</button>
+                    <button type="button" class="chunky-btn secondary" id="prof-open-legal" style="border-color:#22c55e; color:#86efac;">🛡️ LGPD &amp; Excluir</button>
+                  </div>
+                </div>
+              ` : ''}
+
+              ${activeTab === 'showcase' ? `
+                <div class="item-card" style="gap:8px;">
+                  <strong style="color:#ffd447;">📊 Estatísticas Gerais</strong>
+                  <div class="stat-grid">
+                    <div class="stat-tile"><span class="label">Melhor Pontuação</span><span class="val">${stats.highScore}</span></div>
+                    <div class="stat-tile"><span class="label">Distância Total</span><span class="val">${stats.totalDist} m</span></div>
+                    <div class="stat-tile"><span class="label">Partidas</span><span class="val">${stats.runs}</span></div>
+                    <div class="stat-tile"><span class="label">Chefes Derrotados</span><span class="val">${stats.bossesDefeated}</span></div>
+                    <div class="stat-tile"><span class="label">Ovos Totais</span><span class="val">${stats.totalEggs}</span></div>
+                    <div class="stat-tile"><span class="label">Dino Favorito</span><span class="val" style="font-size:0.95rem;">${escapeHtml(favSpec.name)}</span></div>
+                  </div>
+                </div>
+
+                <div class="item-card" style="gap:8px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <strong style="color:#6ee7b7;">🏆 Vitrine de Troféus (escolha até 4)</strong>
+                    <button type="button" class="chunky-btn secondary" id="prof-open-ach" style="padding:6px 10px; font-size:0.78rem;">Ver Todas Conquistas</button>
+                  </div>
+                  ${unlockedAchievements.length === 0
+                    ? '<p style="font-size:0.8rem; color:#d8c2a6;">Desbloqueie conquistas jogando para exibi-las aqui!</p>'
+                    : `<div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        ${unlockedAchievements.map((a) => {
+                          const selected = prof.showcaseAchievements.includes(a.id);
+                          return `<button type="button" class="tab-btn ${selected ? 'active' : ''}" data-showcase="${a.id}">${a.icon} ${escapeHtml(a.name)}</button>`;
+                        }).join('')}
+                      </div>`
+                  }
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+
+      const avBox = container.querySelector('#prof-avatar-box');
+      if (avBox) {
+        avatarPreview = new ProfileAvatar3D(avBox, prof.avatar);
+      }
+
+      container.querySelector('#prof-close')?.addEventListener('click', () => {
+        cleanupAvatar();
+        onClose?.();
+      });
+
+      container.querySelectorAll('[data-ptab]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          activeTab = btn.getAttribute('data-ptab');
+          render();
+        });
+      });
+      container.querySelectorAll('[data-asub]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          authSubTab = btn.getAttribute('data-asub');
+          render();
+        });
+      });
+
+      // Controles ao vivo da Foto 3D
+      const syncPreview = () => {
+        if (!avatarPreview) return;
+        avatarPreview.setAvatarConfig({
+          dinoId: container.querySelector('#prof-av-dino')?.value || prof.avatar.dinoId,
+          pose: container.querySelector('#prof-av-pose')?.value || prof.avatar.pose,
+          angleY: Number(container.querySelector('#prof-av-angle')?.value || -55) / 100,
+          zoom: Number(container.querySelector('#prof-av-zoom')?.value || 100) / 100
+        });
+      };
+      container.querySelector('#prof-av-dino')?.addEventListener('change', syncPreview);
+      container.querySelector('#prof-av-pose')?.addEventListener('change', syncPreview);
+      container.querySelector('#prof-av-angle')?.addEventListener('input', syncPreview);
+      container.querySelector('#prof-av-zoom')?.addEventListener('input', syncPreview);
+
+      container.querySelector('#prof-save-btn')?.addEventListener('click', async () => {
+        const res = await AuthProfile.updateProfile({
+          nickname: container.querySelector('#prof-nick')?.value || prof.nickname,
+          bio: container.querySelector('#prof-bio')?.value || '',
+          activeTitle: container.querySelector('#prof-title')?.value || prof.activeTitle,
+          bannerId: container.querySelector('#prof-banner')?.value || prof.bannerId,
+          frameId: container.querySelector('#prof-frame')?.value || prof.frameId,
+          isPublic: !!container.querySelector('#prof-public')?.checked,
+          avatar: avatarPreview?.cfg || prof.avatar
+        });
+        if (res.ok) {
+          statusTone = '#6ee7b7';
+          statusMsg = '✅ Perfil salvo com sucesso!';
+          onProfileUpdated?.();
+        } else {
+          statusTone = '#fca5a5';
+          statusMsg = `⚠️ ${res.error}`;
+        }
+        render();
+      });
+
+      // Auth handlers
+      container.querySelector('#auth-login-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const identifier = container.querySelector('#auth-login-id')?.value || '';
+        const password = container.querySelector('#auth-login-pw')?.value || '';
+        const res = await AuthProfile.login({ identifier, password });
+        statusTone = res.ok ? '#6ee7b7' : '#fca5a5';
+        statusMsg = res.ok ? `✅ Bem-vindo(a), ${res.nickname || 'Jogador'}!` : `⚠️ ${res.error}`;
+        render();
+      });
+
+      container.querySelector('#auth-reg-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const res = await AuthProfile.register({
+          nickname: container.querySelector('#auth-reg-nick')?.value || '',
+          email: container.querySelector('#auth-reg-email')?.value || '',
+          password: container.querySelector('#auth-reg-pw')?.value || '',
+          confirmPassword: container.querySelector('#auth-reg-pw2')?.value || '',
+          acceptTerms: !!container.querySelector('#auth-reg-terms')?.checked,
+          isMinorConsent: !!container.querySelector('#auth-reg-minor')?.checked
+        });
+        statusTone = res.ok ? '#6ee7b7' : '#fca5a5';
+        statusMsg = res.ok ? `✅ ${res.message}` : `⚠️ ${res.error}`;
+        render();
+      });
+
+      container.querySelector('#auth-rec-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const res = await AuthProfile.recoverPassword(container.querySelector('#auth-rec-id')?.value || '');
+        statusTone = res.ok ? '#6ee7b7' : '#fca5a5';
+        statusMsg = res.ok ? `📧 ${res.message}` : `⚠️ ${res.error}`;
+        render();
+      });
+
+      container.querySelector('#auth-oauth-google')?.addEventListener('click', async () => {
+        const res = await AuthProfile.signInWithOAuth('google');
+        if (!res.ok) { statusTone = '#fca5a5'; statusMsg = `⚠️ ${res.error}`; render(); }
+      });
+      container.querySelector('#auth-oauth-discord')?.addEventListener('click', async () => {
+        const res = await AuthProfile.signInWithOAuth('discord');
+        if (!res.ok) { statusTone = '#fca5a5'; statusMsg = `⚠️ ${res.error}`; render(); }
+      });
+
+      container.querySelector('#prof-sync-now')?.addEventListener('click', async () => {
+        const res = await AuthProfile.migrateGuestProgressToAccount();
+        statusTone = res.ok ? '#6ee7b7' : '#fca5a5';
+        statusMsg = res.ok ? '✅ Progresso local migrado e sincronizado na nuvem (backup local criado)!' : `⚠️ ${res.error}`;
+        render();
+      });
+      container.querySelector('#prof-link-google')?.addEventListener('click', async () => {
+        const res = await AuthProfile.linkOAuthIdentity('google');
+        if (!res.ok) { statusTone = '#fca5a5'; statusMsg = `⚠️ ${res.error}`; render(); }
+      });
+      container.querySelector('#prof-link-discord')?.addEventListener('click', async () => {
+        const res = await AuthProfile.linkOAuthIdentity('discord');
+        if (!res.ok) { statusTone = '#fca5a5'; statusMsg = `⚠️ ${res.error}`; render(); }
+      });
+      container.querySelector('#prof-logout-all')?.addEventListener('click', async () => {
+        await AuthProfile.logout('global');
+        statusTone = '#ffd447';
+        statusMsg = '🚪 Sessão encerrada em todos os dispositivos.';
+        render();
+      });
+
+      container.querySelectorAll('[data-showcase]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const aid = btn.getAttribute('data-showcase');
+          const list = [...prof.showcaseAchievements];
+          const idx = list.indexOf(aid);
+          if (idx >= 0) list.splice(idx, 1);
+          else {
+            if (list.length >= 4) list.shift();
+            list.push(aid);
+          }
+          await AuthProfile.updateProfile({ showcaseAchievements: list });
+          render();
+        });
+      });
+
+      container.querySelector('#prof-open-ach')?.addEventListener('click', () => {
+        cleanupAvatar();
+        onOpenAchievements?.();
+      });
+      container.querySelector('#prof-open-save')?.addEventListener('click', () => {
+        cleanupAvatar();
+        onOpenSave?.();
+      });
+      container.querySelector('#prof-open-legal')?.addEventListener('click', () => {
+        cleanupAvatar();
+        onOpenLegal?.();
+      });
+
+      attachModalHelp(container, 'Personalize sua foto 3D (arraste, ajuste ângulo, zoom e pose), edite sua bio, destaque até 4 conquistas e conecte sua conta para salvar na nuvem.');
+    };
+
+    render();
+    return cleanupAvatar;
+  }
+}
