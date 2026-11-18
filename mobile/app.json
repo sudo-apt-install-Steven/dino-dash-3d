@@ -1,0 +1,75 @@
+{
+  "expo": {
+    "name": "DINO DASH 3D",
+    "slug": "dino-dash-3d",
+    "version": "1.0.0",
+    "scheme": "dinodash3d",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#26140a",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#26140a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.steven.dinodash3d",
+      "requireFullScreen": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Opcional para leitura de QR Code de salas multiplayer no futuro."
+      }
+    },
+    "android": {
+      "package": "com.steven.dinodash3d",
+      "adaptiveIcon": {
+        "backgroundColor": "#26140a",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "dinodash3d"
+            },
+            {
+              "scheme": "https",
+              "host": "dino-dash-3d-six.vercel.app"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#f59e0b"
+        }
+      ],
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "DEFAULT"
+        }
+      ]
+    ],
+    "extra": {
+      "gameUrl": "https://dino-dash-3d-six.vercel.app"
+    }
+  }
+}

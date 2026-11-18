@@ -1,0 +1,254 @@
+[
+  {
+    "id": "scorpion_king",
+    "name": "Rei Escorpião",
+    "title": "Soberano das Dunas",
+    "biomeId": "desert",
+    "hp": 5,
+    "color": "#9b1d42",
+    "weakOrder": [0, 2, 1],
+    "rewardAccessory": "crown",
+    "rewardEggs": 55,
+    "rewardCrystals": 3,
+    "attackProfile": ["espinhos", "rocha"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "pinça_areia", "telegraphSec": 0.9 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "rajada_espinhos", "telegraphSec": 0.75 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "frenesi_dunas", "telegraphSec": 0.6 }
+    ]
+  },
+  {
+    "id": "storm_eagle",
+    "name": "Águia Tempestade",
+    "title": "Senhora dos Ventos",
+    "biomeId": "sky",
+    "hp": 5,
+    "color": "#3a86ff",
+    "weakOrder": [1, 0, 2],
+    "rewardAccessory": "wings",
+    "rewardEggs": 55,
+    "rewardCrystals": 3,
+    "attackProfile": ["raio", "onda"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "rasante_vento", "telegraphSec": 0.85 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "raios_cruzados", "telegraphSec": 0.72 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "tempestade_total", "telegraphSec": 0.58 }
+    ]
+  },
+  {
+    "id": "mother_ufo",
+    "name": "Mãe OVNI",
+    "title": "Nave-Mãe Extraterrestre",
+    "biomeId": "alien_planet",
+    "hp": 6,
+    "color": "#a855f7",
+    "weakOrder": [2, 1, 0],
+    "rewardAccessory": "vr_visor",
+    "rewardEggs": 65,
+    "rewardCrystals": 4,
+    "attackProfile": ["feixe", "raio"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "varredura_trator", "telegraphSec": 0.9 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "feixe_duplo", "telegraphSec": 0.74 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "sobrecarga_orbital", "telegraphSec": 0.6 }
+    ]
+  },
+  {
+    "id": "alpha_trex",
+    "name": "T-Rex Alfa",
+    "title": "Rei dos Predadores",
+    "biomeId": "jungle",
+    "hp": 6,
+    "color": "#dc2626",
+    "weakOrder": [1, 2, 0],
+    "rewardAccessory": "spikes",
+    "rewardEggs": 60,
+    "rewardCrystals": 3,
+    "attackProfile": ["tronco", "rocha", "onda"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "mordida_brutal", "telegraphSec": 0.88 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "pisao_sismico", "telegraphSec": 0.72 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "rugido_alfa", "telegraphSec": 0.58 }
+    ]
+  },
+  {
+    "id": "plesiosaur",
+    "name": "Plesiossauro Gigante",
+    "title": "Leviatã Abissal",
+    "biomeId": "river",
+    "hp": 5,
+    "color": "#0284c7",
+    "weakOrder": [0, 1, 2],
+    "rewardAccessory": "aura_fire",
+    "rewardEggs": 55,
+    "rewardCrystals": 3,
+    "attackProfile": ["onda", "poca"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "onda_marinha", "telegraphSec": 0.9 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "redemoinho_duplo", "telegraphSec": 0.75 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "tsunami_jurassico", "telegraphSec": 0.6 }
+    ]
+  },
+  {
+    "id": "swamp_hydra",
+    "name": "Hidra do Pântano",
+    "title": "Terror de Três Cabeças",
+    "biomeId": "dark_swamp",
+    "hp": 5,
+    "color": "#65a30d",
+    "weakOrder": [0, 2, 1],
+    "rewardAccessory": "leaf_cape",
+    "rewardEggs": 60,
+    "rewardCrystals": 3,
+    "attackProfile": ["poca", "tronco"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "cuspe_acido", "telegraphSec": 0.88 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "ataque_triplo", "telegraphSec": 0.72 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "regeneracao_furia", "telegraphSec": 0.58 }
+    ]
+  },
+  {
+    "id": "lava_golem",
+    "name": "Golem de Magma",
+    "title": "Titã da Caldeira",
+    "biomeId": "volcano",
+    "hp": 6,
+    "color": "#f97316",
+    "weakOrder": [1, 0, 2],
+    "rewardAccessory": "aura_fire",
+    "rewardEggs": 65,
+    "rewardCrystals": 4,
+    "attackProfile": ["magma", "rocha"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "rocha_vulcanica", "telegraphSec": 0.9 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "rios_de_lava", "telegraphSec": 0.74 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "superaquecimento", "telegraphSec": 0.6 }
+    ]
+  },
+  {
+    "id": "frost_mammoth",
+    "name": "Mamute Glacial",
+    "title": "Colosso da Tundra",
+    "biomeId": "ice_age",
+    "hp": 6,
+    "color": "#38bdf8",
+    "weakOrder": [2, 1, 0],
+    "rewardAccessory": "aura_ice",
+    "rewardEggs": 60,
+    "rewardCrystals": 3,
+    "attackProfile": ["gelo", "onda"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "investida_glacial", "telegraphSec": 0.9 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "chuva_estalactites", "telegraphSec": 0.75 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "nevasca_absoluta", "telegraphSec": 0.6 }
+    ]
+  },
+  {
+    "id": "cave_spider",
+    "name": "Aranha Cavernosa",
+    "title": "Rainha das Sombras",
+    "biomeId": "crystal_cavern",
+    "hp": 5,
+    "color": "#84cc16",
+    "weakOrder": [0, 1, 0],
+    "rewardAccessory": "bat_wings",
+    "rewardEggs": 55,
+    "rewardCrystals": 3,
+    "attackProfile": ["teia", "poca"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "teia_armadilha", "telegraphSec": 0.88 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "enxame_sombras", "telegraphSec": 0.72 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "emboscada_veneno", "telegraphSec": 0.58 }
+    ]
+  },
+  {
+    "id": "amber_scarab",
+    "name": "Escaravelho de Âmbar",
+    "title": "Guardião Dourado",
+    "biomeId": "amber_canyon",
+    "hp": 5,
+    "color": "#f59e0b",
+    "weakOrder": [1, 2, 1],
+    "rewardAccessory": "amber_medallion",
+    "rewardEggs": 55,
+    "rewardCrystals": 3,
+    "attackProfile": ["espinhos", "rocha"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "carapaca_dourada", "telegraphSec": 0.88 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "espinhos_solares", "telegraphSec": 0.74 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "explosao_ambar", "telegraphSec": 0.6 }
+    ]
+  },
+  {
+    "id": "crystal_wyrm",
+    "name": "Serpe Cristalina",
+    "title": "Dragão de Ametista",
+    "biomeId": "crystal_cavern",
+    "hp": 6,
+    "color": "#c084fc",
+    "weakOrder": [2, 0, 2],
+    "rewardAccessory": "crystal_wings",
+    "rewardEggs": 65,
+    "rewardCrystals": 4,
+    "attackProfile": ["gelo", "raio"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "sopro_prisma", "telegraphSec": 0.86 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "cristais_ressoantes", "telegraphSec": 0.72 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "tempestade_ametista", "telegraphSec": 0.58 }
+    ]
+  },
+  {
+    "id": "cyber_raptor",
+    "name": "Raptor Cibernético [Mini-Boss]",
+    "title": "Unidade Alfa-X",
+    "biomeId": "cyber_city",
+    "hp": 4,
+    "color": "#22d3ee",
+    "weakOrder": [0, 1, 2],
+    "rewardAccessory": "visor_neon",
+    "rewardEggs": 50,
+    "rewardCrystals": 3,
+    "attackProfile": ["feixe", "raio"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "pulso_neon", "telegraphSec": 0.82 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "corte_laser", "telegraphSec": 0.68 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "overclock_alfa", "telegraphSec": 0.55 }
+    ]
+  },
+  {
+    "id": "leviathan_abyssal",
+    "name": "Leviatã Abissal",
+    "title": "Soberano das Fossas",
+    "biomeId": "ocean_abyss",
+    "hp": 6,
+    "color": "#06b6d4",
+    "weakOrder": [0, 2, 1],
+    "rewardAccessory": "diving_mask",
+    "rewardEggs": 65,
+    "rewardCrystals": 4,
+    "attackProfile": ["onda", "poca", "gelo"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "corrente_abissal", "telegraphSec": 0.88 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "tentaculos_nevoa", "telegraphSec": 0.74 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "voragem_profunda", "telegraphSec": 0.6 }
+    ]
+  },
+  {
+    "id": "mecha_titan",
+    "name": "Titã Mecânico Ω",
+    "title": "Colosso Cibernético",
+    "biomeId": "cyber_city",
+    "hp": 7,
+    "color": "#f43f5e",
+    "weakOrder": [2, 0, 1],
+    "rewardAccessory": "mecha_wings",
+    "rewardEggs": 80,
+    "rewardCrystals": 5,
+    "attackProfile": ["feixe", "raio", "rocha"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "laser_orbital", "telegraphSec": 0.85 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "pisao_blindado", "telegraphSec": 0.7 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "protocolo_omega", "telegraphSec": 0.55 }
+    ]
+  }
+]

@@ -5,6 +5,7 @@ export class DinoAnimator {
   constructor(model) {
     this.model = model;
     this.runPhase = 0;
+    this.hurtPhase = 0;
     this.roarTimer = 0;
     this.hurtTimer = 0;
     this.squashTimer = 0;
@@ -28,6 +29,7 @@ export class DinoAnimator {
   reset() {
     const m = this.model;
     this.runPhase = 0;
+    this.hurtPhase = 0;
     this.roarTimer = 0;
     this.hurtTimer = 0;
     this.squashTimer = 0;
@@ -68,6 +70,7 @@ export class DinoAnimator {
       swimming = false,
       dead = false,
       victory = false,
+      hurt = false,
       invulnActive = false,
       giantScale = 1.0,
       laneLean = 0
@@ -78,7 +81,9 @@ export class DinoAnimator {
       const p = this.deathProgress;
       m.rig.rotation.z = p * (Math.PI * 0.48);
       m.rig.position.y = -p * 0.42;
+      m.rig.position.x = 0;
       m.jaw.rotation.x = -0.45 * p;
+      m.root.visible = true;
       return;
     } else if (this.deathProgress > 0) {
       this.deathProgress = 0;
@@ -89,6 +94,7 @@ export class DinoAnimator {
 
     if (this.squashTimer > 0) this.squashTimer = Math.max(0, this.squashTimer - dt);
     if (this.roarTimer > 0) this.roarTimer = Math.max(0, this.roarTimer - dt);
+    const isHurtActive = hurt || this.hurtTimer > 0;
     if (this.hurtTimer > 0) {
       this.hurtTimer = Math.max(0, this.hurtTimer - dt);
       // Pisca claramente no estado de invulnerabilidade pós-dano
@@ -97,6 +103,14 @@ export class DinoAnimator {
       m.root.visible = Math.floor(performance.now() * 0.016) % 2 === 0;
     } else {
       m.root.visible = true;
+    }
+
+    if (isHurtActive) {
+      this.hurtPhase += dt;
+      m.rig.position.x = Math.sin(this.hurtPhase * 42) * 0.085;
+    } else {
+      this.hurtPhase = 0;
+      m.rig.position.x += (0 - m.rig.position.x) * Math.min(1, dt * 16);
     }
 
     // Esticar e encolher (squash & stretch) no pulo e pouso
@@ -128,10 +142,63 @@ export class DinoAnimator {
     );
 
     if (victory) {
-      this.runPhase += dt * 10;
-      m.torso.position.y = this.baseTorsoY + Math.abs(Math.sin(this.runPhase)) * 0.35;
-      m.torso.rotation.x = -0.15;
-      m.jaw.rotation.x = -0.35;
+      this.runPhase += dt * 9.5;
+      const hop = Math.abs(Math.sin(this.runPhase));
+      const sway = Math.sin(this.runPhase * 0.5);
+      m.torso.position.y = this.baseTorsoY + hop * 0.42;
+      m.torso.rotation.x = -0.18 + Math.sin(this.runPhase * 2) * 0.08;
+      m.torso.rotation.y = sway * 0.22;
+      m.torso.rotation.z = sway * 0.08;
+
+      // Braços / asas erguidos comemorando
+      if (m.armL?.isWing && m.armR?.isWing) {
+        m.armL.hip.rotation.z = -(0.35 + hop * 0.55);
+        m.armR.hip.rotation.z = +(0.35 + hop * 0.55);
+        if (m.armL.outer) m.armL.outer.rotation.z = -(hop * 0.35);
+        if (m.armR.outer) m.armR.outer.rotation.z = +(hop * 0.35);
+      } else if (m.armL?.isFlipper && m.armR?.isFlipper) {
+        m.armL.hip.rotation.z = -0.35 - hop * 0.42;
+        m.armR.hip.rotation.z = 0.35 + hop * 0.42;
+      } else if (m.armL?.hip && m.armR?.hip) {
+        m.armL.hip.rotation.x = -1.25 - Math.sin(this.runPhase * 2) * 0.28;
+        m.armR.hip.rotation.x = -1.25 + Math.sin(this.runPhase * 2) * 0.28;
+      }
+
+      // Pernas acompanham o pulo rítmico
+      if (m.legL?.hip && m.legR?.hip && !m.legL.isFlipper) {
+        m.legL.hip.rotation.x = -hop * 0.36;
+        m.legR.hip.rotation.x = -hop * 0.36;
+        if (m.legL.knee) m.legL.knee.rotation.x = hop * 0.52;
+        if (m.legR.knee) m.legR.knee.rotation.x = hop * 0.52;
+      }
+      if (Array.isArray(m.extraLegs)) {
+        m.extraLegs.forEach((leg) => {
+          leg.hip.rotation.x = -hop * 0.28;
+          if (leg.knee) leg.knee.rotation.x = hop * 0.42;
+        });
+      }
+
+      // Cabeça erguida em rugido triunfante + olhos brilhantes
+      m.neckPivot.rotation.x = this.baseNeckRotX - 0.22 - hop * 0.08;
+      m.neckPivot.rotation.y = sway * 0.14;
+      m.jaw.rotation.x = -0.4 - hop * 0.16;
+      if (m.eyeGroups?.length === 2) {
+        m.eyeGroups.forEach((eg) => {
+          eg.scale.y += (1.18 - eg.scale.y) * Math.min(1, dt * 16);
+          eg.scale.z += (1.0 - eg.scale.z) * Math.min(1, dt * 16);
+        });
+      }
+      if (m.browGroups?.length === 2) {
+        m.browGroups.forEach((bg) => {
+          if (bg._baseY === undefined) bg._baseY = bg.position.y;
+          bg.rotation.x += (-0.22 - bg.rotation.x) * Math.min(1, dt * 16);
+          bg.position.y += ((bg._baseY + 0.04) - bg.position.y) * Math.min(1, dt * 16);
+        });
+      }
+      m.tailSegments.forEach((seg, idx) => {
+        seg.rotation.y = Math.sin(this.runPhase * 1.6 - idx * 0.6) * (0.18 + idx * 0.05);
+        seg.rotation.x = 0.08;
+      });
       return;
     }
 
@@ -290,12 +357,23 @@ export class DinoAnimator {
     }
 
     // Pescoço, mandíbula e expressões faciais (Pulo / Dano / Rugido / Dash)
-    const isHurtFace = this.hurtTimer > 0;
+    const isHurtFace = isHurtActive;
     const isRoarFace = this.roarTimer > 0 || !!state.furyActive;
     const isDashFace = !!(sliding || state.dashing);
     const isJumpFace = !grounded && vy > 2;
 
-    const targetNeckPitch = this.baseNeckRotX + (ducking ? -0.35 : (sliding ? 0.28 : (isRoarFace ? -0.16 : 0)));
+    if (isHurtActive) {
+      m.torso.rotation.x -= 0.16;
+      if (m.armL?.hip && m.armR?.hip && !m.armL.isWing && !m.armL.isFlipper) {
+        m.armL.hip.rotation.z = -0.35;
+        m.armR.hip.rotation.z = 0.35;
+      }
+    } else if (m.armL?.hip && m.armR?.hip && !m.armL.isWing && !m.armL.isFlipper) {
+      m.armL.hip.rotation.z += (0 - m.armL.hip.rotation.z) * Math.min(1, dt * 14);
+      m.armR.hip.rotation.z += (0 - m.armR.hip.rotation.z) * Math.min(1, dt * 14);
+    }
+
+    const targetNeckPitch = this.baseNeckRotX + (isHurtFace ? -0.26 : (ducking ? -0.35 : (sliding ? 0.28 : (isRoarFace ? -0.16 : 0))));
     m.neckPivot.rotation.x += (targetNeckPitch - m.neckPivot.rotation.x) * Math.min(1, dt * 12);
     if (locomotion === 'aquatic') {
       m.neckPivot.rotation.y += (-Math.sin(this.runPhase + 0.35) * 0.08 - m.neckPivot.rotation.y) * Math.min(1, dt * 12);

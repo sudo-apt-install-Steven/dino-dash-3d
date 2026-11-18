@@ -2,6 +2,7 @@
 // Mapa-Múndi de Campanha com Rotas Alternativas, Sazonalidade, Times Locais, Desafios Semanais,
 // Editor de Pistas (exportar/importar seed/JSON) e Estatísticas com gráficos.
 import { Save } from './Save.js';
+import { ContentLoader } from '../content/ContentLoader.js';
 
 export const TALENT_DEFS = [
   { id: 'speed', name: 'Pés Ligeiros', icon: '⚡', maxLevel: 5, costBase: 150, desc: '+5% velocidade & distância inicial por nível' },
@@ -11,25 +12,30 @@ export const TALENT_DEFS = [
   { id: 'greed', name: 'Caçador de Fósseis', icon: '🥚', maxLevel: 5, costBase: 180, desc: '+10% chance de ovos extras & tesouros por nível' }
 ];
 
-export const CAMPAIGN_NODES = [
-  { id: 'desert_start', title: 'Vale Dourado', biome: 'desert', targetScore: 400, x: 14, y: 50, next: ['oasis_route', 'canyon_route'], reward: 12 },
-  { id: 'oasis_route', title: 'Rota do Oásis', biome: 'river', targetScore: 700, x: 38, y: 28, next: ['ice_peaks', 'temple_secret'], reward: 16 },
-  { id: 'canyon_route', title: 'Caldeira Vulcânica', biome: 'volcano', targetScore: 750, x: 38, y: 74, next: ['magma_boss', 'ice_peaks'], reward: 18 },
-  { id: 'ice_peaks', title: 'Picos Glaciais', biome: 'ice', targetScore: 1050, x: 64, y: 36, next: ['final_sanctuary'], reward: 22 },
-  { id: 'temple_secret', title: 'Templo Submerso', biome: 'ocean_abyss', targetScore: 1100, x: 64, y: 14, next: ['final_sanctuary'], reward: 26 },
-  { id: 'magma_boss', title: 'Cidadela do Alfa', biome: 'cyber_city', targetScore: 1250, x: 64, y: 76, next: ['final_sanctuary'], reward: 30 },
-  { id: 'final_sanctuary', title: 'Santuário Estelar', biome: 'alien_planet', targetScore: 1600, x: 88, y: 48, next: [], reward: 55 }
-];
+export const CAMPAIGN_NODES = ContentLoader.getMissions('campaign').map((m) => ({
+  id: m.id,
+  title: m.title,
+  biome: m.biome,
+  targetScore: m.target,
+  x: m.x,
+  y: m.y,
+  next: m.next || [],
+  reward: m.rewardEggs
+}));
 
-export const WEEKLY_CHALLENGES = [
-  { id: 'wk_no_damage', title: 'Intocável da Semana', desc: 'Alcance 1200 pts esta semana em uma corrida.', goal: 1200, reward: 40 },
-  { id: 'wk_collectors', title: 'Grande Colecionador', desc: 'Colete 90 ovos acumulados na semana.', goal: 90, reward: 35 },
-  { id: 'wk_elements', title: 'Alquimista Jurássico', desc: 'Percorra 2500m acumulados na semana.', goal: 2500, reward: 40 }
-];
+export const WEEKLY_CHALLENGES = ContentLoader.getMissions('weekly').map((m) => ({
+  id: m.id,
+  title: m.title,
+  desc: m.desc || m.title,
+  goal: m.target,
+  metric: m.metric,
+  reward: m.rewardEggs
+}));
 
 export class Metagame {
   static getPrestigeMultiplier() {
-    return 1 + (Save.data.prestige?.level || 0) * 0.25;
+    const step = ContentLoader.getBalance().rewards?.prestigeStepMult ?? 0.25;
+    return 1 + (Save.data.prestige?.level || 0) * step;
   }
 
   static getRebirthReqScore() {
@@ -44,9 +50,10 @@ export class Metagame {
     if (!this.canRebirth()) {
       return { ok: false, reason: `Alcance ${this.getRebirthReqScore()}+ pts de Recorde (HI) para o próximo Prestígio.` };
     }
+    const step = ContentLoader.getBalance().rewards?.prestigeStepMult ?? 0.25;
     const p = Save.data.prestige || { level: 0, bonusMult: 1.0 };
     p.level += 1;
-    p.bonusMult = Number((1 + p.level * 0.25).toFixed(2));
+    p.bonusMult = Number((1 + p.level * step).toFixed(2));
     Save.data.prestige = p;
     Save.data.dinoLevels = {};
     Save.data.eggs = 150 + Math.min(250, p.level * 50);
@@ -75,15 +82,42 @@ export class Metagame {
     return { ok: true, level: cur + 1 };
   }
 
-  static getActiveSeason() {
+  static getActiveSeason(date = new Date()) {
     const pref = Save.data.season || 'auto';
     if (pref !== 'auto') return pref;
-    const m = new Date().getMonth() + 1;
-    const d = new Date().getDate();
-    if (m === 10) return 'halloween';
-    if (m === 12) return 'xmas';
-    if (m === 11 && d <= 20) return 'birthday';
-    return 'none';
+    const ev = ContentLoader.getActiveSeasonalEvent(date);
+    return ev ? ev.id : 'none';
+  }
+
+  static getActiveSeasonInfo(date = new Date()) {
+    const id = this.getActiveSeason(date);
+    if (!id || id === 'none') {
+      return { id: 'none', name: 'Temporada Padrão', accent: '#38bdf8', bonusMult: 1.0, active: false };
+    }
+    const ev = ContentLoader.getSeasonalEvents().find((e) => e.id === id);
+    return ev
+      ? { ...ev, active: true }
+      : { id, name: id, accent: '#ffd447', bonusMult: 1.15, active: true };
+  }
+
+  static getSeasonBonusMultiplier(date = new Date()) {
+    return this.getActiveSeasonInfo(date).bonusMult || 1.0;
+  }
+
+  static getMissionsCatalog(scope = null) {
+    return ContentLoader.getMissions(scope);
+  }
+
+  static getCampaignProgress() {
+    const completed = Save.data.campaign?.completedNodes || [];
+    const total = CAMPAIGN_NODES.length;
+    const unlockedNextIds = new Set(['desert_start']);
+    for (const node of CAMPAIGN_NODES) {
+      if (completed.includes(node.id)) {
+        for (const nxt of node.next || []) unlockedNextIds.add(nxt);
+      }
+    }
+    return { completedCount: completed.length, total, unlockedNextIds: [...unlockedNextIds] };
   }
 
   static getCurrentWeekId() {

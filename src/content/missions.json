@@ -1,0 +1,145 @@
+[
+  {
+    "id": "m_eggs",
+    "scope": "daily",
+    "title": "Colete 220 ovos em corridas",
+    "target": 220,
+    "metric": "eggs",
+    "rewardEggs": 65
+  },
+  {
+    "id": "m_score",
+    "scope": "daily",
+    "title": "Alcance 1500 pontos em uma corrida",
+    "target": 1500,
+    "metric": "bestRun",
+    "rewardEggs": 80
+  },
+  {
+    "id": "m_jumps",
+    "scope": "daily",
+    "title": "Dê 55 pulos na pista",
+    "target": 55,
+    "metric": "jumps",
+    "rewardEggs": 50
+  },
+  {
+    "id": "m_stomp",
+    "scope": "daily",
+    "title": "Derrote 8 inimigos (pisão ou Q)",
+    "target": 8,
+    "metric": "stomps",
+    "rewardEggs": 75
+  },
+  {
+    "id": "wk_no_damage",
+    "scope": "weekly",
+    "title": "Intocável da Semana",
+    "desc": "Alcance 1200 pts esta semana em uma corrida.",
+    "target": 1200,
+    "metric": "bestRun",
+    "rewardEggs": 40
+  },
+  {
+    "id": "wk_collectors",
+    "scope": "weekly",
+    "title": "Grande Colecionador",
+    "desc": "Colete 90 ovos acumulados na semana.",
+    "target": 90,
+    "metric": "eggs",
+    "rewardEggs": 35
+  },
+  {
+    "id": "wk_elements",
+    "scope": "weekly",
+    "title": "Alquimista Jurássico",
+    "desc": "Percorra 2500m acumulados na semana.",
+    "target": 2500,
+    "metric": "distance",
+    "rewardEggs": 40
+  },
+  {
+    "id": "desert_start",
+    "scope": "campaign",
+    "title": "Vale Dourado",
+    "biome": "desert",
+    "target": 400,
+    "metric": "score",
+    "rewardEggs": 12,
+    "x": 14,
+    "y": 50,
+    "next": ["oasis_route", "canyon_route"]
+  },
+  {
+    "id": "oasis_route",
+    "scope": "campaign",
+    "title": "Rota do Oásis",
+    "biome": "river",
+    "target": 700,
+    "metric": "score",
+    "rewardEggs": 16,
+    "x": 38,
+    "y": 28,
+    "next": ["ice_peaks", "temple_secret"]
+  },
+  {
+    "id": "canyon_route",
+    "scope": "campaign",
+    "title": "Caldeira Vulcânica",
+    "biome": "volcano",
+    "target": 750,
+    "metric": "score",
+    "rewardEggs": 18,
+    "x": 38,
+    "y": 74,
+    "next": ["magma_boss", "ice_peaks"]
+  },
+  {
+    "id": "ice_peaks",
+    "scope": "campaign",
+    "title": "Picos Glaciais",
+    "biome": "ice",
+    "target": 1050,
+    "metric": "score",
+    "rewardEggs": 22,
+    "x": 64,
+    "y": 36,
+    "next": ["final_sanctuary"]
+  },
+  {
+    "id": "temple_secret",
+    "scope": "campaign",
+    "title": "Templo Submerso",
+    "biome": "ocean_abyss",
+    "target": 1100,
+    "metric": "score",
+    "rewardEggs": 26,
+    "x": 64,
+    "y": 14,
+    "next": ["final_sanctuary"]
+  },
+  {
+    "id": "magma_boss",
+    "scope": "campaign",
+    "title": "Cidadela do Alfa",
+    "biome": "cyber_city",
+    "target": 1250,
+    "metric": "score",
+    "rewardEggs": 30,
+    "x": 64,
+    "y": 76,
+    "next": ["final_sanctuary"]
+  },
+  {
+    "id": "final_sanctuary",
+    "scope": "campaign",
+    "title": "Santuário Estelar",
+    "biome": "alien_planet",
+    "target": 1600,
+    "metric": "score",
+    "rewardEggs": 55,
+    "x": 88,
+    "y": 48,
+    "next": []
+  }
+]

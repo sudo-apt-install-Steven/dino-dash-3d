@@ -155,21 +155,21 @@ export class HUD {
         </div>
       </div>
 
-      <!-- Controles touch para celular (Swipe livre por padrão + botões ⚔️/⚡/🧭/🔥/🔄/🎒 ergonômicos com rótulo claro) -->
+      <!-- Controles touch para celular (Divisão ergonômica: esquerda movimento/abaixar/roda/item vs direita pular/hab/atq/fúria/troca) -->
       <div class="touch-controls" id="touch-controls">
-        <div class="touch-cluster touch-cluster-left touch-dpad-only" id="touch-cluster-left">
-          <button class="touch-btn" data-tact="left" aria-label="Faixa Esquerda">◀</button>
-          <button class="touch-btn" data-tact="right" aria-label="Faixa Direita">▶</button>
+        <div class="touch-cluster touch-cluster-left" id="touch-cluster-left">
+          <button class="touch-btn touch-dpad-only" data-tact="left" aria-label="Faixa Esquerda"><span class="touch-btn-ico">◀</span><span class="touch-btn-lbl">Esq</span></button>
+          <button class="touch-btn touch-dpad-only" data-tact="right" aria-label="Faixa Direita"><span class="touch-btn-ico">▶</span><span class="touch-btn-lbl">Dir</span></button>
+          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar"><span class="touch-btn-ico" id="touch-duck-ico">▼</span><span class="touch-btn-lbl" id="touch-duck-lbl">Baixo</span></button>
+          <button class="touch-btn touch-btn-action touch-btn-radial" id="touch-radial-btn" aria-label="Roda Tática X"><span class="touch-btn-ico">🧭</span><span class="touch-btn-lbl">Roda</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-item" id="touch-item-btn" data-tact="item" aria-label="Usar Item da Mochila"><span class="touch-btn-ico" id="touch-item-ico">🎒</span><span class="touch-btn-lbl">Item</span></button>
         </div>
         <div class="touch-cluster touch-cluster-right" id="touch-cluster-right">
-          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar"><span class="touch-btn-ico" id="touch-duck-ico">▼</span><span class="touch-btn-lbl" id="touch-duck-lbl">Baixo</span></button>
           <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular"><span class="touch-btn-ico">▲</span><span class="touch-btn-lbl">Pulo</span></button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-fury" id="touch-fury-btn" data-tact="fury" aria-label="Modo Fúria"><span class="touch-btn-ico">🔥</span><span class="touch-btn-lbl">Fúria!</span></button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-item" id="touch-item-btn" data-tact="item" aria-label="Usar Item da Mochila"><span class="touch-btn-ico" id="touch-item-ico">🎒</span><span class="touch-btn-lbl">Item</span></button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-transmute" id="touch-transmute-btn" data-tact="transmute" aria-label="Trocar Habitat"><span class="touch-btn-ico">🔄</span><span class="touch-btn-lbl" id="touch-transmute-lbl">Troca</span></button>
-          <button class="touch-btn touch-btn-action touch-btn-radial" id="touch-radial-btn" aria-label="Roda Tática X"><span class="touch-btn-ico">🧭</span><span class="touch-btn-lbl">Roda</span></button>
-          <button class="touch-btn touch-btn-action touch-btn-attack" id="touch-attack-btn" data-tact="attack" aria-label="Ataque Rápido"><span class="touch-btn-ico">⚔️</span><span class="touch-btn-lbl" id="touch-attack-lbl">Atq</span></button>
           <button class="touch-btn touch-btn-action touch-btn-ability" id="touch-ability-btn" data-tact="ability" aria-label="Habilidade Especial"><span class="touch-btn-ico">⚡</span><span class="touch-btn-lbl" id="touch-ability-lbl">Hab</span></button>
+          <button class="touch-btn touch-btn-action touch-btn-attack" id="touch-attack-btn" data-tact="attack" aria-label="Ataque Rápido"><span class="touch-btn-ico">⚔️</span><span class="touch-btn-lbl" id="touch-attack-lbl">Atq</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-fury" id="touch-fury-btn" data-tact="fury" aria-label="Modo Fúria"><span class="touch-btn-ico">🔥</span><span class="touch-btn-lbl">Fúria!</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-transmute" id="touch-transmute-btn" data-tact="transmute" aria-label="Trocar Habitat"><span class="touch-btn-ico">🔄</span><span class="touch-btn-lbl" id="touch-transmute-lbl">Troca</span></button>
         </div>
       </div>
 
@@ -558,6 +558,10 @@ export class HUD {
         if (this.isEditingTouchLayout) return;
         e.preventDefault();
         e.stopPropagation();
+        try {
+          navigator.vibrate?.(10);
+          window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'HAPTIC_IMPACT', payload: { style: 'light' } }));
+        } catch {}
         this.callbacks.onTouchAction?.(act, true);
       });
       const release = () => {

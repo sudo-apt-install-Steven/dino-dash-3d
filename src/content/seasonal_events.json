@@ -1,0 +1,62 @@
+[
+  {
+    "id": "new_year",
+    "name": "Virada Cósmica",
+    "startMM": 1,
+    "startDD": 1,
+    "endMM": 1,
+    "endDD": 7,
+    "accent": "#a855f7",
+    "bonusMult": 1.2
+  },
+  {
+    "id": "carnival",
+    "name": "Carnaval Pré-Histórico",
+    "startMM": 2,
+    "startDD": 15,
+    "endMM": 2,
+    "endDD": 28,
+    "accent": "#ec4899",
+    "bonusMult": 1.15
+  },
+  {
+    "id": "summer_sun",
+    "name": "Solstício Dourado",
+    "startMM": 7,
+    "startDD": 1,
+    "endMM": 7,
+    "endDD": 15,
+    "accent": "#facc15",
+    "bonusMult": 1.1
+  },
+  {
+    "id": "halloween",
+    "name": "Festival Assombrado",
+    "startMM": 10,
+    "startDD": 1,
+    "endMM": 10,
+    "endDD": 31,
+    "accent": "#f97316",
+    "bonusMult": 1.15
+  },
+  {
+    "id": "birthday",
+    "name": "Aniversário Dino Dash",
+    "startMM": 11,
+    "startDD": 1,
+    "endMM": 11,
+    "endDD": 20,
+    "accent": "#ffd447",
+    "bonusMult": 1.25
+  },
+  {
+    "id": "xmas",
+    "name": "Natal Jurássico",
+    "startMM": 12,
+    "startDD": 1,
+    "endMM": 12,
+    "endDD": 31,
+    "accent": "#38bdf8",
+    "bonusMult": 1.2
+  }
+]

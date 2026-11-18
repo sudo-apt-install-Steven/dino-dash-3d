@@ -1,5 +1,13 @@
-// Monitoramento de Desempenho (Parte C): Benchmark inicial, Auto-Qualidade 60 FPS e preset "Meu PC é fraco".
+// Monitoramento de Desempenho (Parte C + Fase 5): Benchmark inicial, Auto-Qualidade adaptativa por FPS (auto/low/medium/high) e preset "Meu PC é fraco".
 import { Save } from './Save.js';
+
+export const QUALITY_PRESETS = ['auto', 'low', 'medium', 'high'];
+
+export const QUALITY_CONFIG = {
+  low: { pixelRatioCap: 0.75, shadows: false, particles: 'min', lowLod: true, cameraFar: 125 },
+  medium: { pixelRatioCap: 1.35, shadows: true, particles: 'normal', lowLod: false, cameraFar: 260 },
+  high: { pixelRatioCap: 2.0, shadows: true, particles: 'high', lowLod: false, cameraFar: 280 }
+};
 
 export class PerfMonitor {
   constructor() {
@@ -7,6 +15,7 @@ export class PerfMonitor {
     this.elapsed = 0;
     this.avgFps = 60;
     this.lowStreak = 0;
+    this.highStreak = 0;
     this.lowLod = false;
     this.autoNotified = false;
   }
@@ -185,6 +194,70 @@ export class PerfMonitor {
     game?.applySettings?.();
   }
 
+  static normalizeQualityPreset(preset) {
+    return QUALITY_PRESETS.includes(preset) ? preset : 'auto';
+  }
+
+  static getQualityPreset() {
+    if (Save.data.lowSpecMode) return 'low';
+    if (Save.data.autoQuality !== false && Save.data.settings?.qualityPreset === 'auto') return 'auto';
+    const q = Save.data.settings?.qualityPreset || (Save.data.autoQuality !== false ? 'auto' : Save.data.settings?.quality);
+    return PerfMonitor.normalizeQualityPreset(q);
+  }
+
+  static applyQualityTier(game, tier = 'medium') {
+    const resolved = tier === 'low' || tier === 'high' ? tier : 'medium';
+    const cfg = QUALITY_CONFIG[resolved];
+    const s = Save.data.settings;
+    s.quality = resolved;
+    s.shadows = cfg.shadows;
+    s.particles = cfg.particles;
+
+    const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+    const targetPr = Math.min(dpr, cfg.pixelRatioCap);
+    game?.renderer?.setPixelRatio?.(targetPr);
+    game?.particles?.setLowSpec?.(cfg.particles === 'min');
+    game?.setLowLod?.(cfg.lowLod);
+    if (game?.camera) {
+      game.camera.far = cfg.cameraFar;
+      game.camera.updateProjectionMatrix?.();
+    }
+    game?.applySettings?.();
+    return { tier: resolved, pixelRatio: targetPr, ...cfg };
+  }
+
+  static setQualityPreset(game, preset = 'auto') {
+    const normalized = PerfMonitor.normalizeQualityPreset(preset);
+    if (!Save.data.settings) Save.data.settings = {};
+    Save.data.settings.qualityPreset = normalized;
+
+    if (normalized === 'auto') {
+      Save.data.autoQuality = true;
+      Save.data.lowSpecMode = false;
+      const benchFps = Number(Save.data.benchmarkFps || 60);
+      const initialTier = benchFps < 30 ? 'low' : (benchFps >= 52 ? 'high' : 'medium');
+      const applied = PerfMonitor.applyQualityTier(game, initialTier);
+      Save.save();
+      return { preset: 'auto', ...applied };
+    }
+
+    Save.data.autoQuality = false;
+    Save.data.lowSpecMode = normalized === 'low';
+    const applied = PerfMonitor.applyQualityTier(game, normalized);
+    Save.save();
+    return { preset: normalized, ...applied };
+  }
+
+  getQualityPreset() {
+    return PerfMonitor.getQualityPreset();
+  }
+
+  setQualityPreset(game, preset = 'auto') {
+    this.lowStreak = 0;
+    this.highStreak = 0;
+    return PerfMonitor.setQualityPreset(game, preset);
+  }
+
   recordFrame(dt, game) {
     if (!game || game.state !== 'playing') return null;
     if (typeof document !== 'undefined' && document.hidden) return null;
@@ -207,30 +280,52 @@ export class PerfMonitor {
       game?.setLowLod?.(shouldLod);
     }
 
-    if (!Save.data.autoQuality || Save.data.lowSpecMode) return null;
+    if (Save.data.autoQuality === false || Save.data.lowSpecMode) return null;
 
-    if (this.avgFps < 30) {
+    const s = Save.data.settings;
+    const hw = PerfMonitor.detectHardwareProfile(game?.renderer);
+
+    if (this.avgFps < 29) {
+      this.highStreak = 0;
       this.lowStreak++;
-      if (this.lowStreak >= 4) {
+      if (this.lowStreak >= 3) {
         this.lowStreak = 0;
-        const s = Save.data.settings;
-        const hw = PerfMonitor.detectHardwareProfile(game?.renderer);
+        if (s.quality === 'high') {
+          PerfMonitor.applyQualityTier(game, 'medium');
+          Save.save();
+          return '⚡ Auto-Qualidade: preset ajustado para Médio para manter o FPS estável.';
+        }
         if (s.shadows && (!hw.isDedicatedGpu || this.avgFps < 26)) {
           s.shadows = false;
           game?.applySettings?.();
           Save.save();
           return '⚡ Auto-Qualidade: sombras reduzidas para manter o FPS estável.';
         }
-        if (s.quality !== 'low' && (!hw.isDedicatedGpu && this.avgFps < 24)) {
-          s.quality = 'low';
-          s.particles = 'min';
-          game?.applySettings?.();
+        if (s.quality !== 'low' && (!hw.isDedicatedGpu || this.avgFps < 24)) {
+          PerfMonitor.applyQualityTier(game, 'low');
           Save.save();
           return '⚡ Auto-Qualidade: modo leve ativado para fluidez!';
         }
       }
+    } else if (this.avgFps >= 54) {
+      this.lowStreak = 0;
+      this.highStreak++;
+      if (this.highStreak >= 5) {
+        this.highStreak = 0;
+        if (s.quality === 'low') {
+          PerfMonitor.applyQualityTier(game, 'medium');
+          Save.save();
+          return '✨ Auto-Qualidade: FPS estável — qualidade elevada para Médio.';
+        }
+        if (s.quality === 'medium' && (hw.isDedicatedGpu || this.avgFps >= 58)) {
+          PerfMonitor.applyQualityTier(game, 'high');
+          Save.save();
+          return '✨ Auto-Qualidade: FPS ótimo — qualidade elevada para Alto.';
+        }
+      }
     } else {
       this.lowStreak = 0;
+      this.highStreak = 0;
     }
     return null;
   }

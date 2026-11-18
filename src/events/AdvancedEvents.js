@@ -21,6 +21,15 @@ export class AdvancedEvents {
     this.flightPhase = 0;
 
     this.lavaCorridorTimer = 0;
+    this.auroraBuffTimer = 0;
+  }
+
+  startAuroraBuff(duration = 12) {
+    this.auroraBuffTimer = duration;
+  }
+
+  getScoreMultiplier() {
+    return this.auroraBuffTimer > 0 ? 1.5 : 1.0;
   }
 
   startChaser(duration = 14) {
@@ -146,6 +155,11 @@ export class AdvancedEvents {
         ctx.spawner?._acquire('lava_pool', LANE_X[lane], 0, -110);
       }
     }
+
+    // Aurora Boreal (Buff)
+    if (this.auroraBuffTimer > 0) {
+      this.auroraBuffTimer = Math.max(0, this.auroraBuffTimer - dt);
+    }
   }
 
   clearChaser() {
@@ -161,5 +175,6 @@ export class AdvancedEvents {
     this.flightActive = false;
     if (this.flightCarrier) this.flightCarrier.visible = false;
     this.lavaCorridorTimer = 0;
+    this.auroraBuffTimer = 0;
   }
 }
