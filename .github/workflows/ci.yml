@@ -27,3 +27,6 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Verify performance & bundle budget
+        run: npm run test:budget

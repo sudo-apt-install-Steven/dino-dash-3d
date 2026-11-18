@@ -1,6 +1,9 @@
 // Modal de Configurações em 5 abas: Geral, Gráficos, Áudio, Controles e Acessibilidade.
 import { Save } from '../systems/Save.js';
 import { OrientationManager } from '../systems/OrientationManager.js';
+import { Telemetry } from '../systems/Telemetry.js';
+import { applyDomLanguage, normalizeLocale } from '../i18n/translations.js';
+import { escapeHtml } from '../security/Sanitize.js';
 import { attachModalHelp } from './Menus.js';
 
 export class SettingsModal {
@@ -30,10 +33,11 @@ export class SettingsModal {
 
           <div id="stab-general">
             <div class="field-row">
-              <span>Idioma</span>
+              <span>Idioma / Language / Idioma</span>
               <select id="set-lang">
-                <option value="pt" ${s.lang === 'pt' ? 'selected' : ''}>Português (Padrão)</option>
-                <option value="en" ${s.lang === 'en' ? 'selected' : ''}>English</option>
+                <option value="pt-BR" ${normalizeLocale(s.lang) === 'pt-BR' ? 'selected' : ''}>Português (Brasil)</option>
+                <option value="en" ${normalizeLocale(s.lang) === 'en' ? 'selected' : ''}>English</option>
+                <option value="es" ${normalizeLocale(s.lang) === 'es' ? 'selected' : ''}>Español</option>
               </select>
             </div>
             <div class="field-row">
@@ -85,6 +89,19 @@ export class SettingsModal {
               <div class="field-row">
                 <span>🎲 Desativar Caixas Gacha Voluntariamente (ECA Digital)</span>
                 <input type="checkbox" id="set-disable-gacha" ${s.disableGachaVoluntary ? 'checked' : ''} />
+              </div>
+              <div class="field-row">
+                <span>📊 Telemetria Anônima Opt-in (Sem Dados Pessoais)</span>
+                <input type="checkbox" id="set-analytics-optin" ${s.analyticsOptIn ? 'checked' : ''} />
+              </div>
+              <div class="item-card" id="set-error-panel" style="margin-top:6px; font-size:0.76rem; color:#e4e4e7;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <strong>🩺 Painel de Erros (${Telemetry.getErrorLog().length})</strong>
+                  <button type="button" class="chunky-btn secondary" id="set-clear-errors" style="padding:3px 8px; font-size:0.72rem;">Limpar</button>
+                </div>
+                <div id="set-error-list" style="max-height:80px; overflow-y:auto; font-family:monospace; color:#cbd5e1; margin-top:4px;">
+                  ${Telemetry.getErrorLog().length === 0 ? 'Nenhum erro registrado nesta sessão.' : Telemetry.getErrorLog().map((e) => `<div>[${escapeHtml(e.kind)}] ${escapeHtml(e.message)} (${escapeHtml(e.location)})</div>`).join('')}
+                </div>
               </div>
               ${import.meta.env.DEV ? `
               <div class="field-row">
@@ -245,6 +262,10 @@ export class SettingsModal {
               <input type="checkbox" id="a11y-shake" ${s.accessibility.reduceShake ? 'checked' : ''} />
             </div>
             <div class="field-row">
+              <span>✨ Reduzir Flashes e Cintilações</span>
+              <input type="checkbox" id="a11y-flashes" ${s.accessibility.reduceFlashes ? 'checked' : ''} />
+            </div>
+            <div class="field-row">
               <span>❤️ Pulsar tela em 1 vida</span>
               <input type="checkbox" id="set-lowhp-pulse" ${s.lowHpPulse ? 'checked' : ''} />
             </div>
@@ -323,7 +344,10 @@ export class SettingsModal {
       s.accessibility.highContrast = container.querySelector('#a11y-contrast').checked;
       s.accessibility.colorblind = container.querySelector('#a11y-cb').value;
       s.accessibility.reduceShake = container.querySelector('#a11y-shake').checked;
+      s.accessibility.reduceFlashes = !!container.querySelector('#a11y-flashes')?.checked;
       s.accessibility.vibration = container.querySelector('#a11y-vib').checked;
+      s.analyticsOptIn = !!container.querySelector('#set-analytics-optin')?.checked;
+      applyDomLanguage(s.lang);
 
       Save.save();
       if (onApplySettings) onApplySettings();
@@ -416,6 +440,12 @@ export class SettingsModal {
     container.querySelector('#set-legal-open')?.addEventListener('click', () => {
       sync();
       onOpenLegal?.();
+    });
+
+    container.querySelector('#set-clear-errors')?.addEventListener('click', () => {
+      Telemetry.clearErrors();
+      const list = container.querySelector('#set-error-list');
+      if (list) list.textContent = 'Nenhum erro registrado nesta sessão.';
     });
 
     container.querySelector('#close-settings').addEventListener('click', () => {

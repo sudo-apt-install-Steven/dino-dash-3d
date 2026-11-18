@@ -13,6 +13,8 @@ import { DINO_CATALOG, getDinoSpec } from '../src/dinos/DinoCatalog.js';
 import { BIOMES, getBiomeById } from '../src/world/Biomes.js';
 import { DIFFICULTY_PRESETS } from '../src/game/Difficulty.js';
 import { ObjectPool } from '../src/systems/ObjectPool.js';
+import { SUPPORTED_LOCALES, normalizeLocale, t } from '../src/i18n/translations.js';
+import { ContentLoader } from '../src/content/ContentLoader.js';
 
 test('Sanitize: escapeHtml blocks XSS payloads', () => {
   const dirty = '<script>alert("xss")</script>&"\'';
@@ -81,3 +83,22 @@ test('ObjectPool: reuses released instances without leaking', () => {
   pool.release(b);
   pool.release(a2);
 });
+
+test('i18n: supports pt-BR, en, and es translations cleanly', () => {
+  assert.deepEqual(SUPPORTED_LOCALES, ['pt-BR', 'en', 'es']);
+  assert.equal(normalizeLocale('pt'), 'pt-BR');
+  assert.equal(normalizeLocale('en-US'), 'en');
+  assert.equal(normalizeLocale('es-ES'), 'es');
+  assert.equal(t('menu.play', 'pt-BR'), '▶ Jogar Agora');
+  assert.equal(t('menu.play', 'en'), '▶ Play Now');
+  assert.equal(t('menu.play', 'es'), '▶ Jugar Ahora');
+});
+
+test('ContentLoader: validates data-driven bosses, missions, and seasonal events', () => {
+  const res = ContentLoader.validateContent();
+  assert.equal(res.ok, true, `Content validation errors: ${(res.errors || []).join(', ')}`);
+  assert.ok(ContentLoader.getBosses().length >= 14);
+  assert.ok(ContentLoader.getMissions().length >= 10);
+  assert.ok(ContentLoader.getSeasonalEvents().length >= 4);
+});
+
