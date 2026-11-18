@@ -105,7 +105,6 @@ export class CameraRig {
         if (spotlight && list.length > 1) {
           fx = fx * 0.45 + spotlight.x * 0.55;
           fz = fz * 0.45 + spotlight.z * 0.55;
-          fz = fz * 0.45 + spotlight.z * 0.55;
           highlightZoom = -0.95;
         }
       }

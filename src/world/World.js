@@ -439,11 +439,15 @@ export class World {
       opacity: 0.36,
       side: THREE.DoubleSide,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
       fog: false
     });
     const surfaceCeiling = new THREE.Mesh(new THREE.PlaneGeometry(110, 210), surfaceCeilingMat);
     surfaceCeiling.rotation.x = Math.PI / 2;
     surfaceCeiling.position.set(4, 0.02, -70);
+    surfaceCeiling.renderOrder = 3;
     this.underwaterEnvGroup.add(surfaceCeiling);
     this.surfaceCeiling = surfaceCeiling;
 
@@ -475,6 +479,7 @@ export class World {
       const sideX = (i % 2 === 0 ? -5.8 : 5.8) + (i % 3) * 1.4;
       ray.position.set(sideX, -2.4, -125 + i * 18);
       ray.rotation.z = 0.24;
+      ray.renderOrder = 4;
       this.underwaterEnvGroup.add(ray);
       this.underwaterGodRays.push(ray);
     }
@@ -482,13 +487,15 @@ export class World {
     this.underwaterBubbleMat = new THREE.MeshBasicMaterial({
       color: '#e0f2fe',
       transparent: true,
-      opacity: 0.78
+      opacity: 0.78,
+      depthWrite: false
     });
     this.underwaterBubblesMesh = new THREE.InstancedMesh(
       new THREE.BoxGeometry(0.18, 0.18, 0.18),
       this.underwaterBubbleMat,
       96
     );
+    this.underwaterBubblesMesh.renderOrder = 5;
     this.underwaterBubbles = [];
     for (let i = 0; i < 96; i++) {
       this.underwaterBubbles.push({
@@ -546,11 +553,14 @@ export class World {
     const sub = !!this.submergedActive;
     const isSubBiome = !!this._isSubmergedBiome;
 
-    // No Fundo Abissal (isSubBiome), todo o mapa já é o fundo do mar: não há rio azul na lateral!
-    if (this.riverMesh) this.riverMesh.visible = !isSubBiome;
-    if (this.rippleMesh) this.rippleMesh.visible = !isSubBiome;
+    // No Fundo Abissal (isSubBiome) ou quando submerso sob o rio, oculta a caixa sólida do rio para evitar z-fighting com surfaceCeiling!
+    if (this.riverMesh) {
+      this.riverMesh.visible = !isSubBiome && !sub;
+      this.riverMesh.renderOrder = 1;
+    }
+    if (this.rippleMesh) this.rippleMesh.visible = !isSubBiome && !sub;
     if (this.waterLaneGroup) {
-      this.waterLaneGroup.visible = Boolean(this.aquaticChannelActive && !isSubBiome);
+      this.waterLaneGroup.visible = Boolean(this.aquaticChannelActive && !isSubBiome && !sub);
     }
     if (this.waterSurfaceGroup) {
       this.waterSurfaceGroup.visible = Boolean(this.waterSurfaceActive && !isSubBiome && !sub);
@@ -560,13 +570,31 @@ export class World {
       this.underwaterEnvGroup.position.x = isSubBiome ? 0 : 7.6;
     }
     if (this.surfaceCeiling) {
-      this.surfaceCeiling.visible = !isSubBiome;
+      this.surfaceCeiling.visible = sub && !isSubBiome;
+      this.surfaceCeiling.renderOrder = 3;
     }
     for (let i = 0; i < (this.ceilingWaveSlats?.length || 0); i++) {
-      this.ceilingWaveSlats[i].visible = !isSubBiome;
+      this.ceilingWaveSlats[i].visible = sub && !isSubBiome;
+      this.ceilingWaveSlats[i].renderOrder = 3;
     }
     if (this.seabedGroup) {
       this.seabedGroup.visible = Boolean(sub && !isSubBiome);
+    }
+
+    // Fog azul subaquático ao submergir (sem depender da cor do bioma de superfície, evitando névoa laranja debaixo d'água)
+    if (this.scene?.fog && this.scene?.background) {
+      if (sub) {
+        const uwHex = isSubBiome ? '#062c49' : '#0a4f70';
+        this.scene.background.set(uwHex);
+        this.scene.fog.color.set(uwHex);
+        this.scene.fog.density = this.clearVision ? 0.011 : 0.022;
+      } else if (this.skyColor && this.fogColor) {
+        this.scene.background.copy(this.skyColor);
+        this.scene.fog.color.copy(this.fogColor);
+        this.scene.fog.density = this.lowSpec
+          ? 0.004
+          : (this.clearVision ? 0.006 : Math.min(0.018, this._targetFogDensity || 0.012));
+      }
     }
 
     const floorY = isSubBiome ? -0.1 : -4.6;
@@ -893,10 +921,12 @@ export class World {
     this.fogColor.copy(from.fog).lerp(to.fog, k);
     this.currentSkyColor = this.skyColor;
     this.currentFogColor = this.fogColor;
-    this.scene.background.copy(this.skyColor);
-    this.scene.fog.color.copy(this.fogColor);
-    const baseDens = from.fogDensity + (to.fogDensity - from.fogDensity) * k;
-    this.scene.fog.density = this.clearVision ? 0.006 : baseDens;
+    if (!this.submergedActive) {
+      this.scene.background.copy(this.skyColor);
+      this.scene.fog.color.copy(this.fogColor);
+      const baseDens = from.fogDensity + (to.fogDensity - from.fogDensity) * k;
+      this.scene.fog.density = this.clearVision ? 0.006 : baseDens;
+    }
     this.groundMat.color.copy(from.ground).lerp(to.ground, k);
     this.trackMat.color.copy(from.track).lerp(to.track, k);
     this.trackMat.emissive.copy(this.trackMat.color).multiplyScalar(0.18);
@@ -954,5 +984,111 @@ export class World {
 
     this.scenery.update(dt, speed);
     this._updateSpecialCorridorsAndFx(dt, speed);
+  }
+
+  /**
+   * B4: Clona pistas paralelas laterais para multiplayer sem sobreposição.
+   * @param {number[]} offsets - Deslocamentos X das pistas paralelas (ex.: [24, -24, 48])
+   */
+  setParallelTracks(offsets = []) {
+    if (!this.parallelTracksGroup) {
+      this.parallelTracksGroup = new THREE.Group();
+      this.worldGroup.add(this.parallelTracksGroup);
+      this._parallelTrackPool = [];
+      this._parallelObsMat = new THREE.MeshStandardMaterial({
+        color: '#f97316',
+        roughness: 0.65,
+        transparent: true,
+        opacity: 0.72
+      });
+      this._parallelObsMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), this._parallelObsMat, 128);
+      this._parallelObsMesh.count = 0;
+      this._parallelObsMesh.frustumCulled = false;
+      this.worldGroup.add(this._parallelObsMesh);
+    }
+
+    const nonZero = Array.isArray(offsets) ? offsets.filter((x) => Math.abs(x) > 0.1) : [];
+    for (let i = 0; i < this._parallelTrackPool.length; i++) {
+      this._parallelTrackPool[i].visible = false;
+    }
+    if (nonZero.length === 0) {
+      this.parallelTracksGroup.visible = false;
+      if (this._parallelObsMesh) this._parallelObsMesh.count = 0;
+      return;
+    }
+
+    this.parallelTracksGroup.visible = true;
+    const cloneTrackMat = this._parallelTrackMat || (this._parallelTrackMat = new THREE.MeshStandardMaterial({
+      color: this.trackMat?.color || '#eab76a',
+      roughness: 0.85,
+      transparent: true,
+      opacity: 0.78
+    }));
+    cloneTrackMat.color.copy(this.trackMat.color);
+    const cloneRailMat = this._parallelRailMat || (this._parallelRailMat = new THREE.MeshBasicMaterial({
+      color: this.edgeRailMat?.color || '#ffd166',
+      transparent: true,
+      opacity: 0.6
+    }));
+    cloneRailMat.color.copy(this.edgeRailMat.color);
+
+    for (let i = 0; i < nonZero.length; i++) {
+      let grp = this._parallelTrackPool[i];
+      if (!grp) {
+        grp = new THREE.Group();
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(TRACK_WIDTH, 0.14, 210), cloneTrackMat);
+        slab.position.set(0, -0.07, -70);
+        grp.add(slab);
+        for (const lx of [-1.2, 1.2]) {
+          const div = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 210), cloneRailMat);
+          div.position.set(lx, 0.015, -70);
+          grp.add(div);
+        }
+        for (const ex of [-3.75, 3.75]) {
+          const rail = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 210), cloneRailMat);
+          rail.position.set(ex, 0.035, -70);
+          grp.add(rail);
+        }
+        this.parallelTracksGroup.add(grp);
+        this._parallelTrackPool.push(grp);
+      }
+      grp.position.x = nonZero[i];
+      grp.scale.set(0.94, 1, 1);
+      grp.visible = true;
+    }
+  }
+
+  /**
+   * B4: Espelha visualmente os obstáculos ativos nas pistas paralelas (1 draw call InstancedMesh).
+   */
+  syncParallelObstacleProxies(offsets = [], obstacles = []) {
+    if (!this._parallelObsMesh) return;
+    const nonZero = Array.isArray(offsets) ? offsets.filter((x) => Math.abs(x) > 0.1) : [];
+    if (nonZero.length === 0 || !obstacles.length) {
+      this._parallelObsMesh.count = 0;
+      return;
+    }
+    let idx = 0;
+    const maxInst = 128;
+    for (let t = 0; t < nonZero.length && idx < maxInst; t++) {
+      const ox = nonZero[t];
+      for (let i = 0; i < obstacles.length && idx < maxInst; i++) {
+        const obs = obstacles[i];
+        if (!obs || obs.hit || !obs.group?.visible) continue;
+        if (obs.kind === 'egg' || obs.kind === 'fruit') continue;
+        const pos = obs.group.position;
+        if (pos.z < -125 || pos.z > 16) continue;
+        const w = Math.max(0.35, (obs.halfW || 0.45) * 1.6);
+        const h = Math.max(0.35, (obs.maxY || 1.0) - (obs.minY || 0));
+        const d = Math.max(0.35, (obs.halfD || 0.45) * 1.6);
+        this._dummy.position.set(ox + pos.x, pos.y + (obs.minY || 0) + h * 0.5, pos.z);
+        this._dummy.rotation.set(0, 0, 0);
+        this._dummy.scale.set(w, h, d);
+        this._dummy.updateMatrix();
+        this._parallelObsMesh.setMatrixAt(idx++, this._dummy.matrix);
+      }
+    }
+    this._parallelObsMesh.count = idx;
+    this._parallelObsMesh.instanceMatrix.needsUpdate = true;
   }
 }

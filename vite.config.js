@@ -55,12 +55,14 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: false,
-    chunkSizeWarningLimit: 950,
+    chunkSizeWarningLimit: 1050,
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules/three')) return 'vendor-three';
           if (id.includes('node_modules/@supabase') || id.includes('node_modules/qrcode')) return 'vendor-net';
+          if (id.includes('/src/content/') || id.includes('\\src\\content\\')) return 'game-content';
+          if (id.includes('ClaudeVoxelModels') || id.includes('VoxelLibrary') || id.includes('BossModels') || id.includes('PredatorModels')) return 'game-models';
         }
       }
     }

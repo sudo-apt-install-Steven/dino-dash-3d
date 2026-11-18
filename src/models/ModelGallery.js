@@ -22,6 +22,7 @@ const DINO_ANIMS = [
   { id: 'jump', label: 'Pular' },
   { id: 'duck', label: 'Abaixar' },
   { id: 'slide', label: 'Deslizar' },
+  { id: 'attack', label: 'Ataque (Q)' },
   { id: 'swim', label: 'Nadar' },
   { id: 'fly', label: 'Voar' },
   { id: 'hurt', label: 'Dano (Hurt)' },
@@ -148,8 +149,10 @@ export function openModelGallery(container, onClose) {
   let bossPhase = 1;
   let bossAnim = 'idle';
   let autoRotate = true;
+  let compareMode = false;
+  let compareId = 'carnotaurus';
 
-  let camYaw = 0.55;
+  let camYaw = 2.55;
   let camPitch = 0.34;
   let camDist = 5.4;
   let dragging = false;
@@ -158,6 +161,8 @@ export function openModelGallery(container, onClose) {
 
   let currentRoot = null;
   let currentAnimator = null;
+  let compareRoot = null;
+  let compareAnimator = null;
   let currentBossRig = null;
   let currentPropUpdate = null;
   let animTime = 0;
@@ -166,7 +171,7 @@ export function openModelGallery(container, onClose) {
   let destroyed = false;
 
   container.innerHTML = `
-    <div id="mg-overlay" style="position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;background:#09090b;color:#f4f4f5;font-family:Inter,system-ui,-apple-system,sans-serif;">
+    <div id="mg-overlay" style="position:fixed;inset:0;z-index:9999;pointer-events:auto;display:flex;flex-direction:column;background:#09090b;color:#f4f4f5;font-family:Inter,system-ui,-apple-system,sans-serif;">
       <header style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;background:rgba(24,24,27,0.9);border-bottom:1px solid rgba(63,63,70,0.7);gap:12px;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:12px;">
           <span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#10b981);font-weight:700;font-size:16px;">3D</span>
@@ -200,7 +205,11 @@ export function openModelGallery(container, onClose) {
             <span id="mg-model-budget" style="color:#34d399;font-weight:600;">—</span>
           </div>
 
-          <div style="position:absolute;top:14px;right:14px;display:flex;gap:6px;">
+          <div style="position:absolute;top:14px;right:14px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+            <button id="mg-compare-btn" style="padding:6px 10px;border-radius:8px;border:1px solid #3f3f46;background:rgba(24,24,27,0.85);color:#f4f4f5;font-size:12px;cursor:pointer;">⚔️ Comparar: OFF</button>
+            <select id="mg-compare-select" style="display:none;padding:6px 8px;border-radius:8px;border:1px solid #6366f1;background:#18181b;color:#f4f4f5;font-size:12px;cursor:pointer;">
+              ${DINO_CATALOG.map((d) => `<option value="${d.id}">${d.name}</option>`).join('')}
+            </select>
             <button id="mg-autorot" style="padding:6px 10px;border-radius:8px;border:1px solid #3f3f46;background:rgba(24,24,27,0.85);color:#f4f4f5;font-size:12px;cursor:pointer;">↻ Auto-Giro: ON</button>
             <button id="mg-zoom-in" style="padding:6px 10px;border-radius:8px;border:1px solid #3f3f46;background:rgba(24,24,27,0.85);color:#f4f4f5;font-size:12px;cursor:pointer;">＋</button>
             <button id="mg-zoom-out" style="padding:6px 10px;border-radius:8px;border:1px solid #3f3f46;background:rgba(24,24,27,0.85);color:#f4f4f5;font-size:12px;cursor:pointer;">－</button>
@@ -246,6 +255,12 @@ export function openModelGallery(container, onClose) {
   const updateBudgetReadout = () => {
     const meshes = countVoxelMeshes(currentRoot);
     const tris = computeTriangleCount(currentRoot);
+    if (compareMode && category === 'dinos' && compareRoot) {
+      const cMeshes = countVoxelMeshes(compareRoot);
+      const cTris = computeTriangleCount(compareRoot);
+      budgetEl.textContent = `${selectedId}: ${meshes}v / ${tris.toLocaleString('pt-BR')} tris  vs  ${compareId}: ${cMeshes}v / ${cTris.toLocaleString('pt-BR')} tris`;
+      return;
+    }
     budgetEl.textContent = `${meshes} voxels/meshes • ${tris.toLocaleString('pt-BR')} triângulos`;
   };
 
@@ -255,13 +270,23 @@ export function openModelGallery(container, onClose) {
       disposeObjectTree(currentRoot);
       currentRoot = null;
     }
+    if (compareRoot) {
+      scene.remove(compareRoot);
+      disposeObjectTree(compareRoot);
+      compareRoot = null;
+    }
     currentAnimator = null;
+    compareAnimator = null;
     currentBossRig = null;
     currentPropUpdate = null;
   };
 
   const loadModel = () => {
     clearCurrentModel();
+    const cmpBtn = container.querySelector('#mg-compare-btn');
+    const cmpSel = container.querySelector('#mg-compare-select');
+    if (cmpBtn) cmpBtn.style.display = category === 'dinos' ? 'inline-block' : 'none';
+    if (cmpSel) cmpSel.style.display = category === 'dinos' && compareMode ? 'inline-block' : 'none';
 
     if (category === 'dinos') {
       const spec = DINO_CATALOG.find((d) => d.id === selectedId) || DINO_CATALOG[0];
@@ -270,9 +295,27 @@ export function openModelGallery(container, onClose) {
       currentRoot = model.root;
       currentAnimator = new DinoAnimator(model);
       scene.add(currentRoot);
-      camDist = 4.6;
-      titleEl.textContent = `${spec.name} (${spec.id})`;
-      metaEl.textContent = `Classe: ${spec.cls || 'dino'} • Skin: ${skinVariant}`;
+
+      if (compareMode) {
+        if (compareId === selectedId) {
+          compareId = selectedId === 'carnotaurus' ? 'trex' : 'carnotaurus';
+        }
+        if (cmpSel) cmpSel.value = compareId;
+        const cmpSpec = DINO_CATALOG.find((d) => d.id === compareId) || DINO_CATALOG[1] || DINO_CATALOG[0];
+        const cmpModel = DinoFactory.build(cmpSpec.id, { skinVariant }, { skinVariant });
+        compareRoot = cmpModel.root;
+        compareAnimator = new DinoAnimator(cmpModel);
+        currentRoot.position.x = -1.25;
+        compareRoot.position.x = 1.25;
+        scene.add(compareRoot);
+        camDist = 5.8;
+        titleEl.textContent = `${spec.name} (${spec.id})  vs  ${cmpSpec.name} (${cmpSpec.id})`;
+        metaEl.textContent = `Comparação Lado a Lado • Skin: ${skinVariant} • Pose: ${dinoAnim}`;
+      } else {
+        camDist = 4.6;
+        titleEl.textContent = `${spec.name} (${spec.id})`;
+        metaEl.textContent = `Classe: ${spec.dinoClass || 'dino'} • Skin: ${skinVariant}`;
+      }
     } else if (category === 'bosses') {
       const info = BOSS_AUDIT_REPORT.find((b) => b.id === selectedId) || BOSS_AUDIT_REPORT[0];
       selectedId = info.id;
@@ -417,6 +460,19 @@ export function openModelGallery(container, onClose) {
 
   searchEl.addEventListener('input', renderList);
 
+  const cmpBtn = container.querySelector('#mg-compare-btn');
+  const cmpSel = container.querySelector('#mg-compare-select');
+  cmpBtn?.addEventListener('click', () => {
+    compareMode = !compareMode;
+    cmpBtn.textContent = `⚔️ Comparar: ${compareMode ? 'ON' : 'OFF'}`;
+    cmpBtn.style.background = compareMode ? '#4f46e5' : 'rgba(24,24,27,0.85)';
+    loadModel();
+  });
+  cmpSel?.addEventListener('change', () => {
+    compareId = cmpSel.value;
+    loadModel();
+  });
+
   const autoRotBtn = container.querySelector('#mg-autorot');
   autoRotBtn.addEventListener('click', () => {
     autoRotate = !autoRotate;
@@ -425,9 +481,9 @@ export function openModelGallery(container, onClose) {
   container.querySelector('#mg-zoom-in').addEventListener('click', () => { camDist = Math.max(2.2, camDist - 0.8); });
   container.querySelector('#mg-zoom-out').addEventListener('click', () => { camDist = Math.min(18, camDist + 0.8); });
   container.querySelector('#mg-reset-cam').addEventListener('click', () => {
-    camYaw = 0.55;
+    camYaw = 2.55;
     camPitch = 0.34;
-    camDist = category === 'bosses' ? 9.2 : 4.6;
+    camDist = category === 'bosses' ? 9.2 : (compareMode ? 5.8 : 4.6);
   });
 
   const onPointerDown = (e) => {
@@ -491,6 +547,7 @@ export function openModelGallery(container, onClose) {
       case 'jump': return { ...base, grounded: false, vy: Math.cos(t * 4) * 9 };
       case 'duck': return { ...base, ducking: true };
       case 'slide': return { ...base, sliding: true, dashing: true };
+      case 'attack': return { ...base, speed: 12, attacking: (t % 0.75) < 0.12 };
       case 'swim': return { ...base, swimming: true, locomotion: 'aquatic' };
       case 'fly': return { ...base, grounded: false, locomotion: 'flying' };
       case 'hurt': return { ...base, hurt: true };
@@ -511,7 +568,9 @@ export function openModelGallery(container, onClose) {
     }
 
     if (currentAnimator) {
-      currentAnimator.update(dt, buildDinoAnimState(animTime));
+      const animState = buildDinoAnimState(animTime);
+      currentAnimator.update(dt, animState);
+      compareAnimator?.update(dt, animState);
     } else if (currentBossRig?.updateAnimation) {
       currentBossRig.updateAnimation(animTime, dt, bossAnim);
     } else if (currentPropUpdate) {

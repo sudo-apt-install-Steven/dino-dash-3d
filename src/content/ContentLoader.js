@@ -23,6 +23,26 @@ export class ContentLoader {
     return balanceData;
   }
 
+  static getBossCombat() {
+    return balanceData.bossCombat || {};
+  }
+
+  static getPlayerAttack() {
+    return balanceData.playerAttack || {};
+  }
+
+  static getEventScheduler() {
+    return balanceData.eventScheduler || {};
+  }
+
+  static getReviveConfig() {
+    return balanceData.revive || {};
+  }
+
+  static getOxygenConfig() {
+    return balanceData.oxygen || {};
+  }
+
   static getBosses() {
     return bossesData;
   }
@@ -59,6 +79,12 @@ export class ContentLoader {
     const errors = [];
     if (!balanceData?.speed || !balanceData?.rewards || !balanceData?.xp) {
       errors.push('balance.json missing required sections (speed, rewards, xp)');
+    }
+    const requiredBalanceSections = ['bossCombat', 'playerAttack', 'eventScheduler', 'revive', 'oxygen'];
+    for (const sec of requiredBalanceSections) {
+      if (!balanceData?.[sec] || typeof balanceData[sec] !== 'object') {
+        errors.push(`balance.json missing required section: ${sec}`);
+      }
     }
     for (const b of bossesData) {
       if (!b.id || !b.name || !b.biomeId || typeof b.hp !== 'number' || !Array.isArray(b.phases) || b.phases.length !== 3) {

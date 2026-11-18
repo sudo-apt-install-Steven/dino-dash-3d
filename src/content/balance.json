@@ -1,12 +1,15 @@
 {
-  "version": "4.0.0",
+  "version": "4.1.0",
+  "_comment": "Arquivo central de balanceamento do Dino Dash 3D. Ajuste valores aqui sem alterar código.",
   "speed": {
+    "_comment": "Multiplicadores globais de velocidade da corrida.",
     "initialSpeedMultiplier": 1.0,
     "maxSpeedMultiplier": 1.0,
     "accelMultiplier": 1.0,
     "warmupSec": 12
   },
   "rewards": {
+    "_comment": "Recompensas de boss, ovos e prestígio.",
     "bossRewardMult": 1.0,
     "bossScoreBonus": 750,
     "bossDefaultEggs": 55,
@@ -15,6 +18,7 @@
     "prestigeStepMult": 0.25
   },
   "xp": {
+    "_comment": "Progressão de XP e Passe de Temporada.",
     "xpMultiplier": 1.0,
     "xpPerScoreRatio": 0.12,
     "xpPerEggRatio": 0.3,
@@ -22,11 +26,69 @@
     "maxPassLevel": 50
   },
   "bossCombat": {
-    "baseAttackCooldownSec": 1.85,
+    "_comment": "Meta de duração de luta (Normal 60-90s, Fácil ~45-60s, Difícil ~90-120s) e ritmo telegrafar -> atacar -> janela de dano.",
+    "targetDurationSec": {
+      "easy": 52,
+      "normal": 75,
+      "hard": 105
+    },
+    "vulnerabilityWindowSec": 4.5,
+    "idleBetweenAttacksSec": 1.4,
+    "attackExecSec": 0.55,
+    "baseHpPerTier": 350,
+    "hpScaleByDifficulty": {
+      "easy": 0.70,
+      "normal": 1.0,
+      "hard": 1.42,
+      "insane": 1.65,
+      "supreme": 1.85
+    },
+    "offWindowDamageMult": 0.45,
+    "weakOrbDamageMult": 2.5,
+    "elementalWeaknessBonusMult": 0.5,
+    "baseAttackCooldownSec": 1.4,
     "minAttackCooldownSec": 0.85,
-    "cooldownReductionPerHpLost": 0.12,
+    "cooldownReductionPerHpLost": 0.0,
     "phase2Threshold": 0.66,
     "phase3Threshold": 0.33,
     "defaultTelegraphSec": 0.85
+  },
+  "playerAttack": {
+    "_comment": "Parâmetros do ataque básico (tecla Q / botão touch) contra bosses e obstáculos.",
+    "damage": 28,
+    "cooldownSec": 0.65,
+    "rangeZ": 18,
+    "rangeX": 2.6,
+    "hitStopSec": 0.045,
+    "staminaCost": 15,
+    "durationSec": 0.24
+  },
+  "eventScheduler": {
+    "_comment": "Agendador data-driven de eventos por pontuação (sem troca de bioma; enfileira durante boss/intro).",
+    "firstEventMinScore": 1600,
+    "firstEventMaxScore": 2600,
+    "intervalMinScore": 1600,
+    "intervalMaxScore": 3600,
+    "maxConcurrent": 1,
+    "warningLeadSec": 2.2,
+    "noRepeatLastCount": 1,
+    "progressiveUnlock": true
+  },
+  "revive": {
+    "_comment": "Regras equilibradas para reviver aliado caído (tecla V / botão contextual).",
+    "costType": "life_or_shield",
+    "cooldownSec": 25,
+    "windowSec": 15,
+    "maxPerRun": 2,
+    "invulnSec": 2.5,
+    "cancelOnHit": true
+  },
+  "oxygen": {
+    "_comment": "Consumo e recarga de oxigênio (O2) ao submergir.",
+    "drainPerSec": 7.5,
+    "rechargePerSec": 38,
+    "lowThreshold": 30,
+    "graceSec": 2.0,
+    "drownDamagePerTick": 1
   }
 }

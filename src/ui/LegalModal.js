@@ -1,7 +1,8 @@
 // Modais de Conformidade Jurídica (Brasil): Termos, Privacidade (LGPD), ECA Digital e Canal de Denúncia.
 import { Save } from '../systems/Save.js';
+import { AuthProfile } from '../systems/AuthProfile.js';
 import { getSupabaseClient } from '../net/TransportSupabase.js';
-import { LOOTBOX_REAL_MONEY_ENABLED, requestCloudDataWipe, submitAbuseReport } from '../security/EdgeClient.js';
+import { LOOTBOX_REAL_MONEY_ENABLED, submitAbuseReport } from '../security/EdgeClient.js';
 import { escapeHtml } from '../security/Sanitize.js';
 
 export class LegalModal {
@@ -82,13 +83,13 @@ export class LegalModal {
                     coletamos o mínimo técnico necessário:
                   </p>
                   <ul style="margin:4px 0 6px 18px; padding:0; display:flex; flex-direction:column; gap:4px; color:#e5d3bc;">
-                    <li><strong>No seu dispositivo (3 camadas locais):</strong> <code>localStorage</code>, <code>IndexedDB (DinoDash3DDB)</code> e Cookie funcional <code>dd3d_chk</code> (<code>SameSite=Lax</code>, apenas recuperação de recordes/ovos, sem rastreamento publicitário).</li>
-                    <li><strong>Na nuvem (Supabase — opcional/online):</strong> apelido escolhido, pontuação verificada no ranking, código temporário de sala (~20 min) e identificador pseudônimo local (<code>${actorShort}...</code>).</li>
-                    <li><strong>O que NÃO coletamos:</strong> CPF, RG, telefone, endereço, GPS, câmera, microfone ou endereço IP/Wi-Fi para vincular progresso local.</li>
+                    <li><strong>Salvo apenas no seu dispositivo (Modo Convidado / Local):</strong> progresso da corrida, ovos, dinossauros, conquistas, configurações e backup automático em <code>localStorage</code>, <code>IndexedDB (DinoDash3DDB)</code> e Cookie técnico <code>dd3d_chk</code> (<code>SameSite=Lax</code>, sem rastreamento publicitário).</li>
+                    <li><strong>Enviado para a nuvem (Supabase — somente quando conectado ou online):</strong> apelido, e-mail de autenticação (opcional, se criar conta), foto/parâmetros do perfil, bio, conquistas sincronizadas, pontuação verificada no ranking e código temporário de sala (~20 min). Identificador pseudônimo local: <code>${actorShort}...</code>.</li>
+                    <li><strong>O que NÃO coletamos:</strong> CPF, RG, telefone, endereço residencial, GPS, câmera, microfone ou histórico de navegação.</li>
                   </ul>
                   <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
                     <button type="button" class="chunky-btn secondary" id="legal-export-json">💾 Exportar Meus Dados (JSON)</button>
-                    <button type="button" class="chunky-btn secondary" id="legal-wipe-ask" style="border-color:#ef4444; color:#fca5a5;">🗑️ Excluir Meus Dados (LGPD Art. 18)</button>
+                    <button type="button" class="chunky-btn secondary" id="legal-wipe-ask" style="border-color:#ef4444; color:#fca5a5;">🗑️ Excluir Conta &amp; Dados (LGPD Art. 18)</button>
                   </div>
                   ${wipeStepConfirm ? `
                     <div id="legal-wipe-confirm-box" class="item-card" style="margin-top:8px; border-color:#ef4444; background:rgba(127,29,29,0.35);">
@@ -193,16 +194,11 @@ export class LegalModal {
           btn.disabled = true;
           btn.textContent = 'Excluindo...';
         }
-        const client = getSupabaseClient();
-        let cloudMsg = 'offline';
-        if (client) {
-          const res = await requestCloudDataWipe(client);
-          cloudMsg = res?.ok ? 'nuvem removida' : (res?.error || 'sem sessão na nuvem');
-        }
-        await Save.wipeAllLocalData();
+        const res = await AuthProfile.deleteAccountAndCloudData();
+        const cloudMsg = res?.cloudStatus || 'offline';
         wipeStepConfirm = false;
         statusTone = '#6ee7b7';
-        statusMsg = `✅ Dados locais apagados completamente (${cloudMsg}).`;
+        statusMsg = `✅ Dados locais e conta/nuvem apagados completamente (${cloudMsg}).`;
         onAfterWipe?.();
         render();
       });

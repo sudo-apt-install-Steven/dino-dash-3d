@@ -123,6 +123,22 @@ body,
   transform: none !important;
 }
 
+.chunky-btn:focus-visible,
+.tab-btn:focus-visible,
+.inline-change-btn:focus-visible,
+.modal-help-btn:focus-visible,
+.opt-help-btn:focus-visible,
+.game-stepper-btn:focus-visible,
+.touch-btn:focus-visible,
+.select-input:focus-visible,
+.text-input:focus-visible,
+.game-slider:focus-visible,
+.game-switch:has(.game-switch-input:focus-visible) .game-switch-track {
+  outline: 3px solid var(--accent-gold);
+  outline-offset: 2px;
+  box-shadow: 0 0 16px rgba(255, 212, 71, 0.55);
+}
+
 .chunky-panel {
   pointer-events: auto;
   background: var(--panel-bg);
