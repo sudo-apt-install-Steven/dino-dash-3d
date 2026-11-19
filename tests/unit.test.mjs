@@ -33,10 +33,13 @@ test('Sanitize: sanitizeNickname, roomCode, roomPassword, hexColor', () => {
   assert.equal(sanitizeHexColor('javascript:alert(1)', '#ffffff'), '#ffffff');
 });
 
-test('Modes: 17 unique modes and valid fallback', () => {
-  assert.equal(GAME_MODES.length, 17);
+test('Modes: >= 22 unique modes (including expansion modes) and valid fallback', () => {
+  assert.ok(GAME_MODES.length >= 22, `Expected >= 22 modes, got ${GAME_MODES.length}`);
   const ids = new Set(GAME_MODES.map((m) => m.id));
   assert.equal(ids.size, GAME_MODES.length);
+  for (const reqId of ['raid', 'boss_fight', 'free_roam', 'race', 'competition', 'coop']) {
+    assert.ok(ids.has(reqId), `Missing required mode: ${reqId}`);
+  }
   for (const m of GAME_MODES) {
     assert.ok(m.name && m.tier && m.players >= 1);
   }
