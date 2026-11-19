@@ -43,8 +43,8 @@ test('Modes: 17 unique modes and valid fallback', () => {
   assert.equal(getModeDef('nonexistent_mode').id, 'solo');
 });
 
-test('DinoCatalog: 37 unique species with valid attributes', () => {
-  assert.equal(DINO_CATALOG.length, 37);
+test('DinoCatalog: 50 unique species with valid attributes', () => {
+  assert.equal(DINO_CATALOG.length, 50);
   const ids = new Set(DINO_CATALOG.map((d) => d.id));
   assert.equal(ids.size, DINO_CATALOG.length);
   for (const d of DINO_CATALOG) {
@@ -54,8 +54,8 @@ test('DinoCatalog: 37 unique species with valid attributes', () => {
   assert.equal(getDinoSpec('trex').id, 'trex');
 });
 
-test('Biomes & Difficulty: 19 biomes and valid difficulty presets', () => {
-  assert.equal(BIOMES.length, 19);
+test('Biomes & Difficulty: 25 biomes and valid difficulty presets', () => {
+  assert.equal(BIOMES.length, 25);
   const ids = new Set(BIOMES.map((b) => b.id));
   assert.equal(ids.size, BIOMES.length);
   assert.equal(getBiomeById('desert').id, 'desert');

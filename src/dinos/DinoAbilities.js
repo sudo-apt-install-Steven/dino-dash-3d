@@ -11,6 +11,13 @@ export class DinoAbilities {
 
     this.acidMat = new THREE.MeshBasicMaterial({ color: '#7bf118' });
     this.spikeMat = new THREE.MeshBasicMaterial({ color: '#ff6b35' });
+    this.plasmaMat = new THREE.MeshBasicMaterial({ color: '#38bdf8' });
+    this.chronoMat = new THREE.MeshBasicMaterial({ color: '#c084fc' });
+  }
+
+  getPassiveSpec(dinoId) {
+    const spec = getDinoSpec(dinoId);
+    return spec?.passive || null;
   }
 
   getSkillLevelScale(level = 1) {
@@ -260,6 +267,96 @@ export class DinoAbilities {
         player.magnetTimer = Math.max(player.magnetTimer, 4.5);
         this._spawnWave(player.x, player.z, '#38bdf8', 18);
         gameCtx.showFloatText?.(player, 'OVERCLOCK QUÂNTICO!', '#00f5d4');
+        break;
+      // === 13 NOVOS DINOSSAUROS DA MEGA EXPANSÃO ===
+      case 'acrocanthosaurus':
+        player.ramTimer = Math.max(player.ramTimer || 0, player.abilityDuration * 0.85);
+        this._spawnWave(player.x, player.z, '#ea580c', 16);
+        gameCtx.cameraRig?.triggerShake(0.45, 0.25);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 22, true);
+        gameCtx.showFloatText?.(player, 'ESPINHA SÍSMICA!', '#ea580c');
+        break;
+      case 'concavenator':
+        player.turboTimer = Math.max(player.turboTimer || 0, player.abilityDuration);
+        this._spawnProjectile(player.x - 0.65, 1.1, player.z - 0.8, -1.6, -48, this.spikeMat);
+        this._spawnProjectile(player.x + 0.65, 1.1, player.z - 0.8, 1.6, -48, this.spikeMat);
+        gameCtx.showFloatText?.(player, 'IMPULSO DA CORCOVA!', '#f59e0b');
+        break;
+      case 'amargasaurus':
+        player.ramTimer = Math.max(player.ramTimer || 0, player.abilityDuration * 0.9);
+        for (let i = -2; i <= 2; i++) {
+          this._spawnProjectile(player.x + i * 0.45, 1.2, player.z - 0.8, i * 2.5, -40, this.spikeMat);
+        }
+        gameCtx.showFloatText?.(player, 'BARREIRA CERVICAL!', '#14b8a6');
+        break;
+      case 'edmontonia':
+        player.ramTimer = Math.max(player.ramTimer || 0, player.abilityDuration);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 15, false);
+        gameCtx.showFloatText?.(player, 'FALANGE BLINDADA!', '#d6d3d1');
+        break;
+      case 'corythosaurus':
+        player.magnetTimer = Math.max(player.magnetTimer || 0, player.abilityDuration + 1.5);
+        this._spawnWave(player.x, player.z, '#4ade80', 15);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 14, true);
+        gameCtx.healPartner?.(player);
+        gameCtx.showFloatText?.(player, 'ECO DO ELMO!', '#4ade80');
+        break;
+      case 'plesiosaurus':
+        player.diveTimer = Math.max(player.diveTimer || 0, player.abilityDuration);
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.8);
+        this._spawnWave(player.x, player.z, '#38bdf8', 16);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 16, true);
+        gameCtx.showFloatText?.(player, 'REDEMOINHO MARINHO!', '#38bdf8');
+        break;
+      case 'kronosaurus':
+        player.ramTimer = Math.max(player.ramTimer || 0, player.abilityDuration);
+        this._spawnWave(player.x, player.z, '#22d3ee', 18);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 20, false);
+        gameCtx.showFloatText?.(player, 'PRESSÃO ABISSAL!', '#22d3ee');
+        break;
+      case 'archelon':
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.85);
+        player.ramTimer = Math.max(player.ramTimer || 0, player.abilityDuration * 0.75);
+        this._spawnWave(player.x, player.z, '#2dd4bf', 12);
+        gameCtx.showFloatText?.(player, 'CASCO OCEÂNICO!', '#2dd4bf');
+        break;
+      case 'hatzegopteryx':
+        player.extraJumps = Math.max(player.extraJumps || 0, 1);
+        player.turboTimer = Math.max(player.turboTimer || 0, player.abilityDuration * 0.75);
+        this._spawnProjectile(player.x - 0.7, 2.5, player.z - 0.8, -1.8, -48, this.plasmaMat);
+        this._spawnProjectile(player.x + 0.7, 2.5, player.z - 0.8, 1.8, -48, this.plasmaMat);
+        gameCtx.showFloatText?.(player, 'RASANTE IMPERIAL!', '#c084fc');
+        break;
+      case 'archaeopteryx':
+        player.extraJumps = Math.max(player.extraJumps || 0, 1);
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.55);
+        for (let k = -1; k <= 1; k++) {
+          this._spawnProjectile(player.x + k * 0.6, 2.3, player.z - 0.8, k * 2.4, -46, this.spikeMat);
+        }
+        gameCtx.showFloatText?.(player, 'TURBILHÃO DE PENAS!', '#38bdf8');
+        break;
+      case 'microraptor':
+        player.extraJumps = Math.max(player.extraJumps || 0, 2);
+        player.magnetTimer = Math.max(player.magnetTimer || 0, 3.2);
+        player.turboTimer = Math.max(player.turboTimer || 0, player.abilityDuration * 0.7);
+        gameCtx.showFloatText?.(player, 'QUATRO ASAS!', '#818cf8');
+        break;
+      case 'indominus_voxel':
+        player.stealth = true;
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.75);
+        player.turboTimer = Math.max(player.turboTimer || 0, player.abilityDuration * 0.85);
+        this._spawnWave(player.x, player.z, '#e2e8f0', 18);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 20, true);
+        gameCtx.showFloatText?.(player, 'CAMUFLAGEM PREDATÓRIA!', '#e2e8f0');
+        break;
+      case 'chrono_wyvern':
+        player.magnetTimer = Math.max(player.magnetTimer || 0, 3.0);
+        this._spawnWave(player.x, player.z, '#c084fc', 18);
+        for (let k = -1; k <= 1; k++) {
+          this._spawnProjectile(player.x + k * 0.75, 2.4, player.z - 0.8, k * 2.0, -50, this.chronoMat);
+        }
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 18, true);
+        gameCtx.showFloatText?.(player, 'PULSO TEMPORAL!', '#c084fc');
         break;
       default:
         break;

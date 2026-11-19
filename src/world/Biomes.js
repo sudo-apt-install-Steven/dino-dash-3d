@@ -308,6 +308,111 @@ export const BIOMES = [
       river: '#06b6d4', riverEmissive: '#0284c7', sun: '#38bdf8', sunGlow: '#f43f5e',
       scenery: { pebble: '#cbd5e1', rock: '#475569', flora: '#22d3ee', flower: '#fb7185', mesa: '#1e293b', cloud: '#64748b', wood: '#334155' }
     }
+  },
+
+  // === 6 NOVOS BIOMAS DA MEGA EXPANSÃO (20–25) ===
+  {
+    id: 'lunar_crater',
+    tier: 'advanced',
+    name: 'Cratera Lunar',
+    ruleDesc: 'Gravidade lunar reduzida (0.52x): saltos amplos sobre crateras e micro-meteoros!',
+    lore: 'Bacia de impacto silenciosa sob o céu estrelado onde o Colosso Cósmico guarda fragmentos de asteroides.',
+    fossil: { id: 'fossil_lunar', name: 'Meteorito de Titânio', icon: '🌙' },
+    bossId: 'colosso_cosmico',
+    lowGravity: 0.52,
+    craterQuake: true,
+    theme: {
+      sky: '#1e2444', fog: '#2a325c', fogDensity: 0.0085,
+      ground: '#52586b', track: '#8d95ab', stripe: '#e2e8f0', bank: '#3f4659', edgeGlow: '#67e8f9',
+      river: '#38bdf8', riverEmissive: '#0284c7', sun: '#60a5fa', sunGlow: '#38bdf8',
+      scenery: { pebble: '#cbd5e1', rock: '#64748b', flora: '#67e8f9', flower: '#a5f3fc', mesa: '#3b4259', cloud: '#475569', wood: '#52586b', emissiveFlora: '#38bdf8', emissiveIntensity: 0.35 }
+    }
+  },
+  {
+    id: 'aztec_temple',
+    tier: 'advanced',
+    name: 'Templo Asteca',
+    ruleDesc: 'Degraus dourados, brisas de altitude e armadilhas rúnicas ancestrais.',
+    lore: 'Pirâmide colossal tomada por vinhas sagradas onde o Titã Fóssil protege relíquias de jade e ouro.',
+    fossil: { id: 'fossil_aztec', name: 'Ídolo Solar de Jade', icon: '🏛️' },
+    bossId: 'titan_fossil',
+    windBias: 0.85,
+    templeTraps: true,
+    theme: {
+      sky: '#d98a3c', fog: '#c27938', fogDensity: 0.0105,
+      ground: '#566d3e', track: '#c49b5c', stripe: '#2dd4bf', bank: '#8f6b32', edgeGlow: '#facc15',
+      river: '#0d9488', riverEmissive: '#0f766e', sun: '#fde047', sunGlow: '#f59e0b',
+      scenery: { pebble: '#d4a359', rock: '#78716c', flora: '#15803d', flower: '#facc15', mesa: '#92400e', cloud: '#fef3c7', wood: '#713f12', emissiveFlower: '#facc15', emissiveIntensity: 0.28 }
+    }
+  },
+  {
+    id: 'bioluminescent_jungle',
+    tier: 'advanced',
+    name: 'Selva Bioluminescente',
+    ruleDesc: 'Esporos luminosos e correnteza fosforescente que ampliam visibilidade na noite.',
+    lore: 'Floresta tropical de fungos gigantes cintilantes cujo rio abissal abriga o temido Kraken Abissal.',
+    fossil: { id: 'fossil_biolum', name: 'Esporo Luminescente', icon: '🍄' },
+    bossId: 'kraken_abissal',
+    currentForce: 1.0,
+    sporeDrift: true,
+    theme: {
+      sky: '#16425b', fog: '#1f5673', fogDensity: 0.010,
+      ground: '#164e63', track: '#1f6f78', stripe: '#34d399', bank: '#0f3d4c', edgeGlow: '#22d3ee',
+      river: '#06b6d4', riverEmissive: '#2dd4bf', sun: '#a7f3d0', sunGlow: '#22d3ee',
+      scenery: { pebble: '#2dd4bf', rock: '#1e3a5f', flora: '#10b981', flower: '#f472b6', mesa: '#134e4a', cloud: '#38bdf8', wood: '#0f766e', emissiveFlora: '#14b8a6', emissiveFlower: '#f472b6', emissiveIntensity: 0.52 }
+    }
+  },
+  {
+    id: 'obsidian_desert',
+    tier: 'advanced',
+    name: 'Deserto de Obsidiana',
+    ruleDesc: 'Dunas de vidro vulcânico, vento quente constante e miragens rubi!',
+    lore: 'Antigo mar secado por erupções que vitrificaram as dunas onde o Rei Megalodon ronda a fenda rubi.',
+    fossil: { id: 'fossil_obsidian', name: 'Dente de Obsidiana', icon: '🖤' },
+    bossId: 'rei_megalodon',
+    heatDrain: true,
+    windBias: -1.65,
+    theme: {
+      sky: '#6b324c', fog: '#7a3c54', fogDensity: 0.0105,
+      ground: '#362d42', track: '#574e66', stripe: '#f59e0b', bank: '#2b2436', edgeGlow: '#fb7185',
+      river: '#e11d48', riverEmissive: '#be123c', sun: '#fda4af', sunGlow: '#f43f5e',
+      scenery: { pebble: '#a1a1aa', rock: '#3f3f46', flora: '#e11d48', flower: '#fbbf24', mesa: '#27272a', cloud: '#9f6b82', wood: '#44403c', emissiveFlora: '#f43f5e', emissiveIntensity: 0.3 }
+    }
+  },
+  {
+    id: 'magma_core',
+    tier: 'advanced',
+    name: 'Núcleo Magmático',
+    ruleDesc: 'Calor extremo subterrâneo + pista térmica acelerada (1.08x)!',
+    lore: 'Câmara profunda do manto terrestre banhada em magma dourado e vigiada pela Fênix Vulcânica.',
+    fossil: { id: 'fossil_magma', name: 'Pluma de Magma', icon: '🔥' },
+    bossId: 'fenix_vulcanica',
+    heatDrain: true,
+    subterranean: true,
+    speedMod: 1.08,
+    theme: {
+      sky: '#7f1d1d', fog: '#9a2a1d', fogDensity: 0.0105,
+      ground: '#451a14', track: '#7c2d12', stripe: '#fbbf24', bank: '#3b1510', edgeGlow: '#ff6b00',
+      river: '#ff4500', riverEmissive: '#ff6d00', sun: '#fde047', sunGlow: '#f97316',
+      scenery: { pebble: '#b45309', rock: '#451a03', flora: '#f97316', flower: '#fde047', mesa: '#7c2d12', cloud: '#b91c1c', wood: '#57241a', emissiveFlora: '#ff6b00', emissiveFlower: '#fde047', emissiveIntensity: 0.5 }
+    }
+  },
+  {
+    id: 'orbital_station',
+    tier: 'advanced',
+    name: 'Estação Orbital',
+    ruleDesc: 'Baixa gravidade artificial (0.72x) + esteira de aceleração orbital (1.14x)!',
+    lore: 'Anel espacial de alta tecnologia comandado pelo Imperador Cibernético sobre a órbita jurássica.',
+    fossil: { id: 'fossil_orbital', name: 'Núcleo de Dobra', icon: '🛰️' },
+    bossId: 'imperador_cibernetico',
+    lowGravity: 0.72,
+    speedMod: 1.14,
+    theme: {
+      sky: '#1e2948', fog: '#28365c', fogDensity: 0.0085,
+      ground: '#334155', track: '#566882', stripe: '#38bdf8', bank: '#1e293b', edgeGlow: '#22d3ee',
+      river: '#818cf8', riverEmissive: '#6366f1', sun: '#e0f2fe', sunGlow: '#38bdf8',
+      scenery: { pebble: '#94a3b8', rock: '#475569', flora: '#38bdf8', flower: '#c084fc', mesa: '#1e3a5f', cloud: '#64748b', wood: '#334155', emissiveFlora: '#38bdf8', emissiveFlower: '#c084fc', emissiveIntensity: 0.45 }
+    }
   }
 ];
 
@@ -333,6 +438,12 @@ export function getBiomePreviewMeta(biome) {
   if (biome.submerged) return { tag: 'Submerso', icon: '🫧' };
   if (biome.oceanSurface || biome.waterTrack) return { tag: 'Sobre a Água', icon: '🌊' };
   if (biome.subterranean) return { tag: 'Terra Oca', icon: '🕳️' };
+  if (biome.id === 'orbital_station') return { tag: 'Orbital', icon: '🛰️' };
+  if (biome.id === 'lunar_crater') return { tag: 'Lunar', icon: '🌙' };
+  if (biome.id === 'magma_core') return { tag: 'Núcleo Magma', icon: '🔥' };
+  if (biome.id === 'aztec_temple') return { tag: 'Templo Asteca', icon: '🏛️' };
+  if (biome.id === 'bioluminescent_jungle') return { tag: 'Bioluminescente', icon: '🍄' };
+  if (biome.id === 'obsidian_desert') return { tag: 'Obsidiana', icon: '🖤' };
   if (biome.id === 'mecha_city' || biome.id === 'alien_factory') return { tag: 'Futurista', icon: '🤖' };
   if (biome.lowGravity) return { tag: 'Baixa Gravidade', icon: '🪐' };
   if (biome.slippery) return { tag: 'Gelo', icon: '❄️' };

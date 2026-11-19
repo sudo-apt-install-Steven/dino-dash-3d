@@ -1,5 +1,12 @@
 // Personalização de cores, padrões, acessórios, rastros, presets, loja e mutações aleatórias.
 import { Save } from '../systems/Save.js';
+import {
+  NEW_ACCESSORY_ARCHETYPES,
+  NEW_SKIN_ARCHETYPES,
+  NEW_TRAIL_ARCHETYPES,
+  NEW_PATTERN_ARCHETYPES,
+  NEW_MUTATION_ARCHETYPES
+} from '../content/collection_expanded.js';
 
 export const PATTERNS = [
   { id: 'solid', label: 'Liso' },
@@ -7,7 +14,8 @@ export const PATTERNS = [
   { id: 'spots', label: 'Manchas' },
   { id: 'gradient', label: 'Degradê' },
   { id: 'camo', label: 'Camuflagem' },
-  { id: 'neon', label: 'Neon' }
+  { id: 'neon', label: 'Neon' },
+  ...NEW_PATTERN_ARCHETYPES
 ];
 
 export const ACCESSORIES_SHOP = [
@@ -75,14 +83,24 @@ export const ACCESSORIES_SHOP = [
   { id: 'dino_backpack_plush', name: 'Mochila T-Rex Bebê', price: 2200, rarity: 'Épica', category: 'accessory' },
   { id: 'royal_trident', name: 'Tridente Abissal', price: 3200, rarity: 'Épica', category: 'accessory' },
   { id: 'plasma_halo', name: 'Anel de Plasma', price: 7800, rarity: 'Lendária', category: 'accessory' },
-  { id: 'comet_tail_rig', name: 'Propulsor Cometa', price: 11500, rarity: 'Mítica', category: 'accessory' }
+  { id: 'comet_tail_rig', name: 'Propulsor Cometa', price: 11500, rarity: 'Mítica', category: 'accessory' },
+  // Linha Mega Expansão 3D
+  ...NEW_ACCESSORY_ARCHETYPES.map((a) => ({
+    id: a.id,
+    name: a.name,
+    price: a.price,
+    rarity: a.rarity,
+    category: 'accessory',
+    theme: a.theme
+  }))
 ];
 
 export const TRAILS_SHOP = [
   { id: 'dust', name: 'Poeira Clássica', price: 0, rarity: 'Comum', color: '#e8bc79' },
   { id: 'fire', name: 'Rastro de Fogo', price: 600, rarity: 'Rara', color: '#ff5e1a' },
   { id: 'stars', name: 'Chuva de Estrelas', price: 2500, rarity: 'Épica', color: '#ffd447' },
-  { id: 'rainbow', name: 'Arco-Íris', price: 10000, rarity: 'Lendária', color: 'rainbow' }
+  { id: 'rainbow', name: 'Arco-Íris', price: 10000, rarity: 'Lendária', color: 'rainbow' },
+  ...NEW_TRAIL_ARCHETYPES
 ];
 
 export const SKIN_VARIANTS = [
@@ -93,7 +111,8 @@ export const SKIN_VARIANTS = [
   { id: 'unique_jade', name: 'Cor Única: Jade Subterrânea', badge: '💚', rarity: 'Épica', price: 1800, primary: '#059669', secondary: '#a7f3d0', eye: '#fde047', spots: '#064e3b', spikes: '#5eead4', pattern: 'neon', desc: 'Brilho esmeralda extraído da Terra Oca.' },
   { id: 'shiny', name: 'Shiny Cintilante ✨', badge: '✨', rarity: 'Lendária', price: 0, gachaOnly: true, primary: '#fef08a', secondary: '#ffffff', eye: '#38bdf8', spots: '#f59e0b', spikes: '#f472b6', pattern: 'neon', emissiveBoost: 0.42, desc: 'Variante Shiny rara obtida no Gacha! Emite brilho estelar e +15% pontuação.' },
   { id: 'mecha', name: 'Mecânico / Cyber Bot 🤖', badge: '🤖', rarity: 'Mítica', price: 0, gachaOnly: true, primary: '#64748b', secondary: '#e2e8f0', eye: '#38bdf8', spots: '#1e293b', spikes: '#00f5d4', pattern: 'neon', isMecha: true, desc: 'Transformação robótica completa estilo Mecha-Titan com visor LED, placas metálicas e propulsores!' },
-  { id: 'secret', name: 'Secreto Cósmico 🌌', badge: '🌌', rarity: 'Secreta', price: 0, gachaOnly: true, primary: '#5b21b6', secondary: '#f5d0fe', eye: '#00f5d4', spots: '#1e1b4b', spikes: '#f472b6', pattern: 'neon', emissiveBoost: 0.55, desc: 'Forma secreta ultra-rara do universo Terra Oca +25% Score e aura espacial!' }
+  { id: 'secret', name: 'Secreto Cósmico 🌌', badge: '🌌', rarity: 'Secreta', price: 0, gachaOnly: true, primary: '#5b21b6', secondary: '#f5d0fe', eye: '#00f5d4', spots: '#1e1b4b', spikes: '#f472b6', pattern: 'neon', emissiveBoost: 0.55, desc: 'Forma secreta ultra-rara do universo Terra Oca +25% Score e aura espacial!' },
+  ...NEW_SKIN_ARCHETYPES
 ];
 
 export const MAX_MUTATION_LEVEL = 4;
@@ -397,7 +416,8 @@ export const MUTATIONS = [
         cons: [`+${pct(airCostPen)} consumo de estamina aérea por flutuação instável`]
       };
     }
-  }
+  },
+  ...NEW_MUTATION_ARCHETYPES
 ];
 
 export function getSkinVariantDef(id) {

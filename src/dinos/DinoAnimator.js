@@ -1,11 +1,12 @@
 // Animações procedurais de dinossauros voxel:
 // correr, pular (esticar/encolher), abaixar, deslizar, nadar, ataque (Q), dano, reviver, vitória e morte.
 
-const HEADBUTT_IDS = new Set(['carnotaurus', 'pachycephalosaurus', 'triceratops', 'styracosaurus', 'ceratosaurus']);
-const TAIL_ATTACK_IDS = new Set(['stegosaurus', 'ankylosaurus', 'kentrosaurus', 'brachiosaurus', 'diplodocus', 'argentinosaurus']);
+const HEADBUTT_IDS = new Set(['carnotaurus', 'pachycephalosaurus', 'triceratops', 'styracosaurus', 'ceratosaurus', 'edmontonia', 'corythosaurus']);
+const TAIL_ATTACK_IDS = new Set(['stegosaurus', 'ankylosaurus', 'kentrosaurus', 'brachiosaurus', 'diplodocus', 'argentinosaurus', 'amargasaurus']);
 const LUNGE_ATTACK_IDS = new Set([
   'raptor', 'deinonychus', 'utahraptor', 'therizinosaurus', 'compsognathus',
-  'oviraptor', 'cyber_raptor', 'quetzalcoatlus', 'pteranodon', 'tapejara', 'dimorphodon'
+  'oviraptor', 'cyber_raptor', 'quetzalcoatlus', 'pteranodon', 'tapejara', 'dimorphodon',
+  'concavenator', 'hatzegopteryx', 'archaeopteryx', 'microraptor', 'chrono_wyvern'
 ]);
 
 function resolveAttackType(bodyId) {

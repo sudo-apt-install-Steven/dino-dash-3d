@@ -201,6 +201,25 @@ export class SceneryInstancer {
     this.mesaMat.color.set(palette.mesa || '#c85a28');
     this.cloudMat.color.set(palette.cloud || '#ffd2a6');
     this.woodMat.color.set(palette.wood || '#6b442a');
+
+    // Suporte emissivo para biomas bioluminescentes, núcleo magmático, lunar e orbital (zero alocações extras)
+    const emInt = palette.emissiveIntensity ?? 0;
+    if (palette.emissiveFlora) {
+      this.cactusMat.emissive.set(palette.emissiveFlora);
+      this.cactusMat.emissiveIntensity = emInt;
+    } else {
+      this.cactusMat.emissive.setHex(0x000000);
+      this.cactusMat.emissiveIntensity = 0;
+    }
+    if (palette.emissiveFlower) {
+      this.flowerMat.emissive.set(palette.emissiveFlower);
+      this.flowerMat.emissiveIntensity = Math.max(0.2, emInt);
+      this.bugMat.color.set(palette.emissiveFlower);
+    } else {
+      this.flowerMat.emissive.set('#5a1030');
+      this.flowerMat.emissiveIntensity = 0.2;
+      this.bugMat.color.set('#ffe66d');
+    }
   }
 
   update(dt, speed) {
