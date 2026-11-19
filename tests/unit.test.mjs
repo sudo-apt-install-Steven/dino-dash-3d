@@ -33,18 +33,21 @@ test('Sanitize: sanitizeNickname, roomCode, roomPassword, hexColor', () => {
   assert.equal(sanitizeHexColor('javascript:alert(1)', '#ffffff'), '#ffffff');
 });
 
-test('Modes: 17 unique modes and valid fallback', () => {
-  assert.equal(GAME_MODES.length, 17);
+test('Modes: >= 22 unique modes (including expansion modes) and valid fallback', () => {
+  assert.ok(GAME_MODES.length >= 22, `Expected >= 22 modes, got ${GAME_MODES.length}`);
   const ids = new Set(GAME_MODES.map((m) => m.id));
   assert.equal(ids.size, GAME_MODES.length);
+  for (const reqId of ['raid', 'boss_fight', 'free_roam', 'race', 'competition', 'coop']) {
+    assert.ok(ids.has(reqId), `Missing required mode: ${reqId}`);
+  }
   for (const m of GAME_MODES) {
     assert.ok(m.name && m.tier && m.players >= 1);
   }
   assert.equal(getModeDef('nonexistent_mode').id, 'solo');
 });
 
-test('DinoCatalog: 37 unique species with valid attributes', () => {
-  assert.equal(DINO_CATALOG.length, 37);
+test('DinoCatalog: 50 unique species with valid attributes', () => {
+  assert.equal(DINO_CATALOG.length, 50);
   const ids = new Set(DINO_CATALOG.map((d) => d.id));
   assert.equal(ids.size, DINO_CATALOG.length);
   for (const d of DINO_CATALOG) {
@@ -54,8 +57,8 @@ test('DinoCatalog: 37 unique species with valid attributes', () => {
   assert.equal(getDinoSpec('trex').id, 'trex');
 });
 
-test('Biomes & Difficulty: 19 biomes and valid difficulty presets', () => {
-  assert.equal(BIOMES.length, 19);
+test('Biomes & Difficulty: 25 biomes and valid difficulty presets', () => {
+  assert.equal(BIOMES.length, 25);
   const ids = new Set(BIOMES.map((b) => b.id));
   assert.equal(ids.size, BIOMES.length);
   assert.equal(getBiomeById('desert').id, 'desert');

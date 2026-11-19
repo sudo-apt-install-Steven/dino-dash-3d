@@ -6,7 +6,9 @@ import { LANE_X } from './World.js';
 export const CHUNKS_CATALOG = [
   { id: 'oasis_zone', name: 'Zona de Oásis', icon: '🌴', desc: 'Calmaria temporária, regenera estamina rápida e restaura +1 vida.' },
   { id: 'fragile_bridge', name: 'Ponte Quebradiça', icon: '🌉', desc: 'Tábua central racha sob o peso — passe pelas laterais seguras para bônus!' },
-  { id: 'rescue_cross', name: 'Cruzamento de Resgate', icon: '🚨', desc: 'Sinalizador tático que revive aliados caídos ou recarrega escudo + estamina.' }
+  { id: 'rescue_cross', name: 'Cruzamento de Resgate', icon: '🚨', desc: 'Sinalizador tático que revive aliados caídos ou recarrega escudo + estamina.' },
+  { id: 'magma_vent', name: 'Gêiser Magmático', icon: '🌋', desc: 'Grade térmica vulcânica: passe nas faixas laterais ou salte sobre a fenda central!' },
+  { id: 'orbital_boost', name: 'Esteira Orbital', icon: '🛰️', desc: 'Arco holográfico gravitacional que impulsiona velocidade e carga de habilidade.' }
 ];
 
 export function buildChunkOasis() {
@@ -86,5 +88,32 @@ export function buildChunkRescueCross() {
     addVoxelBox(g, 0.36, 1.8, 0.36, sx, 0.9, 0, baseMat);
     addVoxelBox(g, 0.52, 0.48, 0.52, sx, 1.98, 0, beaconMat);
   }
+  return g;
+}
+
+export function buildChunkMagmaVent() {
+  const g = new THREE.Group();
+  const basaltMat = new THREE.MeshStandardMaterial({ color: '#3b1d1a', roughness: 0.85 });
+  const lavaMat = new THREE.MeshStandardMaterial({ color: '#ff5722', emissive: '#ff4500', emissiveIntensity: 0.9 });
+  addVoxelBox(g, 5.8, 0.1, 2.6, 0, 0.05, 0, basaltMat);
+  addVoxelBox(g, 1.5, 0.14, 2.2, LANE_X[1], 0.11, 0, lavaMat);
+  for (const sx of [-2.9, 2.9]) {
+    addVoxelBox(g, 0.44, 1.1, 0.44, sx, 0.55, 0, basaltMat);
+    addVoxelBox(g, 0.28, 0.28, 0.28, sx, 1.2, 0, lavaMat);
+  }
+  return g;
+}
+
+export function buildChunkOrbitalBoost() {
+  const g = new THREE.Group();
+  const alloyMat = new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.6, roughness: 0.3 });
+  const holoMat = new THREE.MeshStandardMaterial({ color: '#38bdf8', emissive: '#0284c7', emissiveIntensity: 0.95 });
+  addVoxelBox(g, 5.8, 0.08, 2.4, 0, 0.04, 0, alloyMat);
+  addVoxelBox(g, 4.8, 0.06, 0.32, 0, 0.1, -0.5, holoMat);
+  addVoxelBox(g, 4.8, 0.06, 0.32, 0, 0.1, 0.5, holoMat);
+  for (const sx of [-3.0, 3.0]) {
+    addVoxelBox(g, 0.32, 2.4, 0.32, sx, 1.2, 0, alloyMat);
+  }
+  addVoxelBox(g, 6.3, 0.24, 0.32, 0, 2.45, 0, holoMat);
   return g;
 }

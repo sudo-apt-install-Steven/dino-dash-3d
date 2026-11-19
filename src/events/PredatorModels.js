@@ -308,8 +308,294 @@ export const PREDATOR_CATALOG = [
     introDuration: 6.4,
     lore: 'Pterossauro apex de bico em lança e crista solar que intercepta invasores em pleno voo.',
     counterTip: 'Alterne faixas aéreas e rasantes rápidos quando a sombra alada se aproximar.'
+  },
+  // +8 Novos Predadores Alfa (Expansão — habitats equilibrados land/aquatic/flying, <= 750 tris)
+  {
+    id: 'pyro_carno',
+    name: 'Pyrocarno Alfa',
+    title: 'Chifre de Obsidiana',
+    biome: 'volcano',
+    habitat: 'land',
+    alpha: true,
+    archetype: 'Carnotauro Vulcânico',
+    color: '#7c2d12',
+    accent: '#ff5722',
+    belly: '#292524',
+    eyeColor: '#fef08a',
+    introDuration: 6.4,
+    lore: 'Carnotauro alfa de chifres incandescentes que investe em linha reta abrindo fendas de brasa.',
+    counterTip: 'Troque de faixa no 0.75s do aviso de bote antes da cabeçada vulcânica.'
+  },
+  {
+    id: 'obsidian_spino',
+    name: 'Espinossauro Obsidiana',
+    title: 'Vela de Basalto',
+    biome: 'fossil_graveyard',
+    habitat: 'land',
+    alpha: true,
+    archetype: 'Colosso de Vela',
+    color: '#1e1b4b',
+    accent: '#a855f7',
+    belly: '#334155',
+    eyeColor: '#38bdf8',
+    introDuration: 6.6,
+    lore: 'Sua vela dorsal de obsidiana acumula energia sísmica para disparar ondas de rugido devastadoras.',
+    counterTip: 'Preserve estamina para não ficar travado após a onda de rugido.'
+  },
+  {
+    id: 'abyss_mosa',
+    name: 'Mosassauro Abissal',
+    title: 'Mandíbula das Fossas',
+    biome: 'deep_ocean',
+    habitat: 'aquatic',
+    swimType: 'leviathan',
+    alpha: true,
+    archetype: 'Mosassauro Alfa',
+    color: '#0f172a',
+    accent: '#06b6d4',
+    belly: '#1e293b',
+    eyeColor: '#22d3ee',
+    introDuration: 6.5,
+    lore: 'Predador das fossas abissais que corta a correnteza em zigue-zague para flanquear sua presa.',
+    counterTip: 'Evite permanecer na mesma faixa submersa quando o corte de flanco for telegrafado.'
+  },
+  {
+    id: 'reef_barracuda',
+    name: 'Xiphactinus Alfa',
+    title: 'Lança dos Recifes',
+    biome: 'ocean_surface',
+    habitat: 'aquatic',
+    swimType: 'plesio_eel',
+    alpha: true,
+    archetype: 'Caçador Pelágico',
+    color: '#0369a1',
+    accent: '#38bdf8',
+    belly: '#e0f2fe',
+    eyeColor: '#fde047',
+    introDuration: 6.3,
+    lore: 'Fera pré-histórica de focinho em lança capaz de disparar jatos corrosivos sob a superfície.',
+    counterTip: 'Desvie do cuspe corrosivo e use Turbo aquático para quebrar a perseguição.'
+  },
+  {
+    id: 'trench_nautilus',
+    name: 'Náutilo Titânico',
+    title: 'Concha das Profundezas',
+    biome: 'beach_sea',
+    habitat: 'aquatic',
+    swimType: 'cephalopod',
+    alpha: true,
+    archetype: 'Cefalópode Colossal',
+    color: '#312e81',
+    accent: '#f472b6',
+    belly: '#1e1b4b',
+    eyeColor: '#facc15',
+    introDuration: 6.5,
+    lore: 'Concha espiralada blindada e tentáculos bioluminescentes que fecham rotas inteiras no mar.',
+    counterTip: 'Atenção às faixas bloqueadas pelos tentáculos durante o corte de flanco.'
+  },
+  {
+    id: 'tempest_wyvern',
+    name: 'Serpe da Tempestade',
+    title: 'Asas de Trovão',
+    biome: 'storm_desert',
+    habitat: 'flying',
+    alpha: true,
+    archetype: 'Wyvern Voltaico',
+    color: '#1e3a8a',
+    accent: '#facc15',
+    belly: '#0f172a',
+    eyeColor: '#fef08a',
+    introDuration: 6.4,
+    lore: 'Serpe alada que mergulha entre relâmpagos convocando correntes elétricas na pista.',
+    counterTip: 'Observe o aviso de faixa dupla em Difícil+ e escolha o corredor limpo.'
+  },
+  {
+    id: 'solar_phoenix_raptor',
+    name: 'Falcão-Sáurio Solar',
+    title: 'Pluma Incandescente',
+    biome: 'sky_canyon',
+    habitat: 'flying',
+    alpha: true,
+    archetype: 'Rapina Solar',
+    color: '#b91c1c',
+    accent: '#fbbf24',
+    belly: '#fef3c7',
+    eyeColor: '#ffffff',
+    introDuration: 6.3,
+    lore: 'Predador alado de coroa flamejante que dispara projéteis solares enquanto persegue em altitude.',
+    counterTip: 'Combine mudanças de faixa com saltos precisos para fugir do projétil solar.'
+  },
+  {
+    id: 'frost_pteron',
+    name: 'Pterodonte Glacial',
+    title: 'Lâmina Boreal',
+    biome: 'snowy_mountain',
+    habitat: 'flying',
+    alpha: true,
+    archetype: 'Pterossauro Ártico',
+    color: '#0c4a6e',
+    accent: '#7dd3fc',
+    belly: '#f0f9ff',
+    eyeColor: '#38bdf8',
+    introDuration: 6.4,
+    lore: 'Plana silenciosamente em nevascas e lança rajadas congelantes que drenam a estamina do alvo.',
+    counterTip: 'Mantenha velocidade constante e evite a onda de rugido gélida.'
   }
 ];
+
+/**
+ * Mutadores de caça aplicáveis a qualquer predador em perseguição (especialmente Difícil+/Danger Tier alto).
+ */
+export const PREDATOR_HUNT_MUTATORS = [
+  {
+    id: 'frenzied',
+    name: 'Frenético',
+    badge: '🔥',
+    color: '#ef4444',
+    paceMult: 1.18,
+    attackCooldownMult: 0.82,
+    telegraphMult: 0.94,
+    extraDamage: 0,
+    statusId: null,
+    desc: 'Fecha distância mais rápido e reduz o intervalo entre ataques.'
+  },
+  {
+    id: 'stalker',
+    name: 'Perseguidor',
+    badge: '👁️',
+    color: '#a855f7',
+    paceMult: 1.12,
+    attackCooldownMult: 0.9,
+    telegraphMult: 0.92,
+    extraDamage: 0,
+    statusId: 'blind_fog',
+    desc: 'Acompanha mudanças de faixa rapidamente e obscurece a visão no impacto.'
+  },
+  {
+    id: 'armored',
+    name: 'Blindado',
+    badge: '🛡️',
+    color: '#94a3b8',
+    paceMult: 1.04,
+    attackCooldownMult: 0.95,
+    telegraphMult: 1.0,
+    extraDamage: 0,
+    statusId: null,
+    decoyResist: 0.45,
+    desc: 'Resiste parcialmente a iscas e mantém pressão constante.'
+  },
+  {
+    id: 'venomous',
+    name: 'Venenoso',
+    badge: '☠️',
+    color: '#84cc16',
+    paceMult: 1.06,
+    attackCooldownMult: 0.92,
+    telegraphMult: 0.98,
+    extraDamage: 0,
+    statusId: 'poison',
+    desc: 'Projéteis e golpes aplicam veneno prolongado.'
+  },
+  {
+    id: 'voltaic',
+    name: 'Voltaico',
+    badge: '⚡',
+    color: '#facc15',
+    paceMult: 1.15,
+    attackCooldownMult: 0.85,
+    telegraphMult: 0.92,
+    extraDamage: 0,
+    statusId: 'shock',
+    desc: 'Investidas eletrificadas com drenagem extra de estamina.'
+  },
+  {
+    id: 'glacial',
+    name: 'Glacial',
+    badge: '❄️',
+    color: '#38bdf8',
+    paceMult: 1.05,
+    attackCooldownMult: 0.92,
+    telegraphMult: 0.98,
+    extraDamage: 0,
+    statusId: 'frost_slow',
+    desc: 'Ondas de rugido e cortes desaceleram o dino atingido.'
+  },
+  {
+    id: 'pack_alpha',
+    name: 'Alfa da Matilha',
+    badge: '🐺',
+    color: '#f97316',
+    paceMult: 1.1,
+    attackCooldownMult: 0.88,
+    telegraphMult: 0.95,
+    extraDamage: 0,
+    statusId: null,
+    forcePackCall: true,
+    desc: 'Prioriza Chamado da Matilha para cercar múltiplas faixas.'
+  },
+  {
+    id: 'void_touched',
+    name: 'Tocado pelo Vazio',
+    badge: '🌀',
+    color: '#c084fc',
+    paceMult: 1.14,
+    attackCooldownMult: 0.86,
+    telegraphMult: 0.9,
+    extraDamage: 0,
+    statusId: 'confusion',
+    desc: 'Ataques distorcem o controle por breve duração.'
+  },
+  {
+    id: 'relentless',
+    name: 'Implacável',
+    badge: '💀',
+    color: '#f43f5e',
+    paceMult: 1.22,
+    attackCooldownMult: 0.84,
+    telegraphMult: 0.94,
+    extraDamage: 0,
+    statusId: null,
+    durationMult: 1.25,
+    desc: 'Perseguição mais longa e pressão implacável.'
+  },
+  {
+    id: 'ambusher',
+    name: 'Emboscador',
+    badge: '🗡️',
+    color: '#fb7185',
+    paceMult: 1.08,
+    attackCooldownMult: 0.82,
+    telegraphMult: 0.9,
+    extraDamage: 0,
+    statusId: 'bleed',
+    desc: 'Especialista em Corte de Flanco e botes rápidos.'
+  }
+];
+
+export function getPredatorMutator(id) {
+  if (!id) return null;
+  return PREDATOR_HUNT_MUTATORS.find((m) => m.id === id) || null;
+}
+
+export function rollPredatorMutator(difficultyId = 'normal', dangerTier = 1, rng = Math.random) {
+  const chance =
+    difficultyId === 'supreme' ? 0.95 :
+    difficultyId === 'insane' ? 0.82 :
+    difficultyId === 'hard' ? 0.6 :
+    dangerTier >= 3 ? 0.45 :
+    difficultyId === 'normal' ? 0.2 : 0;
+  if (rng() > chance) return null;
+  const idx = Math.floor(rng() * PREDATOR_HUNT_MUTATORS.length);
+  return PREDATOR_HUNT_MUTATORS[idx] || null;
+}
+
+export function applyPredatorMutatorVisuals(model, mutator) {
+  if (!model || !mutator) return;
+  const ring = model.parts?.threatRing;
+  if (ring?.material?.color) {
+    ring.material.color.set(mutator.color || '#ff2e4c');
+  }
+}
 
 export function normalizePredatorHabitat(habitat = 'land') {
   if (habitat === 'aquatic' || habitat === 'flying' || habitat === 'land') return habitat;
@@ -479,6 +765,42 @@ export function buildPredatorModel(id) {
   } else if (spec.id === 'gorgeraptor') {
     // Gola de leque no pescoço
     vox(headPivot, 1.48, 0.95, 0.14, 0, 0.25, 0.08, accentMat);
+  } else if (spec.id === 'pyro_carno') {
+    // Chifres curvos de obsidiana e crista flamejante
+    vox(headPivot, 0.18, 0.72, 0.24, -0.34, 0.74, -0.25, accentMat);
+    vox(headPivot, 0.18, 0.72, 0.24, 0.34, 0.74, -0.25, accentMat);
+    vox(headPivot, 0.22, 0.28, 0.65, 0, 0.56, -0.78, eyeMat);
+  } else if (spec.id === 'obsidian_spino') {
+    // Vela dorsal alta segmentada em obsidiana
+    vox(body, 0.16, 1.25, 0.45, 0, 1.12, -0.45, accentMat);
+    vox(body, 0.16, 1.48, 0.48, 0, 1.22, 0.05, eyeMat);
+    vox(body, 0.16, 1.12, 0.44, 0, 1.05, 0.55, accentMat);
+  } else if (spec.id === 'abyss_mosa') {
+    // Mandíbula colossal e lanterna abissal
+    vox(headPivot, 0.92, 0.24, 1.28, 0, 0.46, -0.95, accentMat);
+    vox(body, 0.26, 0.48, 0.95, 0, 0.78, 0.15, eyeMat);
+  } else if (spec.id === 'reef_barracuda') {
+    // Focinho em lança e barbatana dorsal cortante
+    vox(headPivot, 0.32, 0.22, 1.35, 0, 0.16, -1.45, accentMat);
+    vox(body, 0.14, 0.92, 0.72, 0, 0.95, -0.05, accentMat);
+  } else if (spec.id === 'trench_nautilus') {
+    // Concha espiralada blindada no dorso
+    vox(body, 1.48, 1.08, 1.35, 0, 0.76, 0.32, accentMat);
+    vox(body, 1.12, 0.72, 0.92, 0, 1.05, 0.48, eyeMat);
+  } else if (spec.id === 'tempest_wyvern') {
+    // Chifres voltaicos bifurcados
+    vox(headPivot, 0.16, 0.68, 0.28, -0.32, 0.68, -0.18, eyeMat);
+    vox(headPivot, 0.16, 0.68, 0.28, 0.32, 0.68, -0.18, eyeMat);
+    vox(headPivot, 0.14, 0.52, 0.78, 0, 0.58, 0.06, accentMat);
+  } else if (spec.id === 'solar_phoenix_raptor') {
+    // Coroa solar incandescente
+    vox(headPivot, 0.22, 0.78, 0.45, 0, 0.74, -0.18, eyeMat);
+    vox(headPivot, 0.18, 0.52, 0.42, -0.28, 0.62, -0.02, accentMat);
+    vox(headPivot, 0.18, 0.52, 0.42, 0.28, 0.62, -0.02, accentMat);
+  } else if (spec.id === 'frost_pteron') {
+    // Bico-lança glacial e crista cristalina
+    vox(headPivot, 0.24, 0.22, 1.4, 0, 0.14, -1.35, accentMat);
+    vox(headPivot, 0.16, 0.64, 0.92, 0, 0.66, 0.15, eyeMat);
   }
 
   const isAquatic = spec.habitat === 'aquatic';

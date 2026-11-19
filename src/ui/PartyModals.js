@@ -13,9 +13,17 @@ export class PartyModals {
   static renderPodiumModal(container, summary, actions = {}) {
     const standings = summary?.standings || [];
     const mvp = standings[0];
-    const modeName = summary?.mpMode === 'duel'
-      ? '⚔️ Duelo PvP'
-      : (summary?.mpMode === 'elimination' ? '⏳ Eliminação 30s' : '🏁 Corrida Competitiva');
+    const modeLabels = {
+      duel: '⚔️ Duelo PvP',
+      elimination: '⏳ Eliminação 30s',
+      race: '🏁 Corrida Competitiva',
+      raid: '🐉 Raid Colossal',
+      boss_fight: '👑 Boss Fight / Rush',
+      competition: '🏅 Competição (Liga)',
+      coop: '🤝 Coop Tático',
+      free_roam: '🧪 Livre / Sandbox'
+    };
+    const modeName = modeLabels[summary?.mpMode] || '🏁 Corrida Competitiva';
     const durSec = Math.max(0, Math.floor(summary?.durationSec || 0));
     const durLabel = `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, '0')}`;
     const matchDist = Math.floor(summary?.distance || 0);
@@ -31,8 +39,13 @@ export class PartyModals {
     ];
     const voteModes = [
       { id: 'race', label: '🏁 Corrida' },
+      { id: 'coop', label: '🤝 Coop' },
+      { id: 'raid', label: '🐉 Raid' },
+      { id: 'boss_fight', label: '👑 Boss Rush' },
+      { id: 'competition', label: '🏅 Liga' },
       { id: 'duel', label: '⚔️ Duelo PvP' },
-      { id: 'elimination', label: '⏳ Eliminação' }
+      { id: 'elimination', label: '⏳ Eliminação' },
+      { id: 'free_roam', label: '🧪 Livre' }
     ];
     let pickedBiome = summary?._votedBiome || 'desert';
     let pickedMode = summary?._votedMpMode || summary?.mpMode || 'race';
@@ -47,6 +60,8 @@ export class PartyModals {
             <span>📏 ${matchDist}m</span>
             <span>🌍 ${biomeLabel}</span>
             <span>🎚️ ${diffLabel}</span>
+            ${summary?.raceTargetDistance ? `<span>🏁 Meta ${Math.floor(summary.raceTargetDistance)}m</span>` : ''}
+            ${summary?.raidTotalDamage > 0 ? `<span>🐉 Dano Raid ${Math.floor(summary.raidTotalDamage)}</span>` : ''}
             ${summary?.maxCombo > 1 ? `<span>🔥 Combo Max ${summary.maxCombo}x</span>` : ''}
           </div>
           ${mvp ? `<div class="item-card" style="border-color:#ffd447; margin:8px 0;">
@@ -66,6 +81,8 @@ export class PartyModals {
                 </span>
                 <span style="font-size:0.85rem;">
                   <strong>${Math.floor(p.score)} pts</strong>
+                  ${typeof p.raidDamage === 'number' && p.raidDamage > 0 ? ` • 🐉 ${Math.floor(p.raidDamage)} dmg (${Math.round(p.raidDps || 0)} DPS)` : ''}
+                  ${typeof p.distance === 'number' && summary?.raceTargetDistance ? ` • 📏 ${Math.floor(p.distance)}m` : ''}
                   ${typeof p.eggs === 'number' ? ` • 🥚 ${p.eggs}` : ''}
                   ${typeof p.stomps === 'number' && p.stomps > 0 ? ` • 💥 ${p.stomps}` : ''}
                   ${p.pvpHits ? ` • ⚔️ ${p.pvpHits}` : ''}

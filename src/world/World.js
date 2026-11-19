@@ -882,6 +882,12 @@ export class World {
     return { sky, fog, fogDensity, ground, track, stripe, bank, river, riverEmissive, sun, sunGlow, edgeGlow };
   }
 
+  applyBiome(biome, immediate = false) {
+    if (!biome) return;
+    if (biome.theme) this.applyTheme(biome.theme, immediate);
+    this.setHollowEarthVisuals(Boolean(biome.subterranean));
+  }
+
   applyTheme(theme, immediate = true) {
     if (!theme) return;
     const nextColors = this._buildThemeColors(theme);

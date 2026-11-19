@@ -250,5 +250,113 @@
       { "phase": 2, "hpThreshold": 0.66, "pattern": "pisao_blindado", "telegraphSec": 0.7 },
       { "phase": 3, "hpThreshold": 0.33, "pattern": "protocolo_omega", "telegraphSec": 0.55 }
     ]
+  },
+  {
+    "id": "abyssal_kraken",
+    "name": "Kraken Abissal",
+    "title": "Terror das Profundezas",
+    "biomeId": "deep_ocean",
+    "hp": 6,
+    "color": "#0e7490",
+    "weakOrder": [0, 2, 1],
+    "rewardAccessory": "diving_mask",
+    "rewardEggs": 70,
+    "rewardCrystals": 4,
+    "attackProfile": ["onda", "poca", "teia"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "chicote_tentaculo", "telegraphSec": 0.88 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "mare_tinta_toxica", "telegraphSec": 0.74 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "maelstrom_abissal", "telegraphSec": 0.6 }
+    ]
+  },
+  {
+    "id": "volcanic_phoenix",
+    "name": "Fênix Vulcânica",
+    "title": "Renascida da Caldeira",
+    "biomeId": "volcano",
+    "hp": 6,
+    "color": "#ea580c",
+    "weakOrder": [1, 0, 2],
+    "rewardAccessory": "aura_fire",
+    "rewardEggs": 70,
+    "rewardCrystals": 4,
+    "attackProfile": ["magma", "onda", "raio"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "rasante_brasas", "telegraphSec": 0.86 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "pilares_cinza", "telegraphSec": 0.72 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "supernova_caldeira", "telegraphSec": 0.58 }
+    ]
+  },
+  {
+    "id": "king_megalodon",
+    "name": "Rei Megalodon",
+    "title": "Soberano dos Mares",
+    "biomeId": "ocean_surface",
+    "hp": 6,
+    "color": "#0369a1",
+    "weakOrder": [2, 1, 0],
+    "rewardAccessory": "diving_mask",
+    "rewardEggs": 70,
+    "rewardCrystals": 4,
+    "attackProfile": ["onda", "rocha", "poca"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "investida_barbatana", "telegraphSec": 0.86 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "mordida_mare", "telegraphSec": 0.72 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "frenesi_oceanico", "telegraphSec": 0.58 }
+    ]
+  },
+  {
+    "id": "cyber_emperor",
+    "name": "Imperador Cibernético",
+    "title": "Soberano da Rede",
+    "biomeId": "cyber_city",
+    "hp": 6,
+    "color": "#7c3aed",
+    "weakOrder": [0, 1, 2],
+    "rewardAccessory": "visor_neon",
+    "rewardEggs": 75,
+    "rewardCrystals": 5,
+    "attackProfile": ["feixe", "raio", "espinhos"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "barreira_firewall", "telegraphSec": 0.85 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "rajada_holografica", "telegraphSec": 0.72 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "sobrecarga_imperial", "telegraphSec": 0.58 }
+    ]
+  },
+  {
+    "id": "fossil_titan",
+    "name": "Titã Fóssil",
+    "title": "Colosso dos Ossos",
+    "biomeId": "fossil_graveyard",
+    "hp": 6,
+    "color": "#78716c",
+    "weakOrder": [1, 2, 0],
+    "rewardAccessory": "amber_medallion",
+    "rewardEggs": 75,
+    "rewardCrystals": 4,
+    "attackProfile": ["rocha", "tronco", "espinhos"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "esmagamento_osseo", "telegraphSec": 0.88 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "chuva_costelas", "telegraphSec": 0.74 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "terremoto_ancestral", "telegraphSec": 0.6 }
+    ]
+  },
+  {
+    "id": "cosmic_colossus",
+    "name": "Colosso Cósmico",
+    "title": "Guardião das Estrelas",
+    "biomeId": "alien_planet",
+    "hp": 6,
+    "color": "#4f46e5",
+    "weakOrder": [2, 0, 1],
+    "rewardAccessory": "crystal_wings",
+    "rewardEggs": 80,
+    "rewardCrystals": 5,
+    "attackProfile": ["feixe", "raio", "onda"],
+    "phases": [
+      { "phase": 1, "hpThreshold": 1.0, "pattern": "pulso_gravitacional", "telegraphSec": 0.86 },
+      { "phase": 2, "hpThreshold": 0.66, "pattern": "aneis_estelares", "telegraphSec": 0.72 },
+      { "phase": 3, "hpThreshold": 0.33, "pattern": "colapso_cosmico", "telegraphSec": 0.58 }
+    ]
   }
 ]

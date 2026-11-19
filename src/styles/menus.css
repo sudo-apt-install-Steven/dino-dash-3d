@@ -2144,3 +2144,456 @@ html.force-landscape-rot .touch-controls.touch-mode-buttons .touch-btn {
 .menu-mini-btn {
   border-color: rgba(255, 212, 71, 0.45);
 }
+
+/* ==========================================================================
+   MEGA EXPANSÃO — HUD (Perigo, Debuffs, Telégrafo), Modos, Bestiário, Filtros
+   ========================================================================== */
+
+/* 1. Indicador de Perigo Nv.X */
+.hud-danger-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(24, 12, 8, 0.86);
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.hud-danger-pill.danger-critical {
+  animation: dangerPulse 1.15s ease-in-out infinite;
+}
+
+.hud-danger-track {
+  display: inline-block;
+  width: 48px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.hud-danger-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+
+@keyframes dangerPulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(239, 68, 68, 0.0); }
+  50% { box-shadow: 0 0 14px rgba(239, 68, 68, 0.72); }
+}
+
+/* 2. Bandeja de Debuffs Ativos (máx 6 + contador) */
+.hud-debuffs-tray {
+  position: fixed;
+  top: 74px;
+  left: 18px;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: min(460px, 68vw);
+  pointer-events: none;
+}
+
+.hud-debuff-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 10px;
+  background: rgba(22, 12, 8, 0.88);
+  border: 2px solid #f97316;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+  max-width: 215px;
+}
+
+.hud-debuff-ico {
+  font-size: 1.05rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.hud-debuff-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.hud-debuff-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.hud-debuff-stacks {
+  font-size: 0.66rem;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fde68a;
+}
+
+.hud-debuff-time {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: #fef3c7;
+  margin-left: auto;
+}
+
+.hud-debuff-tip {
+  font-size: 0.64rem;
+  color: #d8c2a6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-debuff-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 4px 8px;
+  border-radius: 10px;
+  background: rgba(185, 28, 28, 0.88);
+  border: 2px solid #fca5a5;
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+/* 3. Telégrafo de Ataque de Predador (Faixa / Zona) */
+.hud-predator-telegraph {
+  position: fixed;
+  top: 124px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 22;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: min(360px, 88vw);
+  pointer-events: none;
+}
+
+.telegraph-alert-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  background: rgba(127, 29, 29, 0.92);
+  border: 2px solid #fb923c;
+  color: #fef2f2;
+  font-size: 0.82rem;
+  font-weight: 900;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.45);
+  animation: dangerPulse 0.75s ease-in-out infinite;
+}
+
+.telegraph-lanes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+
+.telegraph-lane {
+  padding: 5px 4px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: rgba(255, 249, 235, 0.42);
+  background: rgba(20, 11, 6, 0.58);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.telegraph-lane.active {
+  color: #fff;
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.88), rgba(153, 27, 27, 0.92));
+  border-color: #fde047;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.72);
+}
+
+/* 4. Cards de Modos de Jogo */
+.modes-cards-grid {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.mode-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mode-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.mode-card-title {
+  color: #ffd447;
+  font-size: 0.98rem;
+}
+
+.mode-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mode-diff-badge,
+.mode-players-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.mode-players-badge {
+  background: rgba(30, 41, 59, 0.75);
+  color: #e2e8f0;
+}
+
+.mode-diff-badge.tone-free { background: rgba(22, 101, 52, 0.75); color: #bbf7d0; border-color: #4ade80; }
+.mode-diff-badge.tone-normal { background: rgba(14, 116, 144, 0.75); color: #cffafe; border-color: #38bdf8; }
+.mode-diff-badge.tone-medium { background: rgba(161, 98, 7, 0.8); color: #fef08a; border-color: #facc15; }
+.mode-diff-badge.tone-hard { background: rgba(194, 65, 12, 0.82); color: #fed7aa; border-color: #fb923c; }
+.mode-diff-badge.tone-extreme { background: rgba(153, 27, 27, 0.88); color: #fecaca; border-color: #f87171; }
+
+.mode-card-desc {
+  font-size: 0.8rem;
+  color: #d8c2a6;
+  line-height: 1.35;
+  flex: 1;
+}
+
+/* 5. Bestiário & Catálogo + Toolbars de Busca/Filtro */
+.catalog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.catalog-search {
+  flex: 1 1 180px;
+  min-width: 140px;
+  padding: 7px 11px;
+  font-size: 0.84rem;
+}
+
+.catalog-select {
+  flex: 0 1 165px;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  border-radius: 10px;
+  background: rgba(26, 15, 8, 0.92);
+  color: var(--text-light);
+  border: 2px solid var(--panel-border);
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.bestiary-grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.bestiary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bestiary-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.bestiary-ico {
+  font-size: 1.45rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.bestiary-sub {
+  font-size: 0.72rem;
+  color: #a8a29e;
+}
+
+.bestiary-desc {
+  font-size: 0.78rem;
+  color: #e7e5e4;
+  line-height: 1.35;
+}
+
+.bestiary-counter-box {
+  margin-top: auto;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(14, 116, 144, 0.22);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  font-size: 0.74rem;
+  color: #bae6fd;
+  line-height: 1.35;
+}
+
+/* 6. Badges de Trade-off nas Mutações + Scroll suave sem pulo */
+.mut-tradeoff-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 4px 0 2px;
+}
+
+.mut-badge-pro,
+.mut-badge-con,
+.mut-badge-tag {
+  font-size: 0.66rem;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.mut-badge-pro {
+  background: rgba(22, 101, 52, 0.72);
+  border: 1px solid #4ade80;
+  color: #bbf7d0;
+}
+
+.mut-badge-con {
+  background: rgba(153, 27, 27, 0.72);
+  border: 1px solid #f87171;
+  color: #fecaca;
+}
+
+.mut-badge-tag {
+  background: rgba(113, 63, 18, 0.72);
+  border: 1px solid #fbbf24;
+  color: #fef08a;
+}
+
+.cust-scroll-grid {
+  max-height: min(52vh, 460px);
+  overflow-y: auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+}
+
+/* Foco visível universal para acessibilidade teclado/gamepad */
+.item-card:focus-visible,
+.catalog-select:focus-visible,
+.catalog-search:focus-visible,
+button:focus-visible {
+  outline: 3px solid var(--accent-gold);
+  outline-offset: 2px;
+}
+
+/* Responsividade Mobile Retrato (360x740 / 320px+) */
+@media (max-width: 600px) {
+  .hud-debuffs-tray {
+    top: 62px;
+    left: 8px;
+    max-width: calc(100vw - 16px);
+    gap: 4px;
+  }
+
+  .hud-debuff-badge {
+    padding: 3px 7px;
+    max-width: 165px;
+  }
+
+  .hud-debuff-tip {
+    display: none;
+  }
+
+  .hud-predator-telegraph {
+    top: 108px;
+    width: min(300px, 92vw);
+  }
+
+  .hud-danger-track {
+    width: 34px;
+  }
+
+  .modes-cards-grid,
+  .bestiary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-toolbar {
+    gap: 6px;
+  }
+
+  .catalog-select {
+    flex: 1 1 120px;
+  }
+}
+
+/* Responsividade Mobile Paisagem Compacta (640x360, 844x390) */
+@media (max-height: 440px) and (orientation: landscape) {
+  .hud-debuffs-tray {
+    top: 46px;
+    left: 10px;
+    max-width: 58vw;
+    gap: 4px;
+  }
+
+  .hud-debuff-badge {
+    padding: 3px 6px;
+    max-width: 150px;
+  }
+
+  .hud-debuff-tip {
+    display: none;
+  }
+
+  .hud-predator-telegraph {
+    top: 52px;
+    width: min(290px, 52vw);
+  }
+
+  .telegraph-alert-pill {
+    padding: 3px 10px;
+    font-size: 0.72rem;
+  }
+
+  .telegraph-lane {
+    padding: 3px 2px;
+    font-size: 0.62rem;
+  }
+
+  .cust-scroll-grid {
+    max-height: 44vh;
+  }
+}
+
+/* 4K / Telas Ultra-Wide */
+@media (min-width: 2200px) {
+  .modes-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+
+  .bestiary-grid {
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  }
+}

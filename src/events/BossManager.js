@@ -8,6 +8,7 @@ import { StatusSystem } from '../systems/StatusSystem.js';
 import { buildVoxelWeakOrb } from '../models/VoxelLibrary.js';
 import { buildClaudeBossObstacle } from '../models/ClaudeVoxelModels.js';
 import { ContentLoader } from '../content/ContentLoader.js';
+import { getBossAffix, rollBossAffix } from '../content/threat_variants.js';
 
 export function computeBossPhase(hpRatio, phases = null) {
   const combatCfg = ContentLoader.getBossCombat();
@@ -32,7 +33,13 @@ export const BOSS_ATTACK_PROFILES = {
   crystal_wyrm: ['gelo', 'raio'],
   cyber_raptor: ['feixe', 'raio'],
   leviathan_abyssal: ['onda', 'poca', 'gelo'],
-  mecha_titan: ['feixe', 'raio', 'rocha']
+  mecha_titan: ['feixe', 'raio', 'rocha'],
+  abyssal_kraken: ['onda', 'poca', 'teia'],
+  volcanic_phoenix: ['magma', 'onda', 'raio'],
+  king_megalodon: ['onda', 'rocha', 'poca'],
+  cyber_emperor: ['feixe', 'raio', 'espinhos'],
+  fossil_titan: ['rocha', 'tronco', 'espinhos'],
+  cosmic_colossus: ['feixe', 'raio', 'onda']
 };
 
 export const BOSS_OBS_CFG = {
@@ -62,7 +69,13 @@ export const BOSS_DEFS = {
   crystal_wyrm: { id: 'crystal_wyrm', name: 'Serpe Cristalina', title: 'Dragão de Ametista', hp: 6, color: '#c084fc', weakOrder: [2, 0, 2], rewardAccessory: 'crystal_wings' },
   cyber_raptor: { id: 'cyber_raptor', name: 'Raptor Cibernético [Mini-Boss]', title: 'Unidade Alfa-X', hp: 4, color: '#22d3ee', weakOrder: [0, 1, 2], rewardAccessory: 'visor_neon' },
   leviathan_abyssal: { id: 'leviathan_abyssal', name: 'Leviatã Abissal', title: 'Soberano das Fossas', hp: 6, color: '#06b6d4', weakOrder: [0, 2, 1], rewardAccessory: 'diving_mask' },
-  mecha_titan: { id: 'mecha_titan', name: 'Titã Mecânico Ω', title: 'Colosso Cibernético', hp: 7, color: '#f43f5e', weakOrder: [2, 0, 1], rewardAccessory: 'mecha_wings' }
+  mecha_titan: { id: 'mecha_titan', name: 'Titã Mecânico Ω', title: 'Colosso Cibernético', hp: 7, color: '#f43f5e', weakOrder: [2, 0, 1], rewardAccessory: 'mecha_wings' },
+  abyssal_kraken: { id: 'abyssal_kraken', name: 'Kraken Abissal', title: 'Terror das Profundezas', hp: 6, color: '#0e7490', weakOrder: [0, 2, 1], rewardAccessory: 'diving_mask' },
+  volcanic_phoenix: { id: 'volcanic_phoenix', name: 'Fênix Vulcânica', title: 'Renascida da Caldeira', hp: 6, color: '#ea580c', weakOrder: [1, 0, 2], rewardAccessory: 'aura_fire' },
+  king_megalodon: { id: 'king_megalodon', name: 'Rei Megalodon', title: 'Soberano dos Mares', hp: 6, color: '#0369a1', weakOrder: [2, 1, 0], rewardAccessory: 'diving_mask' },
+  cyber_emperor: { id: 'cyber_emperor', name: 'Imperador Cibernético', title: 'Soberano da Rede', hp: 6, color: '#7c3aed', weakOrder: [0, 1, 2], rewardAccessory: 'visor_neon' },
+  fossil_titan: { id: 'fossil_titan', name: 'Titã Fóssil', title: 'Colosso dos Ossos', hp: 6, color: '#78716c', weakOrder: [1, 2, 0], rewardAccessory: 'amber_medallion' },
+  cosmic_colossus: { id: 'cosmic_colossus', name: 'Colosso Cósmico', title: 'Guardião das Estrelas', hp: 6, color: '#4f46e5', weakOrder: [2, 0, 1], rewardAccessory: 'crystal_wings' }
 };
 
 export class BossManager {
@@ -71,6 +84,7 @@ export class BossManager {
     this.headless = !!opts.headless;
     this.activeBoss = null;
     this.bossRig = null;
+    this.bossRush = null;
     this.group = new THREE.Group();
     this.scene.add(this.group);
 
@@ -119,12 +133,18 @@ export class BossManager {
         });
   }
 
-  startBoss(bossId = 'alpha_trex', playerCount = 1, difficultyId = 'normal') {
+  startBoss(bossId = 'alpha_trex', playerCount = 1, difficultyId = 'normal', opts = {}) {
     this.clear();
     const contentDef = ContentLoader.getBossById(bossId);
     const legacyDef = BOSS_DEFS[bossId] || BOSS_DEFS.alpha_trex;
     const def = { ...legacyDef, ...(contentDef || {}) };
     const combatCfg = ContentLoader.getBossCombat();
+
+    const affix = opts.affixId === null
+      ? null
+      : (opts.affixId
+        ? getBossAffix(opts.affixId)
+        : (opts.allowAffix === false ? null : rollBossAffix(difficultyId, opts.dangerTier || 1, opts.rng || Math.random)));
 
     const phases = Array.isArray(def.phases) && def.phases.length === 3
       ? def.phases
@@ -135,19 +155,34 @@ export class BossManager {
         ];
 
     const isTeam = playerCount >= 2;
+    const isRaid = opts.mode === 'raid';
     const tierHp = def.hp || 6;
     const baseHpPerTier = combatCfg.baseHpPerTier ?? 350;
     const diffScale = combatCfg.hpScaleByDifficulty?.[difficultyId] ?? 1.0;
-    const teamScale = isTeam ? 1 + Math.min(3, playerCount - 1) * 0.35 : 1.0;
-    const scaledHp = Math.max(100, Math.round(tierHp * baseHpPerTier * diffScale * teamScale));
+    const teamScale = isTeam ? 1 + Math.min(3, playerCount - 1) * (isRaid ? 0.55 : 0.35) : (isRaid ? 1.35 : 1.0);
+    const affixHpMult = affix?.hpMult ?? 1.0;
+    const customHpMult = typeof opts.hpMult === 'number' && opts.hpMult > 0 ? opts.hpMult : 1.0;
+    const scaledHp = Math.max(100, Math.round(tierHp * baseHpPerTier * diffScale * teamScale * affixHpMult * customHpMult));
+
+    const baseProfile = [...(def.attackProfile || BOSS_ATTACK_PROFILES[def.id] || ['rocha', 'onda'])];
+    if (affix?.extraObs && !baseProfile.includes(affix.extraObs)) {
+      baseProfile.push(affix.extraObs);
+    }
 
     this.state = 'intro';
     this.stateTimer = 1.65;
-    this.attackTimer = combatCfg.idleBetweenAttacksSec ?? 1.4;
+    const baseIdle = combatCfg.idleBetweenAttacksSec ?? 1.4;
+    this.attackTimer = Math.max(0.75, baseIdle * (affix?.idleMult ?? 1.0));
 
+    const baseTelegraph = phases[0]?.telegraphSec || combatCfg.defaultTelegraphSec || 0.85;
     this.activeBoss = {
       ...def,
+      attackProfile: baseProfile,
       difficultyId,
+      mode: opts.mode || 'infinite',
+      affix: affix || null,
+      affixId: affix?.id || null,
+      displayName: affix ? `${def.name} [${affix.badge} ${affix.name}]` : def.name,
       phases,
       weakness: StatusSystem.getBossWeakness(def.id),
       currentHp: scaledHp,
@@ -160,7 +195,8 @@ export class BossManager {
       phase: 1,
       state: 'intro',
       currentPattern: phases[0]?.pattern || 'padrao_1',
-      telegraphSec: phases[0]?.telegraphSec || combatCfg.defaultTelegraphSec || 0.85,
+      telegraphSec: Math.max(0.45, Number((baseTelegraph * (affix?.telegraphMult ?? 1.0)).toFixed(2))),
+      idleBetweenAttacksSec: Math.max(0.75, Number((baseIdle * (affix?.idleMult ?? 1.0)).toFixed(2))),
       lungeZ: 0,
       hitsTaken: 0
     };
@@ -177,8 +213,69 @@ export class BossManager {
 
     this.currentAnim = 'roar';
     this.animCycleTimer = 1.4;
-    this._triggerShockwave(0, -22, def.color);
+    this._triggerShockwave(0, -22, affix?.color || def.color);
     this._spawnNextWeakOrb();
+    return this.activeBoss;
+  }
+
+  /**
+   * API pública para modos dedicados (boss_fight, raid) consumida pelo modes_engine.
+   */
+  startBossById(id, opts = {}) {
+    const playerCount = opts.playerCount ?? 1;
+    const difficultyId = opts.difficultyId || 'normal';
+    return this.startBoss(id || 'alpha_trex', playerCount, difficultyId, opts);
+  }
+
+  /**
+   * Inicia uma sequência de Boss Rush (lista customizada ou todos os 20 bosses).
+   */
+  startBossRush(opts = {}) {
+    const allBossIds = ContentLoader.getBosses().map((b) => b.id);
+    const queue = Array.isArray(opts.bossIds) && opts.bossIds.length
+      ? [...opts.bossIds]
+      : (allBossIds.length ? allBossIds : Object.keys(BOSS_DEFS));
+
+    this.bossRush = {
+      active: true,
+      queue,
+      index: 0,
+      total: queue.length,
+      defeatedCount: 0,
+      autoAdvance: opts.autoAdvance !== false,
+      opts: { ...opts, mode: opts.mode || 'boss_fight' }
+    };
+
+    this.startBossById(queue[0], this.bossRush.opts);
+    return {
+      active: true,
+      currentBossId: queue[0],
+      index: 0,
+      total: queue.length
+    };
+  }
+
+  advanceBossRush(ctx = {}) {
+    if (!this.bossRush || !this.bossRush.active) return null;
+    this.bossRush.index++;
+    if (this.bossRush.index >= this.bossRush.queue.length) {
+      const summary = {
+        completed: true,
+        defeatedCount: this.bossRush.defeatedCount,
+        total: this.bossRush.total
+      };
+      this.bossRush.active = false;
+      ctx.onBossRushComplete?.(summary);
+      return summary;
+    }
+    const nextId = this.bossRush.queue[this.bossRush.index];
+    this.startBossById(nextId, this.bossRush.opts);
+    return {
+      completed: false,
+      currentBossId: nextId,
+      index: this.bossRush.index,
+      total: this.bossRush.total
+    };
   }
 
   _triggerShockwave(x, z, color = '#ff3b30') {
@@ -237,7 +334,7 @@ export class BossManager {
       }
       if (this.stateTimer <= 0) {
         b.introTimer = 0;
-        this._setState('idle', combatCfg.idleBetweenAttacksSec ?? 1.4, b);
+        this._setState('idle', b.idleBetweenAttacksSec ?? combatCfg.idleBetweenAttacksSec ?? 1.4, b);
       }
     } else if (this.state === 'idle') {
       const aggSpeed = b.phase >= 2 ? 1.85 : 1.35;
@@ -285,7 +382,7 @@ export class BossManager {
       this.group.position.z = -14.5;
       this.group.rotation.y = Math.sin(b.phaseTime * 1.6) * 0.08;
       if (this.stateTimer <= 0) {
-        this._setState('idle', combatCfg.idleBetweenAttacksSec ?? 1.4, b);
+        this._setState('idle', b.idleBetweenAttacksSec ?? combatCfg.idleBetweenAttacksSec ?? 1.4, b);
       }
     }
 
@@ -328,6 +425,10 @@ export class BossManager {
           ) {
             s.hit = true;
             if (s.status) StatusSystem.apply(p, s.status, 3.0, ctx);
+            if (b.affix?.vampiricHealPct > 0 && b.currentHp > 0) {
+              const heal = Math.max(1, Math.round(b.maxHp * b.affix.vampiricHealPct));
+              b.currentHp = Math.min(b.maxHp, b.currentHp + heal);
+            }
             ctx.damagePlayer?.(p, 'boss');
           }
         }
@@ -370,6 +471,10 @@ export class BossManager {
     let isHigh = false;
     if (attackRoll === 0) {
       lanes.push(Math.floor(Math.random() * 3));
+      if (b.affix?.extraLaneHazard && minSafePaths <= 1) {
+        const extra = (lanes[0] + 1) % 3;
+        if (!lanes.includes(extra)) lanes.push(extra);
+      }
       this.currentAnim = 'bite';
       this.animCycleTimer = Math.max(0.5, telegraphSec);
     } else if (attackRoll === 1) {
@@ -447,7 +552,8 @@ export class BossManager {
     const weakMatch = b.weakness && player.element === b.weakness.element;
     const windowMult = this.state === 'vulnerable' ? 1.0 : (combatCfg.offWindowDamageMult ?? 0.45);
     const elemMult = weakMatch ? (1 + (combatCfg.elementalWeaknessBonusMult ?? 0.5)) : 1.0;
-    const damage = Math.max(1, Math.round(baseDmg * atkPower * windowMult * elemMult));
+    const affixDmgMult = b.affix?.damageTakenMult ?? 1.0;
+    const damage = Math.max(1, Math.round(baseDmg * atkPower * windowMult * elemMult * affixDmgMult));
 
     this._applyDamageToBoss(damage, player, ctx, {
       via: 'player_attack',
@@ -494,7 +600,8 @@ export class BossManager {
     const phaseCfg = b.phases?.[nextPhase - 1];
     if (phaseCfg) {
       b.currentPattern = phaseCfg.pattern;
-      b.telegraphSec = phaseCfg.telegraphSec;
+      const affixTeleMult = b.affix?.telegraphMult ?? 1.0;
+      b.telegraphSec = Math.max(0.45, Number((phaseCfg.telegraphSec * affixTeleMult).toFixed(2)));
     }
 
     ctx.sfx?.stomp?.();
@@ -540,7 +647,13 @@ export class BossManager {
       }
       ctx.sfx?.victory?.();
       ctx.onBossDefeated?.(defeated);
-      ctx.showFloatText?.(player, `🏆 ${defeated.name} DERROTADO! +${eggReward} 🥚 & +${crystalReward} 💎!`, '#58d63a');
+      ctx.showFloatText?.(player, `🏆 ${defeated.displayName || defeated.name} DERROTADO! +${eggReward} 🥚 & +${crystalReward} 💎!`, '#58d63a');
+      if (this.bossRush?.active) {
+        this.bossRush.defeatedCount++;
+        if (this.bossRush.autoAdvance) {
+          this.advanceBossRush(ctx);
+        }
+      }
     }
   }
 
@@ -635,8 +748,10 @@ export class BossManager {
     const { attackRoll, chosenObs, lanes, isHigh, minSafePaths, laneXs, baseY, showRedSign } = atk;
     if (attackRoll === 0) {
       b.lungeZ = 3.2;
-      const lane = lanes[0] ?? 1;
-      this._spawnShot(laneXs[lane], baseY, -28, { obsType: chosenObs, laneIdx: lane, laneY: baseY, showRedSign });
+      const targetLanes = lanes.length ? lanes : [1];
+      for (const lane of targetLanes) {
+        this._spawnShot(laneXs[lane], baseY, -28, { obsType: chosenObs, laneIdx: lane, laneY: baseY, showRedSign });
+      }
       this._announceObs(chosenObs, players, ctx, b);
     } else if (attackRoll === 1) {
       if (minSafePaths >= 2) {

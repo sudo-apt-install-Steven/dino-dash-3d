@@ -458,8 +458,169 @@ export function buildVoxelSpikeBarricade(logMat) {
 export const VOXEL_AUDIT_REPORT = [
   { category: 'Dinossauros Jogáveis (27)', minParts: 14, status: 'OK', note: '27 modelos voxel articulados por espécie' },
   { category: 'Predadores & Chefes (12)', minParts: 20, status: 'OK', note: '14 predadores + 12 chefes multi-peças com mandíbula e aura' },
-  { category: 'Obstáculos & Perigos (20)', minParts: 4, status: 'OK', note: '20 obstáculos puros (âmbar, gêiser, piche, estalactite, bobina, barricada...)' },
+  { category: 'Obstáculos & Perigos (48)', minParts: 4, status: 'OK', note: '20 obstáculos base + 28 arquétipos móveis/telegrafados da Mega Expansão' },
   { category: 'Itens, Frutas & Ovos Elementais', minParts: 6, status: 'OK', note: '15 itens especiais sem Sphere/Octahedron/Torus genéricos' },
   { category: 'Portais Rúnicos & Projéteis', minParts: 4, status: 'OK', note: 'Arco rúnico em voxel, projéteis alados e pontos fracos' },
   { category: 'Acessórios (45) & Destroços', minParts: 3, status: 'OK', note: '45 acessórios com >= 3 peças voxel próprias' }
 ];
+
+// Cache de materiais para os 28 arquétipos expandidos (zero alocação repetida)
+const _expMatCache = new Map();
+function getCachedVoxelMat(color, opts = {}) {
+  const key = `${color}|${opts.emissive || ''}|${opts.emissiveIntensity || 0}|${opts.opacity ?? 1}|${opts.metalness || 0}`;
+  let m = _expMatCache.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({
+      color,
+      roughness: opts.roughness ?? 0.55,
+      metalness: opts.metalness ?? 0.15,
+      emissive: opts.emissive || '#000000',
+      emissiveIntensity: opts.emissiveIntensity ?? 0,
+      transparent: (opts.opacity ?? 1) < 1,
+      opacity: opts.opacity ?? 1
+    });
+    _expMatCache.set(key, m);
+  }
+  return m;
+}
+
+/**
+ * Constrói modelos voxel multi-partes (>= 4 peças) + indicador visual de telégrafo
+ * para os 28 novos arquétipos móveis/telegrafados do catálogo expandido.
+ */
+export function buildVoxelExpandedHazard(archetype, primaryColor = '#ef4444', accentColor = '#facc15') {
+  const g = new THREE.Group();
+  const baseMat = getCachedVoxelMat(primaryColor, { roughness: 0.65, metalness: 0.2 });
+  const darkMat = getCachedVoxelMat('#1e293b', { roughness: 0.45, metalness: 0.5 });
+  const glowMat = getCachedVoxelMat(accentColor, { emissive: accentColor, emissiveIntensity: 0.85, roughness: 0.3 });
+  const warnMat = getCachedVoxelMat('#ff2e2e', { emissive: '#ff2e2e', emissiveIntensity: 0.9, opacity: 0.78 });
+
+  // Telégrafo de solo universal (visível antes da ativação para fairness garantida)
+  const telegraphMesh = new THREE.Group();
+  addVoxelBox(telegraphMesh, 1.9, 0.05, 0.22, 0, 0.04, 0.85, warnMat);
+  addVoxelBox(telegraphMesh, 1.9, 0.05, 0.22, 0, 0.04, -0.85, warnMat);
+  addVoxelBox(telegraphMesh, 0.22, 0.05, 1.8, -0.88, 0.04, 0, warnMat);
+  addVoxelBox(telegraphMesh, 0.22, 0.05, 1.8, 0.88, 0.04, 0, warnMat);
+  g.add(telegraphMesh);
+
+  const activePart = new THREE.Group();
+  g.add(activePart);
+
+  switch (archetype) {
+    case 'oscillating_laser':
+    case 'plasma_turret':
+      addVoxelBox(g, 0.34, 2.2, 0.34, -1.05, 1.1, 0, darkMat);
+      addVoxelBox(g, 0.34, 2.2, 0.34, 1.05, 1.1, 0, darkMat);
+      addVoxelBox(activePart, 2.0, 0.24, 0.24, 0, 1.1, 0, glowMat);
+      addVoxelBox(activePart, 0.38, 0.38, 0.38, -0.95, 1.1, 0, baseMat);
+      addVoxelBox(activePart, 0.38, 0.38, 0.38, 0.95, 1.1, 0, baseMat);
+      break;
+    case 'lane_saw':
+      addVoxelBox(g, 2.1, 0.1, 0.4, 0, 0.05, 0, darkMat);
+      addVoxelBox(activePart, 1.15, 1.15, 0.22, 0, 0.68, 0, baseMat);
+      addVoxelBox(activePart, 0.9, 0.9, 0.28, 0, 0.68, 0, glowMat, 0, 0, Math.PI / 4);
+      addVoxelBox(activePart, 0.36, 0.36, 0.36, 0, 0.68, 0, darkMat);
+      break;
+    case 'telegraphed_geyser':
+    case 'acid_geyser':
+    case 'magma_fissure':
+      addVoxelBox(g, 1.6, 0.16, 1.6, 0, 0.08, 0, darkMat);
+      addVoxelBox(g, 1.15, 0.2, 1.15, 0, 0.14, 0, baseMat);
+      addVoxelBox(activePart, 0.85, 2.4, 0.85, 0, 1.25, 0, glowMat);
+      addVoxelBox(activePart, 1.18, 0.45, 1.18, 0, 2.35, 0, baseMat);
+      break;
+    case 'magnetic_mine':
+    case 'spore_mine':
+      addVoxelBox(activePart, 0.9, 0.9, 0.9, 0, 0.95, 0, darkMat);
+      addVoxelBox(activePart, 1.15, 0.32, 0.32, 0, 0.95, 0, glowMat);
+      addVoxelBox(activePart, 0.32, 1.15, 0.32, 0, 0.95, 0, glowMat);
+      addVoxelBox(activePart, 0.32, 0.32, 1.15, 0, 0.95, 0, baseMat);
+      break;
+    case 'quicksand_pit':
+    case 'net_trap':
+      addVoxelBox(g, 2.05, 0.08, 2.4, 0, 0.04, 0, baseMat);
+      addVoxelBox(activePart, 1.7, 0.1, 2.0, 0, 0.08, 0, darkMat);
+      addVoxelBox(activePart, 1.35, 0.12, 0.2, 0, 0.12, 0.55, glowMat);
+      addVoxelBox(activePart, 1.35, 0.12, 0.2, 0, 0.12, -0.55, glowMat);
+      break;
+    case 'double_wall_gap':
+      addVoxelBox(g, 0.36, 2.5, 0.65, -0.95, 1.25, 0, baseMat);
+      addVoxelBox(g, 0.36, 2.5, 0.65, 0.95, 1.25, 0, baseMat);
+      addVoxelBox(activePart, 2.1, 0.72, 0.65, 0, 2.15, 0, darkMat);
+      addVoxelBox(activePart, 1.9, 0.16, 0.72, 0, 1.72, 0, glowMat);
+      break;
+    case 'sliding_block':
+    case 'crusher_pillar':
+      addVoxelBox(g, 2.2, 0.08, 0.55, 0, 0.04, 0, darkMat);
+      addVoxelBox(activePart, 1.55, 1.65, 1.25, 0, 0.92, 0, baseMat);
+      addVoxelBox(activePart, 1.65, 0.25, 1.32, 0, 1.62, 0, glowMat);
+      addVoxelBox(activePart, 1.65, 0.25, 1.32, 0, 0.22, 0, darkMat);
+      break;
+    case 'emerging_tentacle':
+    case 'blood_thorn':
+      addVoxelBox(g, 1.25, 0.16, 1.25, 0, 0.08, 0, darkMat);
+      addVoxelBox(activePart, 0.52, 0.85, 0.52, 0, 0.45, 0, baseMat);
+      addVoxelBox(activePart, 0.38, 0.85, 0.38, 0.12, 1.2, 0, baseMat, 0, 0, -0.18);
+      addVoxelBox(activePart, 0.26, 0.7, 0.26, -0.05, 1.88, 0, glowMat, 0, 0, 0.22);
+      break;
+    case 'sonic_crystal':
+    case 'frost_obelisk':
+    case 'static_pylon':
+    case 'quake_totem':
+      addVoxelBox(g, 1.15, 0.24, 1.15, 0, 0.12, 0, darkMat);
+      addVoxelBox(g, 0.68, 1.7, 0.68, 0, 1.05, 0, baseMat);
+      addVoxelBox(g, 0.4, 0.65, 0.4, 0, 2.1, 0, glowMat);
+      addVoxelBox(activePart, 1.85, 0.18, 0.22, 0, 0.55, 0.85, glowMat);
+      addVoxelBox(activePart, 1.85, 0.18, 0.22, 0, 0.55, -0.85, glowMat);
+      break;
+    case 'seeker_drone':
+      addVoxelBox(activePart, 0.95, 0.45, 0.95, 0, 1.45, 0, darkMat);
+      addVoxelBox(activePart, 0.38, 0.3, 0.3, 0, 1.45, 0.5, glowMat);
+      addVoxelBox(activePart, 1.45, 0.12, 0.3, 0, 1.65, 0, baseMat);
+      addVoxelBox(activePart, 0.3, 0.12, 1.45, 0, 1.65, 0, baseMat);
+      break;
+    case 'bone_pendulum':
+      addVoxelBox(g, 0.28, 2.9, 0.28, -1.0, 1.45, 0, darkMat);
+      addVoxelBox(g, 0.28, 2.9, 0.28, 1.0, 1.45, 0, darkMat);
+      addVoxelBox(g, 2.2, 0.26, 0.28, 0, 2.85, 0, darkMat);
+      activePart.position.set(0, 2.75, 0);
+      addVoxelBox(activePart, 0.18, 1.55, 0.18, 0, -0.8, 0, baseMat);
+      addVoxelBox(activePart, 1.15, 0.55, 0.55, 0, -1.55, 0, glowMat);
+      break;
+    case 'retractable_spike':
+      addVoxelBox(g, 1.8, 0.14, 1.8, 0, 0.07, 0, darkMat);
+      addVoxelBox(activePart, 0.24, 1.05, 0.24, -0.5, 0.52, -0.45, glowMat);
+      addVoxelBox(activePart, 0.24, 1.05, 0.24, 0.5, 0.52, -0.45, glowMat);
+      addVoxelBox(activePart, 0.24, 1.05, 0.24, 0, 0.52, 0.45, baseMat);
+      break;
+    case 'corrosive_cloud':
+    case 'void_rift':
+    case 'phantom_decoy':
+      addVoxelBox(activePart, 1.45, 0.9, 1.35, 0, 1.55, 0, baseMat);
+      addVoxelBox(activePart, 1.05, 0.75, 1.05, -0.55, 1.75, 0.25, glowMat);
+      addVoxelBox(activePart, 0.95, 0.7, 0.95, 0.55, 1.45, -0.25, glowMat);
+      break;
+    case 'inverted_gravity_field':
+      addVoxelBox(g, 0.34, 2.3, 0.4, -0.95, 1.15, 0, darkMat);
+      addVoxelBox(g, 0.34, 2.3, 0.4, 0.95, 1.15, 0, darkMat);
+      addVoxelBox(g, 2.2, 0.3, 0.45, 0, 2.28, 0, baseMat);
+      addVoxelBox(activePart, 1.7, 1.9, 0.18, 0, 1.15, 0, glowMat);
+      break;
+    case 'shockwave_emitter':
+      addVoxelBox(g, 0.75, 0.55, 0.75, 0, 0.28, 0, darkMat);
+      addVoxelBox(g, 0.42, 0.85, 0.42, 0, 0.65, 0, baseMat);
+      addVoxelBox(activePart, 2.1, 0.22, 0.22, 0, 0.32, 0.88, glowMat);
+      addVoxelBox(activePart, 2.1, 0.22, 0.22, 0, 0.32, -0.88, glowMat);
+      addVoxelBox(activePart, 0.22, 0.22, 1.9, -0.95, 0.32, 0, glowMat);
+      addVoxelBox(activePart, 0.22, 0.22, 1.9, 0.95, 0.32, 0, glowMat);
+      break;
+    case 'fragmented_meteor':
+    default:
+      addVoxelBox(activePart, 1.15, 1.1, 1.15, 0, 1.1, 0, baseMat);
+      addVoxelBox(activePart, 0.75, 1.35, 0.75, 0, 1.15, 0, glowMat);
+      addVoxelBox(activePart, 1.35, 0.65, 0.75, 0, 1.0, 0, darkMat);
+      break;
+  }
+
+  return { group: g, telegraphMesh, activePart };
+}

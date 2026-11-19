@@ -10,6 +10,8 @@ import { OrientationManager } from '../systems/OrientationManager.js';
 import { ProgressionManager } from '../systems/Progression.js';
 import { attachModalHelp } from './Menus.js';
 import { renderSkillSvg } from './SvgIcons.js';
+import { normalizeLocale } from '../i18n/translations.js';
+import { escapeHtml } from '../security/Sanitize.js';
 
 let _sharedPreviewStage = null;
 
@@ -205,12 +207,25 @@ export class SelectionScreen {
   static renderInto(container, { onClose, onSelect, onTestTrack, onPlayRoar }) {
     let currentId = Save.data.selectedDino || 'trex';
     let classFilter = 'all';
+    let rarityFilter = 'all';
+    let searchQuery = '';
     let preview = null;
     let noticeMsg = '';
+
+    const loc = normalizeLocale(Save.data.settings?.lang);
+    const getDinoRarity = (d) => {
+      if (d.rarity) return String(d.rarity);
+      const cost = d.unlockCost || 0;
+      if (cost >= 900) return 'Lendário';
+      if (cost >= 450) return 'Épico';
+      if (cost >= 180) return 'Raro';
+      return 'Comum';
+    };
 
     const allNonSecret = DINO_CATALOG.filter(
       (d) => !d.secret || Save.data.unlockedDinos.includes(d.id)
     );
+    const dynamicRarities = Array.from(new Set(allNonSecret.map((d) => getDinoRarity(d))));
     const hasSecret = Save.data.unlockedDinos.includes('ghostgold');
     const unlockedCount = DINO_CATALOG.filter((d) => Save.data.unlockedDinos.includes(d.id)).length;
 
@@ -251,6 +266,16 @@ export class SelectionScreen {
           </div>
 
           <div class="sel-bottom-dock" id="sel-bottom-dock">
+            <div class="catalog-toolbar sel-catalog-toolbar">
+              <input type="search" class="text-input catalog-search" id="sel-search" placeholder="${loc === 'en' ? 'Search dinosaur or ability...' : (loc === 'es' ? 'Buscar dinosaurio o habilidad...' : 'Buscar dinossauro ou habilidade...')}" aria-label="Buscar dinossauro" />
+              <select class="select-input catalog-select" id="sel-rarity-filter" aria-label="Filtrar por raridade ou desbloqueio">
+                <option value="all">${loc === 'en' ? 'All rarities' : (loc === 'es' ? 'Todas las rarezas' : 'Todas raridades')}</option>
+                <option value="__unlocked">${loc === 'en' ? 'Unlocked' : (loc === 'es' ? 'Desbloqueados' : '✔ Desbloqueados')}</option>
+                <option value="__locked">${loc === 'en' ? 'Locked' : (loc === 'es' ? 'Bloqueados' : '🔒 Bloqueados')}</option>
+                ${dynamicRarities.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('')}
+              </select>
+              <span class="hud-pill" id="sel-match-count" style="font-size:0.74rem; padding:4px 8px;">${allNonSecret.length}/${DINO_CATALOG.length}</span>
+            </div>
             <div class="tabs-row sel-filter-tabs" id="sel-filter-tabs">
               <button class="tab-btn active" data-cfilter="all">Todos (${DINO_CATALOG.length})</button>
               ${Object.entries(DINO_CLASSES).map(([k, info]) => `
@@ -315,20 +340,36 @@ export class SelectionScreen {
       const listEl = container.querySelector('#sel-dino-list');
       if (!listEl) return;
       const savedListScroll = listEl.scrollTop;
-      const filteredDinos = classFilter === 'all'
-        ? allNonSecret
-        : allNonSecret.filter((d) => d.dinoClass === classFilter);
+      const q = searchQuery.trim().toLowerCase();
+      const filteredDinos = allNonSecret.filter((d) => {
+        if (classFilter !== 'all' && d.dinoClass !== classFilter) return false;
+        const owned = Save.data.unlockedDinos.includes(d.id) || (d.unlockCost || 0) === 0;
+        if (rarityFilter === '__unlocked' && !owned) return false;
+        if (rarityFilter === '__locked' && owned) return false;
+        if (rarityFilter !== 'all' && rarityFilter !== '__unlocked' && rarityFilter !== '__locked') {
+          if (getDinoRarity(d) !== rarityFilter) return false;
+        }
+        if (q) {
+          const hay = `${d.name} ${d.id} ${d.ability?.name || ''} ${d.ability?.desc || ''} ${getDinoRarity(d)}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      const matchCountEl = container.querySelector('#sel-match-count');
+      if (matchCountEl) matchCountEl.textContent = `${filteredDinos.length}/${DINO_CATALOG.length}`;
 
       listEl.innerHTML = `
-        ${filteredDinos.map((d) => {
+        ${filteredDinos.length ? filteredDinos.map((d) => {
           const owned = Save.data.unlockedDinos.includes(d.id) || (d.unlockCost || 0) === 0;
+          const rar = getDinoRarity(d);
           return `
-            <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${d.id}" title="${d.name}" style="min-height:40px; width:100%;">
-              ${d.id === Save.data.selectedDino ? '★ ' : (!owned ? '🔒 ' : '')}${d.name}
+            <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${escapeHtml(d.id)}" title="${escapeHtml(d.name)} (${escapeHtml(rar)})" style="min-height:40px; width:100%;">
+              ${d.id === Save.data.selectedDino ? '★ ' : (!owned ? '🔒 ' : '')}${escapeHtml(d.name)}
             </button>
           `;
-        }).join('')}
-        ${!hasSecret ? `<button class="tab-btn" id="sel-secret-locked" style="opacity:0.75; min-height:40px; width:100%;">🔒 ??? (Secreto)</button>` : ''}
+        }).join('') : `<div style="grid-column:1/-1; text-align:center; color:#d8c2a6; font-size:0.82rem; padding:10px;">Nenhum dinossauro encontrado.</div>`}
+        ${(!hasSecret && !q && rarityFilter === 'all') ? `<button class="tab-btn" id="sel-secret-locked" style="opacity:0.75; min-height:40px; width:100%;">🔒 ??? (Secreto)</button>` : ''}
       `;
       listEl.scrollTop = savedListScroll;
 
@@ -501,6 +542,16 @@ export class SelectionScreen {
       if (Save.data.hybrid) Save.data.hybrid.enabled = false;
       equipDino(currentId, true);
       updateContent({ updatePreview: true });
+    });
+
+    container.querySelector('#sel-search')?.addEventListener('input', (e) => {
+      searchQuery = e.target.value || '';
+      rebuildDinoList();
+    });
+
+    container.querySelector('#sel-rarity-filter')?.addEventListener('change', (e) => {
+      rarityFilter = e.target.value || 'all';
+      rebuildDinoList();
     });
 
     container.querySelectorAll('[data-cfilter]').forEach((btn) => {

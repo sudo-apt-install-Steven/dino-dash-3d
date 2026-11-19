@@ -39,7 +39,15 @@ import { ContentLoader } from '../content/ContentLoader.js';
 import { RoomClient } from '../net/RoomClient.js';
 import { EventManager } from '../events/EventManager.js';
 import { DifficultyManager } from './Difficulty.js';
-import { getModeDef, STORY_CHAPTERS, CHAOS_RULES } from './Modes.js';
+import {
+  getModeDef,
+  STORY_CHAPTERS,
+  CHAOS_RULES,
+  RAID_AFFIXES,
+  RACE_DISTANCES,
+  isModeRanked,
+  getCompetitionSeed
+} from './Modes.js';
 import { AudioEngine } from '../audio/AudioEngine.js';
 import { SoundEffects } from '../audio/SoundEffects.js';
 import { MusicSequencer } from '../audio/MusicSequencer.js';
@@ -139,6 +147,20 @@ export class Game {
     this._progressiveNotified = new Set();
     this._portalBiomeAccum = 0;
     this._mpReviveCount = 0;
+
+    // Estados dos novos modos (Raid, Boss Fight/Rush, Free Roam, Race, Competition) e integração §3
+    this.bossFightConfig = { submode: 'rush', targetBossId: null };
+    this.raceConfig = { targetDistance: RACE_DISTANCES[0] || 5000 };
+    this.raidState = null;
+    this.bossRushState = null;
+    this.raceState = null;
+    this.freeRoamState = null;
+    this.raceAiRacers = [];
+    this._predatorHazards = [];
+    this._currentDangerTier = { tier: 0, speedBonus: 0, densityBonus: 0, eventFreqBonus: 0, predatorAggro: 1.0 };
+    this._lastHudDangerTier = -1;
+    this._hudDebuffAccum = 0;
+    this._lastCoopBossHit = null;
 
     this.net = new RoomClient();
     this.perf = new PerfMonitor();
@@ -775,7 +797,9 @@ export class Game {
         const orbDx = Math.abs(bosses.weakOrb.position.x - localX);
         const orbDz = bosses.weakOrb.position.z - p.z;
         if (orbDx < reachX && orbDz > -reachZ && orbDz < 2.0) {
+          const weakDmg = this._computeBossAttackDamage(p, Math.max(dmg, 35), true);
           bosses._hitBossWeakPoint?.(p, this.players, this._eventContext());
+          this._recordBossDamage(p, weakDmg);
           landedHit = true;
         }
       }
@@ -803,10 +827,11 @@ export class Game {
         const bossDz = bossZ - p.z;
         if (bossDx <= reachX + 2.4 && bossDz >= -(reachZ + 22) && bossDz <= 2.0) {
           const ctx = this._eventContext();
+          const finalDmg = this._computeBossAttackDamage(p, dmg, false);
           if (typeof bosses.applyPlayerAttack === 'function') {
-            bosses.applyPlayerAttack(p, dmg, ctx);
+            bosses.applyPlayerAttack(p, finalDmg, ctx);
           } else {
-            const appliedDmg = b.maxHp > 25 ? dmg : Math.max(1, Math.round(dmg / 25));
+            const appliedDmg = b.maxHp > 25 ? finalDmg : Math.max(1, Math.round(finalDmg / 25));
             b.currentHp = Math.max(0, b.currentHp - appliedDmg);
             const hpRatio = b.currentHp / Math.max(1, b.maxHp);
             const nextPhase = hpRatio <= 0.33 ? 3 : (hpRatio <= 0.66 ? 2 : 1);
@@ -825,6 +850,7 @@ export class Game {
               ctx.onBossHudUpdate?.(b);
             }
           }
+          this._recordBossDamage(p, finalDmg);
           this.cameraRig?.triggerShake?.(0.32, 0.16);
           landedHit = true;
         }
@@ -891,6 +917,96 @@ export class Game {
       : null;
   }
 
+  setBossFightConfig(cfg = {}) {
+    this.bossFightConfig = {
+      submode: cfg.submode === 'single' ? 'single' : 'rush',
+      targetBossId: cfg.targetBossId || null
+    };
+  }
+
+  setRaceDistance(distanceMeters = 5000) {
+    this.raceConfig = {
+      targetDistance: Number(distanceMeters) >= 10000 ? 10000 : 5000
+    };
+  }
+
+  setFreeRoamBiome(biomeId) {
+    const target = getBiomeById(biomeId);
+    if (!target) return false;
+    this.currentBiome = target;
+    this.world.applyTheme(target.theme, false);
+    this.spawner.setBiome(target.id);
+    this._applyBiomePlayersState(target);
+    this.ui.hud.showBanner(`🧪 SANDBOX — Bioma: ${target.name}`, '#34d399', 2.4);
+    return true;
+  }
+
+  setFreeRoamSpeed(mult = 1.0) {
+    if (!this.freeRoamState) this.freeRoamState = { active: true, speedScale: 1.0, spawnPaused: false };
+    this.freeRoamState.speedScale = Math.max(0.4, Math.min(2.2, Number(mult) || 1.0));
+    this.ui.hud.showFloatText(`🧪 Velocidade: ${Math.round(this.freeRoamState.speedScale * 100)}%`, '#34d399');
+    return this.freeRoamState.speedScale;
+  }
+
+  spawnFreeRoamEntity(kind = 'wave') {
+    if (this.state !== 'playing') return false;
+    if (kind === 'boss') {
+      const bId = this.currentBiome?.bossId || 'alpha_trex';
+      if (typeof this.events?.bosses?.startBossById === 'function') {
+        this.events.bosses.startBossById(bId, this.players.length, this.difficultyMgr.activeId);
+      } else {
+        this.events?.bosses?.startBoss?.(bId, this.players.length, this.difficultyMgr.activeId);
+      }
+      this.ui.hud.showFloatText(`👑 Boss invocado: ${bId}`, '#fb923c');
+      return true;
+    }
+    if (typeof this.spawner.spawnFromCatalog === 'function') {
+      const spawned = this.spawner.spawnFromCatalog(Math.random, {
+        biomeId: this.currentBiome?.id,
+        dangerTier: this._currentDangerTier,
+        modeId: this.modeId
+      });
+      if (spawned) {
+        this.ui.hud.showFloatText('🧪 Entidade de catálogo gerada!', '#38bdf8');
+        return true;
+      }
+    }
+    const lane = Math.floor(Math.random() * 3);
+    const lx = this.spawner._isWaterTrack?.() ? this.spawner._getLaneX(lane) : LANE_X[lane];
+    this.spawner._acquire?.('cactus_tall', lx, 0, -58);
+    this.ui.hud.showFloatText('🧪 Obstáculo gerado sob demanda!', '#38bdf8');
+    return true;
+  }
+
+  _computeBossAttackDamage(p, baseDmg, isWeakPoint = false) {
+    let dmg = Math.max(1, Number(baseDmg) || 20);
+    const affix = this.raidState?.active ? this.raidState.activeAffix : null;
+    if (affix && !isWeakPoint && typeof affix.damageMult === 'number') {
+      dmg *= affix.damageMult;
+    }
+    // Sinergia de ataque Coop / Raid (2+ jogadores acertando o chefe em janela de 2.0s)
+    const isTeamMode = this.modeId === 'coop' || this.modeId === 'raid' || (this.multiplayerSession?.active && this.players.length >= 2);
+    if (isTeamMode && this.players.length >= 2) {
+      const last = this._lastCoopBossHit;
+      if (last && last.playerKey !== p.key && (this.runTime - last.at) <= 2.0) {
+        const synMult = affix?.synergyBonus || 1.35;
+        dmg *= synMult;
+        p.abilityCharge = Math.min(100, (p.abilityCharge || 0) + 12);
+        this.ui.hud.showFloatText(`⚡ SINERGIA COOP! +${Math.round((synMult - 1) * 100)}% DANO!`, '#fde047');
+      }
+      this._lastCoopBossHit = { playerKey: p.key, at: this.runTime };
+    }
+    return Math.max(1, Math.round(dmg));
+  }
+
+  _recordBossDamage(p, dmg) {
+    if (!p || !dmg || dmg <= 0) return;
+    p.raidDamage = (p.raidDamage || 0) + dmg;
+    if (this.raidState?.active) {
+      this.raidState.totalDamage = (this.raidState.totalDamage || 0) + dmg;
+    }
+  }
+
   setBiomeConfig(biomeId, seq) {
     this.startBiomeId = biomeId;
     this.sequenceBiomes = seq;
@@ -919,6 +1035,13 @@ export class Game {
       this.scene.remove(this.goldenEggProp);
       this.goldenEggProp = null;
     }
+    if (Array.isArray(this.raceAiRacers) && this.raceAiRacers.length) {
+      for (const ai of this.raceAiRacers) {
+        if (ai?.model?.root) this.scene.remove(ai.model.root);
+      }
+      this.raceAiRacers = [];
+    }
+    this._predatorHazards = [];
     this.companions.clear();
   }
 
@@ -1306,7 +1429,8 @@ export class Game {
       nextCardScoreByPeer: new Map()
     };
 
-    this.modeId = 'solo';
+    const mpNativeModes = new Set(['raid', 'boss_fight', 'race', 'competition', 'coop', 'free_roam']);
+    this.modeId = mpNativeModes.has(mpMode) ? mpMode : 'solo';
     this.net.broadcastHostStart({
       roomCode: room?.code,
       roster,
@@ -1330,7 +1454,17 @@ export class Game {
     });
     this.startRun(false, { keepMultiplayerSession: true, roster, seed: matchSeed, biomeId: matchBiomeId });
     this.tvHud.setVisible(this.players.length > 1, !!Save.data.network?.tvScale);
-    const modeLabel = mpMode === 'duel' ? '⚔️ DUELO PvP' : (isElim ? '⏳ ELIMINAÇÃO 30s' : '🏁 CORRIDA');
+    const mpBannerLabels = {
+      duel: '⚔️ DUELO PvP',
+      elimination: '⏳ ELIMINAÇÃO 30s',
+      race: '🏁 CORRIDA',
+      raid: '🐉 RAID COLOSSAL',
+      boss_fight: '👑 BOSS RUSH',
+      competition: '🏅 LIGA COMPETITIVA',
+      coop: '🤝 COOP TÁTICO',
+      free_roam: '🧪 LIVRE / SANDBOX'
+    };
+    const modeLabel = mpBannerLabels[mpMode] || (isElim ? '⏳ ELIMINAÇÃO 30s' : '🏁 CORRIDA');
     this.ui.hud.showBanner(`🌐 ${modeLabel} INICIADA (${this.players.length} DINOS)!`, '#58d63a', 3.4);
   }
 
@@ -1386,7 +1520,8 @@ export class Game {
       nextCardScoreByPeer: new Map()
     };
 
-    this.modeId = 'solo';
+    const mpNativeModes = new Set(['raid', 'boss_fight', 'race', 'competition', 'coop', 'free_roam']);
+    this.modeId = mpNativeModes.has(mpMode) ? mpMode : 'solo';
     this.startRun(false, {
       keepMultiplayerSession: true,
       roster,
@@ -1636,10 +1771,38 @@ export class Game {
     this._progressiveNotified = new Set();
     this._portalBiomeAccum = 0;
     this._mpReviveCount = 0;
+
+    // Reset de estados dos modos de expansão e integração §3 (preservando configs escolhidas)
+    this.raidState = null;
+    this.bossRushState = null;
+    this.raceState = null;
+    this.freeRoamState = null;
+    this._predatorHazards = [];
+    this._currentDangerTier = { tier: 0, speedBonus: 0, densityBonus: 0, eventFreqBonus: 0, predatorAggro: 1.0 };
+    this._lastHudDangerTier = -1;
+    this._hudDebuffAccum = 0;
+    this._lastCoopBossHit = null;
+    this.ui.hud.setDangerTier?.(this._currentDangerTier);
+    this.ui.hud.setActiveDebuffs?.([]);
+    this.ui.hud.setPredatorTelegraph?.(null);
     this.hiScore = Save.getHighScore();
 
-    // Seed determinística para Desafio Diário, Multiplayer ou Seed compartilhável
-    const seed = opts.seed || this.activeCustomTrack?.seed || (this.modeId === 'daily_challenge' ? getTodaySeed() : this.customSeed);
+    // Modo Competição (Liga): regras padronizadas sem modificadores fáceis
+    if (this.modeId === 'competition') {
+      if (this.difficultyMgr.activeId === 'easy') {
+        this.difficultyMgr.setPreset('normal');
+      }
+      this.activeCustomTrack = null;
+      for (const pl of this.players) {
+        pl._unlockAll = true;
+      }
+    }
+
+    // Seed determinística para Desafio Diário, Competição (Liga), Multiplayer ou Seed compartilhável
+    const seed = opts.seed
+      || (this.modeId === 'competition' ? getCompetitionSeed() : null)
+      || this.activeCustomTrack?.seed
+      || (this.modeId === 'daily_challenge' ? getTodaySeed() : this.customSeed);
     this.spawner.setSeed(seed);
     this.spawner.setDifficultyId(this.difficultyMgr.activeId);
     this.spawner.setDifficultyConfig(diff);
@@ -1784,6 +1947,151 @@ export class Game {
       this.scene.add(rModel.root);
       this.rivalAi = { model: rModel, animator: new DinoAnimator(rModel), lane: 2, x: LANE_X[2], y: 0, z: -1.5, vy: 0, quoteTimer: 10, pers };
       this.ui.hud.showBanner(`🤖 ${pers.name}: "${pers.quote}"`, '#ff4757', 3.5);
+    }
+
+    // 1) Modo Raid Colossal (múltiplas barras de vida, afixos rotativos, placar DPS)
+    if (this.modeId === 'raid') {
+      const pCount = Math.max(1, this.players.length);
+      const totalBars = 4;
+      const firstAffix = RAID_AFFIXES[0];
+      const raidBossId = opts.bossId || this.currentBiome?.bossId || 'alpha_trex';
+      this.raidState = {
+        active: true,
+        bossId: raidBossId,
+        bossBarIndex: 1,
+        totalBars,
+        affixIndex: 0,
+        affixTimer: 22,
+        activeAffix: firstAffix,
+        spawnDelay: 2.2,
+        bossSpawned: false,
+        hazardTimer: 5.5,
+        totalDamage: 0,
+        dpsAnnounceTimer: 8.0
+      };
+      for (const pl of this.players) {
+        pl.raidDamage = 0;
+        pl._unlockAll = true;
+      }
+      this.ui.hud.showBanner(
+        `🐉 RAID COLOSSAL (${totalBars} Barras • ${pCount}P) — Afixo: ${firstAffix.icon} ${firstAffix.name}!`,
+        '#c084fc',
+        4.2
+      );
+    }
+
+    // 2) Modo Boss Fight / Boss Rush (escolher boss direto ou sequência Boss Rush)
+    if (this.modeId === 'boss_fight') {
+      const submode = opts.bossSubmode || this.bossFightConfig?.submode || 'rush';
+      const targetBossId = opts.bossId || this.bossFightConfig?.targetBossId || this.currentBiome?.bossId || 'alpha_trex';
+      const rushList = [
+        'alpha_trex',
+        'scorpion_king',
+        'magma_golem',
+        'frost_mammoth',
+        'void_leviathan'
+      ];
+      for (const pl of this.players) {
+        pl._unlockAll = true;
+      }
+      this.bossRushState = {
+        active: true,
+        submode,
+        targetBossId,
+        queue: submode === 'single' ? [targetBossId] : rushList,
+        currentIndex: 0,
+        defeatedCount: 0,
+        nextBossDelay: 1.8,
+        usedNativeRush: false
+      };
+      this.ui.hud.showBanner(
+        submode === 'single'
+          ? `👑 BOSS FIGHT — Duelo direto contra ${targetBossId}!`
+          : `👑 BOSS RUSH — Derrote ${rushList.length} chefes em sequência!`,
+        '#fb923c',
+        3.8
+      );
+    }
+
+    // 3) Modo Livre / Sandbox (sem morte, sem ranking/conquistas validadas)
+    if (this.modeId === 'free_roam') {
+      this.freeRoamState = {
+        active: true,
+        speedScale: 1.0,
+        spawnPaused: false
+      };
+      for (const pl of this.players) {
+        pl._unlockAll = true;
+      }
+      this.ui.hud.showBanner(
+        '🧪 LIVRE / SANDBOX (Sem Ranking) — [1/2] Velocidade • [3] Bioma • [4] Spawn • [5] Boss',
+        '#34d399',
+        4.6
+      );
+    }
+
+    // 4) Modo Corrida (Linha de Chegada 5.000m / 10.000m, barra 1º/2º/3º, checkpoints)
+    if (this.modeId === 'race') {
+      const targetDistance = Number(opts.raceDistance || this.raceConfig?.targetDistance || 5000);
+      this.raceState = {
+        active: true,
+        targetDistance: targetDistance >= 10000 ? 10000 : 5000,
+        checkpointStep: 1000,
+        nextCheckpoint: 1000,
+        finished: false,
+        winnerName: null
+      };
+      for (const pl of this.players) {
+        pl.distance = 0;
+        pl.raceFinished = false;
+      }
+      // Em corrida solo (sem outros jogadores humanos/bots da sala), cria 2 rivais IA para disputar 1º/2º/3º
+      if (!this.multiplayerSession?.active && this.players.length === 1) {
+        const aiSpecs = [
+          { name: 'Veloz IA', dinoId: 'raptor', color: '#38bdf8', lane: 0, pace: 0.99 },
+          { name: 'Titã IA', dinoId: 'carnotaurus', color: '#fb923c', lane: 2, pace: 1.015 }
+        ];
+        this.raceAiRacers = aiSpecs.map((cfg) => {
+          const m = DinoFactory.build(cfg.dinoId, { primary: cfg.color });
+          this.scene.add(m.root);
+          return {
+            name: cfg.name,
+            color: cfg.color,
+            model: m,
+            animator: new DinoAnimator(m),
+            lane: cfg.lane,
+            x: LANE_X[cfg.lane],
+            y: 0,
+            z: -1.8,
+            vy: 0,
+            distance: 0,
+            pace: cfg.pace,
+            burstTimer: 2 + Math.random() * 4
+          };
+        });
+      }
+      this.ui.hud.showBanner(
+        `🏁 CORRIDA ATÉ ${this.raceState.targetDistance.toLocaleString('pt-BR')}m! Checkpoints a cada 1.000m!`,
+        '#38bdf8',
+        3.8
+      );
+    }
+
+    // 5) Modo Competição / Liga (Seed fixa, Danger Tier acelerado, sem modificadores fáceis)
+    if (this.modeId === 'competition') {
+      this.ui.hud.showBanner(
+        `🏅 LIGA COMPETITIVA (${seed}) — Regras oficiais & Danger Tier acelerado!`,
+        '#facc15',
+        4.0
+      );
+    }
+
+    if (this.modeId === 'coop' && this.players.length >= 2) {
+      this.ui.hud.showBanner(
+        '🤝 COOP TÁTICO — Ataques sincronizados em boss (+35% dano) & Reviver [V] ou por proximidade!',
+        '#58d63a',
+        3.6
+      );
     }
 
     // Tutorial curto na 1ª partida (e dica de arrastar o dedo no celular)
@@ -2418,6 +2726,14 @@ export class Game {
       showBanner: (t, c, d) => this.ui.hud.showBanner(t, c, d),
       showFloatText: (p, t, c) => this.ui.hud.showFloatText(t, c),
       damagePlayer: (p, cause = 'event') => this._damagePlayer(p, cause),
+      applyStatus: (player, id, dur = 4.0) => this._applyPlayerStatus(player, id, dur),
+      spawnPredatorHazard: (cfg) => this._spawnPredatorHazard(cfg),
+      onPredatorTelegraph: (info) => this.ui.hud.setPredatorTelegraph?.(info),
+      dangerTier: this._currentDangerTier,
+      predatorAggro: (this._currentDangerTier?.predatorAggro ?? 1.0)
+        + (this.raidState?.activeAffix?.predatorAggroBonus || 0),
+      modeId: this.modeId,
+      onBossDamage: (p, dmg) => this._recordBossDamage(p, dmg),
       healPlayer: (p, amt = 1, text = '💚 +1 VIDA!') => this._healPlayer(p, amt, text),
       onMerchantEncounter: () => {
         if (this.state !== 'playing' || this.isTestTrack || this.headlessBot || this.multiplayerSession?.active) return;
@@ -2539,6 +2855,8 @@ export class Game {
       ufo: { label: '🛸 Raio do OVNI', tip: 'Observe a sombra luminosa na pista e troque de faixa.' },
       boss: { label: '👑 Ataque do Chefe', tip: 'Use [Q] para acertar o Orbe do Chefe (bônus se usar elemento fraco!).' },
       predator: { label: '🦖 Predador Alfa', tip: 'Guarde [Espaço] e Escudos ao ouvir o rugido da perseguição!' },
+      predator_attack: { label: '🦖 Ataque de Predador', tip: 'Observe o telégrafo na faixa e troque de faixa [A/D] ou pule antes do golpe!' },
+      raid_hazard: { label: '🐉 Afixo de Raid', tip: 'Fique atento ao afixo ativo e saia das faixas telegrafadas!' },
       poison: { label: '☠️ Veneno Acumulado', tip: 'Use Antídoto [E] ou pegue Esfera de Fogo 🔥 para neutralizar o veneno.' },
       amber_crystal: { label: '🔶 Cristal de Âmbar', tip: 'Quebre o Cristal com Ataque [Q] ou pule/desvie para outra faixa!' },
       geyser_vent: { label: '💨 Gêiser Vulcânico', tip: 'Troque de faixa com [A/D] ou dê um salto alto sobre o jato!' },
@@ -2563,12 +2881,116 @@ export class Game {
     };
   }
 
+  _applyPlayerStatus(player, id, dur = 4.0) {
+    if (!player || player.dead || !id) return false;
+    if (this.modeId === 'zen' || this.modeId === 'free_roam' || this.isTestTrack) return false;
+    if (typeof StatusSystem.apply === 'function') {
+      StatusSystem.apply(player, id, dur, this);
+      return true;
+    }
+    return false;
+  }
+
+  _spawnPredatorHazard(cfg = {}) {
+    if (this.state !== 'playing' || this.isTestTrack) return;
+    const lane = Number.isInteger(cfg.lane) ? Math.max(0, Math.min(2, cfg.lane)) : Math.floor(Math.random() * 3);
+    const x = Number.isFinite(cfg.x) ? cfg.x : (LANE_X[lane] ?? 0);
+    const telegraphSec = Math.max(0.25, Number(cfg.telegraphSec ?? 0.9));
+    const type = cfg.type || 'lunge';
+    const label = cfg.label || (type === 'roar' ? '📢 RUGIDO' : (type === 'pounce' ? '🐾 BOTE' : '🦖 ATAQUE PREDADOR'));
+    const entry = {
+      type,
+      lane,
+      x,
+      remainingSec: telegraphSec,
+      damage: Math.max(1, Number(cfg.damage ?? 1)),
+      label
+    };
+    this._predatorHazards.push(entry);
+    this.ui.hud.setPredatorTelegraph?.({
+      type: entry.type,
+      lane: entry.lane,
+      remainingSec: entry.remainingSec,
+      label: entry.label
+    });
+    if (typeof this.spawner.spawnFromCatalog === 'function' && cfg.spawnObstacle) {
+      this.spawner.spawnFromCatalog(Math.random, {
+        biomeId: this.currentBiome?.id,
+        lane,
+        dangerTier: this._currentDangerTier,
+        source: 'predator'
+      });
+    }
+  }
+
+  _updatePredatorHazards(dt) {
+    if (!this._predatorHazards || this._predatorHazards.length === 0) return;
+    let leadHazard = null;
+    for (let i = this._predatorHazards.length - 1; i >= 0; i--) {
+      const h = this._predatorHazards[i];
+      h.remainingSec -= dt;
+      if (h.remainingSec <= 0) {
+        this._predatorHazards.splice(i, 1);
+        this.particles?.emitExplosion?.(h.x, 0.9, -1.2, '#ef4444', 12, true);
+        this.cameraRig?.triggerShake?.(0.35, 0.18);
+        for (const p of this.players) {
+          if (p.dead) continue;
+          const localX = p.x - (p.trackOffsetX || 0);
+          const sameLane = p.lane === h.lane || Math.abs(localX - h.x) < 1.35;
+          const jumpedOver = h.type === 'sweep' && p.y > 1.05;
+          if (sameLane && !jumpedOver) {
+            this._damagePlayer(p, h.type === 'raid_storm' ? 'raid_hazard' : 'predator_attack');
+            if (this.raidState?.activeAffix?.appliesPoison) {
+              this._applyPlayerStatus(p, 'poison', 4.5);
+            }
+          }
+        }
+      } else if (!leadHazard || h.remainingSec < leadHazard.remainingSec) {
+        leadHazard = h;
+      }
+    }
+    this.ui.hud.setPredatorTelegraph?.(leadHazard ? {
+      type: leadHazard.type,
+      lane: leadHazard.lane,
+      remainingSec: Math.max(0, leadHazard.remainingSec),
+      label: leadHazard.label
+    } : null);
+  }
+
+  _computeDangerTier(scoreVal) {
+    const effScore = this.modeId === 'competition'
+      ? Math.max(0, scoreVal * 1.45 + 600)
+      : Math.max(0, scoreVal);
+    if (typeof this.difficultyMgr?.getDangerTier === 'function') {
+      const info = this.difficultyMgr.getDangerTier(effScore);
+      if (info && typeof info.tier === 'number') return info;
+    }
+    if (typeof DifficultyManager?.getDangerTier === 'function') {
+      const info = DifficultyManager.getDangerTier(effScore);
+      if (info && typeof info.tier === 'number') return info;
+    }
+    const tier = Math.min(10, Math.floor(effScore / 2500));
+    const dtOut = this._currentDangerTier;
+    dtOut.tier = tier;
+    dtOut.speedBonus = tier * 0.035;
+    dtOut.densityBonus = tier * 0.045;
+    dtOut.eventFreqBonus = tier * 0.04;
+    dtOut.predatorAggro = 1 + tier * 0.12;
+    return dtOut;
+  }
+
   _damagePlayer(p, cause = 'obstacle') {
     if (this.tutorialState?.active) {
       this.ui.hud.showFloatText('💡 Veja a instrução no topo para desviar ou quebrar!', '#ffd447');
       return;
     }
-    if (!p || p.dead || this.godMode || this.modeId === 'zen' || this.isTestTrack) return;
+    if (!p || p.dead || this.godMode || this.modeId === 'zen' || this.modeId === 'free_roam' || this.isTestTrack) {
+      if (this.modeId === 'free_roam' && p && !p.dead && p.invulnTimer <= 0) {
+        p.invulnTimer = 0.7;
+        this.ui.hud.showFloatText('🧪 Sandbox: sem dano!', '#34d399');
+      }
+      return;
+    }
     if (p.invulnTimer > 0 || p.furyTimer > 0 || p.ramTimer > 0 || p.rocketTimer > 0) return;
 
     // Filhote companheiro pode bloquear 1 dano!
@@ -2713,8 +3135,9 @@ export class Game {
     this.music.setPlaying(false);
 
     const diff = this.difficultyMgr.getConfig();
+    const rankedMode = isModeRanked(this.modeId) && this.modeId !== 'free_roam' && !this.isTestTrack;
     const finalScore = Math.floor(this.score * diff.scoreMult * (this.modeId === 'hardcore' ? 5 : 1));
-    const isNewRecord = Save.updateHighScore(finalScore, this.modeId);
+    const isNewRecord = rankedMode ? Save.updateHighScore(finalScore, this.modeId) : false;
     this.hiScore = Save.getHighScore();
 
     let displayTitle = title;
@@ -2748,20 +3171,22 @@ export class Game {
       this.replay.saveGhostIfBest(finalScore);
     }
 
-    ProgressionManager.reportRunStats({
-      score: finalScore,
-      eggs: this.runEggs,
-      jumps: this.runJumps,
-      stomps: this.runStomps
-    });
-    Metagame.updateStatsAndWeekly({
-      score: finalScore,
-      distance: this.distance,
-      eggs: this.runEggs,
-      deathCause: this.players[0]?._lastDeathCause || null
-    });
+    if (rankedMode) {
+      ProgressionManager.reportRunStats({
+        score: finalScore,
+        eggs: this.runEggs,
+        jumps: this.runJumps,
+        stomps: this.runStomps
+      });
+      Metagame.updateStatsAndWeekly({
+        score: finalScore,
+        distance: this.distance,
+        eggs: this.runEggs,
+        deathCause: this.players[0]?._lastDeathCause || null
+      });
+    }
 
-    if (this.activeCampaignNode && finalScore >= this.activeCampaignNode.targetScore) {
+    if (rankedMode && this.activeCampaignNode && finalScore >= this.activeCampaignNode.targetScore) {
       if (!Save.data.campaign.completedNodes.includes(this.activeCampaignNode.id)) {
         Save.data.campaign.completedNodes.push(this.activeCampaignNode.id);
         Save.addEggs(this.activeCampaignNode.reward || 20);
@@ -2769,7 +3194,7 @@ export class Game {
       Save.save();
     }
 
-    if (this.net?.supabase?.isConfigured?.() && finalScore > 100 && !this.isTestTrack) {
+    if (rankedMode && this.net?.supabase?.isConfigured?.() && finalScore > 100 && !this.isTestTrack) {
       finishAuthoritativeRun(this.net.supabase.client, {
         playerName: Save.data.network?.nickname || 'Dino',
         dinoId: this.players[0]?.id || 'trex',
@@ -2779,7 +3204,9 @@ export class Game {
         distance: this.distance,
         eggs: this.runEggs,
         runTimeSec: this.runTime,
-        maxCombo: this.maxCombo
+        maxCombo: this.maxCombo,
+        competitive: this.modeId === 'competition',
+        seed: this.modeId === 'competition' ? getCompetitionSeed() : (this.customSeed || null)
       }).catch(() => {});
     }
 
@@ -2788,12 +3215,15 @@ export class Game {
       const humanCount = this.players.filter((p) => !p.isBot).length;
       const eligible = humanCount >= 2 && this.runTime >= 20 && finalScore >= 120;
       const tierRewards = [12, 6, 3];
+      const elapsedSec = Math.max(1, this.runTime || 1);
       const standings = sorted.map((p, idx) => ({
         peerId: p.peerId,
         name: p.name,
         dinoId: p.id || p.spec?.id || 'trex',
         score: p.score || finalScore,
         distance: Math.floor(p.distance || this.distance || 0),
+        raidDamage: Math.floor(p.raidDamage || 0),
+        raidDps: Math.round((p.raidDamage || 0) / elapsedSec),
         eggs: p.eggsCollected ?? this.runEggs ?? 0,
         stomps: p.stomps || 0,
         pvpHits: p.pvpHits || 0,
@@ -2828,6 +3258,8 @@ export class Game {
         mpMode: this.multiplayerSession.mpMode || 'race',
         durationSec: Math.floor(this.runTime || 0),
         distance: Math.floor(this.distance || 0),
+        raceTargetDistance: this.raceState?.targetDistance || null,
+        raidTotalDamage: Math.floor(this.raidState?.totalDamage || 0),
         biomeName: this.currentBiome?.name || this.currentBiome?.id || 'Deserto',
         difficulty: diff?.id || 'normal',
         maxCombo: this.maxCombo || 1,
@@ -2865,7 +3297,7 @@ export class Game {
       return;
     }
 
-    const gachaEligible = !this.isTestTrack && !this.multiplayerSession?.active && this.modeId !== 'zen' && this.modeId !== 'tutorial';
+    const gachaEligible = rankedMode && !this.isTestTrack && !this.multiplayerSession?.active && this.modeId !== 'zen' && this.modeId !== 'free_roam' && this.modeId !== 'tutorial';
     const gachaCrates = GachaSystem.computeRunCrates(finalScore, this.difficultyMgr.getConfig(), gachaEligible);
     if (gachaCrates > 0) GachaSystem.addCrates(gachaCrates);
     const totalCrates = GachaSystem.getCrateCount();
@@ -2876,6 +3308,7 @@ export class Game {
       !this._crystalReviveUsed &&
       !Save.data.perfectMode &&
       this.modeId !== 'hardcore' &&
+      this.modeId !== 'competition' &&
       (this.difficultyMgr.activeId === 'easy' || this.difficultyMgr.activeId === 'normal')
     );
 
@@ -3058,8 +3491,14 @@ export class Game {
       this._transmutePlayerHabitat(p);
     }
 
-    // Regra do Modo Caos ou Modo Espelhado: controles invertidos!
-    if (this.activeChaosRule?.id === 'inverted' || Save.data.mirroredMode) {
+    // Tick de debuffs expandidos (§3 contrato) — devolve speedMult, laneMult, controlsReversed, abilityLocked, visionMult, gravityMult
+    const debuffFx = typeof StatusSystem.tickDebuffs === 'function'
+      ? StatusSystem.tickDebuffs(p, dt, this._eventContext())
+      : null;
+    p._debuffFx = debuffFx;
+
+    // Regra do Modo Caos, Modo Espelhado ou Debuff controlsReversed: controles invertidos!
+    if (this.activeChaosRule?.id === 'inverted' || Save.data.mirroredMode || debuffFx?.controlsReversed) {
       [leftJust, rightJust] = [rightJust, leftJust];
     }
 
@@ -3131,7 +3570,10 @@ export class Game {
     }
 
     const iceLaneMult = p.statuses?.ice ? 0.72 : 1;
-    const laneSpeed = 16 * (p.laneSpeedMult || 1) * iceLaneMult;
+    const debuffLaneMult = Number.isFinite(debuffFx?.laneMult)
+      ? Math.max(0.35, Math.min(1.5, debuffFx.laneMult))
+      : 1;
+    const laneSpeed = 16 * (p.laneSpeedMult || 1) * iceLaneMult * debuffLaneMult;
     const tOff = p.trackOffsetX || 0;
     const baseTargetX = tOff + (p.inShopLane ? (SHOP_LANE_X[p.inShopLane] ?? laneArr[p.lane]) : (laneArr[p.lane] ?? 0));
     const targetX = baseTargetX + (p.xOffset || 0) + Math.sin(this.runTime * 2) * (Math.abs(envWind) > 0.2 ? envWind * 0.15 : 0);
@@ -3420,6 +3862,11 @@ export class Game {
     if (abilityJust) {
       if (this.events.ufo.active && this.events.ufo.mashBreak()) {
         // Escapando do feixe do OVNI!
+      } else if (debuffFx?.abilityLocked) {
+        if (!p._lowStamToastCooldown && p.index === 0) {
+          p._lowStamToastCooldown = 0.9;
+          this.ui.hud.showFloatText('🔒 Habilidade silenciada por debuff!', '#c084fc');
+        }
       } else if (!abilityUnlocked && p.index === 0) {
         if (!p._lowStamToastCooldown) {
           p._lowStamToastCooldown = 0.9;
@@ -3481,10 +3928,16 @@ export class Game {
       p.grounded = false;
     }
 
-    // Gravidade (Planeta Alienígena, Modo Caos, Pista Customizada, Evento Baixa Gravidade + Planar)
+    // Gravidade (Planeta Alienígena, Modo Caos, Pista Customizada, Evento Baixa Gravidade, Debuffs, Raid Affix)
+    const debuffGravMult = Number.isFinite(debuffFx?.gravityMult)
+      ? Math.max(0.45, Math.min(1.85, debuffFx.gravityMult))
+      : 1.0;
+    const raidGravMult = this.raidState?.activeAffix?.gravityMult || 1.0;
     let gravMult = (this.activeChaosRule?.id === 'low_grav' ? 0.55 : (this.currentBiome.lowGravity || 1.0))
       * (this.activeCustomTrack?.gravityScale || 1.0)
-      * (this.events.getGravityScale?.() ?? 1.0);
+      * (this.events.getGravityScale?.() ?? 1.0)
+      * debuffGravMult
+      * raidGravMult;
     if (p.gravityZoneTimer > 0) {
       p.gravityZoneTimer -= dt;
       gravMult *= (p.gravityZoneMode === 'low' ? 0.5 : 1.55);
@@ -3641,6 +4094,11 @@ export class Game {
     if (snap.elimTimer !== undefined) this.multiplayerSession.elimTimer = snap.elimTimer;
     if (snap.suddenDeath !== undefined) this.multiplayerSession.suddenDeath = !!snap.suddenDeath;
     if (snap.mpMode) this.multiplayerSession.mpMode = snap.mpMode;
+    if (snap.modeId && snap.modeId !== this.modeId) this.modeId = snap.modeId;
+    if (typeof snap.dangerTier === 'number' && snap.dangerTier !== this._lastHudDangerTier) {
+      this._lastHudDangerTier = snap.dangerTier;
+      this.ui.hud.setDangerTier?.({ tier: snap.dangerTier });
+    }
     if (snap.trackMode && snap.trackMode !== this.multiplayerSession.trackMode) {
       this.multiplayerSession.trackMode = snap.trackMode;
       this._applyGhostModeVisuals();
@@ -3959,23 +4417,50 @@ export class Game {
     this.runTime += dt;
     if (this.currentOasis > 0) this.currentOasis = Math.max(0, this.currentOasis - dt);
 
-    // Velocidade progressiva + bônus de turbo/slide + dificuldade adaptativa
+    // Velocidade progressiva + bônus de turbo/slide + dificuldade adaptativa + Danger Tier (§3)
     const baseDiff = this.difficultyMgr.getConfig();
+    const dangerTierInfo = this._computeDangerTier(this.score);
+    this._currentDangerTier = dangerTierInfo;
+    if (dangerTierInfo.tier !== this._lastHudDangerTier) {
+      this._lastHudDangerTier = dangerTierInfo.tier;
+      this.ui.hud.setDangerTier?.(dangerTierInfo);
+      if (dangerTierInfo.tier >= 1 && this.runTime > 5 && this.modeId !== 'free_roam') {
+        this.ui.hud.showFloatText(`⚠️ PERIGO NV.${dangerTierInfo.tier}!`, '#f97316');
+      }
+    }
+    this.spawner.setDangerTier?.(dangerTierInfo);
+    this.events.setDangerTier?.(dangerTierInfo);
+
+    const dangerDensityMult = 1 + (dangerTierInfo.densityBonus || 0);
     let adaptiveMult = 1.0;
-    if (this.difficultyMgr.adaptive && p0) {
+    if (this.difficultyMgr.adaptive && p0 && this.modeId !== 'competition') {
       if (p0.hp <= 1 && p0.maxHp > 1) {
         adaptiveMult = 0.88;
-        this.spawner.setDensity(baseDiff.density * 0.8);
+        this.spawner.setDensity(baseDiff.density * 0.8 * dangerDensityMult);
       } else if (this.combo >= 4 && p0.hp >= p0.maxHp) {
         adaptiveMult = 1.12;
-        this.spawner.setDensity(baseDiff.density * 1.18);
+        this.spawner.setDensity(baseDiff.density * 1.18 * dangerDensityMult);
       } else {
-        this.spawner.setDensity(baseDiff.density);
+        this.spawner.setDensity(baseDiff.density * dangerDensityMult);
       }
+    } else {
+      this.spawner.setDensity(baseDiff.density * dangerDensityMult);
     }
 
     // Soft-cap nos multiplicadores de velocidade para evitar aceleração insana com buffs empilhados
-    let speedMult = adaptiveMult * (p0 ? StatusSystem.getSpeedMultiplier(p0) : 1) * (p0?.speedBonus || 1);
+    const debuffSpeedMult = Number.isFinite(p0?._debuffFx?.speedMult)
+      ? Math.max(0.55, Math.min(1.35, p0._debuffFx.speedMult))
+      : 1;
+    const raidSpeedMult = this.raidState?.activeAffix?.speedMult || 1;
+    const freeRoamMult = this.modeId === 'free_roam' ? (this.freeRoamState?.speedScale || 1) : 1;
+    const dangerSpeedMult = 1 + Math.min(0.45, dangerTierInfo.speedBonus || 0);
+    let speedMult = adaptiveMult
+      * (p0 ? StatusSystem.getSpeedMultiplier(p0) : 1)
+      * (p0?.speedBonus || 1)
+      * debuffSpeedMult
+      * raidSpeedMult
+      * dangerSpeedMult
+      * freeRoamMult;
     if (p0?.inWater && p0?.mutationMods?.waterSpeedMult) {
       speedMult *= p0.mutationMods.waterSpeedMult;
     }
@@ -4107,6 +4592,8 @@ export class Game {
     }
     for (const p of this.players) {
       if (!p.dead) {
+        const pStepDist = this.speed * worldDt * (p.speedBonus || 1) * (p.turboTimer > 0 ? 1.12 : 1);
+        p.distance = (p.distance || 0) + pStepDist;
         p.score = (p.score || 0) + this.speed * worldDt * 0.55 * (p.scoreCardMult || 1) * (p.scoreMultBonus || 1) * perfectMult;
       }
     }
@@ -4159,7 +4646,7 @@ export class Game {
           this._applyBiomePlayersState(targetBiome);
           this.ui.hud.showBanner(`🌀 PORTAL! Entrando em: ${targetBiome.name}`, '#00f5d4', 3.5);
           this._discoverCurrentBiomeFossil();
-          if (targetBiome.id === 'jurassic_river') Save.unlockAchievement('river_king');
+          if (targetBiome.id === 'jurassic_river' && isModeRanked(this.modeId)) Save.unlockAchievement('river_king');
         }
       }
     }
@@ -4344,24 +4831,228 @@ export class Game {
       this.world.setSubmergedVisuals(isSub, !!this.currentBiome?.submerged);
     }
 
-    // Coop: reviver parceiro caído ficando perto por 3s
+    // 1) Modo Raid Colossal: múltiplas barras de vida, afixos rotativos e placar DPS
+    if (this.modeId === 'raid' && this.raidState?.active) {
+      const rs = this.raidState;
+      const bosses = this.events?.bosses;
+      if (!rs.bossSpawned) {
+        rs.spawnDelay -= worldDt;
+        if (rs.spawnDelay <= 0 && bosses) {
+          rs.bossSpawned = true;
+          const bId = rs.bossId || this.currentBiome?.bossId || 'alpha_trex';
+          const pScale = Math.max(1, this.players.length) + 1;
+          if (typeof bosses.startBossById === 'function') {
+            bosses.startBossById(bId, pScale, this.difficultyMgr.activeId);
+          } else {
+            bosses.startBoss(bId, pScale, this.difficultyMgr.activeId);
+          }
+          if (bosses.activeBoss) {
+            bosses.activeBoss.name = `${bosses.activeBoss.name} [Barra ${rs.bossBarIndex}/${rs.totalBars}]`;
+            this.ui.hud.setBossHud?.(bosses.activeBoss);
+          }
+        }
+      } else if (bosses && !bosses.activeBoss) {
+        if (rs.bossBarIndex < rs.totalBars) {
+          rs.bossBarIndex++;
+          rs.bossSpawned = false;
+          rs.spawnDelay = 1.6;
+          this.addScore(400 * rs.bossBarIndex);
+          for (const pl of this.players) {
+            if (!pl.dead) pl.shields = Math.min(4, (pl.shields || 0) + 1);
+          }
+          this.sfx.evolution();
+          this.ui.hud.showBanner(
+            `🐉 BARRA ${rs.bossBarIndex - 1}/${rs.totalBars} DESTRUÍDA! Próxima fase do Colosso chegando!`,
+            '#c084fc',
+            3.2
+          );
+        } else {
+          rs.active = false;
+          this.sfx.victory();
+          const topDps = [...this.players].sort((a, b) => (b.raidDamage || 0) - (a.raidDamage || 0))[0];
+          const dpsVal = Math.round((topDps?.raidDamage || 0) / Math.max(1, this.runTime));
+          this._finishRun(`🐉 RAID COLOSSAL VENCIDA! MVP DPS: ${topDps?.name || 'Dino'} (${dpsVal} DPS)`);
+          return;
+        }
+      }
+
+      // Rotação de afixos a cada 22s
+      rs.affixTimer -= dt;
+      if (rs.affixTimer <= 0) {
+        rs.affixTimer = 22;
+        rs.affixIndex = (rs.affixIndex + 1) % RAID_AFFIXES.length;
+        rs.activeAffix = RAID_AFFIXES[rs.affixIndex];
+        this.ui.hud.showBanner(
+          `🐉 NOVO AFIXO: ${rs.activeAffix.icon} ${rs.activeAffix.name} — ${rs.activeAffix.desc}`,
+          '#c084fc',
+          3.6
+        );
+      }
+
+      // Afixo Tempestade do Vazio: telegrafa ataque em faixa
+      if (rs.activeAffix?.telegraphHazards) {
+        rs.hazardTimer -= worldDt;
+        if (rs.hazardTimer <= 0) {
+          rs.hazardTimer = 4.2;
+          const tLane = Math.floor(Math.random() * 3);
+          this._spawnPredatorHazard({
+            type: 'raid_storm',
+            lane: tLane,
+            telegraphSec: 1.0,
+            damage: 1,
+            label: '⚡ RAIO DO VAZIO'
+          });
+        }
+      }
+
+      // Placar de DPS (HUD + resumo periódico)
+      rs.dpsAnnounceTimer -= dt;
+      if (rs.dpsAnnounceTimer <= 0) {
+        rs.dpsAnnounceTimer = 7.5;
+        const elapsed = Math.max(1, this.runTime);
+        const dpsList = [...this.players]
+          .sort((a, b) => (b.raidDamage || 0) - (a.raidDamage || 0))
+          .map((pl) => ({ name: pl.name, damage: Math.floor(pl.raidDamage || 0), dps: Math.round((pl.raidDamage || 0) / elapsed) }));
+        this.ui.hud.setRaidDpsHud?.({
+          barIndex: rs.bossBarIndex,
+          totalBars: rs.totalBars,
+          affix: rs.activeAffix,
+          dpsList
+        });
+        const summaryStr = dpsList.slice(0, 3).map((d) => `${d.name}: ${d.dps} DPS`).join(' | ');
+        if (summaryStr) {
+          this.ui.hud.showFloatText(`🐉 Barra ${rs.bossBarIndex}/${rs.totalBars} • ${summaryStr}`, '#c084fc');
+        }
+      }
+    }
+
+    // 2) Modo Boss Fight / Boss Rush (usa startBossById / startBossRush quando existirem)
+    if (this.modeId === 'boss_fight' && this.bossRushState?.active) {
+      const br = this.bossRushState;
+      const bosses = this.events?.bosses;
+      if (bosses && !bosses.activeBoss) {
+        br.nextBossDelay -= worldDt;
+        if (br.nextBossDelay <= 0) {
+          if (br.submode === 'rush' && !br.usedNativeRush && typeof bosses.startBossRush === 'function') {
+            br.usedNativeRush = true;
+            bosses.startBossRush(br.queue, this.players.length, this.difficultyMgr.activeId);
+          } else if (br.currentIndex < br.queue.length) {
+            const nextId = br.queue[br.currentIndex];
+            if (br.currentIndex > 0) {
+              for (const pl of this.players) {
+                if (!pl.dead) this._healPlayer(pl, 1, '💚 +1 VIDA (ENTRE CHEFES)!');
+              }
+            }
+            if (typeof bosses.startBossById === 'function') {
+              bosses.startBossById(nextId, this.players.length, this.difficultyMgr.activeId);
+            } else {
+              bosses.startBoss(nextId, this.players.length, this.difficultyMgr.activeId);
+            }
+            br.currentIndex++;
+            br.nextBossDelay = 2.4;
+          } else {
+            br.active = false;
+            this.sfx.victory();
+            this._finishRun(
+              br.submode === 'single'
+                ? `👑 CHEFE DERROTADO! VITÓRIA NO DUELO!`
+                : `👑 BOSS RUSH CONCLUÍDO (${br.queue.length} CHEFES DERROTADOS)!`
+            );
+            return;
+          }
+        }
+      }
+    }
+
+    // 4) Modo Corrida (Linha de Chegada 5.000m/10.000m, checkpoints e barra 1º/2º/3º)
+    if (this.modeId === 'race' && this.raceState?.active && !this.raceState.finished) {
+      const rc = this.raceState;
+      // Atualiza rivais IA da corrida
+      if (this.raceAiRacers?.length) {
+        const leadDist = this.players[0]?.distance || this.distance;
+        for (const ai of this.raceAiRacers) {
+          ai.burstTimer -= dt;
+          if (ai.burstTimer <= 0) {
+            ai.burstTimer = 3.5 + Math.random() * 4.5;
+            ai.lane = Math.floor(Math.random() * 3);
+          }
+          const gap = leadDist - ai.distance;
+          const rubber = Math.max(-0.08, Math.min(0.11, gap * 0.00055));
+          ai.distance += this.speed * worldDt * (ai.pace + rubber);
+          ai.x += (LANE_X[ai.lane] - ai.x) * Math.min(1, dt * 7);
+          const relZ = Math.max(-18, Math.min(10, (leadDist - ai.distance) * 0.16 - 1.2));
+          ai.model.root.position.set(ai.x, ai.y, relZ);
+          ai.animator.update(dt, { speed: this.speed * ai.pace, grounded: true, vy: 0 });
+        }
+      }
+
+      // Checkpoints a cada 1.000m
+      const maxPlayerDist = Math.max(...this.players.map((pl) => pl.distance || 0), this.distance || 0);
+      if (maxPlayerDist >= rc.nextCheckpoint && rc.nextCheckpoint < rc.targetDistance) {
+        const cp = rc.nextCheckpoint;
+        rc.nextCheckpoint += rc.checkpointStep;
+        this.sfx.powerup?.();
+        for (const pl of this.players) {
+          if (!pl.dead) {
+            pl.stamina = 100;
+            pl.turboTimer = Math.max(pl.turboTimer || 0, 1.5);
+          }
+        }
+        this.ui.hud.showBanner(`🏁 CHECKPOINT ${cp.toLocaleString('pt-BR')}m / ${rc.targetDistance.toLocaleString('pt-BR')}m! Turbo + Estamina!`, '#38bdf8', 2.6);
+      }
+
+      // Calcula posição 1º/2º/3º
+      const entries = [
+        ...this.players.map((pl) => ({ name: pl.name, distance: pl.distance || 0, isPlayer: true, player: pl })),
+        ...(this.raceAiRacers || []).map((ai) => ({ name: ai.name, distance: ai.distance || 0, isPlayer: false }))
+      ].sort((a, b) => b.distance - a.distance);
+
+      const p0Pos = Math.max(1, entries.findIndex((e) => e.player === p0) + 1);
+      const pct = Math.min(100, Math.round((maxPlayerDist / rc.targetDistance) * 100));
+      this.ui.hud.setRaceHud?.({
+        position: p0Pos,
+        total: entries.length,
+        distance: Math.floor(maxPlayerDist),
+        targetDistance: rc.targetDistance,
+        progressPct: pct,
+        standings: entries.slice(0, 3).map((e, i) => ({ rank: i + 1, name: e.name, distance: Math.floor(e.distance) }))
+      });
+
+      const winner = entries.find((e) => e.distance >= rc.targetDistance);
+      if (winner) {
+        rc.finished = true;
+        rc.winnerName = winner.name;
+        this.sfx.victory();
+        const podiumStr = entries.slice(0, 3).map((e, i) => `${i + 1}º ${e.name}`).join(' • ');
+        this._finishRun(`🏁 LINHA DE CHEGADA (${rc.targetDistance.toLocaleString('pt-BR')}m)! ${podiumStr}`);
+        return;
+      }
+    }
+
+    // Coop: reviver parceiro caído ficando perto por 2.5s (além do reviver tático [V])
     if (this.modeId === 'coop' && this.players.length === 2) {
       const [a, b] = this.players;
-      if (a.dead && !b.dead && Math.abs(a.x - b.x) < 1.8) {
+      if (a.dead && !b.dead && Math.abs((a.x - (a.trackOffsetX || 0)) - (b.x - (b.trackOffsetX || 0))) < 2.2) {
         a.reviveProgress += dt;
-        if (a.reviveProgress >= 3) {
+        if (a.reviveProgress >= 2.5) {
           a.dead = false;
           a.hp = 1;
+          a.shields = Math.min(4, (a.shields || 0) + 1);
+          a.invulnTimer = 2.5;
           a.reviveProgress = 0;
-          this.ui.hud.showBanner('💚 PARCEIRO REVIVIDO!', '#58d63a', 2.5);
+          this.sfx.powerup?.();
+          this.ui.hud.showBanner('💚 PARCEIRO REVIVIDO (+1 ESCUDO)!', '#58d63a', 2.5);
         }
-      } else if (b.dead && !a.dead && Math.abs(a.x - b.x) < 1.8) {
+      } else if (b.dead && !a.dead && Math.abs((a.x - (a.trackOffsetX || 0)) - (b.x - (b.trackOffsetX || 0))) < 2.2) {
         b.reviveProgress += dt;
-        if (b.reviveProgress >= 3) {
+        if (b.reviveProgress >= 2.5) {
           b.dead = false;
           b.hp = 1;
+          b.shields = Math.min(4, (b.shields || 0) + 1);
+          b.invulnTimer = 2.5;
           b.reviveProgress = 0;
-          this.ui.hud.showBanner('💚 PARCEIRO REVIVIDO!', '#58d63a', 2.5);
+          this.sfx.powerup?.();
+          this.ui.hud.showBanner('💚 PARCEIRO REVIVIDO (+1 ESCUDO)!', '#58d63a', 2.5);
         }
       }
     }
@@ -4463,6 +5154,7 @@ export class Game {
     this.spawner.update(worldDt, this.speed, this.score, this.players, Boolean(this.events.isMagneticActive?.()));
     this.particles.update(worldDt, this.speed);
     this.events.update(worldDt, this.speed, this.score, this.players, this._eventContext());
+    this._updatePredatorHazards(worldDt);
     this.cameraRig.setPredatorFocus(null);
     if (this.events?.bosses?.activeBoss) {
       this._hintOnce('boss_attack_q', '⚔️ Chefe à frente! Pressione Q para atacar!', '#fb923c');
@@ -5020,8 +5712,23 @@ export class Game {
         oxygenPct: Math.round(lead.oxygen ?? 100)
       });
     }
+    // Atualiza HUD de debuffs ativos (throttled ~5Hz para manter 60 FPS sem thrash de DOM)
+    this._hudDebuffAccum = (this._hudDebuffAccum || 0) + dt;
+    if (lead && this._hudDebuffAccum >= 0.2) {
+      this._hudDebuffAccum = 0;
+      const activeDebuffs = typeof StatusSystem.getActiveDebuffs === 'function'
+        ? StatusSystem.getActiveDebuffs(lead)
+        : (Array.isArray(lead.debuffs) ? lead.debuffs : []);
+      this.ui.hud.setActiveDebuffs?.(activeDebuffs);
+      if (Number.isFinite(lead._debuffFx?.visionMult) && lead._debuffFx.visionMult < 0.99) {
+        this.ui.hud.setVisionMult?.(lead._debuffFx.visionMult);
+      } else {
+        this.ui.hud.setVisionMult?.(1);
+      }
+    }
+
     this.ui.hud.updateScore(Math.max(this.hiScore, this.score), this.score, this.speed / this.baseSpeed);
-    const dangerLevel = (this.events.bosses.activeBoss || this.events.ufo.active || (lead && lead.hp <= 1)) ? 1 : 0;
+    const dangerLevel = (this.events.bosses.activeBoss || this.events.ufo.active || (lead && lead.hp <= 1) || (this._currentDangerTier?.tier || 0) >= 3) ? 1 : 0;
     this.music.update(dt, this.speed, dangerLevel);
     this.narrator.update(dt);
     const camPlayers = this.players.filter((x) => !x.dead);
@@ -5079,6 +5786,18 @@ export class Game {
           biomeId: this.currentBiome.id,
           trackMode: mpTrackMode,
           mpMode: this.multiplayerSession?.mpMode || 'race',
+          modeId: this.modeId,
+          dangerTier: this._currentDangerTier?.tier || 0,
+          raid: this.raidState?.active ? {
+            barIndex: this.raidState.bossBarIndex,
+            totalBars: this.raidState.totalBars,
+            affixName: this.raidState.activeAffix?.name || '',
+            totalDamage: Math.floor(this.raidState.totalDamage || 0)
+          } : null,
+          race: this.raceState?.active ? {
+            targetDistance: this.raceState.targetDistance,
+            nextCheckpoint: this.raceState.nextCheckpoint
+          } : null,
           suddenDeath: !!this.multiplayerSession?.suddenDeath,
           elimTimer: this.multiplayerSession?.elimTimer || null,
           obstacles: this.spawner.serializeActiveObstacles(),
@@ -5423,11 +6142,33 @@ export class Game {
         this.toggleRadialWheel();
         return;
       }
-      if (this.input.wasKeyJustPressed('Digit1')) this.ui.hud.showFloatText('🎉 VAMOOO!', '#58d63a');
-      if (this.input.wasKeyJustPressed('Digit2')) this.ui.hud.showFloatText('😜 HEHE!', '#ff9a24');
-      if (this.input.wasKeyJustPressed('Digit3')) this.ui.hud.showFloatText('🆘 SOCORRO!', '#38bdf8');
+      if (this.modeId === 'free_roam') {
+        if (this.input.wasKeyJustPressed('Digit1')) {
+          this.setFreeRoamSpeed((this.freeRoamState?.speedScale || 1) - 0.2);
+        }
+        if (this.input.wasKeyJustPressed('Digit2')) {
+          this.setFreeRoamSpeed((this.freeRoamState?.speedScale || 1) + 0.2);
+        }
+        if (this.input.wasKeyJustPressed('Digit3')) {
+          const curIdx = Math.max(0, BIOMES.findIndex((b) => b.id === this.currentBiome?.id));
+          const nextB = BIOMES[(curIdx + 1) % BIOMES.length];
+          if (nextB) this.setFreeRoamBiome(nextB.id);
+        }
+        if (this.input.wasKeyJustPressed('Digit4')) {
+          this.spawnFreeRoamEntity('wave');
+        }
+        if (this.input.wasKeyJustPressed('Digit5')) {
+          this.spawnFreeRoamEntity('boss');
+        }
+      } else {
+        if (this.input.wasKeyJustPressed('Digit1')) this.ui.hud.showFloatText('🎉 VAMOOO!', '#58d63a');
+        if (this.input.wasKeyJustPressed('Digit2')) this.ui.hud.showFloatText('😜 HEHE!', '#ff9a24');
+        if (this.input.wasKeyJustPressed('Digit3')) this.ui.hud.showFloatText('🆘 SOCORRO!', '#38bdf8');
+      }
       if (this.input.wasKeyJustPressed('KeyV') && (this.multiplayerSession?.active || this.players.length >= 2)) {
-        this.reviveFallenAlly(0);
+        if (!this.reviveFallenAlly(0) && this.players.length >= 2) {
+          this.reviveFallenAlly(1);
+        }
       }
       if (this.input.wasKeyJustPressed('KeyB')) {
         this.breatheOrSurface(0);

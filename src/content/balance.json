@@ -1,6 +1,6 @@
 {
-  "version": "4.1.0",
-  "_comment": "Arquivo central de balanceamento do Dino Dash 3D. Ajuste valores aqui sem alterar código.",
+  "version": "5.0.0",
+  "_comment": "Arquivo central de balanceamento do Dino Dash 3D (Mega Expansão). Ajuste valores aqui sem alterar código.",
   "speed": {
     "_comment": "Multiplicadores globais de velocidade da corrida.",
     "initialSpeedMultiplier": 1.0,
@@ -90,5 +90,64 @@
     "lowThreshold": 30,
     "graceSec": 2.0,
     "drownDamagePerTick": 1
+  },
+  "dangerTier": {
+    "_comment": "Escalonamento de pressão por Danger Tier (1..6) para hazards, debuffs e eventos dinâmicos.",
+    "scoreThresholds": [0, 3500, 9000, 18000, 32000, 52000],
+    "densityBonusPerTier": 0.14,
+    "hazardSpeedBonusPerTier": 0.06,
+    "eventIntensityPerTier": 0.18,
+    "debuffDurationMultPerTier": 0.08,
+    "maxTier": 6
+  },
+  "debuffs": {
+    "_comment": "Limites e ritmo dos 24+ debuffs mecânicos reais (sempre com contra-jogada clara).",
+    "maxSimultaneous": 4,
+    "defaultDurationSec": 4.5,
+    "maxDurationSec": 9.0,
+    "minSpeedMult": 0.55,
+    "minLaneMult": 0.45,
+    "minVisionMult": 0.35,
+    "maxGravityMult": 1.85,
+    "perfectModeDurationMult": 1.2,
+    "supremeModeDurationMult": 1.15
+  },
+  "hazards": {
+    "_comment": "Parâmetros dos 28 arquétipos móveis/telegrafados em Spawner.spawnFromCatalog com fairness garantida.",
+    "minTelegraphSec": 0.55,
+    "defaultTelegraphSec": 0.95,
+    "catalogSpawnChanceBase": 0.24,
+    "catalogSpawnChancePerTier": 0.08,
+    "catalogSpawnChanceMax": 0.68,
+    "doubleHazardChanceBase": 0.12,
+    "doubleHazardChancePerTier": 0.07,
+    "minSafeLanes": 1,
+    "maxActiveCatalogHazards": 14,
+    "trackLockZ": -18
+  },
+  "helpers": {
+    "_comment": "Caps rígidos para impedir builds invencíveis; Modo Perfeito proíbe escudos e vidas extras.",
+    "maxHelpCatalogRatio": 0.30,
+    "caps": {
+      "maxShieldsNormal": 2,
+      "maxShieldsHard": 2,
+      "maxShieldsInsane": 1,
+      "maxShieldsSupreme": 1,
+      "maxShieldsPerfect": 0,
+      "maxHpNormal": 5,
+      "maxHpHard": 4,
+      "maxHpInsane": 4,
+      "maxHpSupreme": 3,
+      "maxHpPerfect": 1,
+      "maxScoreCardMult": 2.25,
+      "minCooldownMult": 0.55,
+      "maxPostHitInvulnBonus": 0.45,
+      "maxJumpMult": 1.35,
+      "maxLaneSpeedMult": 1.65,
+      "minCardScaleMult": 0.85,
+      "maxAbilityPowerMult": 1.85,
+      "maxEggValueMult": 2.0,
+      "maxFuryChargeMult": 2.2
+    }
   }
 }
