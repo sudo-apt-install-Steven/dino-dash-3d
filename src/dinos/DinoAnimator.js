@@ -1,14 +1,34 @@
 // Animações procedurais de dinossauros voxel:
-// correr, pular (esticar/encolher), abaixar, deslizar, nadar, dano, vitória e morte.
+// correr, pular (esticar/encolher), abaixar, deslizar, nadar, ataque (Q), dano, reviver, vitória e morte.
+
+const HEADBUTT_IDS = new Set(['carnotaurus', 'pachycephalosaurus', 'triceratops', 'styracosaurus', 'ceratosaurus', 'edmontonia', 'corythosaurus']);
+const TAIL_ATTACK_IDS = new Set(['stegosaurus', 'ankylosaurus', 'kentrosaurus', 'brachiosaurus', 'diplodocus', 'argentinosaurus', 'amargasaurus']);
+const LUNGE_ATTACK_IDS = new Set([
+  'raptor', 'deinonychus', 'utahraptor', 'therizinosaurus', 'compsognathus',
+  'oviraptor', 'cyber_raptor', 'quetzalcoatlus', 'pteranodon', 'tapejara', 'dimorphodon',
+  'concavenator', 'hatzegopteryx', 'archaeopteryx', 'microraptor', 'chrono_wyvern'
+]);
+
+function resolveAttackType(bodyId) {
+  if (HEADBUTT_IDS.has(bodyId)) return 'headbutt';
+  if (TAIL_ATTACK_IDS.has(bodyId)) return 'tail';
+  if (LUNGE_ATTACK_IDS.has(bodyId)) return 'lunge';
+  return 'bite';
+}
 
 export class DinoAnimator {
   constructor(model) {
     this.model = model;
     this.runPhase = 0;
+    this.hurtPhase = 0;
     this.roarTimer = 0;
     this.hurtTimer = 0;
     this.squashTimer = 0;
+    this.attackTimer = 0;
+    this.attackDuration = 0.34;
+    this.attackType = resolveAttackType(model.bodyId);
     this.deathProgress = 0;
+    this.reviveGlowTimer = 0;
     this.baseTorsoY = model.torso.position.y;
     this.baseNeckRotX = model.neckPivot?.rotation?.x ?? 0;
   }
@@ -21,6 +41,21 @@ export class DinoAnimator {
     this.roarTimer = duration;
   }
 
+  triggerAttack(typeOrDuration = null, duration = 0.34) {
+    if (typeof typeOrDuration === 'number') {
+      this.attackType = resolveAttackType(this.model.bodyId);
+      this.attackDuration = Math.max(0.18, typeOrDuration);
+    } else {
+      this.attackType = typeOrDuration || resolveAttackType(this.model.bodyId);
+      this.attackDuration = Math.max(0.18, duration);
+    }
+    this.attackTimer = this.attackDuration;
+  }
+
+  triggerRevive(duration = 0.55) {
+    this.reviveGlowTimer = duration;
+  }
+
   triggerHurt(duration = 0.75) {
     this.hurtTimer = duration;
   }
@@ -28,14 +63,18 @@ export class DinoAnimator {
   reset() {
     const m = this.model;
     this.runPhase = 0;
+    this.hurtPhase = 0;
     this.roarTimer = 0;
     this.hurtTimer = 0;
     this.squashTimer = 0;
+    this.attackTimer = 0;
     this.deathProgress = 0;
+    this.reviveGlowTimer = 0;
     m.rig.scale.setScalar(m.baseScale);
     m.rig.rotation.set(0, 0, 0);
     m.rig.position.set(0, 0, 0);
     m.torso.position.y = this.baseTorsoY;
+    m.torso.position.z = 0;
     m.torso.rotation.set(0, 0, 0);
     m.neckPivot.rotation.set(this.baseNeckRotX, 0, 0);
     m.jaw.rotation.set(0, 0, 0);
@@ -68,6 +107,10 @@ export class DinoAnimator {
       swimming = false,
       dead = false,
       victory = false,
+      hurt = false,
+      attack = false,
+      attacking = false,
+      attackType = null,
       invulnActive = false,
       giantScale = 1.0,
       laneLean = 0
@@ -78,17 +121,30 @@ export class DinoAnimator {
       const p = this.deathProgress;
       m.rig.rotation.z = p * (Math.PI * 0.48);
       m.rig.position.y = -p * 0.42;
+      m.rig.position.x = 0;
       m.jaw.rotation.x = -0.45 * p;
+      m.root.visible = true;
       return;
     } else if (this.deathProgress > 0) {
-      this.deathProgress = 0;
-      m.rig.rotation.z = 0;
-      m.rig.position.y = 0;
-      m.jaw.rotation.x = 0;
+      // Transição suave de reviver: ergue o corpo progressivamente sem estalo visual
+      this.deathProgress = Math.max(0, this.deathProgress - dt * 2.8);
+      const p = this.deathProgress * this.deathProgress;
+      m.rig.rotation.z = p * (Math.PI * 0.48);
+      m.rig.position.y = -p * 0.42;
+      m.jaw.rotation.x = -0.45 * p;
+      if (this.deathProgress === 0) {
+        this.reviveGlowTimer = Math.max(this.reviveGlowTimer, 0.45);
+      }
     }
 
     if (this.squashTimer > 0) this.squashTimer = Math.max(0, this.squashTimer - dt);
     if (this.roarTimer > 0) this.roarTimer = Math.max(0, this.roarTimer - dt);
+    if (this.reviveGlowTimer > 0) this.reviveGlowTimer = Math.max(0, this.reviveGlowTimer - dt);
+    if ((attack || attacking) && this.attackTimer <= 0) {
+      this.triggerAttack(attackType || null, 0.34);
+    }
+    if (this.attackTimer > 0) this.attackTimer = Math.max(0, this.attackTimer - dt);
+    const isHurtActive = hurt || this.hurtTimer > 0;
     if (this.hurtTimer > 0) {
       this.hurtTimer = Math.max(0, this.hurtTimer - dt);
       // Pisca claramente no estado de invulnerabilidade pós-dano
@@ -97,6 +153,14 @@ export class DinoAnimator {
       m.root.visible = Math.floor(performance.now() * 0.016) % 2 === 0;
     } else {
       m.root.visible = true;
+    }
+
+    if (isHurtActive) {
+      this.hurtPhase += dt;
+      m.rig.position.x = Math.sin(this.hurtPhase * 42) * 0.085;
+    } else {
+      this.hurtPhase = 0;
+      m.rig.position.x += (0 - m.rig.position.x) * Math.min(1, dt * 16);
     }
 
     // Esticar e encolher (squash & stretch) no pulo e pouso
@@ -128,10 +192,63 @@ export class DinoAnimator {
     );
 
     if (victory) {
-      this.runPhase += dt * 10;
-      m.torso.position.y = this.baseTorsoY + Math.abs(Math.sin(this.runPhase)) * 0.35;
-      m.torso.rotation.x = -0.15;
-      m.jaw.rotation.x = -0.35;
+      this.runPhase += dt * 9.5;
+      const hop = Math.abs(Math.sin(this.runPhase));
+      const sway = Math.sin(this.runPhase * 0.5);
+      m.torso.position.y = this.baseTorsoY + hop * 0.42;
+      m.torso.rotation.x = -0.18 + Math.sin(this.runPhase * 2) * 0.08;
+      m.torso.rotation.y = sway * 0.22;
+      m.torso.rotation.z = sway * 0.08;
+
+      // Braços / asas erguidos comemorando
+      if (m.armL?.isWing && m.armR?.isWing) {
+        m.armL.hip.rotation.z = -(0.35 + hop * 0.55);
+        m.armR.hip.rotation.z = +(0.35 + hop * 0.55);
+        if (m.armL.outer) m.armL.outer.rotation.z = -(hop * 0.35);
+        if (m.armR.outer) m.armR.outer.rotation.z = +(hop * 0.35);
+      } else if (m.armL?.isFlipper && m.armR?.isFlipper) {
+        m.armL.hip.rotation.z = -0.35 - hop * 0.42;
+        m.armR.hip.rotation.z = 0.35 + hop * 0.42;
+      } else if (m.armL?.hip && m.armR?.hip) {
+        m.armL.hip.rotation.x = -1.25 - Math.sin(this.runPhase * 2) * 0.28;
+        m.armR.hip.rotation.x = -1.25 + Math.sin(this.runPhase * 2) * 0.28;
+      }
+
+      // Pernas acompanham o pulo rítmico
+      if (m.legL?.hip && m.legR?.hip && !m.legL.isFlipper) {
+        m.legL.hip.rotation.x = -hop * 0.36;
+        m.legR.hip.rotation.x = -hop * 0.36;
+        if (m.legL.knee) m.legL.knee.rotation.x = hop * 0.52;
+        if (m.legR.knee) m.legR.knee.rotation.x = hop * 0.52;
+      }
+      if (Array.isArray(m.extraLegs)) {
+        m.extraLegs.forEach((leg) => {
+          leg.hip.rotation.x = -hop * 0.28;
+          if (leg.knee) leg.knee.rotation.x = hop * 0.42;
+        });
+      }
+
+      // Cabeça erguida em rugido triunfante + olhos brilhantes
+      m.neckPivot.rotation.x = this.baseNeckRotX - 0.22 - hop * 0.08;
+      m.neckPivot.rotation.y = sway * 0.14;
+      m.jaw.rotation.x = -0.4 - hop * 0.16;
+      if (m.eyeGroups?.length === 2) {
+        m.eyeGroups.forEach((eg) => {
+          eg.scale.y += (1.18 - eg.scale.y) * Math.min(1, dt * 16);
+          eg.scale.z += (1.0 - eg.scale.z) * Math.min(1, dt * 16);
+        });
+      }
+      if (m.browGroups?.length === 2) {
+        m.browGroups.forEach((bg) => {
+          if (bg._baseY === undefined) bg._baseY = bg.position.y;
+          bg.rotation.x += (-0.22 - bg.rotation.x) * Math.min(1, dt * 16);
+          bg.position.y += ((bg._baseY + 0.04) - bg.position.y) * Math.min(1, dt * 16);
+        });
+      }
+      m.tailSegments.forEach((seg, idx) => {
+        seg.rotation.y = Math.sin(this.runPhase * 1.6 - idx * 0.6) * (0.18 + idx * 0.05);
+        seg.rotation.x = 0.08;
+      });
       return;
     }
 
@@ -289,24 +406,94 @@ export class DinoAnimator {
       }
     }
 
-    // Pescoço, mandíbula e expressões faciais (Pulo / Dano / Rugido / Dash)
-    const isHurtFace = this.hurtTimer > 0;
+    // Pescoço, mandíbula e expressões faciais (Pulo / Ataque Q / Dano / Rugido / Dash)
+    const isAttackActive = this.attackTimer > 0;
+    let atkNeckPitch = 0;
+    let atkNeckYaw = 0;
+    let atkTorsoPitch = 0;
+    let atkTorsoYaw = 0;
+    let atkTorsoZ = 0;
+    let atkJaw = 0;
+    let atkTailBias = 0;
+
+    if (isAttackActive) {
+      const progress = 1 - (this.attackTimer / Math.max(0.01, this.attackDuration));
+      // 0..0.32 antecipação, 0.32..0.66 impacto, 0.66..1.0 recuperação
+      let ant = 0;
+      let imp = 0;
+      if (progress < 0.32) {
+        const u = progress / 0.32;
+        ant = u * u;
+      } else if (progress < 0.66) {
+        const u = (progress - 0.32) / 0.34;
+        ant = 1 - u;
+        imp = Math.sin(u * Math.PI * 0.5);
+      } else {
+        const u = (progress - 0.66) / 0.34;
+        imp = 1 - u * u;
+      }
+
+      if (this.attackType === 'headbutt') {
+        atkTorsoPitch = -0.18 * ant + 0.36 * imp;
+        atkTorsoZ = 0.14 * ant - 0.42 * imp;
+        atkNeckPitch = -0.22 * ant + 0.48 * imp;
+        atkJaw = 0.14 * ant;
+      } else if (this.attackType === 'tail') {
+        atkTorsoYaw = -0.45 * ant + 0.72 * imp;
+        atkNeckYaw = 0.25 * ant - 0.38 * imp;
+        atkTailBias = -0.55 * ant + 0.95 * imp;
+      } else if (this.attackType === 'lunge') {
+        atkTorsoPitch = -0.16 * ant + 0.32 * imp;
+        atkTorsoZ = 0.16 * ant - 0.48 * imp;
+        atkNeckPitch = -0.18 * ant + 0.22 * imp;
+        atkJaw = 0.32 * ant + 0.44 * imp;
+        if (m.armL?.hip && m.armR?.hip && !m.armL.isWing && !m.armL.isFlipper) {
+          m.armL.hip.rotation.x = -0.95 * ant + 0.45 * imp;
+          m.armR.hip.rotation.x = -0.95 * ant + 0.45 * imp;
+        }
+      } else {
+        // 'bite' (mordida com antecipação de boca aberta e impacto rápido)
+        atkTorsoPitch = -0.14 * ant + 0.28 * imp;
+        atkTorsoZ = 0.12 * ant - 0.38 * imp;
+        atkNeckPitch = -0.24 * ant + 0.44 * imp;
+        atkJaw = 0.58 * ant + 0.08 * imp;
+      }
+    }
+
+    m.torso.rotation.x += atkTorsoPitch;
+    m.torso.rotation.y += atkTorsoYaw;
+    m.torso.position.z += (atkTorsoZ - m.torso.position.z) * Math.min(1, dt * 24);
+
+    const isHurtFace = isHurtActive;
     const isRoarFace = this.roarTimer > 0 || !!state.furyActive;
     const isDashFace = !!(sliding || state.dashing);
     const isJumpFace = !grounded && vy > 2;
 
-    const targetNeckPitch = this.baseNeckRotX + (ducking ? -0.35 : (sliding ? 0.28 : (isRoarFace ? -0.16 : 0)));
-    m.neckPivot.rotation.x += (targetNeckPitch - m.neckPivot.rotation.x) * Math.min(1, dt * 12);
-    if (locomotion === 'aquatic') {
-      m.neckPivot.rotation.y += (-Math.sin(this.runPhase + 0.35) * 0.08 - m.neckPivot.rotation.y) * Math.min(1, dt * 12);
+    if (isHurtActive) {
+      m.torso.rotation.x -= 0.16;
+      if (m.armL?.hip && m.armR?.hip && !m.armL.isWing && !m.armL.isFlipper) {
+        m.armL.hip.rotation.z = -0.35;
+        m.armR.hip.rotation.z = 0.35;
+      }
+    } else if (m.armL?.hip && m.armR?.hip && !m.armL.isWing && !m.armL.isFlipper) {
+      m.armL.hip.rotation.z += (0 - m.armL.hip.rotation.z) * Math.min(1, dt * 14);
+      m.armR.hip.rotation.z += (0 - m.armR.hip.rotation.z) * Math.min(1, dt * 14);
+    }
+
+    const targetNeckPitch = this.baseNeckRotX + atkNeckPitch + (isHurtFace ? -0.26 : (ducking ? -0.35 : (sliding ? 0.28 : (isRoarFace ? -0.16 : 0))));
+    m.neckPivot.rotation.x += (targetNeckPitch - m.neckPivot.rotation.x) * Math.min(1, dt * (isAttackActive ? 22 : 12));
+    if (isAttackActive && atkNeckYaw !== 0) {
+      m.neckPivot.rotation.y += (atkNeckYaw - m.neckPivot.rotation.y) * Math.min(1, dt * 20);
+    } else if (locomotion === 'aquatic') {
+      m.neckPivot.rotation.y += (-Math.sin(this.runPhase + 0.45) * 0.1 - m.neckPivot.rotation.y) * Math.min(1, dt * 14);
     } else {
       m.neckPivot.rotation.y *= Math.max(0, 1 - dt * 10);
     }
-    const targetJaw = -(isRoarFace ? 0.56 : (isHurtFace ? 0.42 : (isJumpFace ? 0.16 : 0.04 + Math.max(0, Math.sin(this.runPhase * 0.5)) * 0.05)));
-    m.jaw.rotation.x += (targetJaw - m.jaw.rotation.x) * Math.min(1, dt * 18);
+    const targetJaw = -(isAttackActive ? Math.max(atkJaw, 0.04) : (isRoarFace ? 0.56 : (isHurtFace ? 0.42 : (isJumpFace ? 0.16 : 0.04 + Math.max(0, Math.sin(this.runPhase * 0.5)) * 0.05))));
+    m.jaw.rotation.x += (targetJaw - m.jaw.rotation.x) * Math.min(1, dt * (isAttackActive ? 28 : 18));
 
     if (m.eyeGroups?.length === 2) {
-      const eyeScaleY = isHurtFace ? 0.26 : (isDashFace ? 0.68 : (isJumpFace ? 1.24 : 1.0));
+      const eyeScaleY = isHurtFace ? 0.26 : (isAttackActive ? 0.72 : (isDashFace ? 0.68 : (isJumpFace ? 1.24 : 1.0)));
       const eyeScaleZ = isHurtFace ? 1.18 : 1.0;
       m.eyeGroups.forEach((eg) => {
         eg.scale.y += (eyeScaleY - eg.scale.y) * Math.min(1, dt * 18);
@@ -314,8 +501,8 @@ export class DinoAnimator {
       });
     }
     if (m.browGroups?.length === 2) {
-      const browTilt = isHurtFace ? 0.42 : (isRoarFace ? 0.34 : (isDashFace ? 0.22 : (isJumpFace ? -0.22 : 0)));
-      const browYOff = isJumpFace ? 0.045 : (isHurtFace || isRoarFace ? -0.025 : 0);
+      const browTilt = isHurtFace ? 0.42 : (isAttackActive ? 0.38 : (isRoarFace ? 0.34 : (isDashFace ? 0.22 : (isJumpFace ? -0.22 : 0))));
+      const browYOff = isJumpFace ? 0.045 : (isHurtFace || isRoarFace || isAttackActive ? -0.025 : 0);
       m.browGroups.forEach((bg, idx) => {
         if (bg._baseY === undefined) bg._baseY = bg.position.y;
         const sideSign = idx === 0 ? -1 : 1;
@@ -325,12 +512,12 @@ export class DinoAnimator {
       });
     }
 
-    // Cauda articulada com onda senoidal atrasada por segmento (intensa no nado aquático)
-    const tailYawAmp = locomotion === 'aquatic' ? 0.21 : (locomotion === 'flying' ? 0.045 : 0.09);
-    const tailStepAmp = locomotion === 'aquatic' ? 0.085 : 0.035;
+    // Cauda articulada com onda senoidal atrasada por segmento (intensa no nado aquático e golpe de cauda)
+    const tailYawAmp = locomotion === 'aquatic' ? 0.23 : (locomotion === 'flying' ? 0.045 : 0.09);
+    const tailStepAmp = locomotion === 'aquatic' ? 0.09 : 0.035;
     m.tailSegments.forEach((seg, idx) => {
-      const wave = Math.sin(this.runPhase - idx * 0.7);
-      seg.rotation.y = wave * (tailYawAmp + idx * tailStepAmp);
+      const wave = Math.sin(this.runPhase - idx * 0.72);
+      seg.rotation.y = wave * (tailYawAmp + idx * tailStepAmp) + atkTailBias * (0.35 + idx * 0.16);
       seg.rotation.x = Math.cos(this.runPhase - idx * 0.5) * (locomotion === 'flying' ? 0.02 : 0.04);
     });
   }

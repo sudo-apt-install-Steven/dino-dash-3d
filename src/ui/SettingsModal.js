@@ -1,7 +1,16 @@
-// Modal de Configurações em 5 abas: Geral, Gráficos, Áudio, Controles e Acessibilidade.
+// Modal de Configurações em abas de jogo: Geral, Gráficos, Áudio, Controles, Acessibilidade e Conta/Dados.
 import { Save } from '../systems/Save.js';
 import { OrientationManager } from '../systems/OrientationManager.js';
-import { attachModalHelp } from './Menus.js';
+import { Telemetry } from '../systems/Telemetry.js';
+import { applyDomLanguage, normalizeLocale } from '../i18n/translations.js';
+import { escapeHtml } from '../security/Sanitize.js';
+import {
+  attachModalHelp,
+  renderGameSwitch,
+  renderGameStepper,
+  renderHelpBadge,
+  enhanceGameControls
+} from './Menus.js';
 
 export class SettingsModal {
   static renderInto(container, { onClose, onApplySettings, onRunBenchmark = null, onOpenLegal = null }) {
@@ -11,198 +20,137 @@ export class SettingsModal {
     const benchLabel = Save.data.benchmarkDone
       ? `${Save.data.benchmarkTier || 'Médio'} (~${Save.data.benchmarkFps || 60} FPS)`
       : 'Ainda não medido';
+    const introVal = (s.introMode === 'off' || s.disableIntro)
+      ? 'off'
+      : (s.introMode === 'first_time' ? 'first_time' : 'always');
+    const leftHanded = !!(s.mobileHudLayout?.leftHanded ?? s.controllerLayout?.leftHanded);
 
     container.innerHTML = `
       <div class="overlay-center">
-        <div class="chunky-panel modal-card">
+        <div class="chunky-panel modal-card game-modal-card">
           <div class="modal-header">
             <h2>⚙️ Configurações</h2>
             <button class="chunky-btn secondary" id="close-settings">Fechar</button>
           </div>
 
           <div class="tabs-row" id="set-tabs">
-            <button class="tab-btn active" data-stab="general">Geral</button>
-            <button class="tab-btn" data-stab="graphics">Gráficos</button>
-            <button class="tab-btn" data-stab="audio">Áudio</button>
-            <button class="tab-btn" data-stab="controls">Controles</button>
-            <button class="tab-btn" data-stab="a11y">Acessibilidade</button>
+            <button type="button" class="tab-btn active" data-stab="general">🎮 Geral</button>
+            <button type="button" class="tab-btn" data-stab="graphics">🎨 Gráficos</button>
+            <button type="button" class="tab-btn" data-stab="audio">🔊 Áudio</button>
+            <button type="button" class="tab-btn" data-stab="controls">🕹️ Controles</button>
+            <button type="button" class="tab-btn" data-stab="a11y">♿ Acessibilidade</button>
+            <button type="button" class="tab-btn" data-stab="account">💾 Conta &amp; Dados</button>
           </div>
 
           <div id="stab-general">
-            <div class="field-row">
-              <span>Idioma</span>
-              <select id="set-lang">
-                <option value="pt" ${s.lang === 'pt' ? 'selected' : ''}>Português (Padrão)</option>
-                <option value="en" ${s.lang === 'en' ? 'selected' : ''}>English</option>
-              </select>
+            <div class="field-row game-field-row" data-opt-tip-host="Escolha o idioma dos textos e menus do jogo.">
+              <span class="game-field-label">Idioma / Language / Idioma ${renderHelpBadge('Escolha o idioma dos textos e menus do jogo.')}</span>
+              ${renderGameStepper('set-lang', [
+                { value: 'pt-BR', label: 'Português (Brasil)' },
+                { value: 'en', label: 'English' },
+                { value: 'es', label: 'Español' }
+              ], normalizeLocale(s.lang))}
             </div>
-            <div class="field-row">
-              <span>🪧 Dicas Visuais sobre Obstáculos</span>
-              <input type="checkbox" id="set-hints" ${s.obstacleHints !== false ? 'checked' : ''} />
+            ${renderGameSwitch('set-hints', '🪧 Dicas Visuais sobre Obstáculos', s.obstacleHints !== false, 'Exibe setas e avisos acima de obstáculos difíceis na pista.')}
+            ${renderGameSwitch('set-discovery-popups', '✨ Popups de Descoberta (Elementos & Poderes)', s.discoveryPopups !== false, 'Mostra uma dica rápida na primeira vez que você encontra uma mecânica nova.')}
+            ${renderGameSwitch('set-progressive', '🌱 Desbloqueio Progressivo na Corrida', s.progressiveUnlocks !== false, 'Libera habilidade, estamina, ataque e fúria aos poucos para não poluir o início.')}
+            <div class="field-row game-field-row" data-opt-tip-host="Define como a câmera funciona quando há 2+ jogadores na mesma tela.">
+              <span class="game-field-label">👥 Câmera Multiplayer Local ${renderHelpBadge('Define como a câmera funciona quando há 2+ jogadores na mesma tela.')}</span>
+              ${renderGameStepper('set-mp-cam', [
+                { value: 'shared', label: 'Única Compartilhada' },
+                { value: 'split_h', label: 'Dividida Horizontal' },
+                { value: 'split_v', label: 'Dividida Vertical' }
+              ], s.mpCameraMode || 'shared')}
             </div>
-            <div class="field-row">
-              <span>✨ Popups de Descoberta (Elementos & Poderes)</span>
-              <input type="checkbox" id="set-discovery-popups" ${s.discoveryPopups !== false ? 'checked' : ''} />
+            ${renderGameSwitch('set-narrator', '🎙️ Narrador Divertido (PT-BR)', !!s.narrator, 'Exibe legendas e comentários animados durante a corrida.')}
+            <div class="field-row game-field-row" data-opt-tip-host="Controla quando a apresentação cinematográfica dos predadores aparece.">
+              <span class="game-field-label">🎬 Intros dos Predadores ${renderHelpBadge('Controla quando a apresentação cinematográfica dos predadores aparece.')}</span>
+              ${renderGameStepper('set-intromode', [
+                { value: 'always', label: 'Sempre (pulável)' },
+                { value: 'first_time', label: 'Somente 1ª vez' },
+                { value: 'off', label: 'Desativar Intros' }
+              ], introVal)}
             </div>
-            <div class="field-row">
-              <span>🌱 Desbloqueio Progressivo na Corrida (menos poluição no início)</span>
-              <input type="checkbox" id="set-progressive" ${s.progressiveUnlocks !== false ? 'checked' : ''} />
-            </div>
-            <div class="field-row">
-              <span>👥 Câmera Multiplayer Local</span>
-              <select id="set-mp-cam">
-                <option value="shared" ${(s.mpCameraMode || 'shared') === 'shared' ? 'selected' : ''}>Câmera Única Compartilhada (Clássico)</option>
-                <option value="split_h" ${s.mpCameraMode === 'split_h' ? 'selected' : ''}>Tela Dividida Horizontal (Cima / Baixo)</option>
-                <option value="split_v" ${s.mpCameraMode === 'split_v' ? 'selected' : ''}>Tela Dividida Vertical (Lado a Lado)</option>
-              </select>
-            </div>
-            <div class="field-row">
-              <span>Narrador Divertido (PT-BR)</span>
-              <input type="checkbox" id="set-narrator" ${s.narrator ? 'checked' : ''} />
-            </div>
-            <div class="field-row">
-              <span>🎬 Intros dos Predadores</span>
-              <select id="set-intromode">
-                <option value="always" ${(s.introMode !== 'off' && s.introMode !== 'first_time' && !s.disableIntro) ? 'selected' : ''}>Sempre (3.2s, pulável)</option>
-                <option value="first_time" ${s.introMode === 'first_time' ? 'selected' : ''}>Somente 1ª vez (Padrão)</option>
-                <option value="off" ${(s.introMode === 'off' || s.disableIntro) ? 'selected' : ''}>Desativar Intros</option>
-              </select>
-            </div>
-            <details style="margin-top:8px; background:rgba(15,8,4,0.45); border:1px solid var(--panel-border); border-radius:10px; padding:8px 10px;">
-              <summary style="cursor:pointer; font-weight:700; color:#ffd447; font-size:0.86rem;">Mostrar mais opções...</summary>
-              <div class="field-row">
-                <span>🎓 Modo Professor / Aula (Livre)</span>
-                <input type="checkbox" id="set-teacher" ${Save.data.teacherMode ? 'checked' : ''} />
-              </div>
-              <div class="field-row">
-                <span>🪞 Modo Espelhado</span>
-                <input type="checkbox" id="set-mirrored" ${Save.data.mirroredMode ? 'checked' : ''} />
-              </div>
-              <div class="field-row">
-                <span>📺 Modo TV de Sala (HUD maior)</span>
-                <input type="checkbox" id="set-tvscale" ${Save.data.network?.tvScale ? 'checked' : ''} />
-              </div>
-              <div class="field-row">
-                <span>🎲 Desativar Caixas Gacha Voluntariamente (ECA Digital)</span>
-                <input type="checkbox" id="set-disable-gacha" ${s.disableGachaVoluntary ? 'checked' : ''} />
-              </div>
-              ${import.meta.env.DEV ? `
-              <div class="field-row">
-                <span>🛠️ Ativar Modo Desenvolvedor / Debug</span>
-                <input type="checkbox" id="set-devmode" ${Save.data.devMode ? 'checked' : ''} />
-              </div>
-              ` : ''}
-            </details>
-            <div class="item-card" style="margin-top:8px; font-size:0.82rem; color:#ffe6a7; display:flex; flex-direction:column; gap:8px;">
-              <div>📱 <strong>Escaneie para jogar:</strong> Abra <strong>Multiplayer</strong> no menu principal para exibir o QR Code e usar celulares como controles!</div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button type="button" class="chunky-btn secondary" id="set-export-save" style="padding:6px 10px; font-size:0.78rem;">💾 Exportar Save (JSON)</button>
-                <button type="button" class="chunky-btn secondary" id="set-import-save" style="padding:6px 10px; font-size:0.78rem;">📂 Importar Save</button>
-                <input type="file" id="set-import-file" accept=".json,application/json" class="hidden" />
-                <button type="button" class="chunky-btn secondary" id="set-legal-open" style="padding:6px 10px; font-size:0.78rem; border-color:#22c55e; color:#86efac;">🛡️ LGPD, Termos &amp; Excluir Dados</button>
-              </div>
-              <small id="set-save-status" style="color:#6ee7b7;"></small>
-            </div>
+            ${renderGameSwitch('set-teacher', '🎓 Modo Professor / Aula (Livre)', !!Save.data.teacherMode, 'Modo educativo simplificado para salas de aula e apresentações.')}
+            ${renderGameSwitch('set-mirrored', '🪞 Modo Espelhado', !!Save.data.mirroredMode, 'Inverte visualmente a pista para um desafio extra de reflexo.')}
+            ${renderGameSwitch('set-tvscale', '📺 Modo TV de Sala (HUD maior)', !!Save.data.network?.tvScale, 'Aumenta textos e placares para jogar a distância na TV.')}
           </div>
 
           <div id="stab-graphics" class="hidden">
-            <div class="field-row">
-              <span>Qualidade Gráfica</span>
-              <select id="set-quality">
-                <option value="low" ${s.quality === 'low' ? 'selected' : ''}>Baixa (Máx FPS)</option>
-                <option value="medium" ${s.quality === 'medium' ? 'selected' : ''}>Média</option>
-                <option value="high" ${s.quality === 'high' ? 'selected' : ''}>Alta</option>
-              </select>
+            <div class="field-row game-field-row" data-opt-tip-host="Ajusta resolução e detalhes 3D para equilibrar visual e FPS.">
+              <span class="game-field-label">Qualidade Gráfica ${renderHelpBadge('Ajusta resolução e detalhes 3D para equilibrar visual e FPS.')}</span>
+              ${renderGameStepper('set-quality', [
+                { value: 'low', label: 'Baixa (Máx FPS)' },
+                { value: 'medium', label: 'Média' },
+                { value: 'high', label: 'Alta' }
+              ], s.quality || 'medium')}
             </div>
-            <div class="field-row">
-              <span>Sombras</span>
-              <input type="checkbox" id="set-shadows" ${s.shadows ? 'checked' : ''} />
+            ${renderGameSwitch('set-shadows', '🌑 Sombras em Tempo Real', !!s.shadows, 'Ativa sombras projetadas pelos dinossauros e obstáculos.')}
+            <div class="field-row game-field-row" data-opt-tip-host="Ajusta a exposição e luminosidade geral da cena 3D.">
+              <span class="game-field-label">☀️ Brilho Geral (<strong id="set-brightness-val">${Math.round((s.brightness ?? 1.05) * 100)}%</strong>) ${renderHelpBadge('Ajusta a exposição e luminosidade geral da cena 3D.')}</span>
+              <input type="range" class="game-slider" id="set-brightness" min="80" max="150" value="${Math.round((s.brightness ?? 1.05) * 100)}" />
             </div>
-            <div class="field-row">
-              <span>☀️ Brilho Geral (${Math.round((s.brightness ?? 1.05) * 100)}%)</span>
-              <input type="range" id="set-brightness" min="80" max="150" value="${Math.round((s.brightness ?? 1.05) * 100)}" />
+            ${renderGameSwitch('set-clearvis', '👁️ Visão Clara (menos neblina e partículas)', !!s.clearVision, 'Reduz neblina e partículas climáticas para máxima visibilidade.')}
+            ${renderGameSwitch('set-lowspec', '💻 Meu PC é fraco (Escala 0.65x)', !!Save.data.lowSpecMode, 'Otimiza ao máximo para aparelhos antigos ou sem placa de vídeo.')}
+            ${renderGameSwitch('set-autoq', '⚡ Auto-Qualidade (Alvo 60 FPS)', Save.data.autoQuality !== false, 'Reduz efeitos automaticamente se o FPS cair durante a corrida.')}
+            <div class="field-row game-field-row" data-opt-tip-host="Limita a taxa de quadros por segundo para economizar bateria.">
+              <span class="game-field-label">Limite de FPS ${renderHelpBadge('Limita a taxa de quadros por segundo para economizar bateria.')}</span>
+              ${renderGameStepper('set-fpscap', [
+                { value: '0', label: 'Ilimitado' },
+                { value: '60', label: '60 FPS' },
+                { value: '30', label: '30 FPS (Econômico)' }
+              ], String(s.fpsCap || 0))}
             </div>
-            <div class="field-row">
-              <span>👁️ Visão Clara (menos neblina e partículas)</span>
-              <input type="checkbox" id="set-clearvis" ${s.clearVision ? 'checked' : ''} />
+            <div class="field-row game-field-row" data-opt-tip-host="Aplica filtros retrô ou estilizados sobre o canvas 3D.">
+              <span class="game-field-label">Filtro de Estilo Visual ${renderHelpBadge('Aplica filtros retrô ou estilizados sobre o canvas 3D.')}</span>
+              ${renderGameStepper('set-filter', [
+                { value: 'default', label: 'Padrão (Pôr do Sol)' },
+                { value: '8bit', label: 'Retrô 8-bit' },
+                { value: 'neon', label: 'Neon Pôr do Sol' },
+                { value: 'bw', label: 'P&B Clássico' }
+              ], s.styleFilter || 'default')}
             </div>
-            <div class="field-row">
-              <span>💻 Meu PC é fraco (Escala 0.65x, sem sombras/luz extra)</span>
-              <input type="checkbox" id="set-lowspec" ${Save.data.lowSpecMode ? 'checked' : ''} />
+            <div class="field-row game-field-row" data-opt-tip-host="Controla o campo de visão da câmera 3D (48° a 80°).">
+              <span class="game-field-label">FOV Base (<strong id="set-fov-val">${s.fov}°</strong>) ${renderHelpBadge('Controla o campo de visão da câmera 3D (48° a 80°).')}</span>
+              <input type="range" class="game-slider" id="set-fov" min="48" max="80" value="${s.fov}" />
             </div>
-            <div class="field-row" style="gap:8px; flex-wrap:wrap;">
+            <div class="field-row game-field-row" style="gap:8px; flex-wrap:wrap;">
               <span>📊 Benchmark Real FPS: <strong id="set-bench-out" style="color:#ffd447;">${benchLabel}</strong></span>
-              <button class="chunky-btn secondary" id="set-bench" style="padding:6px 12px; font-size:0.8rem;">Testar FPS</button>
+              <button type="button" class="chunky-btn secondary" id="set-bench" style="padding:6px 12px; font-size:0.8rem;">Testar FPS</button>
             </div>
-            <details style="margin-top:8px; background:rgba(15,8,4,0.45); border:1px solid var(--panel-border); border-radius:10px; padding:8px 10px;">
-              <summary style="cursor:pointer; font-weight:700; color:#ffd447; font-size:0.86rem;">Mostrar mais opções...</summary>
-              <div class="field-row">
-                <span>Limite de FPS</span>
-                <select id="set-fpscap">
-                  <option value="0" ${!(s.fpsCap) ? 'selected' : ''}>Ilimitado</option>
-                  <option value="60" ${s.fpsCap === 60 ? 'selected' : ''}>60 FPS</option>
-                  <option value="30" ${s.fpsCap === 30 ? 'selected' : ''}>30 FPS (Econômico)</option>
-                </select>
-              </div>
-              <div class="field-row">
-                <span>Filtro de Estilo Visual</span>
-                <select id="set-filter">
-                  <option value="default" ${s.styleFilter === 'default' ? 'selected' : ''}>Padrão (Pôr do Sol)</option>
-                  <option value="8bit" ${s.styleFilter === '8bit' ? 'selected' : ''}>Retrô 8-bit</option>
-                  <option value="neon" ${s.styleFilter === 'neon' ? 'selected' : ''}>Neon Pôr do Sol</option>
-                  <option value="bw" ${s.styleFilter === 'bw' ? 'selected' : ''}>P&B Clássico (Chrome Dino)</option>
-                </select>
-              </div>
-              <div class="field-row">
-                <span>FOV Base (${s.fov}°)</span>
-                <input type="range" id="set-fov" min="48" max="80" value="${s.fov}" />
-              </div>
-              <div class="field-row">
-                <span>⚡ Auto-Qualidade (Alvo 60 FPS)</span>
-                <input type="checkbox" id="set-autoq" ${Save.data.autoQuality !== false ? 'checked' : ''} />
-              </div>
-            </details>
           </div>
 
           <div id="stab-audio" class="hidden">
-            <div class="field-row">
-              <span>Volume da Música (${Math.round(s.audio.music * 100)}%)</span>
-              <input type="range" id="set-music" min="0" max="100" value="${Math.round(s.audio.music * 100)}" />
+            <div class="field-row game-field-row">
+              <span class="game-field-label">🎵 Volume da Música (<strong id="set-music-val">${Math.round(s.audio.music * 100)}%</strong>)</span>
+              <input type="range" class="game-slider" id="set-music" min="0" max="100" value="${Math.round(s.audio.music * 100)}" />
             </div>
-            <div class="field-row">
-              <span>Volume dos Efeitos (${Math.round(s.audio.sfx * 100)}%)</span>
-              <input type="range" id="set-sfx" min="0" max="100" value="${Math.round(s.audio.sfx * 100)}" />
+            <div class="field-row game-field-row">
+              <span class="game-field-label">💥 Volume dos Efeitos (<strong id="set-sfx-val">${Math.round(s.audio.sfx * 100)}%</strong>)</span>
+              <input type="range" class="game-slider" id="set-sfx" min="0" max="100" value="${Math.round(s.audio.sfx * 100)}" />
             </div>
-            <div class="field-row">
-              <span>Mudo Total</span>
-              <input type="checkbox" id="set-muted" ${s.audio.muted ? 'checked' : ''} />
-            </div>
+            ${renderGameSwitch('set-muted', '🔇 Mudo Total', !!s.audio.muted, 'Silencia música e efeitos sonoros imediatamente.')}
           </div>
 
           <div id="stab-controls" class="hidden">
-            <div class="field-row" style="margin-bottom:8px;">
-              <span>📱 Controles no Celular</span>
-              <select id="set-touchmode">
-                <option value="swipe" ${s.touchMode !== 'buttons' ? 'selected' : ''}>Arrastar o Dedo na Tela (Padrão)</option>
-                <option value="buttons" ${s.touchMode === 'buttons' ? 'selected' : ''}>Botões Direcionais (◀ ▶ ▲ ▼)</option>
-              </select>
+            <div class="field-row game-field-row" data-opt-tip-host="Escolha entre deslizar o dedo na tela ou usar botões direcionais fixos.">
+              <span class="game-field-label">📱 Controles no Celular ${renderHelpBadge('Escolha entre deslizar o dedo na tela ou usar botões direcionais fixos.')}</span>
+              ${renderGameStepper('set-touchmode', [
+                { value: 'swipe', label: 'Arrastar o Dedo' },
+                { value: 'buttons', label: 'Botões Direcionais' }
+              ], s.touchMode === 'buttons' ? 'buttons' : 'swipe')}
             </div>
-            <div class="field-row">
-              <span>🔄 Deitar Tela Automaticamente ao Virar o Celular</span>
-              <input type="checkbox" id="set-autorotate-tilt" ${s.autoRotateTilt !== false ? 'checked' : ''} />
-            </div>
-            <div class="field-row" style="margin-bottom:8px;">
-              <span>📺 Forçar Modo Paisagem no Celular</span>
-              <input type="checkbox" id="set-force-landscape" ${s.forceLandscape ? 'checked' : ''} />
-            </div>
-            <p style="font-size: 0.85rem; color: #d8c2a6; margin-bottom: 8px;">Clique num botão para remapear a tecla desejada.</p>
-            <div class="cards-grid" style="grid-template-columns: repeat(2, 1fr);">
+            ${renderGameSwitch('set-lefthanded', '🤚 Modo Canhoto (Touch)', leftHanded, 'Inverte os botões de movimento e ação entre esquerda e direita no celular.')}
+            ${renderGameSwitch('set-autorotate-tilt', '🔄 Deitar Tela Automaticamente ao Virar o Celular', s.autoRotateTilt !== false, 'Adapta a tela ao girar o aparelho para paisagem.')}
+            ${renderGameSwitch('set-force-landscape', '📺 Forçar Modo Paisagem no Celular', !!s.forceLandscape, 'Trava a interface em modo horizontal mesmo com rotação bloqueada.')}
+            <p style="font-size: 0.85rem; color: #d8c2a6; margin: 8px 0;">Clique num botão para remapear a tecla desejada:</p>
+            <div class="cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));">
               <div class="item-card">
                 <strong>Jogador 1 (P1)</strong>
                 ${['left', 'right', 'jump', 'duck', 'attack', 'ability', 'item', 'bullet'].map((act) => `
                   <div class="field-row">
                     <span>${act}</span>
-                    <button class="tab-btn remap-btn" data-player="p1" data-action="${act}">${kb1[act] || (act === 'attack' ? 'KeyQ' : '')}</button>
+                    <button type="button" class="tab-btn remap-btn" data-player="p1" data-action="${act}">${kb1[act] || (act === 'attack' ? 'KeyQ' : '')}</button>
                   </div>
                 `).join('')}
               </div>
@@ -211,7 +159,7 @@ export class SettingsModal {
                 ${['left', 'right', 'jump', 'duck', 'attack', 'ability', 'item', 'bullet'].map((act) => `
                   <div class="field-row">
                     <span>${act}</span>
-                    <button class="tab-btn remap-btn" data-player="p2" data-action="${act}">${kb2[act] || (act === 'attack' ? 'ControlRight' : '')}</button>
+                    <button type="button" class="tab-btn remap-btn" data-player="p2" data-action="${act}">${kb2[act] || (act === 'attack' ? 'ControlRight' : '')}</button>
                   </div>
                 `).join('')}
               </div>
@@ -219,45 +167,59 @@ export class SettingsModal {
           </div>
 
           <div id="stab-a11y" class="hidden">
-            <div class="field-row">
-              <span>Modo Uma Mão (J/K/L auxiliares)</span>
-              <input type="checkbox" id="a11y-onehand" ${s.accessibility.oneHand ? 'checked' : ''} />
+            ${renderGameSwitch('a11y-onehand', '🖐️ Modo Uma Mão (J/K/L auxiliares)', !!s.accessibility.oneHand, 'Permite jogar com uma mão usando as teclas J, K e L.')}
+            ${renderGameSwitch('a11y-large', '🔠 Texto Grande', !!s.accessibility.largeText, 'Aumenta o tamanho da fonte nos menus e no HUD.')}
+            ${renderGameSwitch('a11y-contrast', '🌗 Alto Contraste', !!s.accessibility.highContrast, 'Aplica fundo escuro sólido e bordas douradas de alta legibilidade.')}
+            <div class="field-row game-field-row" data-opt-tip-host="Ajusta as cores do jogo para diferentes tipos de daltonismo.">
+              <span class="game-field-label">🎨 Filtro de Daltonismo ${renderHelpBadge('Ajusta as cores do jogo para diferentes tipos de daltonismo.')}</span>
+              ${renderGameStepper('a11y-cb', [
+                { value: 'none', label: 'Desativado' },
+                { value: 'protanopia', label: 'Protanopia' },
+                { value: 'deuteranopia', label: 'Deuteranopia' },
+                { value: 'tritanopia', label: 'Tritanopia' }
+              ], s.accessibility.colorblind || 'none')}
             </div>
-            <div class="field-row">
-              <span>Texto Grande</span>
-              <input type="checkbox" id="a11y-large" ${s.accessibility.largeText ? 'checked' : ''} />
+            ${renderGameSwitch('a11y-shake', '📷 Reduzir Tremores de Câmera', !!s.accessibility.reduceShake, 'Diminui o chacoalhar da câmera em impactos e ataques de chefes.')}
+            ${renderGameSwitch('a11y-flashes', '✨ Reduzir Flashes e Cintilações', !!s.accessibility.reduceFlashes, 'Suaviza clarões de tela e efeitos estroboscópicos.')}
+            ${renderGameSwitch('set-lowhp-pulse', '❤️ Pulsar tela em 1 vida', !!s.lowHpPulse, 'Exibe alerta pulsante nas bordas quando restar apenas 1 coração.')}
+            ${renderGameSwitch('a11y-vib', '📳 Vibração (Gamepad/Mobile)', !!s.accessibility.vibration, 'Ativa resposta tátil ao tocar botões ou sofrer impactos.')}
+          </div>
+
+          <div id="stab-account" class="hidden">
+            ${renderGameSwitch('set-disable-gacha', '🎲 Desativar Caixas Gacha Voluntariamente (ECA Digital)', !!s.disableGachaVoluntary, 'Oculta mecânicas de caixas aleatórias para conformidade com proteção a jovens.')}
+            ${renderGameSwitch('set-analytics-optin', '📊 Telemetria Anônima Opt-in (Sem Dados Pessoais)', !!s.analyticsOptIn, 'Ajuda a melhorar o balanceamento sem enviar dados pessoais.')}
+            ${import.meta.env.DEV ? renderGameSwitch('set-devmode', '🛠️ Ativar Modo Desenvolvedor / Debug', !!Save.data.devMode, 'Exibe ferramentas de depuração no HUD (apenas ambiente de desenvolvimento).') : ''}
+            <div class="item-card" style="margin-top:8px; font-size:0.82rem; color:#ffe6a7; display:flex; flex-direction:column; gap:8px;">
+              <div>📱 <strong>Escaneie para jogar:</strong> Abra <strong>Multiplayer</strong> no menu principal para exibir o QR Code e usar celulares como controles!</div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="chunky-btn secondary" id="set-export-save" style="padding:7px 12px; font-size:0.8rem;">💾 Exportar Save (JSON)</button>
+                <button type="button" class="chunky-btn secondary" id="set-import-save" style="padding:7px 12px; font-size:0.8rem;">📂 Importar Save</button>
+                <input type="file" id="set-import-file" accept=".json,application/json" class="hidden" />
+                <button type="button" class="chunky-btn secondary" id="set-legal-open" style="padding:7px 12px; font-size:0.8rem; border-color:#22c55e; color:#86efac;">🛡️ LGPD, Termos &amp; Excluir Dados</button>
+              </div>
+              <small id="set-save-status" style="color:#6ee7b7;"></small>
             </div>
-            <div class="field-row">
-              <span>Alto Contraste</span>
-              <input type="checkbox" id="a11y-contrast" ${s.accessibility.highContrast ? 'checked' : ''} />
-            </div>
-            <div class="field-row">
-              <span>Filtro de Daltonismo</span>
-              <select id="a11y-cb">
-                <option value="none" ${s.accessibility.colorblind === 'none' ? 'selected' : ''}>Desativado</option>
-                <option value="protanopia" ${s.accessibility.colorblind === 'protanopia' ? 'selected' : ''}>Protanopia</option>
-                <option value="deuteranopia" ${s.accessibility.colorblind === 'deuteranopia' ? 'selected' : ''}>Deuteranopia</option>
-                <option value="tritanopia" ${s.accessibility.colorblind === 'tritanopia' ? 'selected' : ''}>Tritanopia</option>
-              </select>
-            </div>
-            <div class="field-row">
-              <span>Reduzir Tremores de Câmera</span>
-              <input type="checkbox" id="a11y-shake" ${s.accessibility.reduceShake ? 'checked' : ''} />
-            </div>
-            <div class="field-row">
-              <span>❤️ Pulsar tela em 1 vida</span>
-              <input type="checkbox" id="set-lowhp-pulse" ${s.lowHpPulse ? 'checked' : ''} />
-            </div>
-            <div class="field-row">
-              <span>Vibração (Gamepad/Mobile)</span>
-              <input type="checkbox" id="a11y-vib" ${s.accessibility.vibration ? 'checked' : ''} />
+            <div class="item-card" id="set-error-panel" style="margin-top:8px; font-size:0.76rem; color:#e4e4e7;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <strong>🩺 Painel de Erros (${Telemetry.getErrorLog().length})</strong>
+                <button type="button" class="chunky-btn secondary" id="set-clear-errors" style="padding:3px 8px; font-size:0.72rem;">Limpar</button>
+              </div>
+              <div id="set-error-list" style="max-height:80px; overflow-y:auto; font-family:monospace; color:#cbd5e1; margin-top:4px;">
+                ${Telemetry.getErrorLog().length === 0 ? 'Nenhum erro registrado nesta sessão.' : Telemetry.getErrorLog().map((e) => `<div>[${escapeHtml(e.kind)}] ${escapeHtml(e.message)} (${escapeHtml(e.location)})</div>`).join('')}
+              </div>
             </div>
           </div>
         </div>
       </div>
     `;
 
-    attachModalHelp(container, 'Ajuste idioma, brilho, qualidade para PCs mais fracos, áudio, teclas e opções de acessibilidade em 5 abas organizadas.');
+    attachModalHelp(container, 'Ajuste idioma, brilho, qualidade para PCs mais fracos, áudio, teclas, acessibilidade e dados de save.');
+    enhanceGameControls(container, {
+      onEscape: () => {
+        sync();
+        onClose?.();
+      }
+    });
 
     // Tabs
     container.querySelectorAll('#set-tabs .tab-btn').forEach((btn) => {
@@ -265,11 +227,26 @@ export class SettingsModal {
         container.querySelectorAll('#set-tabs .tab-btn').forEach((b) => b.classList.remove('active'));
         btn.classList.add('active');
         const tab = btn.getAttribute('data-stab');
-        ['general', 'graphics', 'audio', 'controls', 'a11y'].forEach((t) => {
-          container.querySelector(`#stab-${t}`).classList.toggle('hidden', t !== tab);
+        ['general', 'graphics', 'audio', 'controls', 'a11y', 'account'].forEach((t) => {
+          container.querySelector(`#stab-${t}`)?.classList.toggle('hidden', t !== tab);
         });
       });
     });
+
+    // Live slider labels
+    const bindRangeLabel = (inputSel, valSel, fmt) => {
+      const inp = container.querySelector(inputSel);
+      const valEl = container.querySelector(valSel);
+      if (inp && valEl) {
+        inp.addEventListener('input', () => {
+          valEl.textContent = fmt(inp.value);
+        });
+      }
+    };
+    bindRangeLabel('#set-brightness', '#set-brightness-val', (v) => `${v}%`);
+    bindRangeLabel('#set-fov', '#set-fov-val', (v) => `${v}°`);
+    bindRangeLabel('#set-music', '#set-music-val', (v) => `${v}%`);
+    bindRangeLabel('#set-sfx', '#set-sfx-val', (v) => `${v}%`);
 
     const sync = () => {
       s.quality = container.querySelector('#set-quality').value;
@@ -289,6 +266,11 @@ export class SettingsModal {
       s.mpCameraMode = container.querySelector('#set-mp-cam')?.value || 'shared';
       s.narrator = container.querySelector('#set-narrator').checked;
       s.touchMode = container.querySelector('#set-touchmode')?.value || 'swipe';
+      const lh = !!container.querySelector('#set-lefthanded')?.checked;
+      if (!s.mobileHudLayout) s.mobileHudLayout = { scale: 1.0, opacity: 0.92, leftHanded: false, positions: {} };
+      s.mobileHudLayout.leftHanded = lh;
+      if (!s.controllerLayout) s.controllerLayout = { preset: 'default', leftHanded: false, useJoystick: false, scale: 1.0, opacity: 0.96, positions: {} };
+      s.controllerLayout.leftHanded = lh;
       s.autoRotateTilt = container.querySelector('#set-autorotate-tilt')?.checked !== false;
       const wantLand = !!container.querySelector('#set-force-landscape')?.checked;
       if (wantLand !== !!s.forceLandscape) {
@@ -323,7 +305,10 @@ export class SettingsModal {
       s.accessibility.highContrast = container.querySelector('#a11y-contrast').checked;
       s.accessibility.colorblind = container.querySelector('#a11y-cb').value;
       s.accessibility.reduceShake = container.querySelector('#a11y-shake').checked;
+      s.accessibility.reduceFlashes = !!container.querySelector('#a11y-flashes')?.checked;
       s.accessibility.vibration = container.querySelector('#a11y-vib').checked;
+      s.analyticsOptIn = !!container.querySelector('#set-analytics-optin')?.checked;
+      applyDomLanguage(s.lang);
 
       Save.save();
       if (onApplySettings) onApplySettings();
@@ -416,6 +401,12 @@ export class SettingsModal {
     container.querySelector('#set-legal-open')?.addEventListener('click', () => {
       sync();
       onOpenLegal?.();
+    });
+
+    container.querySelector('#set-clear-errors')?.addEventListener('click', () => {
+      Telemetry.clearErrors();
+      const list = container.querySelector('#set-error-list');
+      if (list) list.textContent = 'Nenhum erro registrado nesta sessão.';
     });
 
     container.querySelector('#close-settings').addEventListener('click', () => {

@@ -35,7 +35,13 @@ export const BOSS_AUDIT_REPORT = [
   { id: 'crystal_wyrm', name: 'Serpe Cristalina', title: 'Dragão de Ametista', status: 'Modelo Voxel Completo', details: 'Asas prismáticas articuladas, crânio dracônico com chifres de quartzo e cauda espigada.' },
   { id: 'cyber_raptor', name: 'Raptor Cibernético [Mini-Boss]', title: 'Unidade Alfa-X', status: 'Modelo Voxel Completo', details: 'Exoesqueleto cromado, visor laser neon, propulsores a jato duplos e lâmina caudal.' },
   { id: 'leviathan_abyssal', name: 'Leviatã Abissal', title: 'Soberano das Fossas', status: 'Modelo Voxel Novo', details: 'Serpente abissal colossal, barbatanas peitorais gigantes, mandíbula luminosa e lanternas bioluminescentes.' },
-  { id: 'mecha_titan', name: 'Titã Mecânico Ω', title: 'Colosso Cibernético', status: 'Modelo Voxel Novo', details: 'Blindagem estilo Transformers/Mecha-Godzilla, placas dorsais neon, canhões nos ombros e núcleo de fusão.' }
+  { id: 'mecha_titan', name: 'Titã Mecânico Ω', title: 'Colosso Cibernético', status: 'Modelo Voxel Novo', details: 'Blindagem estilo Transformers/Mecha-Godzilla, placas dorsais neon, canhões nos ombros e núcleo de fusão.' },
+  { id: 'abyssal_kraken', name: 'Kraken Abissal', title: 'Terror das Profundezas', status: 'Modelo Voxel Expansão', details: 'Manto cefalópode blindado, coroa de olhos bioluminescentes e 6 tentáculos articulados.' },
+  { id: 'volcanic_phoenix', name: 'Fênix Vulcânica', title: 'Renascida da Caldeira', status: 'Modelo Voxel Expansão', details: 'Asas flamejantes articuladas, crista incandescente, núcleo de lava e cauda de penas solares.' },
+  { id: 'king_megalodon', name: 'Rei Megalodon', title: 'Soberano dos Mares', status: 'Modelo Voxel Expansão', details: 'Corpo hidrodinâmico de tubarão gigante, mandíbula serrilhada, barbatana dorsal colossal e cicatrizes.' },
+  { id: 'cyber_emperor', name: 'Imperador Cibernético', title: 'Soberano da Rede', status: 'Modelo Voxel Expansão', details: 'Trono-exoesqueleto holográfico, coroa de dados neon, manto energético e canhões de pulso.' },
+  { id: 'fossil_titan', name: 'Titã Fóssil', title: 'Colosso dos Ossos', status: 'Modelo Voxel Expansão', details: 'Caixa torácica exposta de âmbar vivo, crânio colossal com chifres ósseos e clava vertebral.' },
+  { id: 'cosmic_colossus', name: 'Colosso Cósmico', title: 'Guardião das Estrelas', status: 'Modelo Voxel Expansão', details: 'Monólito astral articulado com anéis orbitais giratórios, núcleo de nebulosa e ombros flutuantes.' }
 ];
 
 export function buildBossModel(bossId) {
@@ -68,12 +74,64 @@ export function buildBossModel(bossId) {
       return buildLeviathanAbyssal();
     case 'mecha_titan':
       return buildMechaTitan();
+    case 'abyssal_kraken':
+      return buildAbyssalKraken();
+    case 'volcanic_phoenix':
+      return buildVolcanicPhoenix();
+    case 'king_megalodon':
+      return buildKingMegalodon();
+    case 'cyber_emperor':
+      return buildCyberEmperor();
+    case 'fossil_titan':
+      return buildFossilTitan();
+    case 'cosmic_colossus':
+      return buildCosmicColossus();
     default:
       return buildAlphaTrex();
   }
 }
 
 function createCommonState(root, parts, destructibles, rageMaterials = [], auraMesh = null) {
+  const baseAuraOpacity = auraMesh?.material?.opacity ?? 0.38;
+
+  const applyPhaseVisuals = (targetPhase, targetBroken) => {
+    const clampedBroken = Math.max(0, Math.min(destructibles.length, targetBroken));
+    for (let i = 0; i < destructibles.length; i++) {
+      if (destructibles[i]) destructibles[i].visible = i >= clampedBroken;
+    }
+
+    for (const rm of rageMaterials) {
+      if (!rm) continue;
+      if (targetPhase === 1) rm.emissiveIntensity = 0.25;
+      else if (targetPhase === 2) rm.emissiveIntensity = 1.05;
+      else rm.emissiveIntensity = 1.85;
+    }
+
+    if (parts?.cracks) {
+      for (const c of parts.cracks) {
+        if (c) c.visible = targetPhase >= 2;
+      }
+    }
+
+    if (auraMesh) {
+      if (targetPhase === 1) {
+        auraMesh.visible = false;
+      } else if (targetPhase === 2) {
+        auraMesh.visible = true;
+        if (auraMesh.material) {
+          auraMesh.material.transparent = true;
+          auraMesh.material.opacity = baseAuraOpacity * 0.45;
+        }
+      } else {
+        auraMesh.visible = true;
+        if (auraMesh.material) {
+          auraMesh.material.transparent = true;
+          auraMesh.material.opacity = baseAuraOpacity;
+        }
+      }
+    }
+  };
+
   return {
     root,
     parts,
@@ -84,30 +142,25 @@ function createCommonState(root, parts, destructibles, rageMaterials = [], auraM
     animTimer: 0,
     brokenCount: 0,
     phase: 1,
+    setPhase(phase) {
+      const nextPhase = Math.max(1, Math.min(3, Math.round(Number(phase) || 1)));
+      this.phase = nextPhase;
+      const targetBroken = nextPhase === 1
+        ? 0
+        : (nextPhase === 2 ? Math.ceil(this.destructibles.length * 0.5) : this.destructibles.length);
+      this.brokenCount = targetBroken;
+      applyPhaseVisuals(nextPhase, targetBroken);
+    },
     setPhaseVisuals(hpRatio) {
-      this.phase = hpRatio <= 0.34 ? 3 : (hpRatio <= 0.67 ? 2 : 1);
+      const ratio = Math.max(0, Math.min(1, Number(hpRatio) ?? 1));
+      this.phase = ratio <= 0.34 ? 3 : (ratio <= 0.67 ? 2 : 1);
       // Quebra partes destrutíveis conforme perde HP
       const targetBroken = Math.min(
         this.destructibles.length,
-        Math.floor((1 - hpRatio) * (this.destructibles.length + 0.5))
+        Math.floor((1 - ratio) * (this.destructibles.length + 0.5))
       );
-      while (this.brokenCount < targetBroken) {
-        const part = this.destructibles[this.brokenCount];
-        if (part) part.visible = false;
-        this.brokenCount++;
-      }
-      // Ativa rachaduras / olhos / aura na Fase 2 e 3
-      for (const rm of this.rageMaterials) {
-        if (this.phase === 1) rm.emissiveIntensity = 0.25;
-        if (this.phase === 2) rm.emissiveIntensity = 0.95;
-        if (this.phase >= 3) rm.emissiveIntensity = 1.65;
-      }
-      if (this.parts.cracks) {
-        for (const c of this.parts.cracks) c.visible = this.phase >= 2;
-      }
-      if (this.auraMesh) {
-        this.auraMesh.visible = this.phase >= 3;
-      }
+      this.brokenCount = Math.max(this.brokenCount, targetBroken);
+      applyPhaseVisuals(this.phase, this.brokenCount);
     }
   };
 }
@@ -1004,6 +1057,226 @@ function buildMechaTitan() {
     cannonR.rotation.x = -Math.sin(t * 4.2) * 0.12;
     tail.rotation.y = Math.sin(t * 5) * 0.25;
     if (auraMesh.visible) auraMesh.rotation.y += dt * 2.0;
+  };
+  return state;
+}
+
+function buildAbyssalKraken() {
+  const root = new THREE.Group();
+  const mantleMat = new THREE.MeshStandardMaterial({ color: '#0e7490', roughness: 0.35, metalness: 0.25 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: '#083344', roughness: 0.45 });
+  const glowMat = new THREE.MeshStandardMaterial({ color: '#22d3ee', emissive: '#06b6d4', emissiveIntensity: 1.2 });
+
+  const body = pivotAt(root, 0, 2.5, 0);
+  vox(body, 2.4, 2.6, 2.2, 0, 0.5, 0, mantleMat);
+  vox(body, 1.8, 1.4, 1.7, 0, 2.1, -0.15, darkMat);
+  const crown = vox(body, 2.6, 0.45, 0.45, 0, 1.4, 0.9, glowMat);
+  vox(body, 0.42, 0.42, 0.35, -0.72, 0.45, 1.15, glowMat);
+  vox(body, 0.42, 0.42, 0.35, 0.72, 0.45, 1.15, glowMat);
+
+  const tentacles = [];
+  const xs = [-1.65, -0.98, -0.34, 0.34, 0.98, 1.65];
+  for (let i = 0; i < xs.length; i++) {
+    const tPivot = pivotAt(body, xs[i], -0.8, 0.35);
+    vox(tPivot, 0.42, 1.55, 0.42, 0, -0.75, 0.25, mantleMat);
+    vox(tPivot, 0.3, 1.25, 0.3, 0, -1.75, 0.65, i % 2 === 0 ? glowMat : darkMat);
+    tentacles.push(tPivot);
+  }
+  const auraMesh = makeStandardAura(root, '#0e7490', 6.2, 5.2, 5.2);
+  const state = createCommonState(root, { body, tentacles, cracks: [] }, [crown, tentacles[0], tentacles[5]], [glowMat], auraMesh);
+  state.updateAnimation = (t, dt, animName) => {
+    const boost = animName === 'roar' || animName === 'bite' ? 1.8 : 1.0;
+    body.position.y = 2.5 + Math.sin(t * 2.6) * 0.28;
+    for (let i = 0; i < tentacles.length; i++) {
+      tentacles[i].rotation.x = Math.sin(t * 4.2 * boost + i * 0.85) * 0.42;
+      tentacles[i].rotation.z = Math.cos(t * 3.1 + i * 0.65) * 0.22;
+    }
+    if (auraMesh.visible) auraMesh.rotation.y += dt * 1.5;
+  };
+  return state;
+}
+
+function buildVolcanicPhoenix() {
+  const root = new THREE.Group();
+  const flameMat = new THREE.MeshStandardMaterial({ color: '#ea580c', emissive: '#c2410c', emissiveIntensity: 0.75 });
+  const emberMat = new THREE.MeshStandardMaterial({ color: '#facc15', emissive: '#f59e0b', emissiveIntensity: 1.35 });
+  const ashMat = new THREE.MeshStandardMaterial({ color: '#292524', roughness: 0.6 });
+
+  const body = pivotAt(root, 0, 2.75, 0);
+  vox(body, 1.75, 1.45, 2.45, 0, 0, 0, ashMat);
+  const core = vox(body, 1.15, 0.95, 1.45, 0, 0.12, 0.55, emberMat);
+  const head = pivotAt(body, 0, 0.95, 1.35);
+  vox(head, 1.05, 0.85, 1.15, 0, 0.25, 0.25, flameMat);
+  vox(head, 0.42, 0.32, 0.88, 0, 0.12, 0.95, emberMat);
+  const crest = vox(head, 0.28, 1.15, 0.85, 0, 0.95, -0.1, emberMat);
+
+  const wingL = pivotAt(body, -1.0, 0.35, 0.15);
+  vox(wingL, 3.2, 0.24, 1.65, -1.6, 0, -0.1, flameMat);
+  vox(wingL, 2.7, 0.16, 0.65, -1.5, 0.08, 0.55, emberMat);
+  const wingR = pivotAt(body, 1.0, 0.35, 0.15);
+  vox(wingR, 3.2, 0.24, 1.65, 1.6, 0, -0.1, flameMat);
+  vox(wingR, 2.7, 0.16, 0.65, 1.5, 0.08, 0.55, emberMat);
+
+  const tail = pivotAt(body, 0, 0.1, -1.35);
+  vox(tail, 2.1, 0.18, 2.2, 0, 0, -1.1, flameMat);
+  vox(tail, 1.4, 0.14, 1.8, 0, 0.12, -1.35, emberMat);
+
+  const auraMesh = makeStandardAura(root, '#ea580c', 6.8, 4.6, 5.4);
+  const state = createCommonState(root, { body, head, wingL, wingR, tail, cracks: [] }, [crest, core], [flameMat, emberMat], auraMesh);
+  state.updateAnimation = (t, dt, animName) => {
+    const flap = Math.sin(t * (animName === 'roar' ? 9.5 : 5.6)) * 0.55;
+    wingL.rotation.z = flap;
+    wingR.rotation.z = -flap;
+    body.position.y = 2.75 + Math.sin(t * 3.8) * 0.32;
+    tail.rotation.x = Math.sin(t * 4.5) * 0.18;
+    if (auraMesh.visible) auraMesh.rotation.y += dt * 2.2;
+  };
+  return state;
+}
+
+function buildKingMegalodon() {
+  const root = new THREE.Group();
+  const sharkMat = new THREE.MeshStandardMaterial({ color: '#0369a1', roughness: 0.3, metalness: 0.2 });
+  const bellyMat = new THREE.MeshStandardMaterial({ color: '#e2e8f0', roughness: 0.5 });
+  const scarMat = new THREE.MeshStandardMaterial({ color: '#f43f5e', emissive: '#e11d48', emissiveIntensity: 0.9 });
+  const toothMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.2 });
+
+  const body = pivotAt(root, 0, 2.25, 0);
+  vox(body, 2.55, 1.85, 3.85, 0, 0, 0, sharkMat);
+  vox(body, 2.15, 0.62, 3.35, 0, -0.78, 0.1, bellyMat);
+  const dorsal = vox(body, 0.34, 1.65, 1.35, 0, 1.55, -0.25, sharkMat);
+  vox(body, 0.42, 0.22, 1.55, 0.95, 0.35, 0.85, scarMat);
+
+  const jaw = pivotAt(body, 0, -0.35, 1.75);
+  vox(jaw, 1.95, 0.48, 1.65, 0, -0.15, 0.65, bellyMat);
+  for (const sx of [-0.62, -0.22, 0.22, 0.62]) {
+    vox(body, 0.18, 0.36, 0.18, sx, -0.25, 2.15, toothMat);
+    vox(jaw, 0.16, 0.32, 0.16, sx, 0.16, 1.25, toothMat);
+  }
+  vox(body, 0.28, 0.28, 0.28, -1.15, 0.35, 1.55, scarMat);
+  vox(body, 0.28, 0.28, 0.28, 1.15, 0.35, 1.55, scarMat);
+
+  const finL = pivotAt(body, -1.35, -0.35, 0.45);
+  vox(finL, 2.05, 0.22, 1.15, -1.0, 0, -0.2, sharkMat);
+  const finR = pivotAt(body, 1.35, -0.35, 0.45);
+  vox(finR, 2.05, 0.22, 1.15, 1.0, 0, -0.2, sharkMat);
+
+  const tail = pivotAt(body, 0, 0, -2.05);
+  vox(tail, 0.85, 1.15, 1.85, 0, 0, -0.85, sharkMat);
+  const tailFin = vox(tail, 0.26, 2.35, 1.05, 0, 0.25, -1.95, sharkMat);
+
+  const auraMesh = makeStandardAura(root, '#0369a1', 6.4, 4.4, 5.8);
+  const state = createCommonState(root, { body, jaw, finL, finR, tail, cracks: [] }, [dorsal, tailFin], [scarMat], auraMesh);
+  state.updateAnimation = (t, dt, animName) => {
+    tail.rotation.y = Math.sin(t * 6.2) * 0.42;
+    jaw.rotation.x = animName === 'bite' || animName === 'roar' ? 0.62 : 0.14 + Math.sin(t * 3.4) * 0.08;
+    body.position.y = 2.25 + Math.sin(t * 2.8) * 0.22;
+    if (auraMesh.visible) auraMesh.rotation.y += dt * 1.6;
+  };
+  return state;
+}
+
+function buildCyberEmperor() {
+  const root = new THREE.Group();
+  const hullMat = new THREE.MeshStandardMaterial({ color: '#1e1b4b', metalness: 0.85, roughness: 0.2 });
+  const goldMat = new THREE.MeshStandardMaterial({ color: '#f59e0b', metalness: 0.8, roughness: 0.25 });
+  const holoMat = new THREE.MeshStandardMaterial({ color: '#a855f7', emissive: '#7c3aed', emissiveIntensity: 1.35 });
+
+  const body = pivotAt(root, 0, 2.55, 0);
+  vox(body, 2.3, 2.25, 1.85, 0, 0, 0, hullMat);
+  vox(body, 1.4, 1.4, 0.35, 0, 0.2, 1.02, holoMat);
+  const crown = vox(body, 1.65, 0.72, 1.1, 0, 1.95, 0.25, goldMat);
+  const head = pivotAt(body, 0, 1.45, 0.35);
+  vox(head, 1.15, 0.95, 1.15, 0, 0, 0, hullMat);
+  vox(head, 1.22, 0.28, 0.55, 0, 0.12, 0.52, holoMat);
+
+  const podL = pivotAt(body, -1.95, 0.65, 0.35);
+  vox(podL, 0.85, 1.35, 1.65, 0, 0, 0, hullMat);
+  vox(podL, 0.45, 0.45, 0.45, 0, 0, 0.95, holoMat);
+  const podR = pivotAt(body, 1.95, 0.65, 0.35);
+  vox(podR, 0.85, 1.35, 1.65, 0, 0, 0, hullMat);
+  vox(podR, 0.45, 0.45, 0.45, 0, 0, 0.95, holoMat);
+
+  const auraMesh = makeStandardAura(root, '#7c3aed', 5.8, 5.0, 5.0);
+  const state = createCommonState(root, { body, head, podL, podR, cracks: [] }, [crown, podL, podR], [holoMat], auraMesh);
+  state.updateAnimation = (t, dt) => {
+    body.position.y = 2.55 + Math.sin(t * 3.2) * 0.26;
+    podL.position.y = 0.65 + Math.sin(t * 5.0) * 0.24;
+    podR.position.y = 0.65 - Math.sin(t * 5.0) * 0.24;
+    if (auraMesh.visible) auraMesh.rotation.y += dt * 2.1;
+  };
+  return state;
+}
+
+function buildFossilTitan() {
+  const root = new THREE.Group();
+  const boneMat = new THREE.MeshStandardMaterial({ color: '#d6d3d1', roughness: 0.72 });
+  const darkStone = new THREE.MeshStandardMaterial({ color: '#44403c', roughness: 0.8 });
+  const amberMat = new THREE.MeshStandardMaterial({ color: '#f59e0b', emissive: '#d97706', emissiveIntensity: 1.15 });
+
+  const body = pivotAt(root, 0, 2.45, 0);
+  vox(body, 2.35, 2.05, 2.35, 0, 0, 0, darkStone);
+  // Costelas fósseis expostas + coração de âmbar
+  for (let i = 0; i < 3; i++) {
+    vox(body, 2.65, 0.26, 0.28, 0, 0.65 - i * 0.55, 1.05, boneMat);
+  }
+  const heart = vox(body, 0.95, 0.95, 0.65, 0, 0.1, 0.95, amberMat);
+  const head = pivotAt(body, 0, 1.45, 0.95);
+  vox(head, 1.55, 1.15, 1.75, 0, 0.2, 0.35, boneMat);
+  const hornL = vox(head, 0.32, 1.05, 0.32, -0.78, 0.85, 0.15, boneMat);
+  const hornR = vox(head, 0.32, 1.05, 0.32, 0.78, 0.85, 0.15, boneMat);
+  vox(head, 0.32, 0.28, 0.28, -0.45, 0.35, 1.12, amberMat);
+  vox(head, 0.32, 0.28, 0.28, 0.45, 0.35, 1.12, amberMat);
+
+  const legL = pivotAt(body, -0.95, -1.05, 0);
+  vox(legL, 0.75, 1.55, 0.85, 0, -0.78, 0, boneMat);
+  const legR = pivotAt(body, 0.95, -1.05, 0);
+  vox(legR, 0.75, 1.55, 0.85, 0, -0.78, 0, boneMat);
+
+  const auraMesh = makeStandardAura(root, '#f59e0b', 5.8, 4.8, 5.2);
+  const state = createCommonState(root, { body, head, legL, legR, cracks: [] }, [hornL, hornR, heart], [amberMat], auraMesh);
+  state.updateAnimation = (t, dt) => {
+    const stride = Math.sin(t * 6.5);
+    legL.rotation.x = stride * 0.38;
+    legR.rotation.x = -stride * 0.38;
+    if (auraMesh.visible) auraMesh.rotation.y += dt * 1.4;
+  };
+  return state;
+}
+
+function buildCosmicColossus() {
+  const root = new THREE.Group();
+  const voidMat = new THREE.MeshStandardMaterial({ color: '#1e1b4b', metalness: 0.7, roughness: 0.25 });
+  const starMat = new THREE.MeshStandardMaterial({ color: '#818cf8', emissive: '#6366f1', emissiveIntensity: 1.35 });
+  const novaMat = new THREE.MeshStandardMaterial({ color: '#f472b6', emissive: '#ec4899', emissiveIntensity: 1.45 });
+
+  const body = pivotAt(root, 0, 2.8, 0);
+  vox(body, 2.1, 2.45, 1.75, 0, 0, 0, voidMat);
+  const core = vox(body, 1.15, 1.15, 1.15, 0, 0.15, 0.65, novaMat);
+  vox(body, 1.25, 1.05, 1.25, 0, 1.85, 0.15, voidMat);
+  vox(body, 1.3, 0.3, 0.45, 0, 1.9, 0.68, starMat);
+
+  const ring = pivotAt(body, 0, 0.35, -0.35);
+  vox(ring, 4.8, 0.26, 0.26, 0, 1.9, 0, starMat);
+  vox(ring, 4.8, 0.26, 0.26, 0, -1.9, 0, starMat);
+  vox(ring, 0.26, 4.0, 0.26, -2.3, 0, 0, novaMat);
+  vox(ring, 0.26, 4.0, 0.26, 2.3, 0, 0, novaMat);
+
+  const armL = pivotAt(body, -1.95, 0.45, 0.25);
+  vox(armL, 0.9, 1.85, 0.9, 0, -0.5, 0, voidMat);
+  vox(armL, 0.55, 0.55, 0.55, 0, -1.55, 0.2, starMat);
+  const armR = pivotAt(body, 1.95, 0.45, 0.25);
+  vox(armR, 0.9, 1.85, 0.9, 0, -0.5, 0, voidMat);
+  vox(armR, 0.55, 0.55, 0.55, 0, -1.55, 0.2, starMat);
+
+  const auraMesh = makeStandardAura(root, '#4f46e5', 6.4, 5.6, 5.4);
+  const state = createCommonState(root, { body, ring, armL, armR, cracks: [] }, [ring, core], [starMat, novaMat], auraMesh);
+  state.updateAnimation = (t, dt) => {
+    body.position.y = 2.8 + Math.sin(t * 2.8) * 0.3;
+    ring.rotation.z += dt * 1.4;
+    armL.rotation.x = Math.sin(t * 3.5) * 0.28;
+    armR.rotation.x = -Math.sin(t * 3.5) * 0.28;
+    if (auraMesh.visible) auraMesh.rotation.y += dt * 1.8;
   };
   return state;
 }

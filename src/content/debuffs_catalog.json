@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0",
+  "_comment": "Catálogo de 24 debuffs mecânicos reais com contra-jogada clara × 6 variantes de origem/severidade (144 entradas kind:'threat').",
+  "archetypes": [
+    { "id": "bleed", "name": "Sangramento", "icon": "🩸", "color": "#e11d48", "speedMult": 0.95, "laneMult": 0.95, "staminaDrainPerSec": 7.5, "counterplay": "Cure com Fruta, Antídoto (E) ou Fogueira", "desc": "Drena estamina continuamente enquanto corre." },
+    { "id": "burn", "name": "Queimadura", "icon": "🔥", "color": "#f97316", "speedMult": 0.96, "laneMult": 1.0, "staminaDrainPerSec": 9.0, "damageTakenMult": 1.15, "counterplay": "Entre na água, use Gelo ou Fruta", "desc": "Queima estamina e fragiliza sua defesa." },
+    { "id": "frostbite", "name": "Congelamento", "icon": "🥶", "color": "#38bdf8", "speedMult": 0.82, "laneMult": 0.72, "counterplay": "Derreta com Fogo, Tocha Solar ou Turbo", "desc": "Reduz velocidade e trava trocas de faixa." },
+    { "id": "blind_fog", "name": "Névoa Cega", "icon": "🌫️", "color": "#94a3b8", "visionMult": 0.45, "counterplay": "Acenda Tocha Solar ou aguarde dissipar", "desc": "Diminui drasticamente a visibilidade à frente." },
+    { "id": "reverse_controls", "name": "Controles Invertidos", "icon": "🔀", "color": "#c084fc", "controlsReversed": true, "counterplay": "Inverta esquerda/direita ou cure com Antídoto (E)", "desc": "Inverte comandos laterais temporariamente." },
+    { "id": "heavy_gravity", "name": "Gravidade Pesada", "icon": "⬇️", "color": "#6366f1", "gravityMult": 1.55, "speedMult": 0.94, "counterplay": "Desvie por faixas em vez de depender de pulos longos", "desc": "Puxa o dino para baixo e encurta saltos." },
+    { "id": "silence_ability", "name": "Silêncio", "icon": "🔇", "color": "#64748b", "abilityLocked": true, "counterplay": "Confie em esquiva pura ou use Antídoto (E)", "desc": "Bloqueia ativação da habilidade especial." },
+    { "id": "stamina_drain", "name": "Dreno de Estamina", "icon": "🪫", "color": "#eab308", "staminaDrainPerSec": 14.0, "counterplay": "Colete Cristais ou Frutas para repor fôlego", "desc": "Suga estamina rapidamente, impedindo arrancadas." },
+    { "id": "brittle_armor", "name": "Armadura Frágil", "icon": "💔", "color": "#f43f5e", "damageTakenMult": 1.5, "counterplay": "Evite qualquer impacto até o efeito acabar", "desc": "Impactos causam dano ampliado e quebram proteção." },
+    { "id": "tunnel_vision", "name": "Visão em Túnel", "icon": "🎯", "color": "#475569", "visionMult": 0.55, "counterplay": "Mantenha-se na faixa central ou use Tocha", "desc": "Estreita o campo de visão periférico." },
+    { "id": "slippery_lanes", "name": "Faixas Escorregadias", "icon": "🧊", "color": "#67e8f9", "laneMult": 0.58, "counterplay": "Antecipe as trocas de faixa ou use Fogo", "desc": "Reduz drasticamente a resposta lateral." },
+    { "id": "cooldown_curse", "name": "Maldição de Recarga", "icon": "⏳", "color": "#a855f7", "cooldownMult": 1.65, "counterplay": "Colete Cristais ou cure com Antídoto (E)", "desc": "Retarda a recarga de habilidades e ataques." },
+    { "id": "magnet_repel", "name": "Repulsão Magnética", "icon": "🧲", "color": "#0284c7", "magnetRepel": true, "counterplay": "Passe diretamente sobre ovos e itens", "desc": "Anula ímãs e afasta coletáveis próximos." },
+    { "id": "camera_tilt", "name": "Vertigem", "icon": "🌀", "color": "#ec4899", "cameraTilt": 0.16, "laneMult": 0.88, "counterplay": "Foque nos marcadores das faixas até estabilizar", "desc": "Inclina a câmera e desorienta a leitura da pista." },
+    { "id": "shield_shatter", "name": "Quebra-Escudo", "icon": "🛡️", "color": "#ef4444", "stripShield": true, "damageTakenMult": 1.25, "counterplay": "Desvie do telegrafo; não confie no escudo", "desc": "Estilhaça 1 escudo ativo e impede bloqueio." },
+    { "id": "score_tax", "name": "Imposto Sombrio", "icon": "📉", "color": "#d97706", "scoreMult": 0.7, "counterplay": "Colete ovos dourados para compensar a taxa", "desc": "Reduz em 30% o ganho de pontuação." },
+    { "id": "slow_react", "name": "Reação Lenta", "icon": "🐢", "color": "#84cc16", "speedMult": 0.88, "laneMult": 0.75, "counterplay": "Ative Turbo ou cure com Antídoto (E)", "desc": "Desacelera corrida e resposta de movimento." },
+    { "id": "phantom_hazards", "name": "Miragens", "icon": "👻", "color": "#818cf8", "phantomHazards": true, "visionMult": 0.82, "counterplay": "Confie apenas nos alertas sólidos no chão", "desc": "Gera alertas falsos na pista para confundir." },
+    { "id": "quake_stagger", "name": "Abalo Sísmico", "icon": "🌋", "color": "#ea580c", "laneMult": 0.72, "periodicStaggerSec": 1.6, "counterplay": "Pule durante os tremores para evitar o tranco", "desc": "Tremores periódicos atrapalham a direção." },
+    { "id": "static_shock", "name": "Choque Estático", "icon": "⚡", "color": "#facc15", "speedMult": 0.9, "abilityLocked": true, "counterplay": "Evite água eletrificada e use Antídoto (E)", "desc": "Descargas bloqueiam habilidades e reduzem ritmo." },
+    { "id": "oxygen_leak", "name": "Vazamento de O2", "icon": "🫧", "color": "#06b6d4", "oxygenDrainPerSec": 12.0, "counterplay": "Pegue bolhas de ar ou suba à superfície", "desc": "Drena oxigênio rapidamente." },
+    { "id": "exhaustion", "name": "Exaustão", "icon": "😮‍💨", "color": "#78716c", "speedMult": 0.84, "laneMult": 0.84, "staminaDrainPerSec": 6.0, "counterplay": "Pegue Fruta ou passe por Oásis", "desc": "Cansaço severo reduz velocidade e fôlego." },
+    { "id": "hex_random", "name": "Feitiço Caótico", "icon": "🔮", "color": "#9333ea", "speedMult": 0.92, "laneMult": 0.85, "visionMult": 0.78, "counterplay": "Cure imediatamente com Antídoto (E) ou Fruta", "desc": "Alterna penalidades imprevisíveis durante a duração." },
+    { "id": "predator_scent", "name": "Cheiro de Presa", "icon": "🦖", "color": "#b91c1c", "predatorAggroBonus": 0.45, "counterplay": "Atravesse água ou fogueira para disfarçar o rastro", "desc": "Atrai predadores mais agressivos e rápidos." }
+  ],
+  "variants": [
+    { "id": "mild_hazard", "label": "Leve (Armadilha)", "durationMult": 0.85, "intensityMult": 0.9, "dangerTierMin": 1 },
+    { "id": "std_hazard", "label": "Padrão (Armadilha)", "durationMult": 1.0, "intensityMult": 1.0, "dangerTierMin": 1 },
+    { "id": "severe_hazard", "label": "Severo (Armadilha)", "durationMult": 1.25, "intensityMult": 1.15, "dangerTierMin": 2 },
+    { "id": "event_wave", "label": "de Evento", "durationMult": 1.15, "intensityMult": 1.1, "dangerTierMin": 2 },
+    { "id": "predator_infusion", "label": "de Predador", "durationMult": 1.35, "intensityMult": 1.25, "dangerTierMin": 3 },
+    { "id": "apex_curse", "label": "Maldição Ápice", "durationMult": 1.5, "intensityMult": 1.35, "dangerTierMin": 4 }
+  ]
+}

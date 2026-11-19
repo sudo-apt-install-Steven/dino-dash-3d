@@ -57,8 +57,9 @@ export class CoreEvents {
     this.beakMat = new THREE.MeshStandardMaterial({ color: '#ffd166', roughness: 0.4 });
   }
 
-  spawnMeteorWave(count = 5) {
-    for (let i = 0; i < count; i++) {
+  spawnMeteorWave(count = 5, dangerTier = 1) {
+    const total = Math.min(10, Math.max(3, Math.round(count + Math.max(0, dangerTier - 1) * 1)));
+    for (let i = 0; i < total; i++) {
       const lane = Math.floor(Math.random() * 3);
       const x = LANE_X[lane];
       const z = -12 - i * 9;

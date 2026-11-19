@@ -59,6 +59,36 @@ export class WorldEvents {
     this.crystalCubes = [];
     this.lunarTimer = 0;
     this.skySwarm = [];
+    this.electricStormTimer = 0;
+    this.electricStrikeCd = 0;
+    this.lightningStrikes = [];
+    this.lightningRods = [];
+    this.eggRushTimer = 0;
+    this.eggRushCd = 0;
+    this.activeExpandedEvent = null;
+  }
+
+  triggerExpandedEvent(evDef, dangerTier = 1, ctx = {}) {
+    if (!evDef) return;
+    const tier = Math.max(1, Math.floor(dangerTier));
+    const intensity = 1 + (tier - 1) * 0.18;
+    const duration = Math.max(5.5, (evDef.durationSec || 8.5) * (1 + (tier - 1) * 0.08));
+    this.activeExpandedEvent = {
+      id: evDef.id,
+      timer: duration,
+      duration,
+      pulseCd: 0.45,
+      pulseInterval: Math.max(0.75, 1.85 / intensity),
+      debuffId: evDef.debuffId || null,
+      dangerTier: tier,
+      debuffApplied: false
+    };
+    if (evDef.id === 'seismic_barrage' || evDef.id === 'sonic_tremor') {
+      ctx.cameraRig?.triggerShake?.(0.45 * Math.min(1.5, intensity), 0.35);
+    }
+    if (evDef.id === 'gale_crosswind' || evDef.id === 'blizzard_squall') {
+      ctx.weather?.setWeather?.('wind');
+    }
   }
 
   // 121. Estampida reversa: vêm por trás (+Z -> -Z)!
@@ -206,7 +236,7 @@ export class WorldEvents {
     this.npcDuel = { model, lane: 1, hp: 2, z: -52, switchTimer: 1.4 };
   }
 
-  // 131. Terremoto Avançado: Rachaduras no chão + Portal da Terra Oca
+  // 131. Terremoto Avançado: Rachaduras no chão (sem troca forçada de bioma)
   spawnEarthquakeEffects(world, ctx = {}) {
     world?.spawnEarthquakeCracks?.(7);
     const showRed = ctx?.difficulty?.showRedHazardSignage ?? true;
@@ -218,13 +248,25 @@ export class WorldEvents {
       this.scene.add(crack);
       this.crackHazards.push({ mesh: crack, lane: fLane, hit: false });
     }
-    if (!this.hollowPortal) {
+    if (ctx?.allowBiomePortal && !this.hollowPortal) {
       const portalLane = (lane + 2) % 3;
       const g = buildHollowEarthPortalGroup();
       g.position.set(LANE_X[portalLane], 0.1, -86);
       this.scene.add(g);
       this.hollowPortal = { group: g, lane: portalLane, entered: false };
     }
+  }
+
+  // 136. Tempestade Elétrica (raios telegrafados + para-raios bônus)
+  triggerElectricStorm(duration = 9) {
+    this.electricStormTimer = duration;
+    this.electricStrikeCd = 1.2;
+  }
+
+  // 137. Fuga de Ovos Raros (chuva intensa de ovos com risco/recompensa)
+  triggerEggRush(duration = 8) {
+    this.eggRushTimer = duration;
+    this.eggRushCd = 0.4;
   }
 
   // 132. Tempestade Magnética (atrai ovos e dá leve impulso magnético)
@@ -612,6 +654,124 @@ export class WorldEvents {
         this.skySwarm.splice(i, 1);
       }
     }
+
+    // 136. Tempestade Elétrica (raios telegrafados + para-raios bônus)
+    if (this.electricStormTimer > 0) {
+      this.electricStormTimer = Math.max(0, this.electricStormTimer - dt);
+      this.electricStrikeCd -= dt;
+      if (this.electricStrikeCd <= 0) {
+        this.electricStrikeCd = 1.65;
+        const strikeLane = Math.floor(Math.random() * 3);
+        const rodLane = (strikeLane + 1 + Math.floor(Math.random() * 2)) % 3;
+        const warnMat = new THREE.MeshBasicMaterial({ color: '#fde047', side: THREE.DoubleSide, transparent: true, opacity: 0.78 });
+        const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 1.05, 16), warnMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(LANE_X[strikeLane], 0.09, -32);
+        this.scene.add(ring);
+        this.lightningStrikes.push({ mesh: ring, lane: strikeLane, timer: 1.35, struck: false });
+
+        const rodMat = new THREE.MeshStandardMaterial({ color: '#38bdf8', emissive: '#0ea5e9', emissiveIntensity: 0.9 });
+        const rod = new THREE.Mesh(BOX, rodMat);
+        rod.scale.set(0.45, 1.5, 0.45);
+        rod.position.set(LANE_X[rodLane], 0.8, -42);
+        this.scene.add(rod);
+        this.lightningRods.push({ mesh: rod, collected: false });
+      }
+    }
+    for (let i = this.lightningStrikes.length - 1; i >= 0; i--) {
+      const ls = this.lightningStrikes[i];
+      ls.timer -= dt;
+      ls.mesh.position.z += speed * 0.55 * dt;
+      if (ls.timer <= 0 && !ls.struck) {
+        ls.struck = true;
+        ctx.sfx?.meteor?.();
+        ctx.particles?.emitExplosion?.(ls.mesh.position.x, 0.9, ls.mesh.position.z, '#fde047', 12, true);
+        for (const p of players) {
+          if (!p.dead && Math.abs(p.x - ls.mesh.position.x) < 1.1 && Math.abs(p.z - ls.mesh.position.z) < 1.5) {
+            ctx.damagePlayer?.(p, 'electric_storm');
+          }
+        }
+        this.scene.remove(ls.mesh);
+        this.lightningStrikes.splice(i, 1);
+      }
+    }
+    for (let i = this.lightningRods.length - 1; i >= 0; i--) {
+      const lr = this.lightningRods[i];
+      lr.mesh.position.z += speed * dt;
+      lr.mesh.rotation.y += dt * 3;
+      if (!lr.collected) {
+        for (const p of players) {
+          if (!p.dead && Math.abs(p.x - lr.mesh.position.x) < 1.15 && Math.abs(p.z - lr.mesh.position.z) < 1.35) {
+            lr.collected = true;
+            p.stamina = Math.min(100, (p.stamina || 0) + 18);
+            ctx.addScore?.(120, p);
+            ctx.sfx?.pickup?.();
+            ctx.showFloatText?.(p, '⚡ PARA-RAIOS! +120 & +ESTAMINA!', '#fde047');
+            this.scene.remove(lr.mesh);
+            this.lightningRods.splice(i, 1);
+            break;
+          }
+        }
+      }
+      if (lr && lr.mesh && lr.mesh.parent && lr.mesh.position.z > 16) {
+        this.scene.remove(lr.mesh);
+        this.lightningRods.splice(i, 1);
+      }
+    }
+
+    // 137. Fuga de Ovos Raros
+    if (this.eggRushTimer > 0) {
+      this.eggRushTimer = Math.max(0, this.eggRushTimer - dt);
+      this.eggRushCd -= dt;
+      if (this.eggRushCd <= 0) {
+        this.eggRushCd = 0.9;
+        ctx.spawner?.spawnEggArc?.(Math.floor(Math.random() * 3), 3, true, -55);
+      }
+    }
+
+    // 138-161. Eventos Expandidos (24 novos arquétipos escalados por Danger Tier, sem troca de bioma)
+    if (this.activeExpandedEvent) {
+      const ev = this.activeExpandedEvent;
+      ev.timer -= dt;
+      ev.pulseCd -= dt;
+
+      if (!ev.debuffApplied && ev.debuffId) {
+        ev.debuffApplied = true;
+        for (let i = 0; i < players.length; i++) {
+          const p = players[i];
+          if (!p || p.dead) continue;
+          ctx.applyStatus?.(p, ev.debuffId, Math.min(6.5, 3.2 + ev.dangerTier * 0.45));
+        }
+      }
+
+      if (ev.pulseCd <= 0) {
+        ev.pulseCd = ev.pulseInterval;
+        ctx.spawner?.spawnFromCatalog?.(null, {
+          dangerTier: ev.dangerTier,
+          biomeId: ctx.currentBiome?.id
+        });
+        if (ev.id === 'seismic_barrage' || ev.id === 'sonic_tremor' || ev.id === 'cataclysm_gauntlet') {
+          ctx.cameraRig?.triggerShake?.(0.26, 0.16);
+        }
+        if (ev.id === 'ash_fallout' || ev.id === 'venom_mist' || ev.id === 'void_eclipse') {
+          if (ctx.scene?.fog) ctx.scene.fog.density = 0.028;
+        }
+      }
+
+      if (ev.id === 'gale_crosswind') {
+        const push = Math.sin(ev.timer * 2.4) * 1.15 * dt;
+        for (let i = 0; i < players.length; i++) {
+          const p = players[i];
+          if (p && !p.dead && typeof p.x === 'number') {
+            p.x = Math.max(LANE_X[0], Math.min(LANE_X[2], p.x + push));
+          }
+        }
+      }
+
+      if (ev.timer <= 0) {
+        this.activeExpandedEvent = null;
+      }
+    }
   }
 
   clear() {
@@ -628,6 +788,8 @@ export class WorldEvents {
     for (const ch of this.crackHazards) this.scene.remove(ch.mesh);
     for (const cc of this.crystalCubes) this.scene.remove(cc.mesh);
     for (const sk of this.skySwarm) this.scene.remove(sk.mesh);
+    for (const ls of this.lightningStrikes) this.scene.remove(ls.mesh);
+    for (const lr of this.lightningRods) this.scene.remove(lr.mesh);
     this.reverseHerd = [];
     this.tsunami = null;
     this.comet = null;
@@ -646,5 +808,12 @@ export class WorldEvents {
     this.crystalCubes = [];
     this.lunarTimer = 0;
     this.skySwarm = [];
+    this.electricStormTimer = 0;
+    this.electricStrikeCd = 0;
+    this.lightningStrikes = [];
+    this.lightningRods = [];
+    this.eggRushTimer = 0;
+    this.eggRushCd = 0;
+    this.activeExpandedEvent = null;
   }
 }

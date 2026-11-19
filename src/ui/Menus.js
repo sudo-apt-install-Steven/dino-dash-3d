@@ -7,10 +7,102 @@ import { EVENT_CATALOG } from '../events/EventManager.js';
 import { DINO_CATALOG } from '../dinos/DinoCatalog.js';
 import { BOSS_DEFS } from '../events/BossManager.js';
 import { PREDATOR_CATALOG } from '../events/PredatorModels.js';
+import { STATUS_DEFS } from '../systems/StatusSystem.js';
 import { ACHIEVEMENTS_CATALOG, ProgressionManager } from '../systems/Progression.js';
 import { Save } from '../systems/Save.js';
 import { isMobileDevice } from '../systems/DeviceDetector.js';
+import { normalizeLocale } from '../i18n/translations.js';
 import { escapeHtml } from '../security/Sanitize.js';
+
+const OPTIONAL_CONTENT_GLOB = typeof import.meta.glob === 'function'
+  ? import.meta.glob('../content/{catalog_expanded,threat_variants}.js')
+  : {};
+
+let _bestiaryExtraCache = null;
+async function loadOptionalBestiaryCatalogs() {
+  if (_bestiaryExtraCache) return _bestiaryExtraCache;
+  const out = { debuffVariants: [], eventVariants: [], hazardVariants: [], predatorVariants: [], bossAffixes: [] };
+  for (const [p, loader] of Object.entries(OPTIONAL_CONTENT_GLOB)) {
+    try {
+      const mod = await loader();
+      if (p.includes('catalog_expanded')) {
+        out.debuffVariants = Array.isArray(mod.DEBUFF_VARIANTS) ? mod.DEBUFF_VARIANTS : [];
+        out.eventVariants = Array.isArray(mod.EVENT_VARIANTS) ? mod.EVENT_VARIANTS : [];
+        out.hazardVariants = Array.isArray(mod.HAZARD_VARIANTS) ? mod.HAZARD_VARIANTS : [];
+      } else if (p.includes('threat_variants')) {
+        out.predatorVariants = Array.isArray(mod.PREDATOR_ENCOUNTER_VARIANTS) ? mod.PREDATOR_ENCOUNTER_VARIANTS : [];
+        out.bossAffixes = Array.isArray(mod.BOSS_AFFIX_VARIANTS) ? mod.BOSS_AFFIX_VARIANTS : [];
+      }
+    } catch { /* fallback silencioso se módulo opcional não existir */ }
+  }
+  _bestiaryExtraCache = out;
+  return out;
+}
+
+const MODE_CATEGORY_META = [
+  { id: 'all', icon: '🎮', label: { 'pt-BR': 'Todos', en: 'All', es: 'Todos' } },
+  { id: 'classic', icon: '🦖', label: { 'pt-BR': 'Clássicos', en: 'Classic', es: 'Clásicos' } },
+  { id: 'competitive', icon: '⚔️', label: { 'pt-BR': 'Competitivos', en: 'Competitive', es: 'Competitivos' } },
+  { id: 'cooperative', icon: '🤝', label: { 'pt-BR': 'Cooperativos', en: 'Cooperative', es: 'Cooperativos' } },
+  { id: 'challenge', icon: '👑', label: { 'pt-BR': 'Desafios / Boss', en: 'Challenges / Boss', es: 'Desafíos / Jefe' } },
+  { id: 'free', icon: '🌿', label: { 'pt-BR': 'Livre', en: 'Free', es: 'Libre' } }
+];
+
+const MODE_DISPLAY_FALLBACKS = {
+  solo: { cat: 'classic', icon: '🦖', diff: 'Normal', tone: 'normal' },
+  story: { cat: 'classic', icon: '📖', diff: 'Normal', tone: 'normal' },
+  time_trial: { cat: 'classic', icon: '⏱️', diff: 'Médio', tone: 'medium' },
+  pvp: { cat: 'competitive', icon: '⚔️', diff: 'Competitivo', tone: 'hard' },
+  teams_2v2: { cat: 'competitive', icon: '🛡️', diff: 'Competitivo', tone: 'hard' },
+  tournament: { cat: 'competitive', icon: '🏆', diff: 'Torneio', tone: 'hard' },
+  sabotage: { cat: 'competitive', icon: '💣', diff: 'Difícil', tone: 'hard' },
+  capture_egg: { cat: 'competitive', icon: '🥚', diff: 'Médio', tone: 'medium' },
+  rival_ai: { cat: 'competitive', icon: '🤖', diff: 'Difícil', tone: 'hard' },
+  race: { cat: 'competitive', icon: '🏁', diff: 'Velocidade', tone: 'medium' },
+  competition: { cat: 'competitive', icon: '🥇', diff: 'Ranqueado', tone: 'hard' },
+  coop: { cat: 'cooperative', icon: '🤝', diff: 'Coop', tone: 'normal' },
+  shared_controls: { cat: 'cooperative', icon: '🎮', diff: 'Party', tone: 'medium' },
+  relay: { cat: 'cooperative', icon: '🏃', diff: 'Coop', tone: 'normal' },
+  raid: { cat: 'cooperative', icon: '🐉', diff: 'Extremo', tone: 'extreme' },
+  boss_fight: { cat: 'challenge', icon: '👑', diff: 'Boss Rush', tone: 'extreme' },
+  hardcore: { cat: 'challenge', icon: '💀', diff: 'Extremo', tone: 'extreme' },
+  chaos: { cat: 'challenge', icon: '🌀', diff: 'Caótico', tone: 'hard' },
+  wave_survival: { cat: 'challenge', icon: '🌊', diff: 'Difícil', tone: 'hard' },
+  daily_challenge: { cat: 'challenge', icon: '📅', diff: 'Desafio', tone: 'medium' },
+  zen: { cat: 'free', icon: '🧘', diff: 'Livre', tone: 'free' },
+  free_roam: { cat: 'free', icon: '🗺️', diff: 'Livre', tone: 'free' }
+};
+
+function classifyModeCategory(mode) {
+  const rawCat = String(mode?.category || '').toLowerCase();
+  if (['classic', 'competitive', 'cooperative', 'challenge', 'free'].includes(rawCat)) return rawCat;
+  if (rawCat.includes('coop')) return 'cooperative';
+  if (rawCat.includes('boss') || rawCat.includes('chal') || rawCat.includes('desaf')) return 'challenge';
+  if (rawCat.includes('comp') || rawCat.includes('pvp') || rawCat.includes('race')) return 'competitive';
+  if (rawCat.includes('free') || rawCat.includes('livre') || rawCat.includes('zen')) return 'free';
+  const fb = MODE_DISPLAY_FALLBACKS[mode?.id];
+  if (fb) return fb.cat;
+  if (mode?.tier === 'bonus') return 'challenge';
+  if (mode?.tier === 'advanced') return 'competitive';
+  return 'classic';
+}
+
+function getModeDisplayMeta(mode) {
+  const fb = MODE_DISPLAY_FALLBACKS[mode?.id] || { cat: 'classic', icon: '🎮', diff: 'Normal', tone: 'normal' };
+  const diffLabel = mode?.difficulty || fb.diff;
+  const dl = String(diffLabel).toLowerCase();
+  const tone = fb.tone || (dl.includes('extr') || dl.includes('boss') ? 'extreme' : (dl.includes('dif') || dl.includes('hard') ? 'hard' : (dl.includes('liv') || dl.includes('free') ? 'free' : 'normal')));
+  const players = mode?.maxPlayers && mode.maxPlayers > 1
+    ? `${mode.players || 1}–${mode.maxPlayers}P`
+    : (mode?.players > 1 ? `${mode.players}P` : '1P');
+  return {
+    category: classifyModeCategory(mode),
+    icon: mode?.icon || fb.icon,
+    difficulty: diffLabel,
+    tone,
+    players
+  };
+}
 
 export function attachModalHelp(container, helpText) {
   const header = container.querySelector('.modal-header');
@@ -39,6 +131,168 @@ export function attachModalHelp(container, helpText) {
     e.stopPropagation();
     pop.classList.toggle('hidden');
   });
+}
+
+export function renderHelpBadge(tipText) {
+  if (!tipText) return '';
+  const safe = escapeHtml(tipText);
+  return `<button type="button" class="opt-help-btn" data-opt-tip="${safe}" aria-label="Explicação da opção" title="${safe}">?</button>`;
+}
+
+export function renderGameSwitch(id, label, checked, tip = '', extraAttrs = '') {
+  return `
+    <div class="field-row game-field-row" ${tip ? `data-opt-tip-host="${escapeHtml(tip)}"` : ''}>
+      <span class="game-field-label">${label} ${renderHelpBadge(tip)}</span>
+      <label class="game-switch" for="${id}">
+        <input type="checkbox" class="game-switch-input" id="${id}" ${checked ? 'checked' : ''} ${extraAttrs} />
+        <span class="game-switch-track" aria-hidden="true"><span class="game-switch-thumb"></span></span>
+      </label>
+    </div>
+  `;
+}
+
+export function renderGameStepper(id, options, selectedValue, { disabled = false, tip = '' } = {}) {
+  const optsHtml = options.map((opt) => {
+    const val = String(opt.value);
+    const sel = String(selectedValue) === val ? 'selected' : '';
+    return `<option value="${escapeHtml(val)}" ${sel}>${escapeHtml(opt.label)}</option>`;
+  }).join('');
+  const current = options.find((o) => String(o.value) === String(selectedValue)) || options[0] || { label: '—' };
+  return `
+    <div class="game-stepper ${disabled ? 'is-disabled' : ''}" data-stepper-for="${id}" ${tip ? `data-opt-tip-host="${escapeHtml(tip)}"` : ''}>
+      <button type="button" class="game-stepper-btn" data-step="-1" aria-label="Anterior" ${disabled ? 'disabled' : ''}>◀</button>
+      <span class="game-stepper-val" data-stepper-label>${escapeHtml(current.label)}</span>
+      <button type="button" class="game-stepper-btn" data-step="1" aria-label="Próximo" ${disabled ? 'disabled' : ''}>▶</button>
+      <select class="game-stepper-native" id="${id}" ${disabled ? 'disabled' : ''}>${optsHtml}</select>
+    </div>
+  `;
+}
+
+function playUiClickSound() {
+  try { window.__DINO_DASH_GAME__?.sfx?.click?.(); } catch {}
+}
+
+export function enhanceGameControls(container, { onEscape = null } = {}) {
+  if (!container) return;
+
+  // Tooltip flutuante unificado para hover, toque longo (mobile) e botão '?'
+  let tipEl = container.querySelector('#game-opt-tooltip');
+  if (!tipEl) {
+    tipEl = document.createElement('div');
+    tipEl.id = 'game-opt-tooltip';
+    tipEl.className = 'game-opt-tooltip hidden';
+    container.appendChild(tipEl);
+  }
+
+  let hideTid = null;
+  const showTip = (anchorEl, text) => {
+    if (!text || !anchorEl) return;
+    clearTimeout(hideTid);
+    tipEl.textContent = text;
+    tipEl.classList.remove('hidden');
+    const r = anchorEl.getBoundingClientRect();
+    const maxLeft = Math.max(12, window.innerWidth - 290);
+    const left = Math.max(12, Math.min(maxLeft, r.left));
+    const top = r.top > 110 ? Math.max(10, r.top - 56) : Math.min(window.innerHeight - 72, r.bottom + 8);
+    tipEl.style.left = `${left}px`;
+    tipEl.style.top = `${top}px`;
+  };
+  const hideTip = () => {
+    clearTimeout(hideTid);
+    tipEl.classList.add('hidden');
+  };
+
+  container.querySelectorAll('[data-opt-tip]').forEach((btn) => {
+    const tip = btn.getAttribute('data-opt-tip');
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      playUiClickSound();
+      if (!tipEl.classList.contains('hidden') && tipEl.textContent === tip) {
+        hideTip();
+      } else {
+        showTip(btn, tip);
+        hideTid = setTimeout(hideTip, 3800);
+      }
+    });
+  });
+
+  container.querySelectorAll('[data-opt-tip-host]').forEach((host) => {
+    const tip = host.getAttribute('data-opt-tip-host');
+    let longPressTid = null;
+    host.addEventListener('pointerenter', (e) => {
+      if (e.pointerType === 'mouse') showTip(host, tip);
+    });
+    host.addEventListener('pointerleave', () => hideTip());
+    host.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      clearTimeout(longPressTid);
+      longPressTid = setTimeout(() => {
+        showTip(host, tip);
+        hideTid = setTimeout(hideTip, 3400);
+      }, 450);
+    });
+    const cancelLp = () => clearTimeout(longPressTid);
+    host.addEventListener('pointerup', cancelLp);
+    host.addEventListener('pointercancel', cancelLp);
+    host.addEventListener('pointermove', cancelLp);
+  });
+
+  // Wire game-stepper ◀ ▶ controls to underlying <select>
+  container.querySelectorAll('.game-stepper').forEach((stepper) => {
+    const sel = stepper.querySelector('.game-stepper-native');
+    const lbl = stepper.querySelector('[data-stepper-label]');
+    if (!sel || !lbl) return;
+    const syncLabel = () => {
+      const opt = sel.options[sel.selectedIndex];
+      lbl.textContent = opt ? opt.textContent : '—';
+    };
+    syncLabel();
+    sel.addEventListener('change', syncLabel);
+    stepper.querySelectorAll('[data-step]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (sel.disabled || sel.options.length === 0) return;
+        const delta = Number(btn.getAttribute('data-step') || 1);
+        const len = sel.options.length;
+        sel.selectedIndex = (sel.selectedIndex + delta + len) % len;
+        syncLabel();
+        playUiClickSound();
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    });
+  });
+
+  // Sons táteis nos switches
+  container.querySelectorAll('.game-switch-input').forEach((cb) => {
+    cb.addEventListener('change', () => playUiClickSound());
+  });
+
+  // Navegação por teclado (setas cima/baixo entre controles focáveis + Esc)
+  const panel = container.querySelector('.main-menu-panel, .modal-card');
+  if (panel && !panel.dataset.kbNavWired) {
+    panel.dataset.kbNavWired = '1';
+    panel.addEventListener('keydown', (e) => {
+      const tag = document.activeElement?.tagName;
+      if (e.key === 'Escape' && onEscape) {
+        e.preventDefault();
+        onEscape();
+        return;
+      }
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      if (tag === 'SELECT' || tag === 'TEXTAREA') return;
+      const focusables = Array.from(
+        panel.querySelectorAll('button:not(:disabled), input:not(:disabled):not(.hidden), select:not(:disabled), [tabindex="0"]')
+      ).filter((el) => el.offsetParent !== null);
+      if (focusables.length === 0) return;
+      const idx = focusables.indexOf(document.activeElement);
+      const nextIdx = e.key === 'ArrowDown'
+        ? (idx + 1) % focusables.length
+        : (idx - 1 + focusables.length) % focusables.length;
+      e.preventDefault();
+      focusables[nextIdx]?.focus();
+    });
+  }
 }
 
 export class Menus {
@@ -109,7 +363,14 @@ export class Menus {
             </button>
           </div>
 
+          <div class="menu-account-row" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;">
+            <button class="chunky-btn secondary menu-mini-btn" data-nav="profile" style="padding:8px 6px; font-size:0.78rem;" title="Perfil do Jogador, Dino 3D e Estatísticas">👤 Perfil</button>
+            <button class="chunky-btn secondary menu-mini-btn" data-nav="achievements" style="padding:8px 6px; font-size:0.78rem;" title="Galeria de Conquistas e Troféus">🏆 Conquistas</button>
+            <button class="chunky-btn secondary menu-mini-btn" data-nav="save_data" style="padding:8px 6px; font-size:0.78rem;" title="Exportar, Importar e Backup do Save">💾 Save</button>
+          </div>
+
           <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; font-size:0.74rem; color:#d6d3d1;">
+            <button type="button" class="inline-change-btn" data-nav="bestiary" title="Bestiário de Predadores, Chefes, Debuffs e Eventos">📚 Bestiário</button>
             <button type="button" class="inline-change-btn" data-nav="custom" title="Desbloqueie e equipe cápsulas de DNA em Personalização">🧬 Mutações DNA</button>
             <button type="button" class="inline-change-btn" data-nav="gacha" title="Desbloqueie Variantes Mecânicas, Shiny e Secretas">🤖 Mecânico &amp; Shiny</button>
             <button type="button" class="inline-change-btn" data-nav="guide" title="Lojinha especial na 4ª Pista a cada 30.000 pts">🛍️ Lojinha 30k</button>
@@ -148,6 +409,7 @@ export class Menus {
     container.querySelectorAll('[data-nav]').forEach((btn) => {
       btn.addEventListener('click', () => actions.onNavigate(btn.getAttribute('data-nav')));
     });
+    enhanceGameControls(container);
   }
 
   static renderExtrasModal(container, state, actions) {
@@ -171,6 +433,11 @@ export class Menus {
             <button class="item-card" data-ex-nav="guide" style="text-align:left; cursor:pointer;">
               <strong style="color:#ffd447;">📖 Guia, Obstáculos & Status</strong>
               <small style="color:#d8c2a6;">Enciclopédia completa de perigos, combos e fraquezas.</small>
+            </button>
+
+            <button class="item-card" data-ex-nav="bestiary" data-nav="bestiary" style="text-align:left; cursor:pointer; border-color:#f97316;">
+              <strong style="color:#fb923c;">📚 Bestiário & Catálogo</strong>
+              <small style="color:#d8c2a6;">Predadores, chefes, debuffs e eventos com dicas de contra-jogada.</small>
             </button>
 
             <button class="item-card" data-ex-nav="missions" style="text-align:left; cursor:pointer;">
@@ -322,64 +589,308 @@ export class Menus {
   }
 
   static renderModesModal(container, currentModeId, currentSeed, onSelectMode, onClose) {
-    let tab = 'essential';
+    const loc = normalizeLocale(Save.data.settings?.lang);
+    const L = {
+      title: loc === 'en' ? 'Game Modes' : (loc === 'es' ? 'Modos de Juego' : 'Modos de Jogo'),
+      back: loc === 'en' ? 'Back' : (loc === 'es' ? 'Volver' : 'Voltar'),
+      seedLbl: loc === 'en' ? 'Shareable Seed (optional, e.g. JURASSIC99)' : (loc === 'es' ? 'Semilla compartible (opcional)' : 'Seed Compartilhável (opcional, ex.: JURASSIC99)'),
+      seedPh: loc === 'en' ? 'Random' : (loc === 'es' ? 'Aleatoria' : 'Aleatória'),
+      selected: loc === 'en' ? 'Selected' : (loc === 'es' ? 'Seleccionado' : 'Selecionado'),
+      pick: loc === 'en' ? 'Select' : (loc === 'es' ? 'Elegir' : 'Escolher')
+    };
+
+    const currentModeObj = GAME_MODES.find((m) => m.id === currentModeId);
+    let tab = currentModeObj ? classifyModeCategory(currentModeObj) : 'all';
+    let seedDraft = currentSeed || '';
+
+    const countByCat = (catId) => (catId === 'all'
+      ? GAME_MODES.length
+      : GAME_MODES.filter((m) => classifyModeCategory(m) === catId).length);
+
     const render = () => {
-      const list = GAME_MODES.filter((m) => m.tier === tab);
+      const list = tab === 'all'
+        ? GAME_MODES
+        : GAME_MODES.filter((m) => classifyModeCategory(m) === tab);
+
       container.innerHTML = `
         <div class="overlay-center">
           <div class="chunky-panel modal-card">
             <div class="modal-header">
-              <h2>🎮 Modos de Jogo</h2>
-              <button class="chunky-btn secondary" id="modes-close">Voltar</button>
+              <h2>🎮 ${L.title} (${GAME_MODES.length})</h2>
+              <button class="chunky-btn secondary" id="modes-close">${L.back}</button>
             </div>
-            <div class="tabs-row">
-              <button class="tab-btn ${tab === 'essential' ? 'active' : ''}" data-mtab="essential">Essencial (4)</button>
-              <button class="tab-btn ${tab === 'advanced' ? 'active' : ''}" data-mtab="advanced">Avançado (7)</button>
-              <button class="tab-btn ${tab === 'bonus' ? 'active' : ''}" data-mtab="bonus">Bônus (6)</button>
+            <div class="tabs-row" role="tablist" aria-label="${L.title}">
+              ${MODE_CATEGORY_META.map((cat) => {
+                const cnt = countByCat(cat.id);
+                return `
+                  <button class="tab-btn ${tab === cat.id ? 'active' : ''}" role="tab" aria-selected="${tab === cat.id}" data-mtab="${cat.id}">
+                    ${cat.icon} ${cat.label[loc] || cat.label['pt-BR']} (${cnt})
+                  </button>
+                `;
+              }).join('')}
             </div>
             <div class="field-row">
-              <span>Seed Compartilhável (opcional, ex.: JURASSIC99)</span>
-              <input class="text-input" id="mode-seed" value="${escapeHtml(currentSeed || '')}" placeholder="Aleatória" />
+              <span>${L.seedLbl}</span>
+              <input class="text-input" id="mode-seed" value="${escapeHtml(seedDraft)}" placeholder="${L.seedPh}" />
             </div>
-            <div class="cards-grid">
-              ${list.map((m) => `
-                <div class="item-card ${m.id === currentModeId ? 'selected' : ''}">
-                  <strong style="color:#ffd447;">${m.name}</strong>
-                  <p style="font-size:0.82rem; color:#d8c2a6; flex:1;">${m.desc}</p>
-                  <button class="chunky-btn ${m.id === currentModeId ? '' : 'secondary'}" data-pick-mode="${m.id}">
-                    ${m.id === currentModeId ? 'Selecionado' : 'Escolher'}
-                  </button>
-                </div>
-              `).join('')}
+            <div class="cards-grid modes-cards-grid">
+              ${list.map((m) => {
+                const meta = getModeDisplayMeta(m);
+                const isSel = m.id === currentModeId;
+                return `
+                  <div class="item-card mode-card ${isSel ? 'selected' : ''}">
+                    <div class="mode-card-head">
+                      <span class="mode-icon" aria-hidden="true">${escapeHtml(meta.icon)}</span>
+                      <strong class="mode-card-title">${escapeHtml(m.name)}</strong>
+                    </div>
+                    <div class="mode-card-badges">
+                      <span class="mode-diff-badge tone-${meta.tone}">${escapeHtml(meta.difficulty)}</span>
+                      <span class="mode-players-badge">👥 ${escapeHtml(meta.players)}</span>
+                    </div>
+                    <p class="mode-card-desc">${escapeHtml(m.desc || '')}</p>
+                    <button class="chunky-btn ${isSel ? '' : 'secondary'}" data-pick-mode="${escapeHtml(m.id)}">
+                      ${isSel ? `✔ ${L.selected}` : L.pick}
+                    </button>
+                  </div>
+                `;
+              }).join('')}
             </div>
             ${currentModeId === 'story' ? `
               <div class="item-card">
                 <strong>📖 Capítulos da História:</strong>
-                ${STORY_CHAPTERS.map((ch) => `<div style="font-size:0.82rem; color:#ffe8b5;">• ${ch.title} — ${ch.dialogue}</div>`).join('')}
+                ${STORY_CHAPTERS.map((ch) => `<div style="font-size:0.82rem; color:#ffe8b5;">• ${escapeHtml(ch.title)} — ${escapeHtml(ch.dialogue)}</div>`).join('')}
               </div>
             ` : ''}
           </div>
         </div>
       `;
 
+      const seedInput = container.querySelector('#mode-seed');
+      seedInput?.addEventListener('input', () => { seedDraft = seedInput.value; });
+
       container.querySelectorAll('[data-mtab]').forEach((b) => {
-        b.addEventListener('click', () => { tab = b.getAttribute('data-mtab'); render(); });
+        b.addEventListener('click', () => {
+          tab = b.getAttribute('data-mtab');
+          render();
+        });
       });
       container.querySelectorAll('[data-pick-mode]').forEach((b) => {
         b.addEventListener('click', () => {
-          const seedVal = container.querySelector('#mode-seed').value.trim();
+          const seedVal = (container.querySelector('#mode-seed')?.value || '').trim();
           onSelectMode(b.getAttribute('data-pick-mode'), seedVal);
           onClose();
         });
       });
       container.querySelector('#modes-close').addEventListener('click', () => {
-        const seedVal = container.querySelector('#mode-seed').value.trim();
+        const seedVal = (container.querySelector('#mode-seed')?.value || '').trim();
         onSelectMode(currentModeId, seedVal);
         onClose();
       });
-      attachModalHelp(container, 'Escolha como correr: Solo Clássico, Cooperação local, Duelo PvP, História, Horda ou Corrida Caótica. Opcionalmente informe uma Seed para repetir a mesma pista.');
+      attachModalHelp(container, 'Explore os modos por categoria (Clássicos, Competitivos, Cooperativos, Desafios/Boss e Livre). Opcionalmente informe uma Seed para repetir a mesma pista.');
     };
     render();
+  }
+
+  static renderBestiaryModal(container, onClose) {
+    const loc = normalizeLocale(Save.data.settings?.lang);
+    const L = {
+      title: loc === 'en' ? 'Bestiary & Catalog' : (loc === 'es' ? 'Bestiario y Catálogo' : 'Bestiário & Catálogo'),
+      back: loc === 'en' ? 'Back' : (loc === 'es' ? 'Volver' : 'Voltar'),
+      searchPh: loc === 'en' ? 'Search by name, biome or counter...' : (loc === 'es' ? 'Buscar por nombre, bioma o contra...' : 'Buscar por nome, bioma ou contra-jogada...'),
+      counterLbl: loc === 'en' ? 'How to counter' : (loc === 'es' ? 'Cómo enfrentar' : 'Como enfrentar'),
+      more: loc === 'en' ? 'Load more' : (loc === 'es' ? 'Mostrar más' : 'Mostrar mais'),
+      empty: loc === 'en' ? 'No entries match your search.' : (loc === 'es' ? 'Ningún resultado encontrado.' : 'Nenhum registro encontrado para essa busca.')
+    };
+
+    let tab = 'predators';
+    let query = '';
+    let limit = 48;
+    let extra = _bestiaryExtraCache || { debuffVariants: [], eventVariants: [], hazardVariants: [], predatorVariants: [], bossAffixes: [] };
+    let destroyed = false;
+
+    const buildEntries = () => {
+      if (tab === 'predators') {
+        const base = (PREDATOR_CATALOG || []).map((p) => ({
+          icon: p.habitat === 'aquatic' ? '🦈' : (p.habitat === 'flying' ? '🦅' : '🦖'),
+          name: p.name,
+          subtitle: `${p.title || p.archetype || 'Predador'} • ${p.biome || 'global'}`,
+          desc: p.lore || 'Predador alfa de perseguição ativa na pista.',
+          counter: p.counterTip || 'Observe o telégrafo na faixa, troque de pista a tempo e use [Q] ou Habilidade [Espaço].',
+          accent: p.accent || '#fb923c'
+        }));
+        const vars = (extra.predatorVariants || []).map((v) => ({
+          icon: v.icon || '🐾',
+          name: v.name || v.id,
+          subtitle: `${v.category || 'Encontro'} • Variante`,
+          desc: v.desc || v.description || 'Encontro avançado de predador.',
+          counter: v.counterTip || v.counter || 'Desvie da faixa sinalizada pelo telégrafo e contra-ataque após a investida.',
+          accent: '#f97316'
+        }));
+        return [...base, ...vars];
+      }
+
+      if (tab === 'bosses') {
+        const base = (BOSS_DEFS || []).map((b) => ({
+          icon: '👑',
+          name: b.name,
+          subtitle: `${b.title || 'Chefe'} • Bioma: ${b.biomeId || 'geral'} • HP ${b.hp || 5}`,
+          desc: b.attackProfile?.length ? `Ataques: ${b.attackProfile.join(', ')}. Fases: ${(b.phases || []).length || 3}.` : 'Chefe de arena com múltiplas fases.',
+          counter: b.counterTip || 'Desvie dos projéteis sinalizados e pressione [Q] ou use fraquezas elementais quando a guarda abrir.',
+          accent: b.color || '#ef4444'
+        }));
+        const affixes = (extra.bossAffixes || []).map((a) => ({
+          icon: a.icon || '💀',
+          name: a.name || a.id,
+          subtitle: `Afixo de Chefe • ${a.category || 'Elite'}`,
+          desc: a.desc || a.description || 'Modificador tático aplicado a chefes em níveis altos.',
+          counter: a.counterTip || a.counter || 'Guarde Estamina/Escudo para o pico de fase e priorize a fraqueza elemental.',
+          accent: '#ec4899'
+        }));
+        return [...base, ...affixes];
+      }
+
+      if (tab === 'debuffs') {
+        const base = Object.values(STATUS_DEFS || {}).map((s) => ({
+          icon: s.icon || '⚠️',
+          name: s.name || s.id,
+          subtitle: s.isDebuff ? 'Debuff de Perigo' : 'Status / Elemento',
+          desc: s.desc || 'Altera atributos ou controle do dinossauro temporariamente.',
+          counter: s.counterTip || s.desc || 'Use Antídoto [E], reações elementais ou limpe com Habilidade/Fúria.',
+          accent: s.color || '#facc15'
+        }));
+        const vars = (extra.debuffVariants || []).map((d) => ({
+          icon: d.icon || '☠️',
+          name: d.name || d.id,
+          subtitle: `Debuff • ${d.category || 'Ameaça'}`,
+          desc: d.desc || d.description || 'Efeito negativo aplicado por perigos ou predadores.',
+          counter: d.counterTip || d.counter || 'Troque de faixa antes da aplicação ou limpe com item/habilidade.',
+          accent: d.color || '#f97316'
+        }));
+        return [...base, ...vars];
+      }
+
+      // events + hazards
+      const baseEvents = (EVENT_CATALOG || []).map((e) => ({
+        icon: e.icon || '☄️',
+        name: e.name || e.id,
+        subtitle: `Evento • ${e.category || 'Mundo'}`,
+        desc: e.desc || e.description || 'Evento dinâmico que altera a pista temporariamente.',
+        counter: e.counterTip || e.tip || 'Leia o banner de alerta, mantenha a faixa central livre e use [Shift] se precisar de precisão.',
+        accent: e.color || '#38bdf8'
+      }));
+      const extraEv = (extra.eventVariants || []).map((e) => ({
+        icon: e.icon || '🌪️',
+        name: e.name || e.id,
+        subtitle: `Evento Avançado • ${e.category || 'Clima'}`,
+        desc: e.desc || e.description || 'Variação de evento de alta intensidade.',
+        counter: e.counterTip || e.counter || 'Antecipe o padrão do evento e evite gastar toda a estamina de uma vez.',
+        accent: '#38bdf8'
+      }));
+      const extraHaz = (extra.hazardVariants || []).map((h) => ({
+        icon: h.icon || '🚧',
+        name: h.name || h.id,
+        subtitle: `Perigo • ${h.category || 'Obstáculo'}`,
+        desc: h.desc || h.description || 'Obstáculo especializado de pista.',
+        counter: h.counterTip || h.counter || 'Pule [W], abaixe [S], corte com [Q] ou mude de faixa [A/D].',
+        accent: '#fb923c'
+      }));
+      return [...baseEvents, ...extraEv, ...extraHaz];
+    };
+
+    const render = () => {
+      if (destroyed) return;
+      const modalCard = container.querySelector('#bestiary-modal-card');
+      const savedScroll = modalCard ? modalCard.scrollTop : 0;
+      const all = buildEntries();
+      const q = query.trim().toLowerCase();
+      const filtered = q
+        ? all.filter((it) => `${it.name} ${it.subtitle} ${it.desc} ${it.counter}`.toLowerCase().includes(q))
+        : all;
+      const shown = filtered.slice(0, limit);
+
+      container.innerHTML = `
+        <div class="overlay-center">
+          <div class="chunky-panel modal-card" id="bestiary-modal-card">
+            <div class="modal-header">
+              <h2>📚 ${L.title}</h2>
+              <button class="chunky-btn secondary" id="bestiary-close">${L.back}</button>
+            </div>
+            <div class="tabs-row" role="tablist" aria-label="${L.title}">
+              <button class="tab-btn ${tab === 'predators' ? 'active' : ''}" data-btab="predators">🦖 Predadores</button>
+              <button class="tab-btn ${tab === 'bosses' ? 'active' : ''}" data-btab="bosses">👑 Chefes</button>
+              <button class="tab-btn ${tab === 'debuffs' ? 'active' : ''}" data-btab="debuffs">☠️ Debuffs</button>
+              <button class="tab-btn ${tab === 'events' ? 'active' : ''}" data-btab="events">☄️ Eventos</button>
+            </div>
+            <div class="catalog-toolbar">
+              <input type="search" class="text-input catalog-search" id="bestiary-search" value="${escapeHtml(query)}" placeholder="${escapeHtml(L.searchPh)}" aria-label="${escapeHtml(L.searchPh)}" />
+              <span class="hud-pill" style="font-size:0.78rem;">${filtered.length} itens</span>
+            </div>
+            <div class="cards-grid bestiary-grid">
+              ${shown.length ? shown.map((it) => `
+                <article class="item-card bestiary-card" style="border-color:${escapeHtml(it.accent)};">
+                  <div class="bestiary-card-head">
+                    <span class="bestiary-ico" aria-hidden="true">${escapeHtml(it.icon)}</span>
+                    <div>
+                      <strong style="color:#ffd447;">${escapeHtml(it.name)}</strong>
+                      <div class="bestiary-sub">${escapeHtml(it.subtitle)}</div>
+                    </div>
+                  </div>
+                  <p class="bestiary-desc">${escapeHtml(it.desc)}</p>
+                  <div class="bestiary-counter-box">
+                    <strong>🛡️ ${L.counterLbl}:</strong> ${escapeHtml(it.counter)}
+                  </div>
+                </article>
+              `).join('') : `<div class="item-card" style="grid-column:1/-1; text-align:center; color:#d8c2a6;">${L.empty}</div>`}
+            </div>
+            ${filtered.length > shown.length ? `
+              <div style="text-align:center; margin-top:6px;">
+                <button class="chunky-btn secondary" id="bestiary-more">${L.more} (${shown.length}/${filtered.length})</button>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+
+      const searchEl = container.querySelector('#bestiary-search');
+      if (searchEl) {
+        searchEl.addEventListener('input', () => {
+          query = searchEl.value;
+          limit = 48;
+          render();
+          const nextSearch = container.querySelector('#bestiary-search');
+          if (nextSearch) {
+            nextSearch.focus();
+            nextSearch.setSelectionRange(query.length, query.length);
+          }
+        });
+      }
+      container.querySelectorAll('[data-btab]').forEach((b) => {
+        b.addEventListener('click', () => {
+          tab = b.getAttribute('data-btab');
+          limit = 48;
+          render();
+        });
+      });
+      container.querySelector('#bestiary-more')?.addEventListener('click', () => {
+        limit += 48;
+        render();
+      });
+      container.querySelector('#bestiary-close')?.addEventListener('click', () => {
+        destroyed = true;
+        onClose();
+      });
+      attachModalHelp(container, 'Consulte predadores, chefes, debuffs e eventos com estratégias de contra-jogada.');
+      const nextCard = container.querySelector('#bestiary-modal-card');
+      if (nextCard) nextCard.scrollTop = savedScroll;
+    };
+
+    render();
+    if (!_bestiaryExtraCache) {
+      loadOptionalBestiaryCatalogs().then((loaded) => {
+        extra = loaded;
+        if (!destroyed) render();
+      });
+    }
   }
 
   static renderMapsModal(container, selectedBiome, sequenceMode, onSelect, onClose) {

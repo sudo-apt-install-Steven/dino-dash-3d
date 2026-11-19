@@ -1,13 +1,35 @@
 {
+  "id": "/",
   "name": "DINO DASH 3D",
   "short_name": "DinoDash3D",
   "description": "Corrida jurássica 3D em grupo estilo Jackbox: PC como telão, celular como controle ou jogador 3D!",
+  "lang": "pt-BR",
   "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#26140a",
   "theme_color": "#2d190e",
+  "categories": ["games", "entertainment"],
   "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/icons/dino-icon.svg",
       "sizes": "any",

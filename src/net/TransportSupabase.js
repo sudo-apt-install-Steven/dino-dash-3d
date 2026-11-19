@@ -426,6 +426,9 @@ export class TransportSupabase {
         type: 'update_room',
         patch: {
           hostPeerId: this.room.hostPeerId,
+          roomName: this.room.roomName || `Sala ${this.room.code}`,
+          maxPlayers: Number(this.room.maxPlayers) || 8,
+          hasPassword: !!this.room.hasPassword,
           status: this.room.status,
           seed: this.room.seed,
           mpMode: this.room.mpMode || (this.room.elimination ? 'elimination' : 'race'),

@@ -1,4 +1,4 @@
-// Motor completo do DINO DASH 3D: integra Essencial, Avançado e Bônus em arquitetura modular.
+﻿// Motor completo do DINO DASH 3D: integra Essencial, Avançado e Bônus em arquitetura modular.
 import * as THREE from 'three';
 import { Save } from '../systems/Save.js';
 import { InputSystem } from '../systems/Input.js';
@@ -35,10 +35,19 @@ import { ReplayRecorder, getTodaySeed } from '../systems/Replay.js';
 import { PerfMonitor } from '../systems/PerfMonitor.js';
 import { ClipRecorder } from '../systems/ClipRecorder.js';
 import { Metagame } from '../systems/Metagame.js';
+import { ContentLoader } from '../content/ContentLoader.js';
 import { RoomClient } from '../net/RoomClient.js';
 import { EventManager } from '../events/EventManager.js';
 import { DifficultyManager } from './Difficulty.js';
-import { getModeDef, STORY_CHAPTERS, CHAOS_RULES } from './Modes.js';
+import {
+  getModeDef,
+  STORY_CHAPTERS,
+  CHAOS_RULES,
+  RAID_AFFIXES,
+  RACE_DISTANCES,
+  isModeRanked,
+  getCompetitionSeed
+} from './Modes.js';
 import { AudioEngine } from '../audio/AudioEngine.js';
 import { SoundEffects } from '../audio/SoundEffects.js';
 import { MusicSequencer } from '../audio/MusicSequencer.js';
@@ -115,6 +124,7 @@ export class Game {
     this.teamsState = null;
     this.godMode = false;
     this.spectatorMode = false;
+    this.spectatorFreeOffset = new THREE.Vector3(0, 0, 0);
     this.activeCampaignNode = null;
     this.activeCustomTrack = null;
     this.multiplayerSession = null;
@@ -138,6 +148,20 @@ export class Game {
     this._portalBiomeAccum = 0;
     this._mpReviveCount = 0;
 
+    // Estados dos novos modos (Raid, Boss Fight/Rush, Free Roam, Race, Competition) e integração §3
+    this.bossFightConfig = { submode: 'rush', targetBossId: null };
+    this.raceConfig = { targetDistance: RACE_DISTANCES[0] || 5000 };
+    this.raidState = null;
+    this.bossRushState = null;
+    this.raceState = null;
+    this.freeRoamState = null;
+    this.raceAiRacers = [];
+    this._predatorHazards = [];
+    this._currentDangerTier = { tier: 0, speedBonus: 0, densityBonus: 0, eventFreqBonus: 0, predatorAggro: 1.0 };
+    this._lastHudDangerTier = -1;
+    this._hudDebuffAccum = 0;
+    this._lastCoopBossHit = null;
+
     this.net = new RoomClient();
     this.perf = new PerfMonitor();
     this.clipRecorder = new ClipRecorder(canvas);
@@ -151,6 +175,7 @@ export class Game {
       onSpectatorAction: (act) => this._applySpectatorAction(act),
       onToggleFreeCam: () => {
         this.spectatorMode = !this.spectatorMode;
+        if (!this.spectatorMode) this.spectatorFreeOffset.set(0, 0, 0);
       }
     });
     this._bindNetworkEvents();
@@ -158,6 +183,12 @@ export class Game {
     this._bindEvents();
     this.applySettings();
     this.openMainMenu();
+
+    if (import.meta.env.DEV) {
+      import('../ui/DebugModal.js').then((mod) => {
+        mod.DebugModal?.mountIfDev?.(this);
+      }).catch(() => {});
+    }
 
     this.lastTime = performance.now();
     this._rafId = requestAnimationFrame(this._loop.bind(this));
@@ -509,6 +540,10 @@ export class Game {
       this.ui.showPodium(summary, {
         onReplay: () => this.ui.hud.showBanner('🎬 Replay disponível apenas na tela do Host.', '#ffd447', 2.4),
         onVote: (v) => this.net.sendRoundVote(v),
+        onRematch: () => {
+          this.net.sendRoundVote({ rematch: true });
+          this.ui.hud.showBanner('🔄 Pedido de revanche enviado ao Dono da Sala!', '#38bdf8', 2.6);
+        },
         onAgain: () => this.ui.hud.showBanner('⏳ Aguardando o Dono da Sala iniciar a próxima rodada...', '#38bdf8', 2.6),
         onMenu: () => this.openMainMenu()
       });
@@ -518,17 +553,31 @@ export class Game {
       if (!this.multiplayerSession?.active) return;
       if (this.multiplayerSession.isHost) {
         if (this.multiplayerSession.allowRevive === false) return;
+        const revCfg = ContentLoader.getBalance().revive || {};
+        const mpRevCfg = this.multiplayerSession.reviveConfig || {};
+        const maxPerRun = mpRevCfg.maxPerRun ?? revCfg.maxPerRun ?? 2;
+        const cooldownSec = mpRevCfg.cooldownSec ?? revCfg.cooldownSec ?? 25;
+        const costType = mpRevCfg.costType || revCfg.costType || 'life_or_shield';
+
         const payerIdx = Math.max(0, this.players.findIndex((p) => p.peerId === (msg.reviverPeerId || msg.peerId)));
         const payer = this.players[payerIdx];
         const ally = (msg.targetPeerId ? this.players.find((pl) => pl.peerId === msg.targetPeerId && pl.dead) : null)
           || this.players.find((pl) => pl.dead && pl !== payer);
         if (!payer || payer.dead || !ally) return;
-        this._revivePlayerEntity(ally, msg.cost || (45 + (this._mpReviveCount || 0) * 35), payer.name || 'Companheiro');
+        if ((payer.reviveCooldown || 0) > 0) return;
+        if ((ally.reviveWindowTimer || 0) <= 0) return;
+        if ((ally.reviveCount || 0) >= maxPerRun) return;
+        if (!this._canPayReviveCost(payer, costType)) return;
+
+        const paidLabel = this._deductReviveCost(payer, costType);
+        payer.reviveCooldown = cooldownSec;
+        this._revivePlayerEntity(ally, paidLabel, payer.name || 'Companheiro');
         this.net.activeTransport?.send?.({
           type: 'mp_revive',
           approved: true,
           allyName: ally.name || ally.spec?.name || 'Aliado',
           reviverName: payer.name || 'Companheiro',
+          paidLabel,
           reviveCount: this._mpReviveCount
         });
       } else if (msg.approved) {
@@ -635,8 +684,35 @@ export class Game {
     this._performMeleeAttack(p);
   }
 
+  breatheOrSurface(idx = 0) {
+    const p = this.players[idx];
+    if (!p || p.dead || this.state !== 'playing') return false;
+    const isSubmergedNow = Boolean(p.inSubmerged || (p.inWater && ((p.diveDepth || 0) > 0.25 || (p.diveTarget || 0) >= 0.5)));
+    if (!p.inWater && !isSubmergedNow) return false;
+    if (!p.inSubmerged) {
+      p.diveTarget = 0;
+      p.diveDepth = 0;
+      p.diveTimer = 0;
+      p.vy = Math.max(p.vy || 0, 11.5);
+      p.grounded = false;
+      p.oxygen = Math.min(100, (p.oxygen ?? 100) + 35);
+      this.sfx.jump(true);
+      this.particles.emitDust(p.x, (p.baseY || 0) + 0.35, p.z, 10, '#67e8f9', 3.0);
+      if (p.index === 0) this.ui.hud.showFloatText('🫧 SUBINDO PARA RESPIRAR (+O₂)!', '#38bdf8');
+      return true;
+    }
+    if ((p._abyssBreatheCd || 0) > 0) return false;
+    p._abyssBreatheCd = 3.0;
+    p.oxygen = Math.min(100, (p.oxygen ?? 100) + 35);
+    this.sfx.heal?.();
+    this.particles.emitDust(p.x, (p.baseY || 0) + 0.8, p.z, 10, '#67e8f9', 2.4);
+    if (p.index === 0) this.ui.hud.showFloatText('🫧 BOLHA DE AR (+35% O₂)!', '#38bdf8');
+    return true;
+  }
+
   _performMeleeAttack(p) {
-    if (!p._unlockAll && !this.isTestTrack && this.score < 1800) {
+    const bossActive = Boolean(this.events?.bosses?.activeBoss);
+    if (!bossActive && !p._unlockAll && !this.isTestTrack && Save.data.settings?.progressiveUnlocks !== false && this.score < 1800) {
       if (!p._lowStamToastCooldown) {
         p._lowStamToastCooldown = 0.8;
         this.ui.hud.showFloatText('🔒 Ataque [Q] libera aos 1.800 pts!', '#94a3b8');
@@ -644,46 +720,148 @@ export class Game {
       return;
     }
     if (p.attackTimer > 0 || (p.attackCooldown || 0) > 0) return;
-    if (!this.isTestTrack && (p.stamina ?? 100) < 20) {
-      if (!p._lowStamToastCooldown) {
-        p._lowStamToastCooldown = 0.8;
-        this.ui.hud.showFloatText('💨 Sem estamina para atacar (20)!', '#fbbf24');
-      }
-      return;
-    }
-    if (!this.isTestTrack) {
-      p.stamina = Math.max(0, (p.stamina ?? 100) - 20);
-      p._staminaRegenDelay = 0.6;
-    }
-    const attackPower = p.attackPowerMult || 1;
-    p.attackTimer = 0.24;
-    p.attackCooldown = (p.attackMaxCooldown || 1.25) * (p.attackCdMult || 1);
-    p.animator.triggerRoar(0.25);
-    this.sfx.melee();
-    this.particles.emitDust(p.x, (p.baseY || 0) + 0.8, p.z - 0.9, 6, '#ffd447', 2.4);
 
-    let brokeAny = false;
-    const reachX = 1.35 * (attackPower > 1.1 ? 1.15 : 1);
-    const reachZ = 4.8 * Math.min(1.4, attackPower);
+    const atkCfg = ContentLoader.getBalance().playerAttack || {};
+    const baseDamage = atkCfg.damage ?? 28;
+    const baseCd = atkCfg.cooldownSec ?? 0.65;
+    const baseRangeZ = atkCfg.rangeZ ?? 18;
+    const baseRangeX = atkCfg.rangeX ?? 2.6;
+    const hitStopSec = atkCfg.hitStopSec ?? 0.045;
+
+    const dinoClass = p.spec?.dinoClass || 'carnivore';
+    let classDmgMult = 1.0;
+    let classCdMult = 1.0;
+    let classRangeXMult = 1.0;
+    let classRangeZMult = 1.0;
+    let fxColor = '#ffd447';
+    if (dinoClass === 'carnivore') {
+      classDmgMult = 1.15;
+      classCdMult = 0.95;
+      fxColor = '#ff5e1a';
+    } else if (dinoClass === 'herbivore') {
+      classDmgMult = 1.05;
+      classRangeXMult = 1.25;
+      fxColor = '#4ade80';
+    } else if (dinoClass === 'aquatic' || dinoClass === 'amphibious') {
+      classRangeZMult = 1.15;
+      fxColor = '#22d3ee';
+    } else if (dinoClass === 'flying') {
+      classCdMult = 0.85;
+      fxColor = '#bae6fd';
+    }
+
+    const attackPower = (p.attackPowerMult || 1) * classDmgMult;
+    const dmg = Math.round(baseDamage * attackPower);
+    p.attackTimer = 0.24;
+    p.attackMaxCooldown = Math.max(0.35, baseCd * classCdMult * (p.attackCdMult || 1));
+    p.attackCooldown = p.attackMaxCooldown;
+    p.animator?.triggerRoar?.(0.25);
+    this.sfx?.melee?.();
+    this.particles?.emitDust?.(p.x, (p.baseY || 0) + 0.8, p.z - 0.9, 8, fxColor, 2.8);
+
+    const trackOffset = p.trackOffsetX || 0;
+    const localX = p.x - trackOffset;
+    const reachX = baseRangeX * classRangeXMult * (attackPower > 1.1 ? 1.1 : 1);
+    const reachZ = baseRangeZ * classRangeZMult;
+    const obsReachZ = Math.min(reachZ, 7.5);
     const smashPts = Math.round(35 * attackPower);
+    let landedHit = false;
+
     for (const obs of this.spawner.getActiveObstacles()) {
       if (obs.hit || !obs.breakable) continue;
-      const dx = Math.abs(obs.group.position.x - p.x);
+      if (obs._hitBy && obs._hitBy.has(p.key)) continue;
+      const dx = Math.abs(obs.group.position.x - localX);
       const dz = obs.group.position.z - p.z;
-      if (dx < reachX && dz > -reachZ && dz < 1.35) {
-        obs.hit = true;
-        obs.pool?.release(obs);
-        this.particles.emitExplosion(obs.group.position.x, (obs.group.position.y || 0) + 0.8, obs.group.position.z, obs.color, 12, true);
-        this._spawnImpactDebris(obs.group.position.x, obs.group.position.z, obs.color);
+      if (dx < reachX && dz > -obsReachZ && dz < 1.6) {
+        if (this.multiplayerSession?.active && this.multiplayerSession.trackMode !== 'classic') {
+          obs._hitBy = obs._hitBy || new Set();
+          obs._hitBy.add(p.key);
+        } else {
+          obs.hit = true;
+          obs.pool?.release(obs);
+        }
+        this.particles?.emitExplosion?.(trackOffset + obs.group.position.x, (obs.group.position.y || 0) + 0.8, obs.group.position.z, obs.color, 12, true);
+        this._spawnImpactDebris(trackOffset + obs.group.position.x, obs.group.position.z, obs.color);
         p.wantedStars = Math.min(5, (p.wantedStars || 0) + 0.3);
-        this.addScore(smashPts * this.combo, p);
-        this.ui.hud.showFloatText(`💥 QUEBROU! +${smashPts}`, '#ffd447');
-        brokeAny = true;
+        this.addScore(smashPts * (this.combo || 1), p);
+        this.ui.hud.showFloatText(`💥 -${dmg} QUEBROU! +${smashPts}`, fxColor);
+        landedHit = true;
       }
     }
 
-    if (brokeAny && this.tutorialState?.active && this.tutorialState.step === 3) {
-      this._advanceTutorialStep();
+    // B2: Ataque Q contra Boss, Orbe de Ponto Fraco e Projéteis do Boss
+    const bosses = this.events?.bosses;
+    const b = bosses?.activeBoss;
+    if (b) {
+      if (bosses.weakOrb?.visible) {
+        const orbDx = Math.abs(bosses.weakOrb.position.x - localX);
+        const orbDz = bosses.weakOrb.position.z - p.z;
+        if (orbDx < reachX && orbDz > -reachZ && orbDz < 2.0) {
+          const weakDmg = this._computeBossAttackDamage(p, Math.max(dmg, 35), true);
+          bosses._hitBossWeakPoint?.(p, this.players, this._eventContext());
+          this._recordBossDamage(p, weakDmg);
+          landedHit = true;
+        }
+      }
+      if (Array.isArray(bosses.hazardShots)) {
+        for (let i = bosses.hazardShots.length - 1; i >= 0; i--) {
+          const s = bosses.hazardShots[i];
+          if (s.hit) continue;
+          const sDx = Math.abs(s.mesh.position.x - localX);
+          const sDz = s.mesh.position.z - p.z;
+          if (sDx < reachX && sDz > -reachZ && sDz < 2.0) {
+            s.hit = true;
+            this.scene.remove(s.mesh);
+            bosses.hazardShots.splice(i, 1);
+            this.particles?.emitExplosion?.(trackOffset + s.mesh.position.x, s.mesh.position.y + 0.6, s.mesh.position.z, fxColor, 10, true);
+            this.addScore(30 * (this.combo || 1), p);
+            this.ui.hud.showFloatText('⚔️ PROJÉTIL DESTRUÍDO! +30', fxColor);
+            landedHit = true;
+          }
+        }
+      }
+      if (b.introTimer <= 0 && b.currentHp > 0) {
+        const bossX = bosses.group?.position?.x ?? 0;
+        const bossZ = bosses.group?.position?.z ?? -33;
+        const bossDx = Math.abs(bossX - localX);
+        const bossDz = bossZ - p.z;
+        if (bossDx <= reachX + 2.4 && bossDz >= -(reachZ + 22) && bossDz <= 2.0) {
+          const ctx = this._eventContext();
+          const finalDmg = this._computeBossAttackDamage(p, dmg, false);
+          if (typeof bosses.applyPlayerAttack === 'function') {
+            bosses.applyPlayerAttack(p, finalDmg, ctx);
+          } else {
+            const appliedDmg = b.maxHp > 25 ? finalDmg : Math.max(1, Math.round(finalDmg / 25));
+            b.currentHp = Math.max(0, b.currentHp - appliedDmg);
+            const hpRatio = b.currentHp / Math.max(1, b.maxHp);
+            const nextPhase = hpRatio <= 0.33 ? 3 : (hpRatio <= 0.66 ? 2 : 1);
+            b.phase = nextPhase;
+            bosses.bossRig?.setPhase?.(nextPhase);
+            bosses.bossRig?.setPhaseVisuals?.(hpRatio);
+            this.particles?.emitExplosion?.(bossX, 2.2, bossZ, fxColor, 14, true);
+            this.ui.hud.showFloatText(`⚔️ -${appliedDmg} HP NO CHEFE!`, fxColor);
+            if (b.currentHp <= 0) {
+              bosses.clear();
+              ctx.onBossHudUpdate?.(null);
+              this.addScore(750, p);
+              this.sfx?.victory?.();
+              this.ui.hud.showFloatText(`🏆 ${b.name} DERROTADO!`, '#58d63a');
+            } else {
+              ctx.onBossHudUpdate?.(b);
+            }
+          }
+          this._recordBossDamage(p, finalDmg);
+          this.cameraRig?.triggerShake?.(0.32, 0.16);
+          landedHit = true;
+        }
+      }
+    }
+
+    if (landedHit) {
+      this.hitStopTimer = Math.max(this.hitStopTimer || 0, hitStopSec);
+      if (this.tutorialState?.active && this.tutorialState.step === 3) {
+        this._advanceTutorialStep();
+      }
     }
     if (p.index === 0) {
       this._triggerFirstUseSpotlight('spotlight_attack', {
@@ -739,6 +917,96 @@ export class Game {
       : null;
   }
 
+  setBossFightConfig(cfg = {}) {
+    this.bossFightConfig = {
+      submode: cfg.submode === 'single' ? 'single' : 'rush',
+      targetBossId: cfg.targetBossId || null
+    };
+  }
+
+  setRaceDistance(distanceMeters = 5000) {
+    this.raceConfig = {
+      targetDistance: Number(distanceMeters) >= 10000 ? 10000 : 5000
+    };
+  }
+
+  setFreeRoamBiome(biomeId) {
+    const target = getBiomeById(biomeId);
+    if (!target) return false;
+    this.currentBiome = target;
+    this.world.applyTheme(target.theme, false);
+    this.spawner.setBiome(target.id);
+    this._applyBiomePlayersState(target);
+    this.ui.hud.showBanner(`🧪 SANDBOX — Bioma: ${target.name}`, '#34d399', 2.4);
+    return true;
+  }
+
+  setFreeRoamSpeed(mult = 1.0) {
+    if (!this.freeRoamState) this.freeRoamState = { active: true, speedScale: 1.0, spawnPaused: false };
+    this.freeRoamState.speedScale = Math.max(0.4, Math.min(2.2, Number(mult) || 1.0));
+    this.ui.hud.showFloatText(`🧪 Velocidade: ${Math.round(this.freeRoamState.speedScale * 100)}%`, '#34d399');
+    return this.freeRoamState.speedScale;
+  }
+
+  spawnFreeRoamEntity(kind = 'wave') {
+    if (this.state !== 'playing') return false;
+    if (kind === 'boss') {
+      const bId = this.currentBiome?.bossId || 'alpha_trex';
+      if (typeof this.events?.bosses?.startBossById === 'function') {
+        this.events.bosses.startBossById(bId, this.players.length, this.difficultyMgr.activeId);
+      } else {
+        this.events?.bosses?.startBoss?.(bId, this.players.length, this.difficultyMgr.activeId);
+      }
+      this.ui.hud.showFloatText(`👑 Boss invocado: ${bId}`, '#fb923c');
+      return true;
+    }
+    if (typeof this.spawner.spawnFromCatalog === 'function') {
+      const spawned = this.spawner.spawnFromCatalog(Math.random, {
+        biomeId: this.currentBiome?.id,
+        dangerTier: this._currentDangerTier,
+        modeId: this.modeId
+      });
+      if (spawned) {
+        this.ui.hud.showFloatText('🧪 Entidade de catálogo gerada!', '#38bdf8');
+        return true;
+      }
+    }
+    const lane = Math.floor(Math.random() * 3);
+    const lx = this.spawner._isWaterTrack?.() ? this.spawner._getLaneX(lane) : LANE_X[lane];
+    this.spawner._acquire?.('cactus_tall', lx, 0, -58);
+    this.ui.hud.showFloatText('🧪 Obstáculo gerado sob demanda!', '#38bdf8');
+    return true;
+  }
+
+  _computeBossAttackDamage(p, baseDmg, isWeakPoint = false) {
+    let dmg = Math.max(1, Number(baseDmg) || 20);
+    const affix = this.raidState?.active ? this.raidState.activeAffix : null;
+    if (affix && !isWeakPoint && typeof affix.damageMult === 'number') {
+      dmg *= affix.damageMult;
+    }
+    // Sinergia de ataque Coop / Raid (2+ jogadores acertando o chefe em janela de 2.0s)
+    const isTeamMode = this.modeId === 'coop' || this.modeId === 'raid' || (this.multiplayerSession?.active && this.players.length >= 2);
+    if (isTeamMode && this.players.length >= 2) {
+      const last = this._lastCoopBossHit;
+      if (last && last.playerKey !== p.key && (this.runTime - last.at) <= 2.0) {
+        const synMult = affix?.synergyBonus || 1.35;
+        dmg *= synMult;
+        p.abilityCharge = Math.min(100, (p.abilityCharge || 0) + 12);
+        this.ui.hud.showFloatText(`⚡ SINERGIA COOP! +${Math.round((synMult - 1) * 100)}% DANO!`, '#fde047');
+      }
+      this._lastCoopBossHit = { playerKey: p.key, at: this.runTime };
+    }
+    return Math.max(1, Math.round(dmg));
+  }
+
+  _recordBossDamage(p, dmg) {
+    if (!p || !dmg || dmg <= 0) return;
+    p.raidDamage = (p.raidDamage || 0) + dmg;
+    if (this.raidState?.active) {
+      this.raidState.totalDamage = (this.raidState.totalDamage || 0) + dmg;
+    }
+  }
+
   setBiomeConfig(biomeId, seq) {
     this.startBiomeId = biomeId;
     this.sequenceBiomes = seq;
@@ -767,6 +1035,13 @@ export class Game {
       this.scene.remove(this.goldenEggProp);
       this.goldenEggProp = null;
     }
+    if (Array.isArray(this.raceAiRacers) && this.raceAiRacers.length) {
+      for (const ai of this.raceAiRacers) {
+        if (ai?.model?.root) this.scene.remove(ai.model.root);
+      }
+      this.raceAiRacers = [];
+    }
+    this._predatorHazards = [];
     this.companions.clear();
   }
 
@@ -795,6 +1070,33 @@ export class Game {
     const spr = new THREE.Sprite(mat);
     spr.scale.set(2.2, 0.55, 1);
     return spr;
+  }
+
+  _getTrackOffsetForIndex(idx, trackMode) {
+    if (trackMode !== 'parallel' || idx <= 0) return 0;
+    const ring = Math.ceil(idx / 2);
+    return (idx % 2 === 1 ? 1 : -1) * ring * 24;
+  }
+
+  _applyGhostModeVisuals() {
+    const trackMode = this.multiplayerSession?.active ? (this.multiplayerSession.trackMode || 'parallel') : 'classic';
+    const isGhost = trackMode === 'ghost' && this.players.length > 1;
+    const localPeerId = this.net?.peerId;
+    for (let i = 0; i < this.players.length; i++) {
+      const p = this.players[i];
+      const isLocal = localPeerId ? p.peerId === localPeerId : i === 0;
+      const shouldGhost = isGhost && !isLocal;
+      p.model?.root?.traverse?.((obj) => {
+        if (obj.isMesh && obj.material) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          for (const m of mats) {
+            m.transparent = shouldGhost;
+            m.opacity = shouldGhost ? 0.42 : 1.0;
+            m.depthWrite = !shouldGhost;
+          }
+        }
+      });
+    }
   }
 
   rebuildPlayers(customRoster = null) {
@@ -849,9 +1151,11 @@ export class Game {
         skinVariant: eqSkinVariant,
         mutationTier: eqMutationTier
       });
-      const startLane = count === 1 ? 1 : (i % 3);
-      const laneOffset = count > 3 ? ((Math.floor(i / 3) - 0.5) * 0.45) : 0;
-      model.root.position.set(LANE_X[startLane] + laneOffset, 0, Math.floor(i / 3) * 0.65);
+      const trackMode = this.multiplayerSession?.active ? (this.multiplayerSession.trackMode || 'parallel') : 'classic';
+      const trackOffsetX = (trackMode === 'parallel' && count > 1) ? this._getTrackOffsetForIndex(i, trackMode) : 0;
+      const startLane = (trackMode === 'parallel' || count === 1) ? 1 : (i % 3);
+      const laneOffset = (trackMode === 'classic' && count > 3) ? ((Math.floor(i / 3) - 0.5) * 0.45) : 0;
+      model.root.position.set(trackOffsetX + LANE_X[startLane] + laneOffset, 0, trackMode === 'parallel' ? 0 : Math.floor(i / 3) * 0.65);
       if (count > 1) {
         const nameTag = this._createPlayerNameTag(slot.name || spec.name, slot.color || spec.colors.primary, i === 0);
         nameTag.position.set(0, 2.75, 0);
@@ -885,9 +1189,11 @@ export class Game {
         backpack: new Backpack(3),
         skillLevel: Save.data.dinoLevels[dinoId] || 1,
         lane: startLane,
-        x: LANE_X[startLane] + laneOffset,
+        trackIndex: i,
+        trackOffsetX,
+        x: trackOffsetX + LANE_X[startLane] + laneOffset,
         y: 0,
-        z: Math.floor(i / 3) * 0.65,
+        z: trackMode === 'parallel' ? 0 : Math.floor(i / 3) * 0.65,
         vy: 0,
         grounded: initialHabitat !== 'flying',
         ducking: false,
@@ -902,6 +1208,9 @@ export class Game {
         shields: startShields,
         dead: false,
         reviveProgress: 0,
+        reviveCount: 0,
+        reviveCooldown: 0,
+        reviveWindowTimer: 0,
         invulnTimer: 0,
         fury: 0,
         furyTimer: 0,
@@ -994,6 +1303,7 @@ export class Game {
         built.scoreMultBonus = (built.scoreMultBonus || 1) * (eqSkinVariant === 'secret' ? 1.25 : 1.15);
       }
     }
+    this._applyGhostModeVisuals();
     if (this.state === 'menu') {
       this._syncMenuEnvironment();
     }
@@ -1003,6 +1313,7 @@ export class Game {
     this.state = 'menu';
     this.photoMode = false;
     this.spectatorMode = false;
+    this.spectatorFreeOffset = new THREE.Vector3(0, 0, 0);
     this.pendingRestart = false;
     this.radialWheelOpen = false;
     this.radialCooldown = 0;
@@ -1079,6 +1390,15 @@ export class Game {
     const isElim = mpMode === 'elimination' || !!room?.elimination;
     const matchDiffId = resolvedCfg.difficulty || Save.data.difficulty || 'normal';
     const matchBiomeId = resolvedCfg.biomeId || this.startBiomeId || 'random_portal';
+    const trackMode = resolvedCfg.trackMode || room?.config?.trackMode || Save.data.settings?.mpTrackMode || 'parallel';
+    const revDefaults = ContentLoader.getBalance().revive || {};
+    const reviveConfig = {
+      costType: resolvedCfg.reviveCostType || room?.config?.reviveCostType || revDefaults.costType || 'life_or_shield',
+      cooldownSec: Number(room?.config?.reviveCooldownSec ?? revDefaults.cooldownSec ?? 25),
+      windowSec: Number(room?.config?.reviveWindowSec ?? revDefaults.windowSec ?? 15),
+      maxPerRun: Number(room?.config?.reviveMaxPerRun ?? revDefaults.maxPerRun ?? 2),
+      invulnSec: Number(room?.config?.reviveInvulnSec ?? revDefaults.invulnSec ?? 2.5)
+    };
     this.difficultyMgr.setPreset(matchDiffId);
     this.multiplayerSession = {
       active: true,
@@ -1088,6 +1408,8 @@ export class Game {
       botCount,
       seed: matchSeed,
       mpMode,
+      trackMode,
+      reviveConfig,
       difficultyId: matchDiffId,
       multiHabitats: room?.config?.multiHabitats !== false,
       allowHybrids: room?.config?.allowHybrids !== false,
@@ -1107,13 +1429,16 @@ export class Game {
       nextCardScoreByPeer: new Map()
     };
 
-    this.modeId = 'solo';
+    const mpNativeModes = new Set(['raid', 'boss_fight', 'race', 'competition', 'coop', 'free_roam']);
+    this.modeId = mpNativeModes.has(mpMode) ? mpMode : 'solo';
     this.net.broadcastHostStart({
       roomCode: room?.code,
       roster,
       botCount,
       seed: matchSeed,
       mpMode,
+      trackMode,
+      reviveConfig,
       difficultyId: matchDiffId,
       multiHabitats: this.multiplayerSession.multiHabitats,
       allowHybrids: this.multiplayerSession.allowHybrids,
@@ -1129,7 +1454,17 @@ export class Game {
     });
     this.startRun(false, { keepMultiplayerSession: true, roster, seed: matchSeed, biomeId: matchBiomeId });
     this.tvHud.setVisible(this.players.length > 1, !!Save.data.network?.tvScale);
-    const modeLabel = mpMode === 'duel' ? '⚔️ DUELO PvP' : (isElim ? '⏳ ELIMINAÇÃO 30s' : '🏁 CORRIDA');
+    const mpBannerLabels = {
+      duel: '⚔️ DUELO PvP',
+      elimination: '⏳ ELIMINAÇÃO 30s',
+      race: '🏁 CORRIDA',
+      raid: '🐉 RAID COLOSSAL',
+      boss_fight: '👑 BOSS RUSH',
+      competition: '🏅 LIGA COMPETITIVA',
+      coop: '🤝 COOP TÁTICO',
+      free_roam: '🧪 LIVRE / SANDBOX'
+    };
+    const modeLabel = mpBannerLabels[mpMode] || (isElim ? '⏳ ELIMINAÇÃO 30s' : '🏁 CORRIDA');
     this.ui.hud.showBanner(`🌐 ${modeLabel} INICIADA (${this.players.length} DINOS)!`, '#58d63a', 3.4);
   }
 
@@ -1171,6 +1506,8 @@ export class Game {
       botCount: payload.botCount || 0,
       seed: payload.seed || room.seed || `MP-${room.code || 'GUEST'}`,
       mpMode,
+      trackMode: payload.trackMode || room?.config?.trackMode || 'parallel',
+      reviveConfig: payload.reviveConfig || ContentLoader.getBalance().revive || {},
       difficultyId: payload.difficultyId || 'normal',
       allowRevive: payload.allowRevive !== false,
       elimination: isElim,
@@ -1183,7 +1520,8 @@ export class Game {
       nextCardScoreByPeer: new Map()
     };
 
-    this.modeId = 'solo';
+    const mpNativeModes = new Set(['raid', 'boss_fight', 'race', 'competition', 'coop', 'free_roam']);
+    this.modeId = mpNativeModes.has(mpMode) ? mpMode : 'solo';
     this.startRun(false, {
       keepMultiplayerSession: true,
       roster,
@@ -1362,6 +1700,7 @@ export class Game {
       this.tvHud.setVisible(false);
     }
     this.spectatorMode = false;
+    this.spectatorFreeOffset = new THREE.Vector3(0, 0, 0);
     this.state = 'playing';
     this.photoMode = false;
     this.ui?._clearModal?.();
@@ -1377,9 +1716,10 @@ export class Game {
     this._clearDebris();
 
     const diff = this.difficultyMgr.getConfig();
-    this.baseSpeed = diff.initialSpeed;
-    this.maxSpeed = diff.maxSpeed;
-    this.speedAccel = diff.accel;
+    const speedCfg = ContentLoader.getBalance().speed || {};
+    this.baseSpeed = diff.initialSpeed * (speedCfg.initialSpeedMultiplier ?? 1.0);
+    this.maxSpeed = diff.maxSpeed * (speedCfg.maxSpeedMultiplier ?? 1.0);
+    this.speedAccel = diff.accel * (speedCfg.accelMultiplier ?? 1.0);
     this.speed = this.baseSpeed;
     if (!isTestTrack && this.net?.supabase?.isConfigured?.()) {
       const firstDinoId = this.players[0]?.id || Save.data.selectedDino || 'trex';
@@ -1431,10 +1771,38 @@ export class Game {
     this._progressiveNotified = new Set();
     this._portalBiomeAccum = 0;
     this._mpReviveCount = 0;
+
+    // Reset de estados dos modos de expansão e integração §3 (preservando configs escolhidas)
+    this.raidState = null;
+    this.bossRushState = null;
+    this.raceState = null;
+    this.freeRoamState = null;
+    this._predatorHazards = [];
+    this._currentDangerTier = { tier: 0, speedBonus: 0, densityBonus: 0, eventFreqBonus: 0, predatorAggro: 1.0 };
+    this._lastHudDangerTier = -1;
+    this._hudDebuffAccum = 0;
+    this._lastCoopBossHit = null;
+    this.ui.hud.setDangerTier?.(this._currentDangerTier);
+    this.ui.hud.setActiveDebuffs?.([]);
+    this.ui.hud.setPredatorTelegraph?.(null);
     this.hiScore = Save.getHighScore();
 
-    // Seed determinística para Desafio Diário, Multiplayer ou Seed compartilhável
-    const seed = opts.seed || this.activeCustomTrack?.seed || (this.modeId === 'daily_challenge' ? getTodaySeed() : this.customSeed);
+    // Modo Competição (Liga): regras padronizadas sem modificadores fáceis
+    if (this.modeId === 'competition') {
+      if (this.difficultyMgr.activeId === 'easy') {
+        this.difficultyMgr.setPreset('normal');
+      }
+      this.activeCustomTrack = null;
+      for (const pl of this.players) {
+        pl._unlockAll = true;
+      }
+    }
+
+    // Seed determinística para Desafio Diário, Competição (Liga), Multiplayer ou Seed compartilhável
+    const seed = opts.seed
+      || (this.modeId === 'competition' ? getCompetitionSeed() : null)
+      || this.activeCustomTrack?.seed
+      || (this.modeId === 'daily_challenge' ? getTodaySeed() : this.customSeed);
     this.spawner.setSeed(seed);
     this.spawner.setDifficultyId(this.difficultyMgr.activeId);
     this.spawner.setDifficultyConfig(diff);
@@ -1474,6 +1842,10 @@ export class Game {
       }
     }
     this._syncEnvironmentHabitat(this.players[0]);
+    const mpTrackMode = this.multiplayerSession?.active ? (this.multiplayerSession.trackMode || 'parallel') : 'classic';
+    this.world.setParallelTracks(
+      mpTrackMode === 'parallel' ? this.players.map((pl) => pl.trackOffsetX || 0) : []
+    );
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat;
       const isFly = mode === 'flying' && !isSubmergedStart;
@@ -1482,14 +1854,15 @@ export class Game {
       pl.inWater = !isFly && Boolean(isSubmergedStart || mode === 'aquatic');
       pl.inSubmerged = isSubmergedStart;
       pl.grounded = !isFly;
+      const tOff = pl.trackOffsetX || 0;
       if (mode === 'aquatic' && !isSubmergedStart) {
-        pl.x = RIVER_LANE_X[pl.lane] ?? RIVER_LANE_X[1];
+        pl.x = tOff + (RIVER_LANE_X[pl.lane] ?? RIVER_LANE_X[1]);
         pl.baseY = 0;
       } else if (isFly) {
-        pl.x = LANE_X[pl.lane] ?? 0;
+        pl.x = tOff + (LANE_X[pl.lane] ?? 0);
         pl.baseY = SKY_CORRIDOR_Y - 1.15;
       } else {
-        pl.x = LANE_X[pl.lane] ?? 0;
+        pl.x = tOff + (LANE_X[pl.lane] ?? 0);
         pl.baseY = 0;
       }
       pl.y = 0;
@@ -1574,6 +1947,151 @@ export class Game {
       this.scene.add(rModel.root);
       this.rivalAi = { model: rModel, animator: new DinoAnimator(rModel), lane: 2, x: LANE_X[2], y: 0, z: -1.5, vy: 0, quoteTimer: 10, pers };
       this.ui.hud.showBanner(`🤖 ${pers.name}: "${pers.quote}"`, '#ff4757', 3.5);
+    }
+
+    // 1) Modo Raid Colossal (múltiplas barras de vida, afixos rotativos, placar DPS)
+    if (this.modeId === 'raid') {
+      const pCount = Math.max(1, this.players.length);
+      const totalBars = 4;
+      const firstAffix = RAID_AFFIXES[0];
+      const raidBossId = opts.bossId || this.currentBiome?.bossId || 'alpha_trex';
+      this.raidState = {
+        active: true,
+        bossId: raidBossId,
+        bossBarIndex: 1,
+        totalBars,
+        affixIndex: 0,
+        affixTimer: 22,
+        activeAffix: firstAffix,
+        spawnDelay: 2.2,
+        bossSpawned: false,
+        hazardTimer: 5.5,
+        totalDamage: 0,
+        dpsAnnounceTimer: 8.0
+      };
+      for (const pl of this.players) {
+        pl.raidDamage = 0;
+        pl._unlockAll = true;
+      }
+      this.ui.hud.showBanner(
+        `🐉 RAID COLOSSAL (${totalBars} Barras • ${pCount}P) — Afixo: ${firstAffix.icon} ${firstAffix.name}!`,
+        '#c084fc',
+        4.2
+      );
+    }
+
+    // 2) Modo Boss Fight / Boss Rush (escolher boss direto ou sequência Boss Rush)
+    if (this.modeId === 'boss_fight') {
+      const submode = opts.bossSubmode || this.bossFightConfig?.submode || 'rush';
+      const targetBossId = opts.bossId || this.bossFightConfig?.targetBossId || this.currentBiome?.bossId || 'alpha_trex';
+      const rushList = [
+        'alpha_trex',
+        'scorpion_king',
+        'magma_golem',
+        'frost_mammoth',
+        'void_leviathan'
+      ];
+      for (const pl of this.players) {
+        pl._unlockAll = true;
+      }
+      this.bossRushState = {
+        active: true,
+        submode,
+        targetBossId,
+        queue: submode === 'single' ? [targetBossId] : rushList,
+        currentIndex: 0,
+        defeatedCount: 0,
+        nextBossDelay: 1.8,
+        usedNativeRush: false
+      };
+      this.ui.hud.showBanner(
+        submode === 'single'
+          ? `👑 BOSS FIGHT — Duelo direto contra ${targetBossId}!`
+          : `👑 BOSS RUSH — Derrote ${rushList.length} chefes em sequência!`,
+        '#fb923c',
+        3.8
+      );
+    }
+
+    // 3) Modo Livre / Sandbox (sem morte, sem ranking/conquistas validadas)
+    if (this.modeId === 'free_roam') {
+      this.freeRoamState = {
+        active: true,
+        speedScale: 1.0,
+        spawnPaused: false
+      };
+      for (const pl of this.players) {
+        pl._unlockAll = true;
+      }
+      this.ui.hud.showBanner(
+        '🧪 LIVRE / SANDBOX (Sem Ranking) — [1/2] Velocidade • [3] Bioma • [4] Spawn • [5] Boss',
+        '#34d399',
+        4.6
+      );
+    }
+
+    // 4) Modo Corrida (Linha de Chegada 5.000m / 10.000m, barra 1º/2º/3º, checkpoints)
+    if (this.modeId === 'race') {
+      const targetDistance = Number(opts.raceDistance || this.raceConfig?.targetDistance || 5000);
+      this.raceState = {
+        active: true,
+        targetDistance: targetDistance >= 10000 ? 10000 : 5000,
+        checkpointStep: 1000,
+        nextCheckpoint: 1000,
+        finished: false,
+        winnerName: null
+      };
+      for (const pl of this.players) {
+        pl.distance = 0;
+        pl.raceFinished = false;
+      }
+      // Em corrida solo (sem outros jogadores humanos/bots da sala), cria 2 rivais IA para disputar 1º/2º/3º
+      if (!this.multiplayerSession?.active && this.players.length === 1) {
+        const aiSpecs = [
+          { name: 'Veloz IA', dinoId: 'raptor', color: '#38bdf8', lane: 0, pace: 0.99 },
+          { name: 'Titã IA', dinoId: 'carnotaurus', color: '#fb923c', lane: 2, pace: 1.015 }
+        ];
+        this.raceAiRacers = aiSpecs.map((cfg) => {
+          const m = DinoFactory.build(cfg.dinoId, { primary: cfg.color });
+          this.scene.add(m.root);
+          return {
+            name: cfg.name,
+            color: cfg.color,
+            model: m,
+            animator: new DinoAnimator(m),
+            lane: cfg.lane,
+            x: LANE_X[cfg.lane],
+            y: 0,
+            z: -1.8,
+            vy: 0,
+            distance: 0,
+            pace: cfg.pace,
+            burstTimer: 2 + Math.random() * 4
+          };
+        });
+      }
+      this.ui.hud.showBanner(
+        `🏁 CORRIDA ATÉ ${this.raceState.targetDistance.toLocaleString('pt-BR')}m! Checkpoints a cada 1.000m!`,
+        '#38bdf8',
+        3.8
+      );
+    }
+
+    // 5) Modo Competição / Liga (Seed fixa, Danger Tier acelerado, sem modificadores fáceis)
+    if (this.modeId === 'competition') {
+      this.ui.hud.showBanner(
+        `🏅 LIGA COMPETITIVA (${seed}) — Regras oficiais & Danger Tier acelerado!`,
+        '#facc15',
+        4.0
+      );
+    }
+
+    if (this.modeId === 'coop' && this.players.length >= 2) {
+      this.ui.hud.showBanner(
+        '🤝 COOP TÁTICO — Ataques sincronizados em boss (+35% dano) & Reviver [V] ou por proximidade!',
+        '#58d63a',
+        3.6
+      );
     }
 
     // Tutorial curto na 1ª partida (e dica de arrastar o dedo no celular)
@@ -1861,7 +2379,8 @@ export class Game {
   _buildCameraEnvOpts(lead = this.players[0]) {
     const isSubmergedBiome = !!this.currentBiome?.submerged;
     const leadMode = lead ? (lead.habitatMode || lead.habitat) : 'land';
-    const trackCenterX = (!isSubmergedBiome && leadMode === 'aquatic') ? (RIVER_LANE_X[1] ?? 10) : 0;
+    const trackOffsetX = lead?.trackOffsetX || 0;
+    const trackCenterX = trackOffsetX + ((!isSubmergedBiome && leadMode === 'aquatic') ? (RIVER_LANE_X[1] ?? 10) : 0);
     const inWater = Boolean(isSubmergedBiome || leadMode === 'aquatic');
     const diveDepth = lead?.diveDepth || 0;
     const isSubmerged = Boolean(isSubmergedBiome || (inWater && diveDepth > 0.25));
@@ -1888,22 +2407,23 @@ export class Game {
     p.ducking = false;
     p.grounded = nextMode !== 'flying' || isSub;
 
+    const tOff = p.trackOffsetX || 0;
     if (nextMode === 'aquatic') {
       const lanes = isSub ? LANE_X : RIVER_LANE_X;
       p.baseY = 0;
       p.y = 0;
       p.vy = 0;
-      p.x = lanes[p.lane] ?? lanes[1];
+      p.x = tOff + (lanes[p.lane] ?? lanes[1]);
     } else if (nextMode === 'flying' && !isSub) {
       p.baseY = SKY_CORRIDOR_Y - 1.15;
       p.y = 0;
       p.vy = 2.2;
-      p.x = LANE_X[p.lane] ?? 0;
+      p.x = tOff + (LANE_X[p.lane] ?? 0);
     } else {
       p.baseY = 0;
       p.y = 0;
       p.vy = 0;
-      p.x = LANE_X[p.lane] ?? 0;
+      p.x = tOff + (LANE_X[p.lane] ?? 0);
     }
     p.inWater = Boolean(isSub || nextMode === 'aquatic');
     p.model.root.position.set(p.x, (p.baseY || 0) + p.y, p.z);
@@ -2075,21 +2595,50 @@ export class Game {
     this.ui.hud.showBanner(`🌀 PORTAL DE BIOMA → ${this.currentBiome.name}!`, '#38bdf8', 3.0);
   }
 
-  _revivePlayerEntity(ally, paidCost = 45, reviverName = '') {
+  _canPayReviveCost(payer, costType = 'life_or_shield') {
+    if (!payer || payer.dead) return false;
+    if (costType === 'shield') return (payer.shields || 0) > 0;
+    if (costType === 'life') return (payer.hp || 0) > 1;
+    // life_or_shield: 1 escudo ou 1 vida (nunca sacrifica a última vida)
+    return (payer.shields || 0) > 0 || (payer.hp || 0) > 1;
+  }
+
+  _deductReviveCost(payer, costType = 'life_or_shield') {
+    if (!payer) return '';
+    if (costType === 'shield' || (costType === 'life_or_shield' && (payer.shields || 0) > 0)) {
+      payer.shields = Math.max(0, (payer.shields || 0) - 1);
+      return '1 🛡️';
+    }
+    payer.hp = Math.max(1, (payer.hp || 1) - 1);
+    return '1 ❤️';
+  }
+
+  _revivePlayerEntity(ally, paidLabel = '1 🛡️', reviverName = '') {
     if (!ally) return;
+    const revCfg = ContentLoader.getBalance().revive || {};
+    const mpRevCfg = this.multiplayerSession?.reviveConfig || {};
+    const invulnSec = mpRevCfg.invulnSec ?? revCfg.invulnSec ?? 2.5;
     ally.dead = false;
-    ally.hp = Math.max(1, Math.min(2, ally.maxHp || 2));
-    ally.shields = (ally.shields || 0) + 1;
-    ally.invulnTimer = 3.2;
+    ally.hp = 1;
+    ally.shields = 0;
+    ally.oxygen = 100;
+    ally.invulnTimer = invulnSec;
+    ally.reviveWindowTimer = 0;
+    ally.reviveCount = (ally.reviveCount || 0) + 1;
+    ally.x = (ally.trackOffsetX || 0) + (LANE_X[ally.lane] ?? 0);
     ally.y = 0;
     ally.vy = 4.5;
-    if (ally.model?.root) ally.model.root.visible = true;
+    ally.grounded = true;
+    if (ally.model?.root) {
+      ally.model.root.visible = true;
+      ally.model.root.position.set(ally.x, ally.baseY || 0, ally.z || 0);
+    }
     this._mpReviveCount = (this._mpReviveCount || 0) + 1;
-    this.particles.emitDust(ally.x, 1, ally.model?.root?.position?.z || 0, 18, '#34d399', 4.5);
-    this.sfx.powerup?.();
+    this.particles?.emitDust?.(ally.x, 1, ally.model?.root?.position?.z || 0, 18, '#34d399', 4.5);
+    this.sfx?.powerup?.();
     this.ui.hud.triggerEdgeFlash('green');
     const byStr = reviverName ? ` por ${reviverName}` : '';
-    this.ui.hud.showBanner(`💖 ${ally.name || 'Aliado'} REVIVIDO${byStr} (${paidCost} 🥚)!`, '#34d399', 3.2);
+    this.ui.hud.showBanner(`💖 ${ally.name || 'Aliado'} REVIVIDO${byStr} (${paidLabel})!`, '#34d399', 3.2);
   }
 
   reviveFallenAlly(payerIdx = 0) {
@@ -2098,42 +2647,51 @@ export class Game {
       this.ui.hud.showBanner('🔒 Revive desativado pelo Dono da Sala!', '#f87171', 2.2);
       return false;
     }
+    const revCfg = ContentLoader.getBalance().revive || {};
+    const mpRevCfg = this.multiplayerSession?.reviveConfig || {};
+    const costType = mpRevCfg.costType || revCfg.costType || 'life_or_shield';
+    const cooldownSec = mpRevCfg.cooldownSec ?? revCfg.cooldownSec ?? 25;
+    const maxPerRun = mpRevCfg.maxPerRun ?? revCfg.maxPerRun ?? 2;
+
     const payer = (this.multiplayerSession?.active && this.net.peerId)
       ? (this.players.find((pl) => pl.peerId === this.net.peerId) || this.players[payerIdx])
       : this.players[payerIdx];
-    const ally = this.players.find((pl) => pl.dead && pl !== payer);
+    const ally = this.players.find(
+      (pl) => pl.dead && pl !== payer && (pl.reviveWindowTimer || 0) > 0 && (pl.reviveCount || 0) < maxPerRun
+    );
     if (!payer || payer.dead || !ally) return false;
 
-    const cost = 45 + (this._mpReviveCount || 0) * 35;
-    const totalAvailable = (this.runEggs || 0) + (Save.data.eggs || 0);
-    if (totalAvailable < cost) {
-      this.ui.hud.showBanner(`🥚 Precisa de ${cost} ovos para reviver ${ally.name || 'aliado'}!`, '#f87171', 2.4);
+    if ((payer.reviveCooldown || 0) > 0) {
+      this.ui.hud.showFloatText(`⏳ Cooldown de reviver: ${Math.ceil(payer.reviveCooldown)}s`, '#fbbf24');
       return false;
     }
 
-    let rem = cost;
-    const takeRun = Math.min(this.runEggs || 0, rem);
-    this.runEggs = Math.max(0, (this.runEggs || 0) - takeRun);
-    rem -= takeRun;
-    if (rem > 0) Save.addEggs(-rem);
+    if (!this._canPayReviveCost(payer, costType)) {
+      this.ui.hud.showBanner('💔 Precisa de 1 Escudo ou 1 Vida extra (>1 ❤️) para reviver!', '#f87171', 2.4);
+      return false;
+    }
 
     if (this.multiplayerSession?.active && !this.multiplayerSession.isHost) {
+      payer.reviveCooldown = cooldownSec;
       this.net.sendMpRevive({
         reviverPeerId: this.net.peerId,
         targetPeerId: ally.peerId || null,
-        cost
+        costType
       });
-      this.ui.hud.showFloatText(`💖 Revivendo ${ally.name || 'Aliado'} (-${cost} 🥚)...`, '#34d399');
+      this.ui.hud.showFloatText(`💖 Revivendo ${ally.name || 'Aliado'}...`, '#34d399');
       return true;
     }
 
-    this._revivePlayerEntity(ally, cost, payer.name || '');
+    const paidLabel = this._deductReviveCost(payer, costType);
+    payer.reviveCooldown = cooldownSec;
+    this._revivePlayerEntity(ally, paidLabel, payer.name || '');
     if (this.multiplayerSession?.active) {
       this.net.activeTransport?.send?.({
         type: 'mp_revive',
         approved: true,
         allyName: ally.name || ally.spec?.name || 'Aliado',
         reviverName: payer.name || 'Host',
+        paidLabel,
         reviveCount: this._mpReviveCount
       });
     }
@@ -2168,6 +2726,14 @@ export class Game {
       showBanner: (t, c, d) => this.ui.hud.showBanner(t, c, d),
       showFloatText: (p, t, c) => this.ui.hud.showFloatText(t, c),
       damagePlayer: (p, cause = 'event') => this._damagePlayer(p, cause),
+      applyStatus: (player, id, dur = 4.0) => this._applyPlayerStatus(player, id, dur),
+      spawnPredatorHazard: (cfg) => this._spawnPredatorHazard(cfg),
+      onPredatorTelegraph: (info) => this.ui.hud.setPredatorTelegraph?.(info),
+      dangerTier: this._currentDangerTier,
+      predatorAggro: (this._currentDangerTier?.predatorAggro ?? 1.0)
+        + (this.raidState?.activeAffix?.predatorAggroBonus || 0),
+      modeId: this.modeId,
+      onBossDamage: (p, dmg) => this._recordBossDamage(p, dmg),
       healPlayer: (p, amt = 1, text = '💚 +1 VIDA!') => this._healPlayer(p, amt, text),
       onMerchantEncounter: () => {
         if (this.state !== 'playing' || this.isTestTrack || this.headlessBot || this.multiplayerSession?.active) return;
@@ -2289,6 +2855,8 @@ export class Game {
       ufo: { label: '🛸 Raio do OVNI', tip: 'Observe a sombra luminosa na pista e troque de faixa.' },
       boss: { label: '👑 Ataque do Chefe', tip: 'Use [Q] para acertar o Orbe do Chefe (bônus se usar elemento fraco!).' },
       predator: { label: '🦖 Predador Alfa', tip: 'Guarde [Espaço] e Escudos ao ouvir o rugido da perseguição!' },
+      predator_attack: { label: '🦖 Ataque de Predador', tip: 'Observe o telégrafo na faixa e troque de faixa [A/D] ou pule antes do golpe!' },
+      raid_hazard: { label: '🐉 Afixo de Raid', tip: 'Fique atento ao afixo ativo e saia das faixas telegrafadas!' },
       poison: { label: '☠️ Veneno Acumulado', tip: 'Use Antídoto [E] ou pegue Esfera de Fogo 🔥 para neutralizar o veneno.' },
       amber_crystal: { label: '🔶 Cristal de Âmbar', tip: 'Quebre o Cristal com Ataque [Q] ou pule/desvie para outra faixa!' },
       geyser_vent: { label: '💨 Gêiser Vulcânico', tip: 'Troque de faixa com [A/D] ou dê um salto alto sobre o jato!' },
@@ -2313,12 +2881,116 @@ export class Game {
     };
   }
 
+  _applyPlayerStatus(player, id, dur = 4.0) {
+    if (!player || player.dead || !id) return false;
+    if (this.modeId === 'zen' || this.modeId === 'free_roam' || this.isTestTrack) return false;
+    if (typeof StatusSystem.apply === 'function') {
+      StatusSystem.apply(player, id, dur, this);
+      return true;
+    }
+    return false;
+  }
+
+  _spawnPredatorHazard(cfg = {}) {
+    if (this.state !== 'playing' || this.isTestTrack) return;
+    const lane = Number.isInteger(cfg.lane) ? Math.max(0, Math.min(2, cfg.lane)) : Math.floor(Math.random() * 3);
+    const x = Number.isFinite(cfg.x) ? cfg.x : (LANE_X[lane] ?? 0);
+    const telegraphSec = Math.max(0.25, Number(cfg.telegraphSec ?? 0.9));
+    const type = cfg.type || 'lunge';
+    const label = cfg.label || (type === 'roar' ? '📢 RUGIDO' : (type === 'pounce' ? '🐾 BOTE' : '🦖 ATAQUE PREDADOR'));
+    const entry = {
+      type,
+      lane,
+      x,
+      remainingSec: telegraphSec,
+      damage: Math.max(1, Number(cfg.damage ?? 1)),
+      label
+    };
+    this._predatorHazards.push(entry);
+    this.ui.hud.setPredatorTelegraph?.({
+      type: entry.type,
+      lane: entry.lane,
+      remainingSec: entry.remainingSec,
+      label: entry.label
+    });
+    if (typeof this.spawner.spawnFromCatalog === 'function' && cfg.spawnObstacle) {
+      this.spawner.spawnFromCatalog(Math.random, {
+        biomeId: this.currentBiome?.id,
+        lane,
+        dangerTier: this._currentDangerTier,
+        source: 'predator'
+      });
+    }
+  }
+
+  _updatePredatorHazards(dt) {
+    if (!this._predatorHazards || this._predatorHazards.length === 0) return;
+    let leadHazard = null;
+    for (let i = this._predatorHazards.length - 1; i >= 0; i--) {
+      const h = this._predatorHazards[i];
+      h.remainingSec -= dt;
+      if (h.remainingSec <= 0) {
+        this._predatorHazards.splice(i, 1);
+        this.particles?.emitExplosion?.(h.x, 0.9, -1.2, '#ef4444', 12, true);
+        this.cameraRig?.triggerShake?.(0.35, 0.18);
+        for (const p of this.players) {
+          if (p.dead) continue;
+          const localX = p.x - (p.trackOffsetX || 0);
+          const sameLane = p.lane === h.lane || Math.abs(localX - h.x) < 1.35;
+          const jumpedOver = h.type === 'sweep' && p.y > 1.05;
+          if (sameLane && !jumpedOver) {
+            this._damagePlayer(p, h.type === 'raid_storm' ? 'raid_hazard' : 'predator_attack');
+            if (this.raidState?.activeAffix?.appliesPoison) {
+              this._applyPlayerStatus(p, 'poison', 4.5);
+            }
+          }
+        }
+      } else if (!leadHazard || h.remainingSec < leadHazard.remainingSec) {
+        leadHazard = h;
+      }
+    }
+    this.ui.hud.setPredatorTelegraph?.(leadHazard ? {
+      type: leadHazard.type,
+      lane: leadHazard.lane,
+      remainingSec: Math.max(0, leadHazard.remainingSec),
+      label: leadHazard.label
+    } : null);
+  }
+
+  _computeDangerTier(scoreVal) {
+    const effScore = this.modeId === 'competition'
+      ? Math.max(0, scoreVal * 1.45 + 600)
+      : Math.max(0, scoreVal);
+    if (typeof this.difficultyMgr?.getDangerTier === 'function') {
+      const info = this.difficultyMgr.getDangerTier(effScore);
+      if (info && typeof info.tier === 'number') return info;
+    }
+    if (typeof DifficultyManager?.getDangerTier === 'function') {
+      const info = DifficultyManager.getDangerTier(effScore);
+      if (info && typeof info.tier === 'number') return info;
+    }
+    const tier = Math.min(10, Math.floor(effScore / 2500));
+    const dtOut = this._currentDangerTier;
+    dtOut.tier = tier;
+    dtOut.speedBonus = tier * 0.035;
+    dtOut.densityBonus = tier * 0.045;
+    dtOut.eventFreqBonus = tier * 0.04;
+    dtOut.predatorAggro = 1 + tier * 0.12;
+    return dtOut;
+  }
+
   _damagePlayer(p, cause = 'obstacle') {
     if (this.tutorialState?.active) {
       this.ui.hud.showFloatText('💡 Veja a instrução no topo para desviar ou quebrar!', '#ffd447');
       return;
     }
-    if (!p || p.dead || this.godMode || this.modeId === 'zen' || this.isTestTrack) return;
+    if (!p || p.dead || this.godMode || this.modeId === 'zen' || this.modeId === 'free_roam' || this.isTestTrack) {
+      if (this.modeId === 'free_roam' && p && !p.dead && p.invulnTimer <= 0) {
+        p.invulnTimer = 0.7;
+        this.ui.hud.showFloatText('🧪 Sandbox: sem dano!', '#34d399');
+      }
+      return;
+    }
     if (p.invulnTimer > 0 || p.furyTimer > 0 || p.ramTimer > 0 || p.rocketTimer > 0) return;
 
     // Filhote companheiro pode bloquear 1 dano!
@@ -2370,6 +3042,21 @@ export class Game {
       p.dead = true;
       p._lastDeathCause = cause;
       this.slowMoTimer = 0.45;
+      if (this.multiplayerSession?.active || this.players.length >= 2) {
+        const revCfg = ContentLoader.getBalance().revive || {};
+        const mpRevCfg = this.multiplayerSession?.reviveConfig || {};
+        const windowSec = mpRevCfg.windowSec ?? revCfg.windowSec ?? 15;
+        const maxPerRun = mpRevCfg.maxPerRun ?? revCfg.maxPerRun ?? 2;
+        p.reviveWindowTimer = (p.reviveCount || 0) < maxPerRun ? windowSec : 0;
+        const nick = p.name || p.spec?.name || 'Aliado';
+        this.ui.hud.showBanner(
+          p.reviveWindowTimer > 0
+            ? `💀 ${nick} caiu! Pressione V para reviver ${nick} (${Math.round(windowSec)}s)`
+            : `💀 ${nick} caiu!`,
+          '#f87171',
+          3.5
+        );
+      }
       const customDeath = getActivePreset(p.key).deathEffect;
       if (customDeath === 'fireworks') {
         this.particles.emitExplosion(p.x, p.y + 1.0, p.z, '#ffbe0b', 18, true);
@@ -2378,6 +3065,15 @@ export class Game {
         this.particles.emitExplosion(p.x, p.y + 0.9, p.z, '#90e0ef', 20, false);
       } else {
         this.particles.emitExplosion(p.x, p.y + 0.8, p.z, '#ffd447', 16, true);
+      }
+      if (this.multiplayerSession?.active && this.players.some((pl) => !pl.dead)) {
+        const isLocalSpectatorTrigger = p.peerId === this.net.peerId || p.index === 0;
+        if (isLocalSpectatorTrigger && !this.spectatorMode) {
+          this.spectatorMode = true;
+          this.spectatorFreeOffset.set(0, 0, 0);
+          this.tvHud.setVisible(true);
+          this.ui.hud.showBanner('👻 ELIMINADO! Câmera Livre Espectador ativa (WASD/Setas mover, Q/E altura, Tab alvo)', '#38bdf8', 4.0);
+        }
       }
       this._checkAllPlayersDead();
     }
@@ -2439,8 +3135,9 @@ export class Game {
     this.music.setPlaying(false);
 
     const diff = this.difficultyMgr.getConfig();
+    const rankedMode = isModeRanked(this.modeId) && this.modeId !== 'free_roam' && !this.isTestTrack;
     const finalScore = Math.floor(this.score * diff.scoreMult * (this.modeId === 'hardcore' ? 5 : 1));
-    const isNewRecord = Save.updateHighScore(finalScore, this.modeId);
+    const isNewRecord = rankedMode ? Save.updateHighScore(finalScore, this.modeId) : false;
     this.hiScore = Save.getHighScore();
 
     let displayTitle = title;
@@ -2474,20 +3171,22 @@ export class Game {
       this.replay.saveGhostIfBest(finalScore);
     }
 
-    ProgressionManager.reportRunStats({
-      score: finalScore,
-      eggs: this.runEggs,
-      jumps: this.runJumps,
-      stomps: this.runStomps
-    });
-    Metagame.updateStatsAndWeekly({
-      score: finalScore,
-      distance: this.distance,
-      eggs: this.runEggs,
-      deathCause: this.players[0]?._lastDeathCause || null
-    });
+    if (rankedMode) {
+      ProgressionManager.reportRunStats({
+        score: finalScore,
+        eggs: this.runEggs,
+        jumps: this.runJumps,
+        stomps: this.runStomps
+      });
+      Metagame.updateStatsAndWeekly({
+        score: finalScore,
+        distance: this.distance,
+        eggs: this.runEggs,
+        deathCause: this.players[0]?._lastDeathCause || null
+      });
+    }
 
-    if (this.activeCampaignNode && finalScore >= this.activeCampaignNode.targetScore) {
+    if (rankedMode && this.activeCampaignNode && finalScore >= this.activeCampaignNode.targetScore) {
       if (!Save.data.campaign.completedNodes.includes(this.activeCampaignNode.id)) {
         Save.data.campaign.completedNodes.push(this.activeCampaignNode.id);
         Save.addEggs(this.activeCampaignNode.reward || 20);
@@ -2495,7 +3194,7 @@ export class Game {
       Save.save();
     }
 
-    if (this.net?.supabase?.isConfigured?.() && finalScore > 100 && !this.isTestTrack) {
+    if (rankedMode && this.net?.supabase?.isConfigured?.() && finalScore > 100 && !this.isTestTrack) {
       finishAuthoritativeRun(this.net.supabase.client, {
         playerName: Save.data.network?.nickname || 'Dino',
         dinoId: this.players[0]?.id || 'trex',
@@ -2505,7 +3204,9 @@ export class Game {
         distance: this.distance,
         eggs: this.runEggs,
         runTimeSec: this.runTime,
-        maxCombo: this.maxCombo
+        maxCombo: this.maxCombo,
+        competitive: this.modeId === 'competition',
+        seed: this.modeId === 'competition' ? getCompetitionSeed() : (this.customSeed || null)
       }).catch(() => {});
     }
 
@@ -2514,11 +3215,19 @@ export class Game {
       const humanCount = this.players.filter((p) => !p.isBot).length;
       const eligible = humanCount >= 2 && this.runTime >= 20 && finalScore >= 120;
       const tierRewards = [12, 6, 3];
+      const elapsedSec = Math.max(1, this.runTime || 1);
       const standings = sorted.map((p, idx) => ({
         peerId: p.peerId,
         name: p.name,
+        dinoId: p.id || p.spec?.id || 'trex',
         score: p.score || finalScore,
+        distance: Math.floor(p.distance || this.distance || 0),
+        raidDamage: Math.floor(p.raidDamage || 0),
+        raidDps: Math.round((p.raidDamage || 0) / elapsedSec),
+        eggs: p.eggsCollected ?? this.runEggs ?? 0,
+        stomps: p.stomps || 0,
         pvpHits: p.pvpHits || 0,
+        alive: !p.dead,
         color: p.peerColor,
         eggReward: eligible ? (tierRewards[idx] || 0) : 0,
         pingMs: this.net.pingMs || 2
@@ -2547,6 +3256,13 @@ export class Game {
       const summary = {
         title: displayTitle,
         mpMode: this.multiplayerSession.mpMode || 'race',
+        durationSec: Math.floor(this.runTime || 0),
+        distance: Math.floor(this.distance || 0),
+        raceTargetDistance: this.raceState?.targetDistance || null,
+        raidTotalDamage: Math.floor(this.raidState?.totalDamage || 0),
+        biomeName: this.currentBiome?.name || this.currentBiome?.id || 'Deserto',
+        difficulty: diff?.id || 'normal',
+        maxCombo: this.maxCombo || 1,
         eligible,
         rewardEggs,
         standings
@@ -2557,15 +3273,21 @@ export class Game {
       this.ui.showPodium(summary, {
         onReplay: () => this.startReplayPlayback(),
         onVote: (v) => this.net.sendRoundVote(v),
+        onRematch: () => {
+          // Revanche mantendo exatamente a mesma sala e configuração atual
+          this.restartRun();
+        },
         onAgain: (voteRes) => {
-          if (voteRes?.votedBiome) {
-            this.setBiomeConfig(voteRes.votedBiome, this.sequenceBiomes);
-          }
-          if (voteRes?.votedMpMode && this.multiplayerSession) {
-            this.multiplayerSession.mpMode = voteRes.votedMpMode;
-            if (this.multiplayerSession.room) {
-              this.multiplayerSession.room.mpMode = voteRes.votedMpMode;
-              this.multiplayerSession.room.elimination = (voteRes.votedMpMode === 'elimination');
+          if (!voteRes?.keepRoomConfig) {
+            if (voteRes?.votedBiome) {
+              this.setBiomeConfig(voteRes.votedBiome, this.sequenceBiomes);
+            }
+            if (voteRes?.votedMpMode && this.multiplayerSession) {
+              this.multiplayerSession.mpMode = voteRes.votedMpMode;
+              if (this.multiplayerSession.room) {
+                this.multiplayerSession.room.mpMode = voteRes.votedMpMode;
+                this.multiplayerSession.room.elimination = (voteRes.votedMpMode === 'elimination');
+              }
             }
           }
           this.restartRun();
@@ -2575,7 +3297,7 @@ export class Game {
       return;
     }
 
-    const gachaEligible = !this.isTestTrack && !this.multiplayerSession?.active && this.modeId !== 'zen' && this.modeId !== 'tutorial';
+    const gachaEligible = rankedMode && !this.isTestTrack && !this.multiplayerSession?.active && this.modeId !== 'zen' && this.modeId !== 'free_roam' && this.modeId !== 'tutorial';
     const gachaCrates = GachaSystem.computeRunCrates(finalScore, this.difficultyMgr.getConfig(), gachaEligible);
     if (gachaCrates > 0) GachaSystem.addCrates(gachaCrates);
     const totalCrates = GachaSystem.getCrateCount();
@@ -2586,6 +3308,7 @@ export class Game {
       !this._crystalReviveUsed &&
       !Save.data.perfectMode &&
       this.modeId !== 'hardcore' &&
+      this.modeId !== 'competition' &&
       (this.difficultyMgr.activeId === 'easy' || this.difficultyMgr.activeId === 'normal')
     );
 
@@ -2664,12 +3387,17 @@ export class Game {
 
   _handlePlayerInput(p, dt) {
     if (p.dead) {
+      if ((p.reviveWindowTimer || 0) > 0) {
+        p.reviveWindowTimer = Math.max(0, p.reviveWindowTimer - dt);
+      }
       // Sabotagem: fantasma joga cactos apertando pulo!
       if (this.modeId === 'sabotage' && this.input.wasActionJustPressed(p.key, 'jump', false)) {
         this.spawner._acquire('cactus_small', LANE_X[Math.floor(Math.random() * 3)], 0, -55);
       }
       return;
     }
+    if ((p.reviveCooldown || 0) > 0) p.reviveCooldown = Math.max(0, p.reviveCooldown - dt);
+    if ((p._abyssBreatheCd || 0) > 0) p._abyssBreatheCd = Math.max(0, p._abyssBreatheCd - dt);
 
     // No modo Relay, apenas o jogador ativo responde
     if (this.modeId === 'relay' && p.index !== this.relayActiveIdx) return;
@@ -2734,7 +3462,7 @@ export class Game {
       itemJust = !!this.input.virtualJustPressed[p.key]?.has('item');
       transmuteJust = !!this.input.virtualJustPressed[p.key]?.has('transmute');
     } else {
-      const allowClassic = isLocalMain || this.players.length === 1;
+      const allowClassic = this.players.length === 1 || (!!this.multiplayerSession?.active && isLocalMain);
       const inKey = isLocalMain ? 'p1' : p.key;
       leftJust = this.input.wasActionJustPressed(inKey, 'left', allowClassic);
       rightJust = this.input.wasActionJustPressed(inKey, 'right', allowClassic);
@@ -2763,8 +3491,14 @@ export class Game {
       this._transmutePlayerHabitat(p);
     }
 
-    // Regra do Modo Caos ou Modo Espelhado: controles invertidos!
-    if (this.activeChaosRule?.id === 'inverted' || Save.data.mirroredMode) {
+    // Tick de debuffs expandidos (§3 contrato) — devolve speedMult, laneMult, controlsReversed, abilityLocked, visionMult, gravityMult
+    const debuffFx = typeof StatusSystem.tickDebuffs === 'function'
+      ? StatusSystem.tickDebuffs(p, dt, this._eventContext())
+      : null;
+    p._debuffFx = debuffFx;
+
+    // Regra do Modo Caos, Modo Espelhado ou Debuff controlsReversed: controles invertidos!
+    if (this.activeChaosRule?.id === 'inverted' || Save.data.mirroredMode || debuffFx?.controlsReversed) {
       [leftJust, rightJust] = [rightJust, leftJust];
     }
 
@@ -2836,8 +3570,12 @@ export class Game {
     }
 
     const iceLaneMult = p.statuses?.ice ? 0.72 : 1;
-    const laneSpeed = 16 * (p.laneSpeedMult || 1) * iceLaneMult;
-    const baseTargetX = p.inShopLane ? (SHOP_LANE_X[p.inShopLane] ?? laneArr[p.lane]) : (laneArr[p.lane] ?? 0);
+    const debuffLaneMult = Number.isFinite(debuffFx?.laneMult)
+      ? Math.max(0.35, Math.min(1.5, debuffFx.laneMult))
+      : 1;
+    const laneSpeed = 16 * (p.laneSpeedMult || 1) * iceLaneMult * debuffLaneMult;
+    const tOff = p.trackOffsetX || 0;
+    const baseTargetX = tOff + (p.inShopLane ? (SHOP_LANE_X[p.inShopLane] ?? laneArr[p.lane]) : (laneArr[p.lane] ?? 0));
     const targetX = baseTargetX + (p.xOffset || 0) + Math.sin(this.runTime * 2) * (Math.abs(envWind) > 0.2 ? envWind * 0.15 : 0);
     const prevX = p.x;
     p.x += (targetX - p.x) * Math.min(1, dt * laneSpeed);
@@ -3067,21 +3805,30 @@ export class Game {
       }
     }
 
-    // Controle real de Oxigênio (O2 / Brânquias) para mergulho / bioma submerso
+    // Controle real de Oxigênio (O2 / Brânquias) para mergulho / bioma submerso (B6)
+    const o2Cfg = ContentLoader.getBalance().oxygen || {};
+    const o2DrainBase = o2Cfg.drainPerSec ?? 7.5;
+    const o2RechargeBase = o2Cfg.rechargePerSec ?? 38;
+    const o2LowThreshold = o2Cfg.lowThreshold ?? 30;
+    const o2GraceSec = o2Cfg.graceSec ?? 2.0;
+
     if (p._oxygenWarnCd > 0) p._oxygenWarnCd = Math.max(0, p._oxygenWarnCd - dt);
     const isSubmergedDepth = Boolean(p.inSubmerged || (inWater && (p.diveDepth || 0) > 0.32));
     if (isSubmergedDepth && !this.isTestTrack && this.modeId !== 'zen') {
+      if (p.index === 0) {
+        this._hintOnce('submerge_o2', '🫧 Submerso! Suba à superfície (W/↑ ou B) para respirar!', '#22d3ee');
+      }
       const hasDiveGear = p.equippedAccessory === 'diving_mask' || p.equippedAccessory === 'snorkel' || p.equippedAccessory === 'steam_goggles';
-      const baseDrain = p.isAquaticNative ? (p.inSubmerged ? 6.5 : 8.5) : (p.inSubmerged ? 8.5 : 12.0);
-      const drainRate = baseDrain * (hasDiveGear ? 0.45 : 1.0);
+      const habitatMult = p.isAquaticNative ? 0.72 : 1.0;
+      const drainRate = o2DrainBase * habitatMult * (hasDiveGear ? 0.45 : 1.0);
       p.oxygen = Math.max(0, (p.oxygen ?? 100) - drainRate * dt);
-      if (p.oxygen <= 30 && p.oxygen > 0 && p.index === 0 && (p._oxygenWarnCd || 0) <= 0) {
-        p._oxygenWarnCd = 2.8;
-        this.ui.hud.showFloatText('🫧 OXIGÊNIO BAIXO! Suba (W/↑) ou pegue Bolha 🫧!', '#38bdf8');
+      if (p.oxygen <= o2LowThreshold && p.oxygen > 0 && p.index === 0 && (p._oxygenWarnCd || 0) <= 0) {
+        p._oxygenWarnCd = 2.6;
+        this.ui.hud.showFloatText('⚠️ OXIGÊNIO BAIXO! Suba (W/↑ ou B) ou pegue Bolha 🫧!', '#ef4444');
       }
       if (p.oxygen <= 0) {
         p._oxygenDmgTimer = (p._oxygenDmgTimer || 0) + dt;
-        if (p._oxygenDmgTimer >= 2.2) {
+        if (p._oxygenDmgTimer >= o2GraceSec) {
           p._oxygenDmgTimer = 0;
           p.oxygen = 22;
           if (!p.inSubmerged) p.diveTarget = 0;
@@ -3089,7 +3836,7 @@ export class Game {
         }
       }
     } else {
-      const refillRate = p.isAquaticNative ? 36 : 28;
+      const refillRate = p.isAquaticNative ? o2RechargeBase * 1.15 : o2RechargeBase;
       p.oxygen = Math.min(100, (p.oxygen ?? 100) + refillRate * dt);
       p._oxygenDmgTimer = 0;
     }
@@ -3115,6 +3862,11 @@ export class Game {
     if (abilityJust) {
       if (this.events.ufo.active && this.events.ufo.mashBreak()) {
         // Escapando do feixe do OVNI!
+      } else if (debuffFx?.abilityLocked) {
+        if (!p._lowStamToastCooldown && p.index === 0) {
+          p._lowStamToastCooldown = 0.9;
+          this.ui.hud.showFloatText('🔒 Habilidade silenciada por debuff!', '#c084fc');
+        }
       } else if (!abilityUnlocked && p.index === 0) {
         if (!p._lowStamToastCooldown) {
           p._lowStamToastCooldown = 0.9;
@@ -3176,10 +3928,16 @@ export class Game {
       p.grounded = false;
     }
 
-    // Gravidade (Planeta Alienígena, Modo Caos, Pista Customizada, Evento Baixa Gravidade + Planar)
+    // Gravidade (Planeta Alienígena, Modo Caos, Pista Customizada, Evento Baixa Gravidade, Debuffs, Raid Affix)
+    const debuffGravMult = Number.isFinite(debuffFx?.gravityMult)
+      ? Math.max(0.45, Math.min(1.85, debuffFx.gravityMult))
+      : 1.0;
+    const raidGravMult = this.raidState?.activeAffix?.gravityMult || 1.0;
     let gravMult = (this.activeChaosRule?.id === 'low_grav' ? 0.55 : (this.currentBiome.lowGravity || 1.0))
       * (this.activeCustomTrack?.gravityScale || 1.0)
-      * (this.events.getGravityScale?.() ?? 1.0);
+      * (this.events.getGravityScale?.() ?? 1.0)
+      * debuffGravMult
+      * raidGravMult;
     if (p.gravityZoneTimer > 0) {
       p.gravityZoneTimer -= dt;
       gravMult *= (p.gravityZoneMode === 'low' ? 0.5 : 1.55);
@@ -3336,15 +4094,33 @@ export class Game {
     if (snap.elimTimer !== undefined) this.multiplayerSession.elimTimer = snap.elimTimer;
     if (snap.suddenDeath !== undefined) this.multiplayerSession.suddenDeath = !!snap.suddenDeath;
     if (snap.mpMode) this.multiplayerSession.mpMode = snap.mpMode;
+    if (snap.modeId && snap.modeId !== this.modeId) this.modeId = snap.modeId;
+    if (typeof snap.dangerTier === 'number' && snap.dangerTier !== this._lastHudDangerTier) {
+      this._lastHudDangerTier = snap.dangerTier;
+      this.ui.hud.setDangerTier?.({ tier: snap.dangerTier });
+    }
+    if (snap.trackMode && snap.trackMode !== this.multiplayerSession.trackMode) {
+      this.multiplayerSession.trackMode = snap.trackMode;
+      this._applyGhostModeVisuals();
+    }
 
-    if (snap.biome && snap.biome !== this.currentBiome.id) {
-      const targetBiome = getBiomeById(snap.biome);
+    const nextBiomeId = snap.biomeId || snap.biome;
+    if (nextBiomeId && nextBiomeId !== this.currentBiome?.id) {
+      const targetBiome = getBiomeById(nextBiomeId);
       if (targetBiome) {
         this.currentBiome = targetBiome;
         this.world.applyTheme(targetBiome.theme);
         this.spawner.setBiome(targetBiome.id);
+        this._applyBiomePlayersState(targetBiome);
         this.ui.hud.showBanner(`🌀 PORTAL! Entrando em: ${targetBiome.name}`, '#00f5d4', 3.0);
       }
+    }
+
+    if (Array.isArray(snap.obstacles)) {
+      this.spawner.syncFromHostObstacles(snap.obstacles);
+    }
+    if (snap.boss !== undefined) {
+      this.ui.hud.setBossHud?.(snap.boss);
     }
 
     if (Array.isArray(snap.players)) {
@@ -3360,6 +4136,15 @@ export class Game {
         target.abilityCooldown = sp.abilityCd ?? target.abilityCooldown;
         target.attackCooldown = sp.attackCd ?? target.attackCooldown;
         target.attackMaxCooldown = sp.attackMaxCd ?? target.attackMaxCooldown;
+        target.oxygen = sp.oxygen ?? target.oxygen;
+        target.inWater = sp.inWater ?? target.inWater;
+        target.inSubmerged = sp.inSubmerged ?? target.inSubmerged;
+        target.diveTarget = sp.diveTarget ?? target.diveTarget;
+        target.diveDepth = sp.diveDepth ?? target.diveDepth;
+        target.trackOffsetX = sp.trackOffsetX ?? target.trackOffsetX ?? 0;
+        target.reviveWindowTimer = sp.reviveWindowTimer ?? target.reviveWindowTimer ?? 0;
+        target.reviveCount = sp.reviveCount ?? target.reviveCount ?? 0;
+        target.reviveCooldown = sp.reviveCooldown ?? target.reviveCooldown ?? 0;
         target.rank = sp.rank ?? target.rank;
         target.pvpHits = sp.pvpHits ?? target.pvpHits;
         target.dead = !!sp.dead;
@@ -3422,11 +4207,22 @@ export class Game {
     this.world.update(dt, this.speed);
     this.dayNight.update(dt, this.currentBiome.theme);
     this.weather.update(dt, true);
+    this.spawner.remoteSyncMode = true;
     this.spawner.update(dt, this.speed, this.score, this.players);
+    if (this.multiplayerSession.trackMode === 'parallel') {
+      this.world.syncParallelObstacleProxies(
+        this.players.map((pl) => pl.trackOffsetX || 0),
+        this.spawner.getActiveObstacles()
+      );
+    }
     this.particles.update(dt, this.speed);
     this.narrator.update(dt);
 
     const myDino = this.players.find((p) => p.peerId === this.net.peerId) || this.players[0];
+    if (myDino) {
+      const isSub = Boolean(this.currentBiome?.submerged || (myDino.inWater && (myDino.diveDepth || 0) > 0.25));
+      this.world.setSubmergedVisuals(isSub, !!this.currentBiome?.submerged);
+    }
     if (myDino) {
       this.ui.hud.updatePlayStatus(
         myDino,
@@ -3451,7 +4247,9 @@ export class Game {
     }
     this.ui.hud.updateScore(Math.max(this.hiScore, this.score), this.score, this.speed / Math.max(1, this.baseSpeed));
     this.music.update(dt, this.speed, myDino && myDino.hp <= 1 ? 1 : 0);
-    const camPlayers = myDino && !myDino.dead ? [myDino] : this.players.filter((x) => !x.dead);
+    const camPlayers = (this.multiplayerSession.trackMode === 'parallel' || this.multiplayerSession.trackMode === 'ghost') && myDino && !myDino.dead
+      ? [myDino]
+      : (myDino && !myDino.dead ? [myDino] : this.players.filter((x) => !x.dead));
     const camLead = camPlayers[0] || this.players[0];
     this.cameraRig.update(
       dt,
@@ -3619,23 +4417,50 @@ export class Game {
     this.runTime += dt;
     if (this.currentOasis > 0) this.currentOasis = Math.max(0, this.currentOasis - dt);
 
-    // Velocidade progressiva + bônus de turbo/slide + dificuldade adaptativa
+    // Velocidade progressiva + bônus de turbo/slide + dificuldade adaptativa + Danger Tier (§3)
     const baseDiff = this.difficultyMgr.getConfig();
+    const dangerTierInfo = this._computeDangerTier(this.score);
+    this._currentDangerTier = dangerTierInfo;
+    if (dangerTierInfo.tier !== this._lastHudDangerTier) {
+      this._lastHudDangerTier = dangerTierInfo.tier;
+      this.ui.hud.setDangerTier?.(dangerTierInfo);
+      if (dangerTierInfo.tier >= 1 && this.runTime > 5 && this.modeId !== 'free_roam') {
+        this.ui.hud.showFloatText(`⚠️ PERIGO NV.${dangerTierInfo.tier}!`, '#f97316');
+      }
+    }
+    this.spawner.setDangerTier?.(dangerTierInfo);
+    this.events.setDangerTier?.(dangerTierInfo);
+
+    const dangerDensityMult = 1 + (dangerTierInfo.densityBonus || 0);
     let adaptiveMult = 1.0;
-    if (this.difficultyMgr.adaptive && p0) {
+    if (this.difficultyMgr.adaptive && p0 && this.modeId !== 'competition') {
       if (p0.hp <= 1 && p0.maxHp > 1) {
         adaptiveMult = 0.88;
-        this.spawner.setDensity(baseDiff.density * 0.8);
+        this.spawner.setDensity(baseDiff.density * 0.8 * dangerDensityMult);
       } else if (this.combo >= 4 && p0.hp >= p0.maxHp) {
         adaptiveMult = 1.12;
-        this.spawner.setDensity(baseDiff.density * 1.18);
+        this.spawner.setDensity(baseDiff.density * 1.18 * dangerDensityMult);
       } else {
-        this.spawner.setDensity(baseDiff.density);
+        this.spawner.setDensity(baseDiff.density * dangerDensityMult);
       }
+    } else {
+      this.spawner.setDensity(baseDiff.density * dangerDensityMult);
     }
 
     // Soft-cap nos multiplicadores de velocidade para evitar aceleração insana com buffs empilhados
-    let speedMult = adaptiveMult * (p0 ? StatusSystem.getSpeedMultiplier(p0) : 1) * (p0?.speedBonus || 1);
+    const debuffSpeedMult = Number.isFinite(p0?._debuffFx?.speedMult)
+      ? Math.max(0.55, Math.min(1.35, p0._debuffFx.speedMult))
+      : 1;
+    const raidSpeedMult = this.raidState?.activeAffix?.speedMult || 1;
+    const freeRoamMult = this.modeId === 'free_roam' ? (this.freeRoamState?.speedScale || 1) : 1;
+    const dangerSpeedMult = 1 + Math.min(0.45, dangerTierInfo.speedBonus || 0);
+    let speedMult = adaptiveMult
+      * (p0 ? StatusSystem.getSpeedMultiplier(p0) : 1)
+      * (p0?.speedBonus || 1)
+      * debuffSpeedMult
+      * raidSpeedMult
+      * dangerSpeedMult
+      * freeRoamMult;
     if (p0?.inWater && p0?.mutationMods?.waterSpeedMult) {
       speedMult *= p0.mutationMods.waterSpeedMult;
     }
@@ -3767,6 +4592,8 @@ export class Game {
     }
     for (const p of this.players) {
       if (!p.dead) {
+        const pStepDist = this.speed * worldDt * (p.speedBonus || 1) * (p.turboTimer > 0 ? 1.12 : 1);
+        p.distance = (p.distance || 0) + pStepDist;
         p.score = (p.score || 0) + this.speed * worldDt * 0.55 * (p.scoreCardMult || 1) * (p.scoreMultBonus || 1) * perfectMult;
       }
     }
@@ -3819,7 +4646,7 @@ export class Game {
           this._applyBiomePlayersState(targetBiome);
           this.ui.hud.showBanner(`🌀 PORTAL! Entrando em: ${targetBiome.name}`, '#00f5d4', 3.5);
           this._discoverCurrentBiomeFossil();
-          if (targetBiome.id === 'jurassic_river') Save.unlockAchievement('river_king');
+          if (targetBiome.id === 'jurassic_river' && isModeRanked(this.modeId)) Save.unlockAchievement('river_king');
         }
       }
     }
@@ -3915,6 +4742,11 @@ export class Game {
             lastPlace.shields = 0;
             lastPlace.dead = true;
             this.ui.hud.showBanner(`⏳ ELIMINAÇÃO! ${lastPlace.name} caiu em último!`, '#ff4757', 3.0);
+            if ((lastPlace.peerId === this.net.peerId || lastPlace.index === 0) && this.players.some((pl) => !pl.dead)) {
+              this.spectatorMode = true;
+              this.spectatorFreeOffset.set(0, 0, 0);
+              this.tvHud.setVisible(true);
+            }
             this._checkAllPlayersDead();
           }
         }
@@ -3999,24 +4831,228 @@ export class Game {
       this.world.setSubmergedVisuals(isSub, !!this.currentBiome?.submerged);
     }
 
-    // Coop: reviver parceiro caído ficando perto por 3s
+    // 1) Modo Raid Colossal: múltiplas barras de vida, afixos rotativos e placar DPS
+    if (this.modeId === 'raid' && this.raidState?.active) {
+      const rs = this.raidState;
+      const bosses = this.events?.bosses;
+      if (!rs.bossSpawned) {
+        rs.spawnDelay -= worldDt;
+        if (rs.spawnDelay <= 0 && bosses) {
+          rs.bossSpawned = true;
+          const bId = rs.bossId || this.currentBiome?.bossId || 'alpha_trex';
+          const pScale = Math.max(1, this.players.length) + 1;
+          if (typeof bosses.startBossById === 'function') {
+            bosses.startBossById(bId, pScale, this.difficultyMgr.activeId);
+          } else {
+            bosses.startBoss(bId, pScale, this.difficultyMgr.activeId);
+          }
+          if (bosses.activeBoss) {
+            bosses.activeBoss.name = `${bosses.activeBoss.name} [Barra ${rs.bossBarIndex}/${rs.totalBars}]`;
+            this.ui.hud.setBossHud?.(bosses.activeBoss);
+          }
+        }
+      } else if (bosses && !bosses.activeBoss) {
+        if (rs.bossBarIndex < rs.totalBars) {
+          rs.bossBarIndex++;
+          rs.bossSpawned = false;
+          rs.spawnDelay = 1.6;
+          this.addScore(400 * rs.bossBarIndex);
+          for (const pl of this.players) {
+            if (!pl.dead) pl.shields = Math.min(4, (pl.shields || 0) + 1);
+          }
+          this.sfx.evolution();
+          this.ui.hud.showBanner(
+            `🐉 BARRA ${rs.bossBarIndex - 1}/${rs.totalBars} DESTRUÍDA! Próxima fase do Colosso chegando!`,
+            '#c084fc',
+            3.2
+          );
+        } else {
+          rs.active = false;
+          this.sfx.victory();
+          const topDps = [...this.players].sort((a, b) => (b.raidDamage || 0) - (a.raidDamage || 0))[0];
+          const dpsVal = Math.round((topDps?.raidDamage || 0) / Math.max(1, this.runTime));
+          this._finishRun(`🐉 RAID COLOSSAL VENCIDA! MVP DPS: ${topDps?.name || 'Dino'} (${dpsVal} DPS)`);
+          return;
+        }
+      }
+
+      // Rotação de afixos a cada 22s
+      rs.affixTimer -= dt;
+      if (rs.affixTimer <= 0) {
+        rs.affixTimer = 22;
+        rs.affixIndex = (rs.affixIndex + 1) % RAID_AFFIXES.length;
+        rs.activeAffix = RAID_AFFIXES[rs.affixIndex];
+        this.ui.hud.showBanner(
+          `🐉 NOVO AFIXO: ${rs.activeAffix.icon} ${rs.activeAffix.name} — ${rs.activeAffix.desc}`,
+          '#c084fc',
+          3.6
+        );
+      }
+
+      // Afixo Tempestade do Vazio: telegrafa ataque em faixa
+      if (rs.activeAffix?.telegraphHazards) {
+        rs.hazardTimer -= worldDt;
+        if (rs.hazardTimer <= 0) {
+          rs.hazardTimer = 4.2;
+          const tLane = Math.floor(Math.random() * 3);
+          this._spawnPredatorHazard({
+            type: 'raid_storm',
+            lane: tLane,
+            telegraphSec: 1.0,
+            damage: 1,
+            label: '⚡ RAIO DO VAZIO'
+          });
+        }
+      }
+
+      // Placar de DPS (HUD + resumo periódico)
+      rs.dpsAnnounceTimer -= dt;
+      if (rs.dpsAnnounceTimer <= 0) {
+        rs.dpsAnnounceTimer = 7.5;
+        const elapsed = Math.max(1, this.runTime);
+        const dpsList = [...this.players]
+          .sort((a, b) => (b.raidDamage || 0) - (a.raidDamage || 0))
+          .map((pl) => ({ name: pl.name, damage: Math.floor(pl.raidDamage || 0), dps: Math.round((pl.raidDamage || 0) / elapsed) }));
+        this.ui.hud.setRaidDpsHud?.({
+          barIndex: rs.bossBarIndex,
+          totalBars: rs.totalBars,
+          affix: rs.activeAffix,
+          dpsList
+        });
+        const summaryStr = dpsList.slice(0, 3).map((d) => `${d.name}: ${d.dps} DPS`).join(' | ');
+        if (summaryStr) {
+          this.ui.hud.showFloatText(`🐉 Barra ${rs.bossBarIndex}/${rs.totalBars} • ${summaryStr}`, '#c084fc');
+        }
+      }
+    }
+
+    // 2) Modo Boss Fight / Boss Rush (usa startBossById / startBossRush quando existirem)
+    if (this.modeId === 'boss_fight' && this.bossRushState?.active) {
+      const br = this.bossRushState;
+      const bosses = this.events?.bosses;
+      if (bosses && !bosses.activeBoss) {
+        br.nextBossDelay -= worldDt;
+        if (br.nextBossDelay <= 0) {
+          if (br.submode === 'rush' && !br.usedNativeRush && typeof bosses.startBossRush === 'function') {
+            br.usedNativeRush = true;
+            bosses.startBossRush(br.queue, this.players.length, this.difficultyMgr.activeId);
+          } else if (br.currentIndex < br.queue.length) {
+            const nextId = br.queue[br.currentIndex];
+            if (br.currentIndex > 0) {
+              for (const pl of this.players) {
+                if (!pl.dead) this._healPlayer(pl, 1, '💚 +1 VIDA (ENTRE CHEFES)!');
+              }
+            }
+            if (typeof bosses.startBossById === 'function') {
+              bosses.startBossById(nextId, this.players.length, this.difficultyMgr.activeId);
+            } else {
+              bosses.startBoss(nextId, this.players.length, this.difficultyMgr.activeId);
+            }
+            br.currentIndex++;
+            br.nextBossDelay = 2.4;
+          } else {
+            br.active = false;
+            this.sfx.victory();
+            this._finishRun(
+              br.submode === 'single'
+                ? `👑 CHEFE DERROTADO! VITÓRIA NO DUELO!`
+                : `👑 BOSS RUSH CONCLUÍDO (${br.queue.length} CHEFES DERROTADOS)!`
+            );
+            return;
+          }
+        }
+      }
+    }
+
+    // 4) Modo Corrida (Linha de Chegada 5.000m/10.000m, checkpoints e barra 1º/2º/3º)
+    if (this.modeId === 'race' && this.raceState?.active && !this.raceState.finished) {
+      const rc = this.raceState;
+      // Atualiza rivais IA da corrida
+      if (this.raceAiRacers?.length) {
+        const leadDist = this.players[0]?.distance || this.distance;
+        for (const ai of this.raceAiRacers) {
+          ai.burstTimer -= dt;
+          if (ai.burstTimer <= 0) {
+            ai.burstTimer = 3.5 + Math.random() * 4.5;
+            ai.lane = Math.floor(Math.random() * 3);
+          }
+          const gap = leadDist - ai.distance;
+          const rubber = Math.max(-0.08, Math.min(0.11, gap * 0.00055));
+          ai.distance += this.speed * worldDt * (ai.pace + rubber);
+          ai.x += (LANE_X[ai.lane] - ai.x) * Math.min(1, dt * 7);
+          const relZ = Math.max(-18, Math.min(10, (leadDist - ai.distance) * 0.16 - 1.2));
+          ai.model.root.position.set(ai.x, ai.y, relZ);
+          ai.animator.update(dt, { speed: this.speed * ai.pace, grounded: true, vy: 0 });
+        }
+      }
+
+      // Checkpoints a cada 1.000m
+      const maxPlayerDist = Math.max(...this.players.map((pl) => pl.distance || 0), this.distance || 0);
+      if (maxPlayerDist >= rc.nextCheckpoint && rc.nextCheckpoint < rc.targetDistance) {
+        const cp = rc.nextCheckpoint;
+        rc.nextCheckpoint += rc.checkpointStep;
+        this.sfx.powerup?.();
+        for (const pl of this.players) {
+          if (!pl.dead) {
+            pl.stamina = 100;
+            pl.turboTimer = Math.max(pl.turboTimer || 0, 1.5);
+          }
+        }
+        this.ui.hud.showBanner(`🏁 CHECKPOINT ${cp.toLocaleString('pt-BR')}m / ${rc.targetDistance.toLocaleString('pt-BR')}m! Turbo + Estamina!`, '#38bdf8', 2.6);
+      }
+
+      // Calcula posição 1º/2º/3º
+      const entries = [
+        ...this.players.map((pl) => ({ name: pl.name, distance: pl.distance || 0, isPlayer: true, player: pl })),
+        ...(this.raceAiRacers || []).map((ai) => ({ name: ai.name, distance: ai.distance || 0, isPlayer: false }))
+      ].sort((a, b) => b.distance - a.distance);
+
+      const p0Pos = Math.max(1, entries.findIndex((e) => e.player === p0) + 1);
+      const pct = Math.min(100, Math.round((maxPlayerDist / rc.targetDistance) * 100));
+      this.ui.hud.setRaceHud?.({
+        position: p0Pos,
+        total: entries.length,
+        distance: Math.floor(maxPlayerDist),
+        targetDistance: rc.targetDistance,
+        progressPct: pct,
+        standings: entries.slice(0, 3).map((e, i) => ({ rank: i + 1, name: e.name, distance: Math.floor(e.distance) }))
+      });
+
+      const winner = entries.find((e) => e.distance >= rc.targetDistance);
+      if (winner) {
+        rc.finished = true;
+        rc.winnerName = winner.name;
+        this.sfx.victory();
+        const podiumStr = entries.slice(0, 3).map((e, i) => `${i + 1}º ${e.name}`).join(' • ');
+        this._finishRun(`🏁 LINHA DE CHEGADA (${rc.targetDistance.toLocaleString('pt-BR')}m)! ${podiumStr}`);
+        return;
+      }
+    }
+
+    // Coop: reviver parceiro caído ficando perto por 2.5s (além do reviver tático [V])
     if (this.modeId === 'coop' && this.players.length === 2) {
       const [a, b] = this.players;
-      if (a.dead && !b.dead && Math.abs(a.x - b.x) < 1.8) {
+      if (a.dead && !b.dead && Math.abs((a.x - (a.trackOffsetX || 0)) - (b.x - (b.trackOffsetX || 0))) < 2.2) {
         a.reviveProgress += dt;
-        if (a.reviveProgress >= 3) {
+        if (a.reviveProgress >= 2.5) {
           a.dead = false;
           a.hp = 1;
+          a.shields = Math.min(4, (a.shields || 0) + 1);
+          a.invulnTimer = 2.5;
           a.reviveProgress = 0;
-          this.ui.hud.showBanner('💚 PARCEIRO REVIVIDO!', '#58d63a', 2.5);
+          this.sfx.powerup?.();
+          this.ui.hud.showBanner('💚 PARCEIRO REVIVIDO (+1 ESCUDO)!', '#58d63a', 2.5);
         }
-      } else if (b.dead && !a.dead && Math.abs(a.x - b.x) < 1.8) {
+      } else if (b.dead && !a.dead && Math.abs((a.x - (a.trackOffsetX || 0)) - (b.x - (b.trackOffsetX || 0))) < 2.2) {
         b.reviveProgress += dt;
-        if (b.reviveProgress >= 3) {
+        if (b.reviveProgress >= 2.5) {
           b.dead = false;
           b.hp = 1;
+          b.shields = Math.min(4, (b.shields || 0) + 1);
+          b.invulnTimer = 2.5;
           b.reviveProgress = 0;
-          this.ui.hud.showBanner('💚 PARCEIRO REVIVIDO!', '#58d63a', 2.5);
+          this.sfx.powerup?.();
+          this.ui.hud.showBanner('💚 PARCEIRO REVIVIDO (+1 ESCUDO)!', '#58d63a', 2.5);
         }
       }
     }
@@ -4118,7 +5154,11 @@ export class Game {
     this.spawner.update(worldDt, this.speed, this.score, this.players, Boolean(this.events.isMagneticActive?.()));
     this.particles.update(worldDt, this.speed);
     this.events.update(worldDt, this.speed, this.score, this.players, this._eventContext());
+    this._updatePredatorHazards(worldDt);
     this.cameraRig.setPredatorFocus(null);
+    if (this.events?.bosses?.activeBoss) {
+      this._hintOnce('boss_attack_q', '⚔️ Chefe à frente! Pressione Q para atacar!', '#fb923c');
+    }
 
     this.abilities.update(worldDt, this.spawner, this.particles, () => {
       this.addScore(45 * this.combo);
@@ -4162,12 +5202,26 @@ export class Game {
 
     // Colisões principais do(s) jogador(es)
     const activeObs = this.spawner.getActiveObstacles();
+    const mpTrackMode = this.multiplayerSession?.active ? (this.multiplayerSession.trackMode || 'parallel') : 'classic';
+    if (mpTrackMode === 'parallel' && this.players.length > 1) {
+      this.world.syncParallelObstacleProxies(
+        this.players.map((pl) => pl.trackOffsetX || 0),
+        activeObs
+      );
+    }
+    const perPlayerHitTrack = this.multiplayerSession?.active && mpTrackMode !== 'classic';
+
     for (const p of this.players) {
       if (p.dead) continue;
-      const pBox = PhysicsCollision.getPlayerBox(p);
+      const rawBox = PhysicsCollision.getPlayerBox(p);
+      const tOff = p.trackOffsetX || 0;
+      const pBox = tOff !== 0
+        ? { ...rawBox, minX: rawBox.minX - tOff, maxX: rawBox.maxX - tOff }
+        : rawBox;
 
       for (const obs of activeObs) {
         if (obs.hit) continue;
+        if (perPlayerHitTrack && obs._hitBy && obs._hitBy.has(p.key)) continue;
 
         if (PhysicsCollision.checkNearMiss(pBox, obs)) {
           obs.nearMissed = true;
@@ -4184,6 +5238,10 @@ export class Game {
         }
 
         if (!PhysicsCollision.checkObstacleHit(pBox, obs)) continue;
+        if (perPlayerHitTrack) {
+          obs._hitBy = obs._hitBy || new Set();
+          obs._hitBy.add(p.key);
+        }
 
         // Coletáveis e interativos
         if (obs.kind === 'egg') {
@@ -4606,6 +5664,7 @@ export class Game {
           radialCooldown: this.radialCooldown || 0,
         }
       );
+      let reviveTargetNick = null;
       if (this.multiplayerSession?.active) {
         const modeTag = this.multiplayerSession.mpMode === 'duel'
           ? 'DUELO PvP'
@@ -4615,28 +5674,61 @@ export class Game {
           `🏁 #${lead.rank || 1}/${this.players.length} • ${Math.floor(lead.score || 0)} pts (${modeTag})${sdTag}`,
           lead.rank === 1 ? '#fde047' : '#93c5fd'
         );
+        const revCfg = ContentLoader.getBalance().revive || {};
+        const mpRevCfg = this.multiplayerSession.reviveConfig || {};
+        const maxPerRun = mpRevCfg.maxPerRun ?? revCfg.maxPerRun ?? 2;
+        const costType = mpRevCfg.costType || revCfg.costType || 'life_or_shield';
         const myPlayer = this.players.find((pl) => pl.peerId === this.net.peerId) || lead;
-        const fallenAlly = this.players.find((pl) => pl !== myPlayer && pl.dead);
-        const revCost = 45 + (this._mpReviveCount || 0) * 35;
-        const totalAvailable = (this.runEggs || 0) + (Save.data.eggs || 0);
+        const fallenAlly = this.players.find(
+          (pl) => pl !== myPlayer && pl.dead && (pl.reviveWindowTimer || 0) > 0 && (pl.reviveCount || 0) < maxPerRun
+        );
+        const canAfford = this._canPayReviveCost(myPlayer, costType) && (myPlayer?.reviveCooldown || 0) <= 0;
+        const canShowRevive = Boolean(
+          this.multiplayerSession.allowRevive !== false &&
+          fallenAlly &&
+          myPlayer &&
+          !myPlayer.dead &&
+          this.players.length >= 2
+        );
+        if (canShowRevive && fallenAlly) {
+          reviveTargetNick = fallenAlly.name || fallenAlly.spec?.name || 'Aliado';
+        }
         this.ui.hud.setMpReviveHud({
-          visible: Boolean(
-            this.multiplayerSession.allowRevive !== false &&
-            fallenAlly &&
-            myPlayer &&
-            !myPlayer.dead &&
-            this.players.length >= 2
-          ),
-          canAfford: totalAvailable >= revCost,
-          cost: revCost,
-          allyName: fallenAlly?.name || fallenAlly?.spec?.name || 'Aliado'
+          visible: canShowRevive,
+          canAfford,
+          cost: costType === 'shield' ? '1 🛡️' : (costType === 'life' ? '1 ❤️' : '1 🛡️/❤️'),
+          allyName: reviveTargetNick || 'Aliado'
         });
       } else {
         this.ui.hud.setMpReviveHud({ visible: false });
       }
+      const atkMax = lead.attackMaxCooldown || 0.65;
+      const atkPct = Math.max(0, Math.min(100, 100 * (1 - Math.max(0, lead.attackCooldown || 0) / atkMax)));
+      this.ui.hud.setContextualTouchState?.({
+        canAttackBoss: Boolean(this.events?.bosses?.activeBoss),
+        reviveTargetNick,
+        canBreathe: Boolean(lead.inSubmerged || (lead.inWater && (lead.diveDepth || 0) > 0.25)),
+        attackCooldownPct: atkPct,
+        oxygenPct: Math.round(lead.oxygen ?? 100)
+      });
     }
+    // Atualiza HUD de debuffs ativos (throttled ~5Hz para manter 60 FPS sem thrash de DOM)
+    this._hudDebuffAccum = (this._hudDebuffAccum || 0) + dt;
+    if (lead && this._hudDebuffAccum >= 0.2) {
+      this._hudDebuffAccum = 0;
+      const activeDebuffs = typeof StatusSystem.getActiveDebuffs === 'function'
+        ? StatusSystem.getActiveDebuffs(lead)
+        : (Array.isArray(lead.debuffs) ? lead.debuffs : []);
+      this.ui.hud.setActiveDebuffs?.(activeDebuffs);
+      if (Number.isFinite(lead._debuffFx?.visionMult) && lead._debuffFx.visionMult < 0.99) {
+        this.ui.hud.setVisionMult?.(lead._debuffFx.visionMult);
+      } else {
+        this.ui.hud.setVisionMult?.(1);
+      }
+    }
+
     this.ui.hud.updateScore(Math.max(this.hiScore, this.score), this.score, this.speed / this.baseSpeed);
-    const dangerLevel = (this.events.bosses.activeBoss || this.events.ufo.active || (lead && lead.hp <= 1)) ? 1 : 0;
+    const dangerLevel = (this.events.bosses.activeBoss || this.events.ufo.active || (lead && lead.hp <= 1) || (this._currentDangerTier?.tier || 0) >= 3) ? 1 : 0;
     this.music.update(dt, this.speed, dangerLevel);
     this.narrator.update(dt);
     const camPlayers = this.players.filter((x) => !x.dead);
@@ -4654,7 +5746,10 @@ export class Game {
       this.cameraRig.update(dt, [p1Lead], this.speed, Save.data.settings.accessibility.reduceShake, false, false, this._buildCameraEnvOpts(p1Lead));
       this.cameraRigP2.update(dt, [p2Lead], this.speed, Save.data.settings.accessibility.reduceShake, false, false, this._buildCameraEnvOpts(p2Lead));
     } else {
-      const activeCamList = camPlayers.length > 0 ? camPlayers : this.players;
+      const focusOwnCam = this.multiplayerSession?.active &&
+        (mpTrackMode === 'parallel' || mpTrackMode === 'ghost') &&
+        lead && !lead.dead;
+      const activeCamList = focusOwnCam ? [lead] : (camPlayers.length > 0 ? camPlayers : this.players);
       this.cameraRig.update(
         dt,
         activeCamList,
@@ -4664,6 +5759,9 @@ export class Game {
         this.spectatorMode,
         this._buildCameraEnvOpts(lead || activeCamList[0])
       );
+      if (this.spectatorMode && this.state === 'playing') {
+        this._updateSpectatorFreeCam(dt, activeCamList);
+      }
     }
     if ((this._skipIntroGuardFrames || 0) > 0) this._skipIntroGuardFrames--;
 
@@ -4679,19 +5777,45 @@ export class Game {
       if (canBroadcastSnap) {
         this._ctrlSnapAccum = 0;
         if (this.multiplayerSession) this.multiplayerSession.netSnapAccum = 0;
+        const activeBoss = this.events?.bosses?.activeBoss;
         this.net.broadcastHostSnapshot({
           score: Math.floor(this.score),
           distance: Math.floor(this.distance),
           speed: Math.round(this.speed * 10) / 10,
           biome: this.currentBiome.id,
+          biomeId: this.currentBiome.id,
+          trackMode: mpTrackMode,
           mpMode: this.multiplayerSession?.mpMode || 'race',
+          modeId: this.modeId,
+          dangerTier: this._currentDangerTier?.tier || 0,
+          raid: this.raidState?.active ? {
+            barIndex: this.raidState.bossBarIndex,
+            totalBars: this.raidState.totalBars,
+            affixName: this.raidState.activeAffix?.name || '',
+            totalDamage: Math.floor(this.raidState.totalDamage || 0)
+          } : null,
+          race: this.raceState?.active ? {
+            targetDistance: this.raceState.targetDistance,
+            nextCheckpoint: this.raceState.nextCheckpoint
+          } : null,
           suddenDeath: !!this.multiplayerSession?.suddenDeath,
           elimTimer: this.multiplayerSession?.elimTimer || null,
+          obstacles: this.spawner.serializeActiveObstacles(),
+          boss: activeBoss ? {
+            id: activeBoss.id,
+            name: activeBoss.name,
+            title: activeBoss.title,
+            currentHp: activeBoss.currentHp,
+            maxHp: activeBoss.maxHp,
+            phase: activeBoss.phase,
+            color: activeBoss.color
+          } : null,
           players: this.players.map((pl) => ({
             peerId: pl.peerId,
             controllerPeerIds: pl.controllerPeerIds || [],
             name: pl.name,
             lane: pl.lane,
+            trackOffsetX: pl.trackOffsetX || 0,
             x: Math.round(pl.x * 100) / 100,
             y: Math.round(pl.y * 100) / 100,
             vy: Math.round(pl.vy * 100) / 100,
@@ -4708,11 +5832,15 @@ export class Game {
             inWater: !!pl.inWater,
             inSubmerged: !!pl.inSubmerged,
             diveTarget: pl.diveTarget ?? 0,
+            diveDepth: Math.round((pl.diveDepth ?? 0) * 100) / 100,
+            reviveWindowTimer: Math.round((pl.reviveWindowTimer ?? 0) * 10) / 10,
+            reviveCount: pl.reviveCount || 0,
+            reviveCooldown: Math.round((pl.reviveCooldown ?? 0) * 10) / 10,
             habitatMode: pl.habitatMode || pl.habitat || 'land',
             canTransmute: Array.isArray(pl.availableHabitats) && pl.availableHabitats.length > 1,
             abilityCharge: Math.round(pl.abilityCharge ?? 100),
             attackCd: Math.round((pl.attackCooldown || 0) * 100) / 100,
-            attackMaxCd: pl.attackMaxCooldown || 1.25,
+            attackMaxCd: pl.attackMaxCooldown || 0.65,
             rank: pl.rank || 1,
             pvpHits: pl.pvpHits || 0,
             abilityCd: pl.abilityCooldown,
@@ -5014,11 +6142,36 @@ export class Game {
         this.toggleRadialWheel();
         return;
       }
-      if (this.input.wasKeyJustPressed('Digit1')) this.ui.hud.showFloatText('🎉 VAMOOO!', '#58d63a');
-      if (this.input.wasKeyJustPressed('Digit2')) this.ui.hud.showFloatText('😜 HEHE!', '#ff9a24');
-      if (this.input.wasKeyJustPressed('Digit3')) this.ui.hud.showFloatText('🆘 SOCORRO!', '#38bdf8');
+      if (this.modeId === 'free_roam') {
+        if (this.input.wasKeyJustPressed('Digit1')) {
+          this.setFreeRoamSpeed((this.freeRoamState?.speedScale || 1) - 0.2);
+        }
+        if (this.input.wasKeyJustPressed('Digit2')) {
+          this.setFreeRoamSpeed((this.freeRoamState?.speedScale || 1) + 0.2);
+        }
+        if (this.input.wasKeyJustPressed('Digit3')) {
+          const curIdx = Math.max(0, BIOMES.findIndex((b) => b.id === this.currentBiome?.id));
+          const nextB = BIOMES[(curIdx + 1) % BIOMES.length];
+          if (nextB) this.setFreeRoamBiome(nextB.id);
+        }
+        if (this.input.wasKeyJustPressed('Digit4')) {
+          this.spawnFreeRoamEntity('wave');
+        }
+        if (this.input.wasKeyJustPressed('Digit5')) {
+          this.spawnFreeRoamEntity('boss');
+        }
+      } else {
+        if (this.input.wasKeyJustPressed('Digit1')) this.ui.hud.showFloatText('🎉 VAMOOO!', '#58d63a');
+        if (this.input.wasKeyJustPressed('Digit2')) this.ui.hud.showFloatText('😜 HEHE!', '#ff9a24');
+        if (this.input.wasKeyJustPressed('Digit3')) this.ui.hud.showFloatText('🆘 SOCORRO!', '#38bdf8');
+      }
       if (this.input.wasKeyJustPressed('KeyV') && (this.multiplayerSession?.active || this.players.length >= 2)) {
-        this.reviveFallenAlly(0);
+        if (!this.reviveFallenAlly(0) && this.players.length >= 2) {
+          this.reviveFallenAlly(1);
+        }
+      }
+      if (this.input.wasKeyJustPressed('KeyB')) {
+        this.breatheOrSurface(0);
       }
     }
   }
@@ -5055,6 +6208,7 @@ export class Game {
       return;
     }
 
+    let consumedPlayingInput = false;
     if (this.state === 'menu') {
       this.world.update(dt, 14);
       this.dayNight.update(dt, this.currentBiome.theme);
@@ -5080,7 +6234,19 @@ export class Game {
       const focusY = (pMenu?.baseY || 0) + 0.2;
       this.cameraRig.update(dt, { x: focusX, y: focusY, z: 0, diveDepth: pMenu?.diveDepth || 0 }, 14, true, false, false, envMenu);
     } else if (this.state === 'playing') {
-      this._updatePlaying(dt);
+      const FIXED_STEP = 1 / 60;
+      this._fixedAcc = Math.min(0.1, (this._fixedAcc || 0) + dt);
+      let steps = 0;
+      while (this._fixedAcc >= FIXED_STEP && steps < 4) {
+        this._updatePlaying(FIXED_STEP);
+        if (steps === 0) {
+          this.input.endFrame();
+          consumedPlayingInput = true;
+        }
+        this._fixedAcc -= FIXED_STEP;
+        steps++;
+      }
+      if (steps === 0) consumedPlayingInput = true; // preserva justPressed até o próximo passo fixo
     } else if (this.state === 'gameover') {
       for (const p of this.players) {
         if (p.dead) p.animator.update(dt, { dead: true });
@@ -5186,7 +6352,41 @@ export class Game {
       }
       this.renderer.render(this.scene, this.camera);
     }
-    this.input.endFrame();
+    if (!consumedPlayingInput) {
+      this.input.endFrame();
+    }
+  }
+
+  _updateSpectatorFreeCam(dt, activeCamList = []) {
+    const panSpeed = 14;
+    const off = this.spectatorFreeOffset;
+    if (this.input.isKeyDown('KeyA') || this.input.isKeyDown('ArrowLeft')) off.x -= panSpeed * dt;
+    if (this.input.isKeyDown('KeyD') || this.input.isKeyDown('ArrowRight')) off.x += panSpeed * dt;
+    if (this.input.isKeyDown('KeyW') || this.input.isKeyDown('ArrowUp')) off.z -= panSpeed * dt;
+    if (this.input.isKeyDown('KeyS') || this.input.isKeyDown('ArrowDown')) off.z += panSpeed * dt;
+    if (this.input.isKeyDown('KeyE') || this.input.isKeyDown('Space')) off.y += panSpeed * 0.7 * dt;
+    if (this.input.isKeyDown('KeyQ') || this.input.isKeyDown('ShiftLeft')) off.y -= panSpeed * 0.7 * dt;
+    off.x = Math.max(-18, Math.min(18, off.x));
+    off.y = Math.max(-2, Math.min(18, off.y));
+    off.z = Math.max(-28, Math.min(24, off.z));
+
+    if (this.input.wasKeyJustPressed('Tab') && activeCamList.length > 0) {
+      const curIdx = activeCamList.findIndex((pl) => pl.peerId === this.tvHud.focusedId || pl.id === this.tvHud.focusedId);
+      const next = activeCamList[(curIdx + 1) % activeCamList.length];
+      const nextId = next?.peerId || next?.id || null;
+      this.cameraRig.setFocusPlayer(nextId);
+      off.set(0, 0, 0);
+    }
+
+    this.camera.position.add(off);
+    const focusTarget = activeCamList[0];
+    if (focusTarget) {
+      this.camera.lookAt(
+        (focusTarget.x || 0) + off.x * 0.35,
+        1.4 + (focusTarget.y || 0) + off.y * 0.25,
+        (focusTarget.z || 0) - 4 + off.z * 0.35
+      );
+    }
   }
 
   destroy() {

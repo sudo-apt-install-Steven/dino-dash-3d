@@ -26,8 +26,13 @@ import {
   buildVoxelTarPit,
   buildVoxelStalactite,
   buildVoxelElectricPylon,
-  buildVoxelSpikeBarricade
+  buildVoxelSpikeBarricade,
+  buildVoxelExpandedHazard
 } from '../models/VoxelLibrary.js';
+import { HAZARD_ARCHETYPES, rollHazard as rollCatalogHazard } from '../content/catalog_expanded.js';
+import { ContentLoader } from '../content/ContentLoader.js';
+
+export { rollCatalogHazard as rollHazard };
 import {
   buildChunkOasis,
   buildChunkFragileBridge,
@@ -107,6 +112,8 @@ export class Spawner {
     this.powerupCooldown = 8;
     this.featureCooldown = 7;
     this.collectibleCooldown = 4.5;
+    this._nextUid = 1;
+    this.remoteSyncMode = false;
     this._hintMaterials = new Map();
     this._hintSprites = [];
 
@@ -273,6 +280,59 @@ export class Spawner {
       thermal_vent: new ObjectPool(() => this._makeThermalVent(), resetBase, 5),
       current_ring: new ObjectPool(() => this._makeCurrentRing(), resetBase, 5)
     };
+
+    // Pools leves (ObjectPool) para os 28 novos arquétipos móveis/telegrafados
+    const resetCatalogHazard = (o) => {
+      resetBase(o);
+      o.telegraphTimer = 0;
+      o.telegraphActive = false;
+      o.phase = 0;
+      o.lockedX = false;
+      o.extraSpeed = 0;
+      o.catalogVariant = null;
+      if (o.telegraphMesh) o.telegraphMesh.visible = true;
+      if (o.activePart) {
+        o.activePart.position.set(0, o.archetype === 'bone_pendulum' ? 2.75 : 0, 0);
+        o.activePart.rotation.set(0, 0, 0);
+        o.activePart.scale.set(1, 1, 1);
+      }
+    };
+    this.catalogArchetypeIds = [];
+    for (let i = 0; i < HAZARD_ARCHETYPES.length; i++) {
+      const arch = HAZARD_ARCHETYPES[i];
+      this.catalogArchetypeIds.push(arch.id);
+      this.pools[arch.id] = new ObjectPool(
+        () => this._makeCatalogHazard(arch),
+        resetCatalogHazard,
+        1
+      );
+    }
+  }
+
+  _makeCatalogHazard(arch) {
+    const built = buildVoxelExpandedHazard(arch.id, arch.color || '#ef4444', arch.accent || '#facc15');
+    return this._reg(arch.id, built.group, {
+      isCatalogHazard: true,
+      archetype: arch.id,
+      movement: arch.movement || 'static_gap',
+      telegraphMesh: built.telegraphMesh,
+      activePart: built.activePart,
+      width: arch.width || 1.5,
+      height: arch.height || 1.5,
+      depth: arch.depth || 1.2,
+      damage: arch.damage ?? 1,
+      debuffId: arch.debuffId || null,
+      debuffDuration: arch.debuffDuration || 4.0,
+      safeCounterplay: arch.safeCounterplay || 'Desvie da faixa sinalizada',
+      telegraphTimer: arch.telegraphSec || 0.95,
+      telegraphActive: true,
+      phase: 0,
+      baseX: 0,
+      lockedX: false,
+      extraSpeed: 0,
+      canJumpOver: arch.height <= 1.25,
+      canDuckUnder: arch.id === 'double_wall_gap' || arch.id === 'bone_pendulum' || arch.id === 'corrosive_cloud' || arch.id === 'seeker_drone'
+    });
   }
 
   _reg(kind, group, props, hintCfg = null) {
@@ -955,6 +1015,7 @@ export class Spawner {
     if (!pool) return null;
     const item = pool.acquire();
     item.pool = pool;
+    item.uid = opts.uid ?? this._nextUid++;
     item.breakable = kind === 'cactus_small' || kind === 'scorpion' || kind === 'rolling_log' || kind === 'cactus_shooter' || kind === 'cactus_spine' || kind === 'amber_crystal' || kind === 'falling_stalactite' || kind === 'spike_barricade' || kind === 'coral_reef' || kind === 'jellyfish_swarm' || kind === 'angler_hazard';
     const baseY = opts.rawY ? y : this._getBaseY(y);
     item.spawnY = baseY;
@@ -1619,6 +1680,22 @@ export class Spawner {
       this._acquire('cactus_cluster', obsX, 0, spawnZ);
     }
 
+    // Obstáculos móveis/telegrafados do catálogo expandido escalados por Danger Tier
+    if (score > 300 && this.habitatMode === 'land') {
+      const tier = this._estimateDangerTier(score);
+      const hazCfg = ContentLoader.getHazardsConfig();
+      const catChance = Math.min(
+        hazCfg.catalogSpawnChanceMax ?? 0.68,
+        (hazCfg.catalogSpawnChanceBase ?? 0.24) + (tier - 1) * (hazCfg.catalogSpawnChancePerTier ?? 0.08)
+      );
+      if (this.rng() < catChance) {
+        const secLane = (targetLane + 1) % 3;
+        if (this._canBlockLane(secLane, spawnZ - 6.0)) {
+          this.spawnFromCatalog(this.rng, { dangerTier: tier, score, lane: secLane, spawnZ: spawnZ - 6.0 });
+        }
+      }
+    }
+
     // Segundo obstáculo na mesma onda apenas após 700 pts e SOMENTE se respeitar minSafePaths!
     if (score > 700 && this.rng() < 0.24) {
       const secLane = (targetLane + 1) % 3;
@@ -1626,6 +1703,106 @@ export class Spawner {
         this._acquire('cactus_small', this._getLaneX(secLane), 0, spawnZ - 2.6);
       }
     }
+  }
+
+  static rollHazard(rng, ctx = {}) {
+    return rollCatalogHazard(rng || Math.random, ctx);
+  }
+
+  rollHazard(rng = null, ctx = {}) {
+    return rollCatalogHazard(rng || this.rng, {
+      dangerTier: ctx?.dangerTier ?? 1,
+      biomeId: ctx?.biomeId ?? this.biomeId
+    });
+  }
+
+  _estimateDangerTier(score = 0) {
+    const thresholds = ContentLoader.getDangerTierConfig()?.scoreThresholds || [0, 3500, 9000, 18000, 32000, 52000];
+    let tier = 1;
+    for (let i = 0; i < thresholds.length; i++) {
+      if (score >= thresholds[i]) tier = i + 1;
+    }
+    return tier;
+  }
+
+  _countActiveCatalogHazards() {
+    let count = 0;
+    const ids = this.catalogArchetypeIds || [];
+    for (let i = 0; i < ids.length; i++) {
+      const p = this.pools[ids[i]];
+      if (p) count += p.active.length;
+    }
+    return count;
+  }
+
+  /**
+   * Spawna um obstáculo móvel/telegrafado do catálogo expandido usando ObjectPool,
+   * escalado por ctx.dangerTier e garantindo sempre caminho seguro (fairness).
+   */
+  spawnFromCatalog(rng = null, ctx = {}) {
+    const rand = typeof rng === 'function' ? rng : this.rng;
+    const hazCfg = ContentLoader.getHazardsConfig();
+    const maxActive = hazCfg.maxActiveCatalogHazards ?? 14;
+    if (this._countActiveCatalogHazards() >= maxActive) return null;
+
+    const dangerTier = Math.max(1, Math.floor(ctx?.dangerTier ?? this._estimateDangerTier(ctx?.score ?? 0)));
+    const spawnZ = ctx?.spawnZ ?? -102;
+    const variant = this.rollHazard(rand, {
+      dangerTier,
+      biomeId: ctx?.biomeId ?? this.biomeId
+    });
+    if (!variant || !this.pools[variant.archetype]) return null;
+
+    // Fairness: encontra uma faixa livre que preserve pelo menos 1 caminho seguro
+    const startLane = typeof ctx?.lane === 'number'
+      ? Math.max(0, Math.min(2, Math.floor(ctx.lane)))
+      : Math.floor(rand() * 3);
+    let chosenLane = -1;
+    for (let offset = 0; offset < 3; offset++) {
+      const cand = (startLane + offset) % 3;
+      if (this._canBlockLane(cand, spawnZ)) {
+        chosenLane = cand;
+        break;
+      }
+    }
+    if (chosenLane < 0) return null;
+
+    const x = this._getLaneX(chosenLane);
+    const obs = this._acquire(variant.archetype, x, 0, spawnZ);
+    if (!obs) return null;
+
+    const dtCfg = ContentLoader.getDangerTierConfig();
+    const tierSpeedBonus = 1 + (dangerTier - 1) * (dtCfg.hazardSpeedBonusPerTier ?? 0.06);
+    const baseTelegraph = Math.max(hazCfg.minTelegraphSec ?? 0.55, variant.telegraphSec ?? 0.95);
+
+    obs.catalogId = variant.id;
+    obs.catalogVariant = variant;
+    obs.movement = variant.movement;
+    obs.damage = variant.damage;
+    obs.debuffId = variant.debuffId || null;
+    obs.debuffDuration = variant.debuffDuration || 4.0;
+    obs.safeCounterplay = variant.safeCounterplay || 'Desvie da faixa sinalizada';
+    obs.telegraphTimer = baseTelegraph;
+    obs.telegraphActive = true;
+    obs.phase = rand() * Math.PI * 2;
+    obs.baseX = x;
+    obs.lockedX = false;
+    obs.extraSpeed = Math.max(0, ((variant.speedMult || 1) * tierSpeedBonus - 1) * 14);
+    obs.width = variant.width || obs.width;
+    obs.height = variant.height || obs.height;
+    obs.depth = variant.depth || obs.depth;
+    if (obs.telegraphMesh) obs.telegraphMesh.visible = true;
+
+    // Em Danger Tiers altos, pode adicionar um segundo hazard complementar mantendo 1 faixa segura
+    const dblChance = (hazCfg.doubleHazardChanceBase ?? 0.12) + (dangerTier - 1) * (hazCfg.doubleHazardChancePerTier ?? 0.07);
+    if (!ctx?._secondary && dangerTier >= 2 && rand() < Math.min(0.48, dblChance)) {
+      const secLane = (chosenLane + 1 + (rand() < 0.5 ? 0 : 1)) % 3;
+      if (this._canBlockLane(secLane, spawnZ - 5.0)) {
+        this.spawnFromCatalog(rand, { ...ctx, dangerTier, lane: secLane, spawnZ: spawnZ - 5.0, _secondary: true });
+      }
+    }
+
+    return obs;
   }
 
   update(dt, speed, score, players = [], magneticActive = false) {
@@ -1637,7 +1814,7 @@ export class Spawner {
     if (this.powerupCooldown > 0) this.powerupCooldown = Math.max(0, this.powerupCooldown - dt);
     if (this.featureCooldown > 0) this.featureCooldown = Math.max(0, this.featureCooldown - dt);
     if (this.collectibleCooldown > 0) this.collectibleCooldown = Math.max(0, this.collectibleCooldown - dt);
-    if (!this.tutorialMode) {
+    if (!this.tutorialMode && !this.remoteSyncMode) {
       this.chunkCooldown -= dt;
       if (score > 460 && this.habitatMode === 'land' && this.chunkCooldown <= 0) {
         const chunkKinds = ['oasis_zone', 'fragile_bridge', 'rescue_cross'];
@@ -1750,12 +1927,122 @@ export class Spawner {
         } else if (obs.kind === 'oxygen_bubble' && obs.core) {
           obs.core.position.y = Math.sin(this.elapsed * 5 + obs.group.position.x) * 0.16;
           obs.core.rotation.y += dt * 2.4;
+        } else if (obs.isCatalogHazard) {
+          obs.phase = (obs.phase || 0) + dt * 3.8;
+          if (obs.telegraphTimer > 0) {
+            obs.telegraphTimer = Math.max(0, obs.telegraphTimer - dt);
+            obs.telegraphActive = obs.telegraphTimer > 0;
+            if (obs.telegraphMesh) {
+              const pulse = 0.85 + Math.sin(this.elapsed * 18) * 0.18;
+              obs.telegraphMesh.scale.set(pulse, 1, pulse);
+              obs.telegraphMesh.visible = true;
+            }
+          } else if (obs.telegraphMesh) {
+            obs.telegraphMesh.visible = obs.group.position.z < -4;
+          }
+
+          if (obs.activePart) {
+            const mv = obs.movement;
+            if (mv === 'oscillate_y') {
+              obs.activePart.position.y = Math.sin(obs.phase * 1.15) * 0.72;
+            } else if (mv === 'lane_patrol') {
+              const offset = Math.sin(obs.phase * 0.85) * 2.15;
+              const nextX = Math.max(LANE_X[0], Math.min(LANE_X[2], (obs.baseX || 0) + offset));
+              obs.group.position.x = nextX;
+              if (obs.archetype === 'lane_saw') obs.activePart.rotation.z += dt * 11;
+            } else if (mv === 'erupt_telegraph') {
+              const scaleY = obs.telegraphActive ? 0.18 : 1.0;
+              obs.activePart.scale.y += (scaleY - obs.activePart.scale.y) * Math.min(1, dt * 10);
+            } else if (mv === 'pendulum_swing') {
+              obs.activePart.rotation.z = Math.sin(obs.phase * 1.1) * 0.75;
+            } else if (mv === 'pulse_ring') {
+              const p = 0.8 + Math.sin(obs.phase * 1.5) * 0.28;
+              obs.activePart.scale.set(p, 1, p);
+              obs.activePart.rotation.y += dt * 2.2;
+            } else if (mv === 'track_lock') {
+              const lead = players[0];
+              if (!obs.lockedX && lead && !lead.dead && obs.group.position.z < -18) {
+                obs.group.position.x += (lead.x - obs.group.position.x) * Math.min(1, dt * 2.6);
+              } else {
+                obs.lockedX = true;
+              }
+              obs.activePart.rotation.y += dt * 3.0;
+            } else if (mv === 'drop_telegraph') {
+              const dropY = obs.telegraphActive ? Math.max(0, obs.telegraphTimer * 10) : 0;
+              obs.activePart.position.y = dropY;
+              obs.activePart.rotation.x += dt * 3.5;
+            } else if (mv === 'hover_drift') {
+              obs.activePart.position.y = Math.sin(obs.phase) * 0.22;
+              obs.activePart.rotation.y += dt * 1.6;
+            }
+          }
         }
 
         if (obs.group.position.z > 18) {
           pool.releaseAt(i);
         }
       }
+    }
+  }
+
+  serializeActiveObstacles() {
+    const out = [];
+    for (const key of Object.keys(this.pools)) {
+      const active = this.pools[key].active;
+      for (let i = 0; i < active.length; i++) {
+        const obs = active[i];
+        const pos = obs.group.position;
+        if (pos.z < -135 || pos.z > 20) continue;
+        out.push({
+          uid: obs.uid,
+          kind: obs.kind,
+          x: Math.round(pos.x * 100) / 100,
+          y: Math.round(pos.y * 100) / 100,
+          z: Math.round(pos.z * 100) / 100,
+          hit: !!obs.hit
+        });
+      }
+    }
+    return out;
+  }
+
+  syncFromHostObstacles(hostObstacles = []) {
+    this.remoteSyncMode = true;
+    const incomingByUid = new Map();
+    for (let i = 0; i < hostObstacles.length; i++) {
+      const ho = hostObstacles[i];
+      if (ho && ho.uid !== undefined) incomingByUid.set(ho.uid, ho);
+    }
+
+    const existingByUid = new Map();
+    for (const key of Object.keys(this.pools)) {
+      const pool = this.pools[key];
+      for (let i = pool.active.length - 1; i >= 0; i--) {
+        const obs = pool.active[i];
+        const ho = incomingByUid.get(obs.uid);
+        if (!ho || ho.kind !== obs.kind) {
+          pool.releaseAt(i);
+        } else {
+          existingByUid.set(obs.uid, obs);
+        }
+      }
+    }
+
+    for (let i = 0; i < hostObstacles.length; i++) {
+      const ho = hostObstacles[i];
+      if (!ho || ho.uid === undefined) continue;
+      let obs = existingByUid.get(ho.uid);
+      if (!obs) {
+        obs = this._acquire(ho.kind, ho.x, ho.y, ho.z, { rawY: true, uid: ho.uid });
+        if (!obs) continue;
+      } else {
+        obs.group.position.x = ho.x;
+        obs.group.position.y = ho.y;
+        const dz = ho.z - obs.group.position.z;
+        obs.group.position.z = Math.abs(dz) > 1.8 ? ho.z : (obs.group.position.z + dz * 0.55);
+      }
+      obs.hit = !!ho.hit;
+      obs.group.visible = !obs.hit;
     }
   }
 
@@ -1768,6 +2055,8 @@ export class Spawner {
     this.featureCooldown = 7;
     this.collectibleCooldown = 4.5;
     this.tutorialMode = false;
+    this.remoteSyncMode = false;
+    this._nextUid = 1;
     this.habitatMode = 'land';
     this.isAquaticBiome = false;
     this.magneticStormActive = false;

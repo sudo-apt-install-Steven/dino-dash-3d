@@ -568,6 +568,220 @@ export const DINO_CATALOG = [
       pt: 'Caçador futurista construído nos laboratórios da Metrópole Mecha.',
       en: 'Futuristic interceptor engineered inside the Mecha Metropolis core.'
     }
+  },
+  // === 13 NOVOS DINOSSAUROS DA MEGA EXPANSÃO (38–50) ===
+  {
+    id: 'acrocanthosaurus',
+    name: 'Acrocanthosaurus',
+    dinoClass: 'carnivore',
+    habitat: 'land',
+    unlockCost: 1400,
+    stats: { speed: 7, jump: 6, hp: 4, defense: 7, attack: 9 },
+    ability: { name: 'Espinha Sísmica', desc: 'Impacto dorsal gera onda de choque média e investida curta.', cooldown: 9.5, duration: 1.6 },
+    passive: { name: 'Carapaça Espinhal', desc: '+15% pontuação ao quebrar obstáculos em sequência.', scoreMultBonus: 0.15 },
+    colors: { primary: '#9a3412', secondary: '#fed7aa', eye: '#facc15', spots: '#431407', spikes: '#ea580c' },
+    roarPitch: 92,
+    fact: {
+      pt: 'Possuía espinhas neurais altas ao longo das costas formando uma crista muscular imponente.',
+      en: 'Sported tall neural spines along its back forming a massive muscular ridge.'
+    }
+  },
+  {
+    id: 'concavenator',
+    name: 'Concavenator',
+    dinoClass: 'carnivore',
+    habitat: 'land',
+    unlockCost: 1200,
+    stats: { speed: 9, jump: 8, hp: 3, defense: 5, attack: 8 },
+    ability: { name: 'Impulso da Corcova', desc: 'Aceleração ágil que lança duas lâminas de vento à frente.', cooldown: 8.2, duration: 1.6 },
+    passive: { name: 'Aerodinâmica Dorsal', desc: '+10% carga de habilidade em saltos perfeitos.', abilityChargeBonus: 0.1 },
+    colors: { primary: '#b45309', secondary: '#fef3c7', eye: '#fde047', spots: '#78350f', spikes: '#f59e0b' },
+    roarPitch: 210,
+    fact: {
+      pt: 'Famoso pela corcova pontiaguda sobre os quadris, possivelmente usada para termorregulação ou exibição.',
+      en: 'Famous for its pointed triangular hip crest, likely used for display or thermoregulation.'
+    }
+  },
+  {
+    id: 'amargasaurus',
+    name: 'Amargasaurus',
+    dinoClass: 'herbivore',
+    habitat: 'land',
+    unlockCost: 1800,
+    stats: { speed: 6, jump: 6, hp: 4, defense: 9, attack: 7 },
+    ability: { name: 'Barreira Cervical', desc: 'Dispara espinhos cervicais em leque e ativa proteção frontal.', cooldown: 10.5, duration: 2.4 },
+    passive: { name: 'Paliçada Natural', desc: 'Reduz penalidade de lama e vento lateral em 20%.', stabilityBonus: 0.2 },
+    colors: { primary: '#0f766e', secondary: '#ccfbf1', eye: '#fde047', spots: '#134e4a', spikes: '#f97316' },
+    roarPitch: 86,
+    fact: {
+      pt: 'Saurópode sul-americano com duas fileiras paralelas de longos espinhos ao longo do pescoço.',
+      en: 'South American sauropod carrying twin parallel rows of tall spines down its neck.'
+    }
+  },
+  {
+    id: 'edmontonia',
+    name: 'Edmontonia',
+    dinoClass: 'herbivore',
+    habitat: 'land',
+    unlockCost: 1650,
+    stats: { speed: 5, jump: 5, hp: 5, defense: 10, attack: 7 },
+    ability: { name: 'Falange Blindada', desc: 'Investida com espinhos de ombro que destrói obstáculos imediatos.', cooldown: 11.0, duration: 2.8 },
+    passive: { name: 'Ombros de Aço', desc: 'Ganha Fúria extra ao absorver impactos com escudo.', furyOnBlock: 18 },
+    colors: { primary: '#57534e', secondary: '#e7e5e4', eye: '#fbbf24', spots: '#292524', spikes: '#d6d3d1' },
+    roarPitch: 78,
+    fact: {
+      pt: 'Nodossauro sem clava caudal que compensava com gigantescos espinhos projetados nos ombros.',
+      en: 'Armored nodosaur lacking a tail club, defended instead by massive forward-pointing shoulder spikes.'
+    }
+  },
+  {
+    id: 'corythosaurus',
+    name: 'Corythosaurus',
+    dinoClass: 'herbivore',
+    habitat: 'land',
+    unlockCost: 1100,
+    stats: { speed: 8, jump: 8, hp: 3, defense: 6, attack: 6 },
+    ability: { name: 'Eco do Elmo', desc: 'Pulso sonoro limpa ameaças leves, atrai ovos e cura aliado no Coop.', cooldown: 8.8, duration: 2.6 },
+    passive: { name: 'Ressonância Harmônica', desc: 'Estende a duração de efeitos de ímã em +15%.', magnetBonus: 0.15 },
+    colors: { primary: '#15803d', secondary: '#dcfce7', eye: '#facc15', spots: '#14532d', spikes: '#ef4444' },
+    roarPitch: 195,
+    fact: {
+      pt: 'Sua crista arredondada lembrava um elmo coríntio e funcionava como câmara de ressonância sonora.',
+      en: 'Its rounded helmet-shaped crest acted as an acoustic resonance chamber for herd calls.'
+    }
+  },
+  {
+    id: 'plesiosaurus',
+    name: 'Plesiosaurus',
+    dinoClass: 'aquatic',
+    habitat: 'aquatic',
+    swimProfile: 'surface',
+    unlockCost: 1900,
+    stats: { speed: 8, jump: 7, hp: 3, defense: 7, attack: 7 },
+    ability: { name: 'Redemoinho Marinho', desc: 'Mergulho ágil com onda aquática radial que limpa obstáculos próximos.', cooldown: 8.5, duration: 2.0 },
+    passive: { name: 'Correntes Ancestrais', desc: '+12% estabilidade e velocidade em rios e mares.', waterSpeedBonus: 0.12 },
+    colors: { primary: '#0369a1', secondary: '#bae6fd', eye: '#fde047', spots: '#0c4a6e', spikes: '#38bdf8' },
+    roarPitch: 165,
+    fact: {
+      pt: 'Réptil marinho jurássico equipado com quatro nadadeiras largas para voar sob a água.',
+      en: 'Jurassic marine reptile propelled by four broad flippers that flew underwater.'
+    }
+  },
+  {
+    id: 'kronosaurus',
+    name: 'Kronosaurus',
+    dinoClass: 'aquatic',
+    habitat: 'aquatic',
+    swimProfile: 'submerge',
+    unlockCost: 3400,
+    stats: { speed: 8, jump: 6, hp: 4, defense: 8, attack: 9 },
+    ability: { name: 'Pressão Abissal', desc: 'Investida pesada submersa com onda de choque frontal.', cooldown: 10.0, duration: 2.1 },
+    passive: { name: 'Mandíbula de Fossa', desc: '+20% pontos ao destruir obstáculos em biomas aquáticos.', aquaticDestroyBonus: 0.2 },
+    colors: { primary: '#1e3a5f', secondary: '#93c5fd', eye: '#f97316', spots: '#0f172a', spikes: '#22d3ee' },
+    roarPitch: 88,
+    fact: {
+      pt: 'Um dos maiores pliossauros já descobertos, com crânio colossal de quase 3 metros.',
+      en: 'One of the largest pliosaurs ever discovered, armed with a nearly 3-meter skull.'
+    }
+  },
+  {
+    id: 'archelon',
+    name: 'Archelon',
+    dinoClass: 'aquatic',
+    habitat: 'aquatic',
+    swimProfile: 'surface',
+    unlockCost: 2600,
+    stats: { speed: 6, jump: 6, hp: 5, defense: 10, attack: 6 },
+    ability: { name: 'Casco Oceânico', desc: 'Deslize invulnerável sob a carapaça que empurra obstáculos imediatos.', cooldown: 11.2, duration: 2.8 },
+    passive: { name: 'Carapaça Hidrodinâmica', desc: 'Reduz o consumo de oxigênio e estamina na água em 18%.', oxygenSave: 0.18 },
+    colors: { primary: '#115e59', secondary: '#99f6e4', eye: '#facc15', spots: '#134e4a', spikes: '#f59e0b' },
+    roarPitch: 118,
+    fact: {
+      pt: 'A maior tartaruga marinha conhecida, alcançando mais de 4 metros entre as pontas das nadadeiras.',
+      en: 'The largest sea turtle ever known, spanning over 4 meters from flipper tip to flipper tip.'
+    }
+  },
+  {
+    id: 'hatzegopteryx',
+    name: 'Hatzegopteryx',
+    dinoClass: 'flying',
+    habitat: 'flying',
+    unlockCost: 3600,
+    stats: { speed: 9, jump: 9, hp: 3, defense: 6, attack: 8 },
+    ability: { name: 'Rasante Imperial', desc: 'Impulso aéreo com 2 rajadas frontais e salto extra no ar.', cooldown: 9.2, duration: 2.2 },
+    passive: { name: 'Asas de Tempestade', desc: '+15% bônus em anéis aéreos e menor desvio sob vento.', windResist: 0.2 },
+    colors: { primary: '#4c1d95', secondary: '#ede9fe', eye: '#facc15', spots: '#2e1065', spikes: '#f43f5e' },
+    roarPitch: 175,
+    fact: {
+      pt: 'Pterossauro gigante de pescoço robusto que dominava os céus da ilha pré-histórica de Hațeg.',
+      en: 'Stout-necked giant pterosaur that reigned as apex predator over prehistoric Hațeg Island.'
+    }
+  },
+  {
+    id: 'archaeopteryx',
+    name: 'Archaeopteryx',
+    dinoClass: 'flying',
+    habitat: 'flying',
+    unlockCost: 2100,
+    stats: { speed: 10, jump: 9, hp: 2, defense: 4, attack: 7 },
+    ability: { name: 'Turbilhão de Penas', desc: 'Dispara 3 lâminas emplumadas e garante salto extra ágil.', cooldown: 7.8, duration: 2.0 },
+    passive: { name: 'Plumagem Leve', desc: '-15% gasto de estamina ao planar e executar saltos duplos.', airStaminaSave: 0.15 },
+    colors: { primary: '#0284c7', secondary: '#e0f2fe', eye: '#fbbf24', spots: '#1e3a8a', spikes: '#f59e0b' },
+    roarPitch: 360,
+    fact: {
+      pt: 'Ícone evolutivo entre dinossauros emplumados e aves modernas, com garras nas asas e cauda longa.',
+      en: 'Iconic transitional species bridging feathered dinosaurs and modern birds, with clawed wings and a frond tail.'
+    }
+  },
+  {
+    id: 'microraptor',
+    name: 'Microraptor',
+    dinoClass: 'flying',
+    habitat: 'flying',
+    unlockCost: 2300,
+    stats: { speed: 10, jump: 10, hp: 2, defense: 4, attack: 6 },
+    ability: { name: 'Quatro Asas', desc: 'Planagem acelerada com 2 saltos extras e atração breve de ovos.', cooldown: 7.6, duration: 2.2 },
+    passive: { name: 'Planador Quádruplo', desc: '+15% responsividade lateral em manobras aéreas.', laneSpeedBonus: 0.15 },
+    colors: { primary: '#1e1b4b', secondary: '#a5b4fc', eye: '#38bdf8', spots: '#09090b', spikes: '#6366f1' },
+    roarPitch: 390,
+    fact: {
+      pt: 'Dinossauro emplumado com penas de voo tanto nos braços quanto nas pernas traseiras.',
+      en: 'Iridescent feathered dinosaur bearing flight feathers on both its forelimbs and hind legs.'
+    }
+  },
+  {
+    id: 'indominus_voxel',
+    name: 'Indominus Voxel',
+    dinoClass: 'mystic',
+    habitat: 'land',
+    isHybridSpecies: true,
+    unlockCost: 8500,
+    stats: { speed: 8, jump: 8, hp: 4, defense: 7, attack: 9 },
+    ability: { name: 'Camuflagem Predatória', desc: 'Furtividade veloz com onda de choque inicial que limpa obstáculos.', cooldown: 10.2, duration: 2.2 },
+    passive: { name: 'DNA Quimérico', desc: '+15% velocidade de carga de habilidade e atrai ovos próximos.', abilityChargeBonus: 0.15 },
+    colors: { primary: '#e2e8f0', secondary: '#f8fafc', eye: '#ef4444', spots: '#475569', spikes: '#94a3b8' },
+    roarPitch: 96,
+    fact: {
+      pt: 'Híbrido genético experimental combinando mandíbula de tiranossauro, braços de terizinossauro e camuflagem.',
+      en: 'Experimental voxel hybrid blending tyrannosaur jaws, clawed forelimbs, and adaptive camouflage.'
+    }
+  },
+  {
+    id: 'chrono_wyvern',
+    name: 'Chrono Wyvern',
+    dinoClass: 'mystic',
+    habitat: 'flying',
+    isHybridSpecies: true,
+    unlockCost: 9800,
+    stats: { speed: 9, jump: 9, hp: 3, defense: 6, attack: 8 },
+    ability: { name: 'Pulso Temporal', desc: 'Onda cronológica + 3 projéteis de plasma e ímã breve de ovos.', cooldown: 10.5, duration: 2.3 },
+    passive: { name: 'Fenda Temporal', desc: 'Combos perfeitos aceleram a recarga da habilidade e atraem ovos.', cooldownBonus: 0.08 },
+    colors: { primary: '#5b21b6', secondary: '#f5d0fe', eye: '#22d3ee', spots: '#2e1065', spikes: '#c084fc' },
+    roarPitch: 155,
+    fact: {
+      pt: 'Híbrido alado cristalino nascido das fendas temporais entre a Terra Oca e a Estação Orbital.',
+      en: 'Crystalline winged hybrid born from temporal rifts linking Hollow Earth and the Orbital Station.'
+    }
   }
 ];
 

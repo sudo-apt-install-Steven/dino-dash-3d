@@ -2,14 +2,43 @@
 // mochila, mapa do tesouro, Boss HP, OVNI fuga, Papéis Compartilhados, Touch, Pausa e Game Over.
 import { BACKPACK_ITEMS } from '../systems/Items.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
-import { StatusSystem } from '../systems/StatusSystem.js';
+import { StatusSystem, STATUS_DEFS } from '../systems/StatusSystem.js';
 import { Save } from '../systems/Save.js';
 import { OrientationManager } from '../systems/OrientationManager.js';
+import { normalizeLocale } from '../i18n/translations.js';
+import { escapeHtml } from '../security/Sanitize.js';
 import { renderSkillSvg, renderEggSvg, renderBossObsSvg } from './SvgIcons.js';
 
 export function formatScoreValue(val) {
   return String(Math.max(0, Math.floor(val))).padStart(5, '0');
 }
+
+const FIRST_TIME_CONTEXT_HINTS = {
+  boss_attack_q: {
+    icon: '⚔️',
+    title: 'Chefe Vulnerável!',
+    pcText: 'Pressione [Q] para atacar o Chefe quando ele abrir a guarda!',
+    mobText: 'Toque no botão [⚔️ Atq] em destaque para causar dano ao Chefe!'
+  },
+  water_breathe: {
+    icon: '🫧',
+    title: 'Mergulho & Oxigênio',
+    pcText: 'Seu O₂ cai debaixo d’água! Suba com [W/↑] ou pegue Bolhas 🫧 para respirar.',
+    mobText: 'Toque em [🫧 Respirar] ou suba à superfície para recuperar Oxigênio!'
+  },
+  mp_revive_v: {
+    icon: '💖',
+    title: 'Aliado Caído!',
+    pcText: 'Pressione [V] perto do aliado para revivê-lo (custa 1 Vida ou 1 Escudo).',
+    mobText: 'Toque no botão [💖 Reviver] para levantar seu aliado na pista!'
+  },
+  event_warning: {
+    icon: '☄️',
+    title: 'Evento Dinâmico na Pista!',
+    pcText: 'Fique atento aos avisos visuais e sonoros: cada evento muda os perigos e bônus!',
+    mobText: 'Evento começando! Observe os sinais na pista para desviar e coletar bônus!'
+  }
+};
 
 export class HUD {
   constructor(rootEl, callbacks = {}) {
@@ -17,7 +46,17 @@ export class HUD {
     this.callbacks = callbacks;
     this.bannerTimer = 0;
     this.subTimer = 0;
+    this.contextHintTimer = 0;
     this.isEditingTouchLayout = false;
+    this._spotlightQueue = [];
+    this._shownContextHints = new Set();
+    this._contextualTouchState = {
+      canAttackBoss: false,
+      reviveTargetNick: null,
+      canBreathe: false,
+      attackCooldownPct: 100,
+      oxygenPct: 100
+    };
     this._render();
   }
 
@@ -43,12 +82,17 @@ export class HUD {
           </div>
           <div class="hud-pill hidden" id="hud-element" style="color:#38bdf8;" data-tip="Elemento ativo: combine com outro ou acerte a fraqueza do Chefe!">✨ Nenhum</div>
           <div class="hud-pill hidden" id="hud-wanted" style="color:#ff4757;" data-tip="Nível de Caçada: aumenta recompensa e atenção de predadores.">🚨 ★</div>
+          <div class="hud-pill hud-danger-pill hidden" id="hud-danger-tier" data-tip="Nível de Perigo dinâmico: aumenta velocidade, densidade e agressividade.">
+            <span id="hud-danger-label">⚠️ Perigo Nv.1</span>
+            <span class="hud-danger-track" aria-hidden="true"><span class="hud-danger-fill" id="hud-danger-fill" style="width:10%"></span></span>
+          </div>
         </div>
 
         <div class="hud-top-right" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
           <div class="hud-top-actions" style="display:flex; gap:8px; align-items:center;">
             <button class="chunky-btn secondary mob-only" id="btn-mob-rotate" style="padding:5px 8px; font-size:0.75rem;" data-tip="Deitar / alternar tela em Paisagem no celular.">🔄</button>
-            <button class="chunky-btn secondary mob-only" id="btn-mob-edit-hud" style="padding:5px 8px; font-size:0.75rem;" data-tip="Editar tamanho e posição dos botões touch.">🛠️</button>
+            <button class="chunky-btn secondary mob-only" id="btn-mob-cam" style="padding:5px 8px; font-size:0.75rem;" data-tip="Trocar ângulo de câmera (Tecla C).">📷</button>
+            <button class="chunky-btn secondary mob-only" id="btn-mob-edit-hud" style="padding:5px 8px; font-size:0.75rem;" data-tip="Editar tamanho, modo canhoto e posição dos botões touch.">🛠️</button>
             <button class="chunky-btn secondary" id="btn-guide" style="padding:5px 10px; font-size:0.75rem;" data-tip="Abre o Guia Visual de obstáculos, status e chefes.">📖<span class="btn-label"> Guia</span></button>
             <button class="chunky-btn secondary" id="btn-clip-rec" style="padding:5px 10px; font-size:0.75rem;" data-tip="Gravar clipe curto da corrida (.webm).">🎥<span class="btn-label"> Clipe</span></button>
             ${import.meta.env.DEV ? `<button class="chunky-btn secondary ${Save.data.devMode ? '' : 'hidden'}" id="btn-debug" style="padding:5px 10px; font-size:0.75rem;" data-tip="Painel de Depuração e Testes (F9).">🛠️<span class="btn-label"> Debug</span></button>` : ''}
@@ -62,6 +106,21 @@ export class HUD {
             <div class="treasure-track"><div class="treasure-fill" id="map-fill" style="width:0%"></div></div>
             <span id="map-next-portal">Portal em 1000</span>
           </div>
+        </div>
+      </div>
+
+      <div class="hud-debuffs-tray hidden" id="hud-debuffs-tray" role="status" aria-live="polite"></div>
+
+      <div class="hud-predator-telegraph hidden" id="hud-predator-telegraph" role="alert" aria-live="assertive">
+        <div class="telegraph-alert-pill" id="telegraph-alert-pill">
+          <span id="telegraph-icon">⚠️</span>
+          <strong id="telegraph-label">Ataque de Predador!</strong>
+          <span id="telegraph-timer">1.0s</span>
+        </div>
+        <div class="telegraph-lanes" id="telegraph-lanes" aria-hidden="true">
+          <div class="telegraph-lane" data-tlane="-1"><span>◀ ESQ</span></div>
+          <div class="telegraph-lane" data-tlane="0"><span>▲ CENTRO</span></div>
+          <div class="telegraph-lane" data-tlane="1"><span>DIR ▶</span></div>
         </div>
       </div>
 
@@ -84,6 +143,7 @@ export class HUD {
       </div>
 
       <div class="banner-toast hidden" id="hud-banner"></div>
+      <div class="context-hint-toast hidden" id="hud-context-hint"></div>
       <div class="chunky-panel hidden" id="hud-tutorial-box" style="position:fixed; top:76px; left:50%; transform:translateX(-50%); z-index:26; padding:10px 16px; width:min(540px, 92vw); pointer-events:auto; border-color:#38bdf8;">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;">
           <strong id="tut-step-title" style="color:#ffd447; font-size:0.95rem;">🎓 Tutorial</strong>
@@ -155,21 +215,27 @@ export class HUD {
         </div>
       </div>
 
-      <!-- Controles touch para celular (Swipe livre por padrão + botões ⚔️/⚡/🧭/🔥/🔄/🎒 ergonômicos com rótulo claro) -->
+      <!-- Controles touch para celular (Divisão ergonômica: esquerda movimento/abaixar/roda/item/respirar vs direita pular/hab/atq/fúria/troca/reviver; inversível no modo canhoto) -->
       <div class="touch-controls" id="touch-controls">
-        <div class="touch-cluster touch-cluster-left touch-dpad-only" id="touch-cluster-left">
-          <button class="touch-btn" data-tact="left" aria-label="Faixa Esquerda">◀</button>
-          <button class="touch-btn" data-tact="right" aria-label="Faixa Direita">▶</button>
+        <div class="touch-cluster touch-cluster-left" id="touch-cluster-left">
+          <button class="touch-btn touch-dpad-only" data-tact="left" aria-label="Faixa Esquerda"><span class="touch-btn-ico">◀</span><span class="touch-btn-lbl">Esq</span></button>
+          <button class="touch-btn touch-dpad-only" data-tact="right" aria-label="Faixa Direita"><span class="touch-btn-ico">▶</span><span class="touch-btn-lbl">Dir</span></button>
+          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar"><span class="touch-btn-ico" id="touch-duck-ico">▼</span><span class="touch-btn-lbl" id="touch-duck-lbl">Baixo</span></button>
+          <button class="touch-btn touch-btn-action touch-btn-radial" id="touch-radial-btn" aria-label="Roda Tática X"><span class="touch-btn-ico">🧭</span><span class="touch-btn-lbl">Roda</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-item" id="touch-item-btn" data-tact="item" aria-label="Usar Item da Mochila"><span class="touch-btn-ico" id="touch-item-ico">🎒</span><span class="touch-btn-lbl">Item</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-breathe" id="touch-breathe-btn" data-tact="breathe" aria-label="Respirar"><span class="touch-btn-ico">🫧</span><span class="touch-btn-lbl" id="touch-breathe-lbl">Respirar</span></button>
         </div>
         <div class="touch-cluster touch-cluster-right" id="touch-cluster-right">
-          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar"><span class="touch-btn-ico" id="touch-duck-ico">▼</span><span class="touch-btn-lbl" id="touch-duck-lbl">Baixo</span></button>
           <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular"><span class="touch-btn-ico">▲</span><span class="touch-btn-lbl">Pulo</span></button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-fury" id="touch-fury-btn" data-tact="fury" aria-label="Modo Fúria"><span class="touch-btn-ico">🔥</span><span class="touch-btn-lbl">Fúria!</span></button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-item" id="touch-item-btn" data-tact="item" aria-label="Usar Item da Mochila"><span class="touch-btn-ico" id="touch-item-ico">🎒</span><span class="touch-btn-lbl">Item</span></button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-transmute" id="touch-transmute-btn" data-tact="transmute" aria-label="Trocar Habitat"><span class="touch-btn-ico">🔄</span><span class="touch-btn-lbl" id="touch-transmute-lbl">Troca</span></button>
-          <button class="touch-btn touch-btn-action touch-btn-radial" id="touch-radial-btn" aria-label="Roda Tática X"><span class="touch-btn-ico">🧭</span><span class="touch-btn-lbl">Roda</span></button>
-          <button class="touch-btn touch-btn-action touch-btn-attack" id="touch-attack-btn" data-tact="attack" aria-label="Ataque Rápido"><span class="touch-btn-ico">⚔️</span><span class="touch-btn-lbl" id="touch-attack-lbl">Atq</span></button>
           <button class="touch-btn touch-btn-action touch-btn-ability" id="touch-ability-btn" data-tact="ability" aria-label="Habilidade Especial"><span class="touch-btn-ico">⚡</span><span class="touch-btn-lbl" id="touch-ability-lbl">Hab</span></button>
+          <button class="touch-btn touch-btn-action touch-btn-attack" id="touch-attack-btn" data-tact="attack" aria-label="Ataque Rápido">
+            <span class="touch-btn-ico">⚔️</span>
+            <span class="touch-btn-lbl" id="touch-attack-lbl">Atq</span>
+            <span class="touch-cd-track" aria-hidden="true"><span class="touch-cd-fill" id="touch-attack-cd-fill" style="width:100%;"></span></span>
+          </button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-fury" id="touch-fury-btn" data-tact="fury" aria-label="Modo Fúria"><span class="touch-btn-ico">🔥</span><span class="touch-btn-lbl">Fúria!</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-transmute" id="touch-transmute-btn" data-tact="transmute" aria-label="Trocar Habitat"><span class="touch-btn-ico">🔄</span><span class="touch-btn-lbl" id="touch-transmute-lbl">Troca</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-revive" id="touch-revive-btn" data-tact="revive" aria-label="Reviver Aliado"><span class="touch-btn-ico">💖</span><span class="touch-btn-lbl" id="touch-revive-lbl">Reviver</span></button>
         </div>
       </div>
 
@@ -212,6 +278,9 @@ export class HUD {
           </label>
           <label style="font-size:0.74rem; display:flex; align-items:center; gap:5px;">
             Opacidade: <input type="range" id="hud-touch-opacity" min="50" max="100" value="92" style="width:84px; accent-color:#f59e0b;" />
+          </label>
+          <label style="font-size:0.74rem; display:flex; align-items:center; gap:5px; cursor:pointer;" data-tip="Inverte os lados dos botões para jogadores canhotos.">
+            <input type="checkbox" id="hud-touch-lefthanded" /> 🤚 Modo Canhoto
           </label>
           <button class="chunky-btn secondary" id="hud-touch-reset" style="padding:5px 10px; font-size:0.74rem;">🔄 Padrão</button>
           <button class="chunky-btn" id="hud-touch-done" style="padding:5px 12px; font-size:0.74rem;">✅ Salvar</button>
@@ -436,8 +505,15 @@ export class HUD {
     this.touchItemIco = q('#touch-item-ico');
     this.touchAttackBtn = q('#touch-attack-btn');
     this.touchAttackLbl = q('#touch-attack-lbl');
+    this.touchAttackCdFill = q('#touch-attack-cd-fill');
     this.touchAbilityBtn = q('#touch-ability-btn');
     this.touchAbilityLbl = q('#touch-ability-lbl');
+    this.touchReviveBtn = q('#touch-revive-btn');
+    this.touchReviveLbl = q('#touch-revive-lbl');
+    this.touchBreatheBtn = q('#touch-breathe-btn');
+    this.touchBreatheLbl = q('#touch-breathe-lbl');
+    this.touchLeftHandedInput = q('#hud-touch-lefthanded');
+    this.contextHintEl = q('#hud-context-hint');
     this.touchDuckBtn = q('[data-tact="duck"]');
     this.touchDuckIco = q('#touch-duck-ico');
     this.touchDuckLbl = q('#touch-duck-lbl');
@@ -452,6 +528,18 @@ export class HUD {
     this.photoOverlay = q('#photo-overlay');
     this.gameOverOverlay = q('#gameover-overlay');
     this.modalLayer = q('#modal-layer');
+    this.dangerTierEl = q('#hud-danger-tier');
+    this.dangerLabelEl = q('#hud-danger-label');
+    this.dangerFillEl = q('#hud-danger-fill');
+    this.debuffsTrayEl = q('#hud-debuffs-tray');
+    this.telegraphEl = q('#hud-predator-telegraph');
+    this.telegraphIconEl = q('#telegraph-icon');
+    this.telegraphLabelEl = q('#telegraph-label');
+    this.telegraphTimerEl = q('#telegraph-timer');
+    this.telegraphLaneEls = Array.from(this.root.querySelectorAll('[data-tlane]'));
+    this._lastDangerKey = '';
+    this._lastDebuffsKey = '';
+    this._lastTelegraphKey = '';
   }
 
   _bindInteractions() {
@@ -481,23 +569,33 @@ export class HUD {
     this.root.querySelector('#btn-pause').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-resume').addEventListener('click', () => this.callbacks.onTogglePause?.());
     this.root.querySelector('#btn-mob-rotate')?.addEventListener('click', () => OrientationManager.toggleForceLandscape());
+    this.root.querySelector('#btn-mob-cam')?.addEventListener('click', () => this.callbacks.onCycleCamera?.());
     this.root.querySelector('#btn-pause-rotate')?.addEventListener('click', () => OrientationManager.toggleForceLandscape());
     this.root.querySelector('#btn-mob-edit-hud')?.addEventListener('click', () => this.toggleTouchLayoutEditor());
     this.root.querySelector('#hud-touch-done')?.addEventListener('click', () => this.toggleTouchLayoutEditor(false));
     this.root.querySelector('#hud-touch-reset')?.addEventListener('click', () => {
-      Save.data.settings.mobileHudLayout = { scale: 1.0, opacity: 0.92, positions: {} };
+      Save.data.settings.mobileHudLayout = { scale: 1.0, opacity: 0.92, leftHanded: false, positions: {} };
+      if (Save.data.settings.controllerLayout) Save.data.settings.controllerLayout.leftHanded = false;
       Save.save();
       this._applyMobileTouchLayout();
     });
     this.root.querySelector('#hud-touch-scale')?.addEventListener('input', (e) => {
-      if (!Save.data.settings.mobileHudLayout) Save.data.settings.mobileHudLayout = { scale: 1, opacity: 0.92, positions: {} };
+      if (!Save.data.settings.mobileHudLayout) Save.data.settings.mobileHudLayout = { scale: 1, opacity: 0.92, leftHanded: false, positions: {} };
       Save.data.settings.mobileHudLayout.scale = Number(e.target.value) / 100;
       Save.save();
       this._applyMobileTouchLayout();
     });
     this.root.querySelector('#hud-touch-opacity')?.addEventListener('input', (e) => {
-      if (!Save.data.settings.mobileHudLayout) Save.data.settings.mobileHudLayout = { scale: 1, opacity: 0.92, positions: {} };
+      if (!Save.data.settings.mobileHudLayout) Save.data.settings.mobileHudLayout = { scale: 1, opacity: 0.92, leftHanded: false, positions: {} };
       Save.data.settings.mobileHudLayout.opacity = Number(e.target.value) / 100;
+      Save.save();
+      this._applyMobileTouchLayout();
+    });
+    this.root.querySelector('#hud-touch-lefthanded')?.addEventListener('change', (e) => {
+      const isLeft = !!e.target.checked;
+      if (!Save.data.settings.mobileHudLayout) Save.data.settings.mobileHudLayout = { scale: 1, opacity: 0.92, leftHanded: false, positions: {} };
+      Save.data.settings.mobileHudLayout.leftHanded = isLeft;
+      if (Save.data.settings.controllerLayout) Save.data.settings.controllerLayout.leftHanded = isLeft;
       Save.save();
       this._applyMobileTouchLayout();
     });
@@ -558,6 +656,10 @@ export class HUD {
         if (this.isEditingTouchLayout) return;
         e.preventDefault();
         e.stopPropagation();
+        try {
+          navigator.vibrate?.(10);
+          window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'HAPTIC_IMPACT', payload: { style: 'light' } }));
+        } catch {}
         this.callbacks.onTouchAction?.(act, true);
       });
       const release = () => {
@@ -618,6 +720,8 @@ export class HUD {
     const cfg = Save.data.settings?.mobileHudLayout || {};
     const scale = Math.max(0.8, Math.min(1.35, Number(cfg.scale || 1)));
     const opacity = Math.max(0.5, Math.min(1.0, Number(cfg.opacity ?? 0.92)));
+    const leftHanded = !!(cfg.leftHanded ?? Save.data.settings?.controllerLayout?.leftHanded);
+    this.touchControls?.classList.toggle('touch-left-handed', leftHanded);
     const applyCluster = (el, key, origin) => {
       if (!el) return;
       const pos = cfg.positions?.[key] || { dx: 0, dy: 0 };
@@ -625,13 +729,14 @@ export class HUD {
       el.style.transform = `translate(${pos.dx || 0}px, ${pos.dy || 0}px) scale(${scale})`;
       el.style.opacity = String(opacity);
     };
-    applyCluster(this.touchClusterLeft, 'left', 'bottom left');
-    applyCluster(this.touchClusterRight, 'right', 'bottom right');
+    applyCluster(this.touchClusterLeft, 'left', leftHanded ? 'bottom right' : 'bottom left');
+    applyCluster(this.touchClusterRight, 'right', leftHanded ? 'bottom left' : 'bottom right');
 
     const scIn = this.root.querySelector('#hud-touch-scale');
     const opIn = this.root.querySelector('#hud-touch-opacity');
     if (scIn) scIn.value = String(Math.round(scale * 100));
     if (opIn) opIn.value = String(Math.round(opacity * 100));
+    if (this.touchLeftHandedInput) this.touchLeftHandedInput.checked = leftHanded;
   }
 
   toggleTouchLayoutEditor(force = null) {
@@ -715,10 +820,18 @@ export class HUD {
     this.touchTransmuteBtn?.classList.add('hidden');
     this.touchFuryBtn?.classList.add('hidden');
     this.touchItemBtn?.classList.add('hidden');
+    this.touchReviveBtn?.classList.add('hidden');
+    this.touchBreatheBtn?.classList.add('hidden');
+    this.touchAttackBtn?.classList.remove('touch-boss-ready');
+    this.contextHintEl?.classList.add('hidden');
+    this._spotlightQueue = [];
     this.bannerEl.classList.add('hidden');
     this.narratorEl.classList.add('hidden');
     this.elementEl?.classList.add('hidden');
     this.wantedEl?.classList.add('hidden');
+    this.setDangerTier(0);
+    this.setActiveDebuffs([]);
+    this.setPredatorTelegraph(null);
   }
 
   setTutorialHud(info) {
@@ -788,6 +901,101 @@ export class HUD {
       this.hpText?.classList.add(cls);
       this._hpPulseTid = setTimeout(() => this.hpText?.classList.remove('hp-shake', 'hp-pop'), 320);
     });
+  }
+
+  _applyOxygenVisuals(pct) {
+    const o2 = Math.max(0, Math.min(100, Math.round(Number(pct ?? 100))));
+    if (this.oxygenPill) {
+      this.oxygenPill.classList.toggle('o2-critical', o2 <= 30);
+      this.oxygenPill.classList.toggle('o2-warn', o2 > 30 && o2 <= 60);
+      this.oxygenPill.classList.toggle('o2-safe', o2 > 60);
+    }
+    if (this.oxygenBar) {
+      this.oxygenBar.style.width = `${o2}%`;
+      this.oxygenBar.style.background = o2 <= 30
+        ? 'linear-gradient(90deg, #dc2626, #ef4444)'
+        : (o2 <= 60 ? 'linear-gradient(90deg, #d97706, #facc15)' : 'linear-gradient(90deg, #16a34a, #4ade80)');
+    }
+  }
+
+  setContextualTouchState({
+    canAttackBoss = false,
+    reviveTargetNick = null,
+    canBreathe = false,
+    attackCooldownPct = 100,
+    oxygenPct = 100
+  } = {}) {
+    this._contextualTouchState = {
+      canAttackBoss: !!canAttackBoss,
+      reviveTargetNick: reviveTargetNick ? String(reviveTargetNick) : null,
+      canBreathe: !!canBreathe,
+      attackCooldownPct: Math.max(0, Math.min(100, Number(attackCooldownPct ?? 100))),
+      oxygenPct: Math.max(0, Math.min(100, Number(oxygenPct ?? 100)))
+    };
+
+    if (this.touchReviveBtn) {
+      const nick = this._contextualTouchState.reviveTargetNick;
+      const showRevive = Boolean(nick);
+      this.touchReviveBtn.classList.toggle('hidden', !showRevive);
+      this.touchReviveBtn.classList.toggle('touch-ready', showRevive);
+      if (showRevive && this.touchReviveLbl) {
+        this.touchReviveLbl.textContent = `Reviver ${nick.slice(0, 10)}`;
+      }
+      if (showRevive) {
+        this.showFirstTimeContextHint('mp_revive_v');
+      }
+    }
+
+    if (this.touchBreatheBtn) {
+      const showBreathe = this._contextualTouchState.canBreathe;
+      this.touchBreatheBtn.classList.toggle('hidden', !showBreathe);
+      this.touchBreatheBtn.classList.toggle('touch-ready', showBreathe && this._contextualTouchState.oxygenPct <= 60);
+      this.touchBreatheBtn.classList.toggle('o2-critical', showBreathe && this._contextualTouchState.oxygenPct <= 30);
+      if (this.touchBreatheLbl) {
+        this.touchBreatheLbl.textContent = 'Respirar';
+      }
+      if (showBreathe) {
+        this.showFirstTimeContextHint('water_breathe');
+      }
+    }
+
+    if (this.touchAttackBtn) {
+      const pct = this._contextualTouchState.attackCooldownPct;
+      const bossReady = this._contextualTouchState.canAttackBoss && pct >= 99;
+      this.touchAttackBtn.classList.toggle('touch-boss-ready', this._contextualTouchState.canAttackBoss);
+      this.touchAttackBtn.classList.toggle('touch-ready', bossReady || pct >= 99);
+      if (this.touchAttackCdFill) {
+        this.touchAttackCdFill.style.width = `${pct}%`;
+        this.touchAttackCdFill.style.background = pct >= 99
+          ? (this._contextualTouchState.canAttackBoss ? '#ffd447' : '#fb923c')
+          : '#64748b';
+      }
+      if (this._contextualTouchState.canAttackBoss) {
+        this.showFirstTimeContextHint('boss_attack_q');
+      }
+    }
+
+    this._applyOxygenVisuals(this._contextualTouchState.oxygenPct);
+  }
+
+  showFirstTimeContextHint(hintKey, { duration = 4.2 } = {}) {
+    const def = FIRST_TIME_CONTEXT_HINTS[hintKey];
+    if (!def || !this.contextHintEl) return false;
+    if (Save.data.settings?.discoveryPopups === false) return false;
+    if (!Save.data.seenContextHints) Save.data.seenContextHints = [];
+    if (this._shownContextHints.has(hintKey) || Save.data.seenContextHints.includes(hintKey)) {
+      return false;
+    }
+    this._shownContextHints.add(hintKey);
+    Save.data.seenContextHints.push(hintKey);
+    try { Save.save(); } catch {}
+
+    const isTouch = (typeof window !== 'undefined') && (window.matchMedia?.('(pointer: coarse)')?.matches || window.innerWidth <= 960);
+    const bodyText = isTouch ? def.mobText : def.pcText;
+    this.contextHintEl.innerHTML = `<span class="context-hint-ico">${def.icon}</span><div><strong>${def.title}</strong><div>${bodyText}</div></div>`;
+    this.contextHintEl.classList.remove('hidden');
+    this.contextHintTimer = duration;
+    return true;
   }
 
   setMpReviveHud({ visible = false, canAfford = false, cost = 45, allyName = 'Aliado' } = {}) {
@@ -890,16 +1098,13 @@ export class HUD {
     this.submergedTint?.classList.toggle('hidden', !submergedNow);
 
     const showO2 = !!(player.inWater || submergedNow || (player.oxygen ?? 100) < 99);
+    const o2 = Math.max(0, Math.min(100, Math.round(player.oxygen ?? 100)));
     if (this.oxygenPill) {
       this.oxygenPill.classList.toggle('hidden', !showO2);
-      const o2 = Math.max(0, Math.min(100, Math.round(player.oxygen ?? 100)));
       if (this.oxygenLbl) {
         this.oxygenLbl.textContent = player.isAquaticNative ? `Brânquias ${o2}%` : `${o2}%`;
       }
-      if (this.oxygenBar) {
-        this.oxygenBar.style.width = `${o2}%`;
-        this.oxygenBar.style.background = o2 < 28 ? '#ef4444' : (o2 < 55 ? '#f59e0b' : '#38bdf8');
-      }
+      this._applyOxygenVisuals(o2);
     }
 
     const petStatus = extra?.companionStatus || null;
@@ -949,13 +1154,25 @@ export class HUD {
       }
     }
     if (this.touchAttackBtn) {
+      const atkMax = player.attackMaxCooldown || 1.25;
+      const atkPct = Math.max(0, Math.min(100, 100 * (1 - atkCd / atkMax)));
       const atkReady = attackOpen && atkCd <= 0.05;
       this.touchAttackBtn.classList.toggle('touch-locked', !attackOpen);
       this.touchAttackBtn.classList.toggle('touch-ready', atkReady);
-      this.touchAttackBtn.style.opacity = !attackOpen ? '0.45' : (atkReady ? '1' : '0.68');
+      this.touchAttackBtn.style.opacity = !attackOpen ? '0.45' : (atkReady ? '1' : '0.78');
       if (this.touchAttackLbl) {
         this.touchAttackLbl.textContent = !attackOpen ? '1.8k' : (atkReady ? 'Atq!' : `${atkCd.toFixed(1)}s`);
       }
+      if (this.touchAttackCdFill) {
+        this.touchAttackCdFill.style.width = `${atkPct}%`;
+        this.touchAttackCdFill.style.background = atkReady ? '#fb923c' : '#64748b';
+      }
+    }
+    if (this.touchBreatheBtn) {
+      const canBreatheNow = Boolean((submergedNow || (player.inWater && o2 < 95)) && !player.isAquaticNative);
+      this.touchBreatheBtn.classList.toggle('hidden', !canBreatheNow);
+      this.touchBreatheBtn.classList.toggle('touch-ready', canBreatheNow && o2 <= 60);
+      this.touchBreatheBtn.classList.toggle('o2-critical', canBreatheNow && o2 <= 30);
     }
     if (this.touchFuryBtn) {
       const furyReady = furyOpen && (player.fury || 0) >= 100 && (player.furyTimer || 0) <= 0;
@@ -1105,6 +1322,145 @@ export class HUD {
     }
   }
 
+  setDangerTier(tierInput) {
+    if (!this.dangerTierEl) return;
+    const obj = (tierInput && typeof tierInput === 'object') ? tierInput : null;
+    const rawTier = obj ? Number(obj.tier ?? obj.level ?? 0) : Number(tierInput ?? 0);
+    const tier = Number.isFinite(rawTier) ? Math.max(0, Math.floor(rawTier)) : 0;
+    if (tier <= 0) {
+      if (this._lastDangerKey !== '0') {
+        this._lastDangerKey = '0';
+        this.dangerTierEl.classList.add('hidden');
+      }
+      return;
+    }
+    const loc = normalizeLocale(Save.data.settings?.lang);
+    const prefix = loc === 'en' ? 'Danger Lv.' : (loc === 'es' ? 'Peligro Nv.' : 'Perigo Nv.');
+    const key = `${tier}:${loc}:${obj?.label || ''}`;
+    if (this._lastDangerKey === key) return;
+    this._lastDangerKey = key;
+
+    const palette = tier >= 9
+      ? '#ec4899'
+      : tier >= 7
+        ? '#ef4444'
+        : tier >= 5
+          ? '#f97316'
+          : tier >= 3
+            ? '#fb923c'
+            : '#facc15';
+    const pct = Math.min(100, Math.max(12, Math.round((tier / 10) * 100)));
+    this.dangerTierEl.classList.remove('hidden');
+    this.dangerTierEl.classList.toggle('danger-critical', tier >= 7);
+    this.dangerTierEl.style.borderColor = palette;
+    this.dangerTierEl.style.color = palette;
+    if (this.dangerLabelEl) {
+      const icon = tier >= 7 ? '☠️' : (tier >= 4 ? '🔥' : '⚠️');
+      this.dangerLabelEl.textContent = `${icon} ${obj?.label || `${prefix}${tier}`}`;
+    }
+    if (this.dangerFillEl) {
+      this.dangerFillEl.style.width = `${pct}%`;
+      this.dangerFillEl.style.background = palette;
+    }
+    if (obj) {
+      const parts = [];
+      if (obj.speedBonus) parts.push(`Vel +${Math.round(obj.speedBonus * 100)}%`);
+      if (obj.densityBonus) parts.push(`Densidade +${Math.round(obj.densityBonus * 100)}%`);
+      if (obj.predatorAggro) parts.push(`Predadores x${Number(obj.predatorAggro).toFixed(1)}`);
+      if (parts.length) this.dangerTierEl.setAttribute('data-tip', `${prefix}${tier}: ${parts.join(' • ')}`);
+    }
+  }
+
+  setActiveDebuffs(list) {
+    if (!this.debuffsTrayEl) return;
+    const arr = Array.isArray(list) ? list.filter(Boolean) : [];
+    if (!arr.length) {
+      if (this._lastDebuffsKey !== '') {
+        this._lastDebuffsKey = '';
+        this.debuffsTrayEl.innerHTML = '';
+        this.debuffsTrayEl.classList.add('hidden');
+      }
+      return;
+    }
+    const maxVisible = 6;
+    const visible = arr.slice(0, maxVisible);
+    const overflow = Math.max(0, arr.length - maxVisible);
+    const key = visible.map((d) => {
+      const id = d.id || d.name || '';
+      const rem = Number(d.remainingSec ?? d.remaining ?? d.duration ?? 0);
+      return `${id}:${Math.round(rem * 10)}:${d.stacks || 1}`;
+    }).join('|') + `|+${overflow}`;
+    if (this._lastDebuffsKey === key) return;
+    this._lastDebuffsKey = key;
+
+    const html = visible.map((d) => {
+      const def = d.id ? STATUS_DEFS[d.id] : null;
+      const icon = escapeHtml(d.icon || def?.icon || '⚠️');
+      const name = escapeHtml(d.name || def?.name || d.id || 'Debuff');
+      const color = d.color || def?.color || '#f97316';
+      const rem = Number(d.remainingSec ?? d.remaining ?? d.duration ?? 0);
+      const timeStr = rem > 0 ? `${rem.toFixed(1)}s` : '';
+      const rawTip = d.counterTip || d.counter || d.tip || def?.desc || '';
+      const shortTip = rawTip.length > 42 ? `${rawTip.slice(0, 39)}...` : rawTip;
+      const stacksBadge = d.stacks > 1 ? `<span class="hud-debuff-stacks">x${d.stacks}</span>` : '';
+      return `
+        <div class="hud-debuff-badge" style="border-color:${escapeHtml(color)};" title="${escapeHtml(rawTip || name)}">
+          <span class="hud-debuff-ico">${icon}</span>
+          <div class="hud-debuff-body">
+            <div class="hud-debuff-head">
+              <strong style="color:${escapeHtml(color)};">${name}</strong>${stacksBadge}
+              ${timeStr ? `<span class="hud-debuff-time">${timeStr}</span>` : ''}
+            </div>
+            ${shortTip ? `<div class="hud-debuff-tip">${escapeHtml(shortTip)}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('') + (overflow > 0 ? `<div class="hud-debuff-more" aria-label="Mais ${overflow} debuffs">+${overflow}</div>` : '');
+
+    this.debuffsTrayEl.innerHTML = html;
+    this.debuffsTrayEl.classList.remove('hidden');
+  }
+
+  setPredatorTelegraph(info) {
+    if (!this.telegraphEl) return;
+    const rem = info ? Number(info.remainingSec ?? info.remaining ?? 0) : 0;
+    if (!info || (info.remainingSec !== undefined && rem <= 0)) {
+      if (this._lastTelegraphKey !== '') {
+        this._lastTelegraphKey = '';
+        this.telegraphEl.classList.add('hidden');
+      }
+      return;
+    }
+    const type = String(info.type || 'pounce');
+    const lane = info.lane;
+    const label = String(info.label || (type === 'roar' ? 'Rugido de Onda!' : (type === 'meteor' ? 'Chuva de Brasas!' : 'Investida de Predador!')));
+    const key = `${type}:${lane}:${Math.round(rem * 10)}:${label}`;
+    if (this._lastTelegraphKey === key) return;
+    this._lastTelegraphKey = key;
+
+    const iconMap = { pounce: '🐾', lunge: '🦷', roar: '📢', swipe: '💢', breath: '🔥', boulder: '🪨', shockwave: '⚡', venom: '☠️' };
+    if (this.telegraphIconEl) this.telegraphIconEl.textContent = info.icon || iconMap[type] || '⚠️';
+    if (this.telegraphLabelEl) this.telegraphLabelEl.textContent = label;
+    if (this.telegraphTimerEl) this.telegraphTimerEl.textContent = rem > 0 ? `${rem.toFixed(1)}s` : '!';
+
+    // Normaliza lane: suporta -1/0/1, 'all'/'zone', ou array de faixas
+    const activeLanes = new Set();
+    if (lane === 'all' || lane === 'zone' || lane === undefined || lane === null) {
+      activeLanes.add(-1); activeLanes.add(0); activeLanes.add(1);
+    } else if (Array.isArray(lane)) {
+      lane.forEach((l) => activeLanes.add(Number(l)));
+    } else {
+      const n = Number(lane);
+      if (Number.isFinite(n)) activeLanes.add(n);
+    }
+
+    for (const laneEl of this.telegraphLaneEls || []) {
+      const idx = Number(laneEl.getAttribute('data-tlane'));
+      laneEl.classList.toggle('active', activeLanes.has(idx));
+    }
+    this.telegraphEl.classList.remove('hidden');
+  }
+
   setBossHud(boss) {
     this.bossWrap.classList.toggle('hidden', !boss);
     if (!boss) {
@@ -1142,14 +1498,28 @@ export class HUD {
       this.subTimer -= dt;
       if (this.subTimer <= 0) this.narratorEl.classList.add('hidden');
     }
+    if (this.contextHintTimer > 0) {
+      this.contextHintTimer -= dt;
+      if (this.contextHintTimer <= 0) this.contextHintEl?.classList.add('hidden');
+    }
   }
 
   showPause(show) {
     this.pauseOverlay.classList.toggle('hidden', !show);
   }
 
-  showSpotlight({ icon = '⚡', title = 'Dica', desc = '', selector = null, accent = '#38bdf8', onDismiss = null }) {
+  showSpotlight(opts = {}) {
     if (!this.spotlightOverlay) return;
+    if (Save.data.settings?.discoveryPopups === false) {
+      opts.onDismiss?.();
+      return;
+    }
+    const isCurrentlyOpen = !this.spotlightOverlay.classList.contains('hidden');
+    if (isCurrentlyOpen) {
+      this._spotlightQueue.push(opts);
+      return;
+    }
+    const { icon = '⚡', title = 'Dica', desc = '', selector = null, accent = '#38bdf8', onDismiss = null } = opts;
     if (this._spotlightFocusEl) {
       this._spotlightFocusEl.classList.remove('spotlight-focus-ring');
       this._spotlightFocusEl = null;
@@ -1201,6 +1571,10 @@ export class HUD {
     const cb = triggerCallback ? this._onSpotlightDismiss : null;
     this._onSpotlightDismiss = null;
     if (cb) cb();
+    if (triggerCallback && this._spotlightQueue.length > 0) {
+      const next = this._spotlightQueue.shift();
+      this.showSpotlight(next);
+    }
   }
 
   showPhotoMode(show) {

@@ -13,7 +13,13 @@ import { BIOMES, getBiomePreviewMeta } from '../world/Biomes.js';
 import { DIFFICULTY_PRESETS } from '../game/Difficulty.js';
 import { Save } from '../systems/Save.js';
 import { isMobileDevice } from '../systems/DeviceDetector.js';
-import { attachModalHelp } from './Menus.js';
+import {
+  attachModalHelp,
+  renderGameSwitch,
+  renderGameStepper,
+  renderHelpBadge,
+  enhanceGameControls
+} from './Menus.js';
 import {
   escapeHtml,
   sanitizeNickname,
@@ -64,6 +70,15 @@ export class MultiplayerLobby {
     let multiHabitats = true;
     let allowVoting = true;
     let allowRevive = true;
+    let trackMode = 'parallel';
+    let mpCameraMode = Save.data.settings?.mpCameraMode || 'shared';
+    let reviveCostType = 'life_or_shield';
+    let reviveCooldownSec = 25;
+    let reviveWindowSec = 15;
+    let reviveMaxPerRun = 2;
+    let introMode = Save.data.settings?.introMode || 'first_time';
+    let obstacleHints = Save.data.settings?.obstacleHints !== false;
+    let mirroredMode = !!Save.data.mirroredMode;
     let allowHybrids = true;
     let uniqueDinos = false;
     let allowControllers = true;
@@ -76,6 +91,7 @@ export class MultiplayerLobby {
     let pausePolicy = 'host_only';
     let tvScale = !!Save.data.network?.tvScale;
     let teacherMode = !!Save.data.teacherMode;
+    let selectedPreviewRoom = null;
     let botCount = 0;
     let publicRooms = [];
     let connTest = null;
@@ -120,21 +136,53 @@ export class MultiplayerLobby {
     net.on('player_reported', onReported);
     net.on('start_countdown', onCountdown);
 
+    const TRACK_MODE_LABELS = { parallel: '🛤️ Pistas Paralelas', ghost: '👻 Modo Ghost', classic: '🔥 Clássico' };
+    const CAM_MODE_LABELS = { shared: '🎥 Única', split_h: '⬒ Div. Horiz.', split_v: '◫ Div. Vert.', per_player: '🦖 Por Jogador' };
+    const REVIVE_COST_LABELS = { life_or_shield: '❤️/🛡️ 1 Vida ou Escudo', eggs: '🥚 Ovos', free: '🆓 Grátis' };
+    const formatRoomRulesChips = (r) => {
+      const c = r?.config || {};
+      const tm = TRACK_MODE_LABELS[c.trackMode || 'parallel'] || '🛤️ Paralelas';
+      const cm = CAM_MODE_LABELS[c.mpCameraMode || 'shared'] || '🎥 Única';
+      const rev = c.allowRevive === false
+        ? '🚫 Sem Revive'
+        : `💖 Reviver (${REVIVE_COST_LABELS[c.reviveCostType || 'life_or_shield'] || '1 Vida/Escudo'}, ${c.reviveCooldownSec ?? 25}s CD, ${c.reviveWindowSec ?? 15}s jan., máx ${c.reviveMaxPerRun === 0 ? '∞' : (c.reviveMaxPerRun ?? 2)})`;
+      const flags = [
+        r?.tvScale || c.tvScale ? '📺 TV' : '',
+        c.mirroredMode ? '🪞 Espelhado' : '',
+        r?.teacherMode || c.teacherMode ? '🎓 Prof.' : '',
+        c.obstacleHints === false ? '🪧 Sem Dicas' : '🪧 Dicas ON'
+      ].filter(Boolean).join(' • ');
+      return `${tm} • ${cm} • ${rev}${flags ? ` • ${flags}` : ''}`;
+    };
+
     const renderPublicRoomsHtml = () => (publicRooms.length === 0
       ? `<span style="font-size:0.8rem; color:#d8c2a6;">Nenhuma sala pública listada ainda.</span>`
       : publicRooms.map((r) => {
         const codeSafe = escapeHtml(sanitizeRoomCode(r.code));
         return `
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; background:rgba(0,0,0,0.34); padding:7px 9px; border-radius:10px; border:1px solid rgba(255,212,71,0.2);">
-          <div style="font-size:0.78rem;">
-            <div><strong>${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.roomName || codeSafe)}</strong> <span style="color:#ffd447;">[${codeSafe}]</span></div>
-            <div style="font-size:0.7rem; color:#d8c2a6;">${escapeHtml(r.hostName)} • ${escapeHtml(r.mode || 'race')} • ${Number(r.playerCount) || 1}/${Number(r.maxPlayers) || 8} • ${r.status === 'playing' ? '🔥 Em jogo' : '🟢 Aberta'}</div>
+        <div style="display:flex; flex-direction:column; gap:5px; background:rgba(0,0,0,0.34); padding:8px 10px; border-radius:10px; border:1px solid rgba(255,212,71,0.2);">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+            <div style="font-size:0.78rem;">
+              <div><strong>${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.roomName || codeSafe)}</strong> <span style="color:#ffd447;">[${codeSafe}]</span></div>
+              <div style="font-size:0.7rem; color:#d8c2a6;">${escapeHtml(r.hostName)} • ${escapeHtml(r.mode || 'race')} • ${Number(r.playerCount) || 1}/${Number(r.maxPlayers) || 8} • ${r.status === 'playing' ? '🔥 Em jogo' : '🟢 Aberta'}</div>
+            </div>
+            <div style="display:flex; gap:5px;">
+              <button type="button" class="chunky-btn secondary" data-preview-rules="${codeSafe}" style="padding:5px 8px; font-size:0.72rem;" title="Ver regras antes de entrar">📜 Regras</button>
+              <button type="button" class="chunky-btn secondary" data-join-code="${codeSafe}" style="padding:5px 10px; font-size:0.76rem;">Conectar</button>
+            </div>
           </div>
-          <button class="chunky-btn secondary" data-join-code="${codeSafe}" style="padding:5px 10px; font-size:0.76rem;">Conectar</button>
+          <div style="font-size:0.68rem; color:#bae6fd; background:rgba(15,23,42,0.55); padding:4px 7px; border-radius:7px;">${escapeHtml(formatRoomRulesChips(r))}</div>
         </div>`;
       }).join(''));
 
     const bindPublicRoomButtons = (root) => {
+      root.querySelectorAll('[data-preview-rules]').forEach((b) => {
+        b.onclick = () => {
+          const c = b.getAttribute('data-preview-rules');
+          selectedPreviewRoom = publicRooms.find((r) => sanitizeRoomCode(r.code) === c) || null;
+          render();
+        };
+      });
       root.querySelectorAll('[data-join-code]').forEach((b) => {
         b.onclick = async () => {
           const c = b.getAttribute('data-join-code');
@@ -206,7 +254,16 @@ export class MultiplayerLobby {
         hostBiomeId = container.querySelector('#mp-biome')?.value || hostBiomeId;
         multiHabitats = container.querySelector('#mp-multi-hab')?.checked !== false;
         allowVoting = container.querySelector('#mp-allow-vote')?.checked !== false;
+        trackMode = container.querySelector('#mp-track-mode')?.value || 'parallel';
+        mpCameraMode = container.querySelector('#mp-cam-mode')?.value || 'shared';
         allowRevive = container.querySelector('#mp-allow-revive')?.checked !== false;
+        reviveCostType = container.querySelector('#mp-revive-cost')?.value || 'life_or_shield';
+        reviveCooldownSec = Math.max(0, Number(container.querySelector('#mp-revive-cd')?.value ?? 25));
+        reviveWindowSec = Math.max(5, Number(container.querySelector('#mp-revive-win')?.value ?? 15));
+        reviveMaxPerRun = Math.max(0, Number(container.querySelector('#mp-revive-max')?.value ?? 2));
+        introMode = container.querySelector('#mp-intro-mode')?.value || 'first_time';
+        obstacleHints = container.querySelector('#mp-obstacle-hints')?.checked !== false;
+        mirroredMode = !!container.querySelector('#mp-mirrored')?.checked;
         allowHybrids = container.querySelector('#mp-allow-hybrids')?.checked !== false;
         uniqueDinos = !!container.querySelector('#mp-unique-dinos')?.checked;
         allowControllers = container.querySelector('#mp-allow-ctrl')?.checked !== false;
@@ -249,6 +306,8 @@ export class MultiplayerLobby {
           difficulty: hostDifficulty,
           biomeId: hostBiomeId,
           multiHabitats,
+          trackMode,
+          mpCameraMode,
           allowHybrids,
           uniqueDinos,
           allowControllers,
@@ -258,6 +317,15 @@ export class MultiplayerLobby {
           allowBosses,
           allowPowerups,
           allowRevive,
+          reviveCostType,
+          reviveCooldownSec,
+          reviveWindowSec,
+          reviveMaxPerRun,
+          tvScale,
+          mirroredMode,
+          introMode,
+          obstacleHints,
+          teacherMode,
           allowHandicap,
           pausePolicy
         }
@@ -316,7 +384,7 @@ export class MultiplayerLobby {
                       <input class="text-input" id="mp-room-name" value="${escapeHtml(roomName)}" maxlength="28" style="width:100%;" />
                     </label>
                   </div>
-                  <div style="display:grid; grid-template-columns:1fr 1fr 80px; gap:6px;">
+                  <div style="display:grid; grid-template-columns:1fr 1fr 88px; gap:6px;">
                     <label style="font-size:0.78rem;">Visibilidade:
                       <select class="select-input" id="mp-pub-sel" style="width:100%;">
                         <option value="public" ${isPublic ? 'selected' : ''}>🌍 Pública</option>
@@ -333,47 +401,123 @@ export class MultiplayerLobby {
                       </select>
                     </label>
                   </div>
-                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                    <label style="font-size:0.78rem;">Modo de Jogo:
-                      <select class="select-input" id="mp-mode" style="width:100%;">
-                        ${MP_MODES.map((m) => `<option value="${m.id}" ${mpMode === m.id ? 'selected' : ''}>${m.label}</option>`).join('')}
-                      </select>
-                    </label>
-                    <label style="font-size:0.78rem;">Dificuldade:
-                      <select class="select-input" id="mp-diff" style="width:100%;">
-                        ${Object.values(DIFFICULTY_PRESETS).map((d) => `<option value="${d.id}" ${hostDifficulty === d.id ? 'selected' : ''}>${d.name}</option>`).join('')}
-                      </select>
-                    </label>
+
+                  <div class="mp-opt-group">
+                    <div class="mp-opt-group-title">🏁 Modo, Pista &amp; Câmera</div>
+                    <div class="field-row game-field-row" data-opt-tip-host="Define como os dinossauros dividem a pista: Paralelas (cada um na sua pista sem atrapalhar), Ghost (semitransparentes na mesma pista) ou Clássico.">
+                      <span class="game-field-label">🛤️ Modo de Pista ${renderHelpBadge('Paralelas: cada jogador tem sua própria pista clonada (recomendado). Ghost: mesma pista sem colisão. Clássico: todos juntos.')}</span>
+                      ${renderGameStepper('mp-track-mode', [
+                        { value: 'parallel', label: 'Paralelas (Rec.)' },
+                        { value: 'ghost', label: 'Modo Ghost' },
+                        { value: 'classic', label: 'Clássico' }
+                      ], trackMode)}
+                    </div>
+                    <div class="field-row game-field-row" data-opt-tip-host="Controla o enquadramento da câmera no multiplayer.">
+                      <span class="game-field-label">🎥 Câmera MP ${renderHelpBadge('Única Compartilhada, Tela Dividida ou Câmera Por Jogador nas pistas paralelas.')}</span>
+                      ${renderGameStepper('mp-cam-mode', [
+                        { value: 'shared', label: 'Única Compartilhada' },
+                        { value: 'split_h', label: 'Dividida Horiz.' },
+                        { value: 'split_v', label: 'Dividida Vert.' },
+                        { value: 'per_player', label: 'Por Jogador' }
+                      ], mpCameraMode)}
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                      <label style="font-size:0.76rem;">Modo de Jogo:
+                        <select class="select-input" id="mp-mode" style="width:100%;">
+                          ${MP_MODES.map((m) => `<option value="${m.id}" ${mpMode === m.id ? 'selected' : ''}>${m.label}</option>`).join('')}
+                        </select>
+                      </label>
+                      <label style="font-size:0.76rem;">Dificuldade:
+                        <select class="select-input" id="mp-diff" style="width:100%;">
+                          ${Object.values(DIFFICULTY_PRESETS).map((d) => `<option value="${d.id}" ${hostDifficulty === d.id ? 'selected' : ''}>${d.name}</option>`).join('')}
+                        </select>
+                      </label>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                      <label style="font-size:0.76rem;">Habitat (Mapa):
+                        <select class="select-input" id="mp-biome" style="width:100%;">
+                          <option value="random_portal" ${hostBiomeId === 'random_portal' ? 'selected' : ''}>🌀 Sorteio / Portais</option>
+                          ${BIOMES.map((b) => `<option value="${b.id}" ${hostBiomeId === b.id ? 'selected' : ''}>${getBiomePreviewMeta(b).icon} ${b.name}</option>`).join('')}
+                        </select>
+                      </label>
+                      <label style="font-size:0.76rem;">Regra de Pausa:
+                        <select class="select-input" id="mp-pause-policy" style="width:100%;">
+                          <option value="host_only" ${pausePolicy === 'host_only' ? 'selected' : ''}>👑 Só o Dono</option>
+                          <option value="all_limited" ${pausePolicy === 'all_limited' ? 'selected' : ''}>👥 Todos (c/ limite)</option>
+                        </select>
+                      </label>
+                    </div>
                   </div>
-                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                    <label style="font-size:0.78rem;">Habitat (Mapa):
-                      <select class="select-input" id="mp-biome" style="width:100%;">
-                        <option value="random_portal" ${hostBiomeId === 'random_portal' ? 'selected' : ''}>🌀 Sorteio / Portais</option>
-                        ${BIOMES.map((b) => `<option value="${b.id}" ${hostBiomeId === b.id ? 'selected' : ''}>${getBiomePreviewMeta(b).icon} ${b.name}</option>`).join('')}
-                      </select>
-                    </label>
-                    <label style="font-size:0.78rem;">Regra de Pausa:
-                      <select class="select-input" id="mp-pause-policy" style="width:100%;">
-                        <option value="host_only" ${pausePolicy === 'host_only' ? 'selected' : ''}>👑 Só o Dono</option>
-                        <option value="all_limited" ${pausePolicy === 'all_limited' ? 'selected' : ''}>👥 Todos (c/ limite)</option>
-                      </select>
-                    </label>
+
+                  <div class="mp-opt-group">
+                    <div class="mp-opt-group-title">💖 Regras de Reviver (Tecla V / Touch)</div>
+                    ${renderGameSwitch('mp-allow-revive', '💖 Permitir Reviver Aliado', allowRevive, 'Permite que jogadores vivos levantem aliados caídos usando V ou botão touch.')}
+                    <div class="field-row game-field-row" data-opt-tip-host="Custo pago por quem revive um aliado caído.">
+                      <span class="game-field-label">Custo do Revive ${renderHelpBadge('Custo para levantar um aliado: 1 Vida ou Escudo (padrão), Ovos ou Grátis.')}</span>
+                      ${renderGameStepper('mp-revive-cost', [
+                        { value: 'life_or_shield', label: '1 Vida / Escudo' },
+                        { value: 'eggs', label: 'Ovos (45+)' },
+                        { value: 'free', label: 'Grátis' }
+                      ], reviveCostType)}
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; font-size:0.74rem;">
+                      <label data-opt-tip-host="Tempo mínimo de recarga pessoal entre revives.">Cooldown ${renderHelpBadge('Tempo de recarga pessoal após reviver alguém.')}
+                        <select class="select-input" id="mp-revive-cd" style="width:100%;">
+                          <option value="15" ${reviveCooldownSec === 15 ? 'selected' : ''}>15s</option>
+                          <option value="25" ${reviveCooldownSec === 25 ? 'selected' : ''}>25s (Pad.)</option>
+                          <option value="35" ${reviveCooldownSec === 35 ? 'selected' : ''}>35s</option>
+                        </select>
+                      </label>
+                      <label data-opt-tip-host="Janela em segundos para salvar o aliado após a queda.">Janela ${renderHelpBadge('Tempo máximo para reviver o jogador depois que ele cai.')}
+                        <select class="select-input" id="mp-revive-win" style="width:100%;">
+                          <option value="10" ${reviveWindowSec === 10 ? 'selected' : ''}>10s</option>
+                          <option value="15" ${reviveWindowSec === 15 ? 'selected' : ''}>15s (Pad.)</option>
+                          <option value="20" ${reviveWindowSec === 20 ? 'selected' : ''}>20s</option>
+                        </select>
+                      </label>
+                      <label data-opt-tip-host="Quantas vezes cada jogador pode ser revivido por corrida.">Limite ${renderHelpBadge('Máximo de revives por jogador em uma mesma corrida.')}
+                        <select class="select-input" id="mp-revive-max" style="width:100%;">
+                          <option value="1" ${reviveMaxPerRun === 1 ? 'selected' : ''}>1x</option>
+                          <option value="2" ${reviveMaxPerRun === 2 ? 'selected' : ''}>2x (Pad.)</option>
+                          <option value="3" ${reviveMaxPerRun === 3 ? 'selected' : ''}>3x</option>
+                          <option value="0" ${reviveMaxPerRun === 0 ? 'selected' : ''}>Ilimitado</option>
+                        </select>
+                      </label>
+                    </div>
                   </div>
-                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; font-size:0.76rem; margin-top:2px;">
-                    <label><input type="checkbox" id="mp-multi-hab" ${multiHabitats ? 'checked' : ''} /> 🌍 Vários habitats</label>
-                    <label><input type="checkbox" id="mp-allow-vote" ${allowVoting ? 'checked' : ''} /> 🗳️ Votação ativa</label>
-                    <label><input type="checkbox" id="mp-allow-hybrids" ${allowHybrids ? 'checked' : ''} /> 🧬 Permitir híbridos</label>
-                    <label><input type="checkbox" id="mp-unique-dinos" ${uniqueDinos ? 'checked' : ''} /> 🦖 Dinos únicos</label>
-                    <label><input type="checkbox" id="mp-allow-ctrl" ${allowControllers ? 'checked' : ''} /> 📱 Controles celular</label>
-                    <label><input type="checkbox" id="mp-allow-spec" ${allowSpectators ? 'checked' : ''} /> 👁️ Espectadores</label>
-                    <label><input type="checkbox" id="mp-allow-events" ${allowEvents ? 'checked' : ''} /> ☄️ Eventos</label>
-                    <label><input type="checkbox" id="mp-allow-bosses" ${allowBosses ? 'checked' : ''} /> 👑 Bosses</label>
-                    <label><input type="checkbox" id="mp-allow-pups" ${allowPowerups ? 'checked' : ''} /> ⚡ Power-ups</label>
-                    <label><input type="checkbox" id="mp-allow-revive" ${allowRevive ? 'checked' : ''} /> 💖 Reviver aliado</label>
-                    <label><input type="checkbox" id="mp-allow-handicap" ${allowHandicap ? 'checked' : ''} /> ⚖️ Handicap</label>
-                    <label><input type="checkbox" id="mp-tv" ${tvScale ? 'checked' : ''} /> 📺 Modo TV</label>
-                    <label><input type="checkbox" id="mp-teacher" ${teacherMode ? 'checked' : ''} /> 🎓 Modo Aula</label>
+
+                  <div class="mp-opt-group">
+                    <div class="mp-opt-group-title">📺 Experiência da Sala &amp; Acessibilidade</div>
+                    ${renderGameSwitch('mp-tv', '📺 Modo TV de Sala (HUD maior)', tvScale, 'Aumenta textos e placares para jogar na TV da sala.')}
+                    ${renderGameSwitch('mp-mirrored', '🪞 Modo Espelhado', mirroredMode, 'Inverte a pista horizontalmente para todos na sala.')}
+                    <div class="field-row game-field-row" data-opt-tip-host="Controla as apresentações dos predadores na sala.">
+                      <span class="game-field-label">🎬 Intros de Predadores ${renderHelpBadge('Sempre, somente na primeira vez ou desativadas para corridas rápidas.')}</span>
+                      ${renderGameStepper('mp-intro-mode', [
+                        { value: 'always', label: 'Sempre' },
+                        { value: 'first_time', label: '1ª Vez' },
+                        { value: 'off', label: 'Nunca' }
+                      ], introMode)}
+                    </div>
+                    ${renderGameSwitch('mp-obstacle-hints', '🪧 Dicas Visuais sobre Obstáculos', obstacleHints, 'Mostra indicadores de pulo/abaixar acima dos obstáculos.')}
+                    ${renderGameSwitch('mp-teacher', '🎓 Modo Professor / Aula (Livre)', teacherMode, 'Simplifica a corrida para uso em salas de aula e eventos.')}
                   </div>
+
+                  <div class="mp-opt-group">
+                    <div class="mp-opt-group-title">⚙️ Regras Extras da Corrida</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
+                      ${renderGameSwitch('mp-multi-hab', '🌍 Vários habitats', multiHabitats, 'Alterna biomas por portais durante a corrida.')}
+                      ${renderGameSwitch('mp-allow-vote', '🗳️ Votação ativa', allowVoting, 'Permite que convidados votem no modo, bioma e dificuldade.')}
+                      ${renderGameSwitch('mp-allow-hybrids', '🧬 Permitir híbridos', allowHybrids, 'Libera dinossauros híbridos na sala.')}
+                      ${renderGameSwitch('mp-unique-dinos', '🦖 Dinos únicos', uniqueDinos, 'Impede dois jogadores de escolherem o mesmo dino.')}
+                      ${renderGameSwitch('mp-allow-ctrl', '📱 Controles celular', allowControllers, 'Permite usar celulares como controle via QR Code.')}
+                      ${renderGameSwitch('mp-allow-spec', '👁️ Espectadores', allowSpectators, 'Permite entrar apenas para assistir à partida.')}
+                      ${renderGameSwitch('mp-allow-events', '☄️ Eventos', allowEvents, 'Ativa eventos dinâmicos na pista (meteoros, eclipse, etc.).')}
+                      ${renderGameSwitch('mp-allow-bosses', '👑 Bosses', allowBosses, 'Ativa lutas contra chefes ao longo da corrida.')}
+                      ${renderGameSwitch('mp-allow-pups', '⚡ Power-ups', allowPowerups, 'Ativa itens e power-ups coletáveis na pista.')}
+                      ${renderGameSwitch('mp-allow-handicap', '⚖️ Handicap', allowHandicap, 'Ajusta bônus para equilibrar jogadores iniciantes e veteranos.')}
+                    </div>
+                  </div>
+
                   <button class="chunky-btn" id="mp-create" style="margin-top:6px;">✨ CRIAR SALA E GERAR QR CODE</button>
                 </div>
 
@@ -387,11 +531,21 @@ export class MultiplayerLobby {
                     <input class="text-input" id="mp-join-pass" value="${escapeHtml(joinPassword)}" maxlength="12" placeholder="Senha (se tiver)" style="width:120px; font-size:0.82rem;" />
                     <button class="chunky-btn orange" id="mp-join">Entrar</button>
                   </div>
+                  ${selectedPreviewRoom ? `
+                    <div class="item-card" style="border-color:#38bdf8; background:rgba(15,23,42,0.75); padding:8px 10px; font-size:0.76rem;">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <strong style="color:#7dd3fc;">📜 Regras da Sala ${escapeHtml(selectedPreviewRoom.roomName || selectedPreviewRoom.code)}</strong>
+                        <button type="button" class="inline-change-btn" id="mp-close-rules-preview">Fechar</button>
+                      </div>
+                      <div style="color:#e2e8f0;">${escapeHtml(formatRoomRulesChips(selectedPreviewRoom))}</div>
+                      <button type="button" class="chunky-btn" data-join-code="${escapeHtml(sanitizeRoomCode(selectedPreviewRoom.code))}" style="padding:6px 10px; font-size:0.78rem;">🚀 Entrar nesta Sala</button>
+                    </div>
+                  ` : ''}
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                     <strong style="font-size:0.84rem;">🌍 Salas Públicas Abertas (auto-atualiza):</strong>
                     <button class="chunky-btn secondary" id="mp-refresh" style="padding:4px 10px; font-size:0.74rem;">🔄 Atualizar</button>
                   </div>
-                  <div id="mp-public-rooms-list" style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto;">${renderPublicRoomsHtml()}</div>
+                  <div id="mp-public-rooms-list" style="display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto;">${renderPublicRoomsHtml()}</div>
                 </div>
               </div>
             ` : `
@@ -461,9 +615,12 @@ export class MultiplayerLobby {
                         </div>
                       ` : ''}
                     </div>
-                    <div style="margin-top:4px; padding:6px 10px; border-radius:8px; background:rgba(15,23,42,0.5); border:1px solid #f59e0b; font-size:0.76rem; color:#fde047; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
-                      <span><strong>${modeLabel}</strong> • ${diffLabel} • ${biomeLabel} • ${room.config?.multiHabitats !== false ? '🌍 Multi-Habitat' : '📍 Habitat Único'}</span>
-                      <span>${room.config?.uniqueDinos ? '🔒 Dinos Únicos' : '♻️ Repetidos OK'} • ${room.config?.allowHybrids !== false ? '🧬 Híbridos ON' : '🚫 Sem Híbridos'}</span>
+                    <div style="margin-top:4px; padding:6px 10px; border-radius:8px; background:rgba(15,23,42,0.5); border:1px solid #f59e0b; font-size:0.76rem; color:#fde047; display:flex; flex-direction:column; gap:4px;">
+                      <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                        <span><strong>${modeLabel}</strong> • ${diffLabel} • ${biomeLabel} • ${room.config?.multiHabitats !== false ? '🌍 Multi-Habitat' : '📍 Habitat Único'}</span>
+                        <span>${room.config?.uniqueDinos ? '🔒 Dinos Únicos' : '♻️ Repetidos OK'} • ${room.config?.allowHybrids !== false ? '🧬 Híbridos ON' : '🚫 Sem Híbridos'}</span>
+                      </div>
+                      <div style="font-size:0.72rem; color:#bae6fd;">📜 ${escapeHtml(formatRoomRulesChips(room))}</div>
                     </div>
                     ${highPingPeers.length > 0 ? `
                       <div style="margin-top:4px; padding:4px 8px; border-radius:8px; background:rgba(127,29,29,0.55); border:1px solid #f87171; font-size:0.74rem; color:#fecaca;">
@@ -607,6 +764,65 @@ export class MultiplayerLobby {
                     <option value="all_limited" ${room.config?.pausePolicy === 'all_limited' ? 'selected' : ''}>👥 Todos (c/ limite)</option>
                   </select>
                 </label>
+                <div class="field-row game-field-row">
+                  <span class="game-field-label">🛤️ Modo de Pista ${renderHelpBadge('Paralelas: pistas clonadas lado a lado. Ghost: mesma pista sem colisão. Clássico: todos juntos.')}</span>
+                  ${renderGameStepper('gear-track-mode', [
+                    { value: 'parallel', label: 'Paralelas (Rec.)' },
+                    { value: 'ghost', label: 'Modo Ghost' },
+                    { value: 'classic', label: 'Clássico' }
+                  ], room.config?.trackMode || 'parallel', { disabled: room.status === 'playing' })}
+                </div>
+                <div class="field-row game-field-row">
+                  <span class="game-field-label">🎥 Câmera MP ${renderHelpBadge('Única Compartilhada, Tela Dividida ou Por Jogador.')}</span>
+                  ${renderGameStepper('gear-cam-mode', [
+                    { value: 'shared', label: 'Única Compartilhada' },
+                    { value: 'split_h', label: 'Dividida Horiz.' },
+                    { value: 'split_v', label: 'Dividida Vert.' },
+                    { value: 'per_player', label: 'Por Jogador' }
+                  ], room.config?.mpCameraMode || 'shared')}
+                </div>
+                ${renderGameSwitch('gear-revive', '💖 Permitir Reviver Aliado', room.config?.allowRevive !== false, 'Permite reviver aliados caídos com V ou touch.')}
+                <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:6px; font-size:0.74rem;">
+                  <label>Custo Revive
+                    <select class="select-input" id="gear-revive-cost" style="width:100%;">
+                      <option value="life_or_shield" ${(room.config?.reviveCostType || 'life_or_shield') === 'life_or_shield' ? 'selected' : ''}>1 Vida / Escudo</option>
+                      <option value="eggs" ${room.config?.reviveCostType === 'eggs' ? 'selected' : ''}>Ovos (45+)</option>
+                      <option value="free" ${room.config?.reviveCostType === 'free' ? 'selected' : ''}>Grátis</option>
+                    </select>
+                  </label>
+                  <label>Cooldown / Janela / Limite
+                    <div style="display:flex; gap:4px;">
+                      <select class="select-input" id="gear-revive-cd" style="flex:1;">
+                        <option value="15" ${Number(room.config?.reviveCooldownSec ?? 25) === 15 ? 'selected' : ''}>15s</option>
+                        <option value="25" ${Number(room.config?.reviveCooldownSec ?? 25) === 25 ? 'selected' : ''}>25s</option>
+                        <option value="35" ${Number(room.config?.reviveCooldownSec ?? 25) === 35 ? 'selected' : ''}>35s</option>
+                      </select>
+                      <select class="select-input" id="gear-revive-win" style="flex:1;">
+                        <option value="10" ${Number(room.config?.reviveWindowSec ?? 15) === 10 ? 'selected' : ''}>10s</option>
+                        <option value="15" ${Number(room.config?.reviveWindowSec ?? 15) === 15 ? 'selected' : ''}>15s</option>
+                        <option value="20" ${Number(room.config?.reviveWindowSec ?? 15) === 20 ? 'selected' : ''}>20s</option>
+                      </select>
+                      <select class="select-input" id="gear-revive-max" style="flex:1;">
+                        <option value="1" ${Number(room.config?.reviveMaxPerRun ?? 2) === 1 ? 'selected' : ''}>1x</option>
+                        <option value="2" ${Number(room.config?.reviveMaxPerRun ?? 2) === 2 ? 'selected' : ''}>2x</option>
+                        <option value="3" ${Number(room.config?.reviveMaxPerRun ?? 2) === 3 ? 'selected' : ''}>3x</option>
+                        <option value="0" ${Number(room.config?.reviveMaxPerRun ?? 2) === 0 ? 'selected' : ''}>∞</option>
+                      </select>
+                    </div>
+                  </label>
+                </div>
+                ${renderGameSwitch('gear-tv', '📺 Modo TV de Sala', !!(room.tvScale || room.config?.tvScale), 'Aumenta textos e placares para TV.')}
+                ${renderGameSwitch('gear-mirrored', '🪞 Modo Espelhado', !!room.config?.mirroredMode, 'Inverte a pista horizontalmente.')}
+                ${renderGameSwitch('gear-hints', '🪧 Dicas Visuais sobre Obstáculos', room.config?.obstacleHints !== false, 'Exibe setas/dicas acima dos obstáculos.')}
+                ${renderGameSwitch('gear-teacher', '🎓 Modo Professor / Aula', !!(room.teacherMode || room.config?.teacherMode), 'Modo educativo simplificado.')}
+                <div class="field-row game-field-row">
+                  <span class="game-field-label">🎬 Intros de Predadores</span>
+                  ${renderGameStepper('gear-intro', [
+                    { value: 'always', label: 'Sempre' },
+                    { value: 'first_time', label: '1ª Vez' },
+                    { value: 'off', label: 'Nunca' }
+                  ], room.config?.introMode || 'first_time')}
+                </div>
                 <label class="field-row"><span>🌍 Vários Habitats (portais)</span><input type="checkbox" id="gear-multihab" ${room.config?.multiHabitats !== false ? 'checked' : ''} /></label>
                 <label class="field-row"><span>🗳️ Jogadores podem votar</span><input type="checkbox" id="gear-vote" ${room.config?.allowVoting !== false ? 'checked' : ''} /></label>
                 <label class="field-row"><span>🧬 Permitir Híbridos</span><input type="checkbox" id="gear-hybrids" ${room.config?.allowHybrids !== false ? 'checked' : ''} /></label>
@@ -678,6 +894,10 @@ export class MultiplayerLobby {
           else if (statusMsg.startsWith('⏳') && net.isConnected) statusMsg = '';
           render();
         };
+        container.querySelector('#mp-close-rules-preview')?.addEventListener('click', () => {
+          selectedPreviewRoom = null;
+          render();
+        });
         bindPublicRoomButtons(container);
         const syncNick = (e) => {
           nickname = String(e.target.value || '').slice(0, 18);
@@ -757,13 +977,29 @@ export class MultiplayerLobby {
         });
         container.querySelector('#gear-save')?.addEventListener('click', () => {
           const modeVal = container.querySelector('#gear-mode')?.value || 'race';
+          const tvVal = !!container.querySelector('#gear-tv')?.checked;
+          const teacherVal = !!container.querySelector('#gear-teacher')?.checked;
           net.updateRoomSettings({
             mpMode: modeVal,
             elimination: modeVal === 'elimination',
+            tvScale: tvVal,
+            teacherMode: teacherVal,
             config: {
               difficulty: container.querySelector('#gear-diff')?.value || 'normal',
               biomeId: container.querySelector('#gear-biome')?.value || 'random_portal',
               pausePolicy: container.querySelector('#gear-pause')?.value || 'host_only',
+              trackMode: container.querySelector('#gear-track-mode')?.value || 'parallel',
+              mpCameraMode: container.querySelector('#gear-cam-mode')?.value || 'shared',
+              allowRevive: container.querySelector('#gear-revive')?.checked !== false,
+              reviveCostType: container.querySelector('#gear-revive-cost')?.value || 'life_or_shield',
+              reviveCooldownSec: Math.max(0, Number(container.querySelector('#gear-revive-cd')?.value ?? 25)),
+              reviveWindowSec: Math.max(5, Number(container.querySelector('#gear-revive-win')?.value ?? 15)),
+              reviveMaxPerRun: Math.max(0, Number(container.querySelector('#gear-revive-max')?.value ?? 2)),
+              tvScale: tvVal,
+              mirroredMode: !!container.querySelector('#gear-mirrored')?.checked,
+              obstacleHints: container.querySelector('#gear-hints')?.checked !== false,
+              teacherMode: teacherVal,
+              introMode: container.querySelector('#gear-intro')?.value || 'first_time',
               multiHabitats: !!container.querySelector('#gear-multihab')?.checked,
               allowVoting: !!container.querySelector('#gear-vote')?.checked,
               allowHybrids: !!container.querySelector('#gear-hybrids')?.checked,
@@ -844,6 +1080,12 @@ export class MultiplayerLobby {
         });
       }
       attachModalHelp(container, 'Crie uma sala com suas regras, compartilhe o QR Code lateral ou código de 4 letras, aguarde todos ficarem prontos e inicie a corrida!');
+      enhanceGameControls(container, {
+        onEscape: () => {
+          cleanupListeners();
+          callbacks.onClose?.();
+        }
+      });
     };
 
     const cleanupListeners = () => {

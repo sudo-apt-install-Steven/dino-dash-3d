@@ -1,0 +1,153 @@
+{
+  "version": "5.0.0",
+  "_comment": "Arquivo central de balanceamento do Dino Dash 3D (Mega Expansão). Ajuste valores aqui sem alterar código.",
+  "speed": {
+    "_comment": "Multiplicadores globais de velocidade da corrida.",
+    "initialSpeedMultiplier": 1.0,
+    "maxSpeedMultiplier": 1.0,
+    "accelMultiplier": 1.0,
+    "warmupSec": 12
+  },
+  "rewards": {
+    "_comment": "Recompensas de boss, ovos e prestígio.",
+    "bossRewardMult": 1.0,
+    "bossScoreBonus": 750,
+    "bossDefaultEggs": 55,
+    "bossDefaultCrystals": 3,
+    "eggScoreValue": 10,
+    "prestigeStepMult": 0.25
+  },
+  "xp": {
+    "_comment": "Progressão de XP e Passe de Temporada.",
+    "xpMultiplier": 1.0,
+    "xpPerScoreRatio": 0.12,
+    "xpPerEggRatio": 0.3,
+    "xpPerLevel": 160,
+    "maxPassLevel": 50
+  },
+  "bossCombat": {
+    "_comment": "Meta de duração de luta (Normal 60-90s, Fácil ~45-60s, Difícil ~90-120s) e ritmo telegrafar -> atacar -> janela de dano.",
+    "targetDurationSec": {
+      "easy": 52,
+      "normal": 75,
+      "hard": 105
+    },
+    "vulnerabilityWindowSec": 4.5,
+    "idleBetweenAttacksSec": 1.4,
+    "attackExecSec": 0.55,
+    "baseHpPerTier": 350,
+    "hpScaleByDifficulty": {
+      "easy": 0.70,
+      "normal": 1.0,
+      "hard": 1.42,
+      "insane": 1.65,
+      "supreme": 1.85
+    },
+    "offWindowDamageMult": 0.45,
+    "weakOrbDamageMult": 2.5,
+    "elementalWeaknessBonusMult": 0.5,
+    "baseAttackCooldownSec": 1.4,
+    "minAttackCooldownSec": 0.85,
+    "cooldownReductionPerHpLost": 0.0,
+    "phase2Threshold": 0.66,
+    "phase3Threshold": 0.33,
+    "defaultTelegraphSec": 0.85
+  },
+  "playerAttack": {
+    "_comment": "Parâmetros do ataque básico (tecla Q / botão touch) contra bosses e obstáculos.",
+    "damage": 28,
+    "cooldownSec": 0.65,
+    "rangeZ": 18,
+    "rangeX": 2.6,
+    "hitStopSec": 0.045,
+    "staminaCost": 15,
+    "durationSec": 0.24
+  },
+  "eventScheduler": {
+    "_comment": "Agendador data-driven de eventos por pontuação (sem troca de bioma; enfileira durante boss/intro).",
+    "firstEventMinScore": 1600,
+    "firstEventMaxScore": 2600,
+    "intervalMinScore": 1600,
+    "intervalMaxScore": 3600,
+    "maxConcurrent": 1,
+    "warningLeadSec": 2.2,
+    "noRepeatLastCount": 1,
+    "progressiveUnlock": true
+  },
+  "revive": {
+    "_comment": "Regras equilibradas para reviver aliado caído (tecla V / botão contextual).",
+    "costType": "life_or_shield",
+    "cooldownSec": 25,
+    "windowSec": 15,
+    "maxPerRun": 2,
+    "invulnSec": 2.5,
+    "cancelOnHit": true
+  },
+  "oxygen": {
+    "_comment": "Consumo e recarga de oxigênio (O2) ao submergir.",
+    "drainPerSec": 7.5,
+    "rechargePerSec": 38,
+    "lowThreshold": 30,
+    "graceSec": 2.0,
+    "drownDamagePerTick": 1
+  },
+  "dangerTier": {
+    "_comment": "Escalonamento de pressão por Danger Tier (1..6) para hazards, debuffs e eventos dinâmicos.",
+    "scoreThresholds": [0, 3500, 9000, 18000, 32000, 52000],
+    "densityBonusPerTier": 0.14,
+    "hazardSpeedBonusPerTier": 0.06,
+    "eventIntensityPerTier": 0.18,
+    "debuffDurationMultPerTier": 0.08,
+    "maxTier": 6
+  },
+  "debuffs": {
+    "_comment": "Limites e ritmo dos 24+ debuffs mecânicos reais (sempre com contra-jogada clara).",
+    "maxSimultaneous": 4,
+    "defaultDurationSec": 4.5,
+    "maxDurationSec": 9.0,
+    "minSpeedMult": 0.55,
+    "minLaneMult": 0.45,
+    "minVisionMult": 0.35,
+    "maxGravityMult": 1.85,
+    "perfectModeDurationMult": 1.2,
+    "supremeModeDurationMult": 1.15
+  },
+  "hazards": {
+    "_comment": "Parâmetros dos 28 arquétipos móveis/telegrafados em Spawner.spawnFromCatalog com fairness garantida.",
+    "minTelegraphSec": 0.55,
+    "defaultTelegraphSec": 0.95,
+    "catalogSpawnChanceBase": 0.24,
+    "catalogSpawnChancePerTier": 0.08,
+    "catalogSpawnChanceMax": 0.68,
+    "doubleHazardChanceBase": 0.12,
+    "doubleHazardChancePerTier": 0.07,
+    "minSafeLanes": 1,
+    "maxActiveCatalogHazards": 14,
+    "trackLockZ": -18
+  },
+  "helpers": {
+    "_comment": "Caps rígidos para impedir builds invencíveis; Modo Perfeito proíbe escudos e vidas extras.",
+    "maxHelpCatalogRatio": 0.30,
+    "caps": {
+      "maxShieldsNormal": 2,
+      "maxShieldsHard": 2,
+      "maxShieldsInsane": 1,
+      "maxShieldsSupreme": 1,
+      "maxShieldsPerfect": 0,
+      "maxHpNormal": 5,
+      "maxHpHard": 4,
+      "maxHpInsane": 4,
+      "maxHpSupreme": 3,
+      "maxHpPerfect": 1,
+      "maxScoreCardMult": 2.25,
+      "minCooldownMult": 0.55,
+      "maxPostHitInvulnBonus": 0.45,
+      "maxJumpMult": 1.35,
+      "maxLaneSpeedMult": 1.65,
+      "minCardScaleMult": 0.85,
+      "maxAbilityPowerMult": 1.85,
+      "maxEggValueMult": 2.0,
+      "maxFuryChargeMult": 2.2
+    }
+  }
+}

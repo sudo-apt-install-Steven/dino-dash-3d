@@ -4,6 +4,9 @@ import './styles/controller.css';
 import { Game } from './game/Game.js';
 import { Save } from './systems/Save.js';
 import { PerfMonitor } from './systems/PerfMonitor.js';
+import { Telemetry } from './systems/Telemetry.js';
+import { applyDomLanguage } from './i18n/translations.js';
+import { openModelGallery } from './models/ModelGallery.js';
 import { isMobileDevice } from './systems/DeviceDetector.js';
 import { verifyAuthorizedDomain, renderUnauthorizedDomainNotice } from './security/DomainGuard.js';
 import { attachForensicMeta } from './security/Watermark.js';
@@ -78,7 +81,13 @@ function showSplashAndBoot() {
     return;
   }
   attachForensicMeta();
+  Telemetry.init();
+  applyDomLanguage(Save.data?.settings?.lang);
   const params = new URLSearchParams(window.location.search);
+  if (window.location.pathname === '/debug/models' || params.get('debug') === 'models') {
+    openModelGallery(uiRoot, () => window.location.assign('/'));
+    return;
+  }
   const roomParam = (params.get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
   const onMobile = isMobileDevice();
   const isMobileRoomEntry = onMobile && (params.get('controller') === '1' || Boolean(roomParam)) && params.get('screen') !== '1';

@@ -27,6 +27,7 @@ body,
 #app {
   width: 100%;
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: none;
@@ -120,6 +121,22 @@ body,
   cursor: not-allowed;
   filter: grayscale(0.4);
   transform: none !important;
+}
+
+.chunky-btn:focus-visible,
+.tab-btn:focus-visible,
+.inline-change-btn:focus-visible,
+.modal-help-btn:focus-visible,
+.opt-help-btn:focus-visible,
+.game-stepper-btn:focus-visible,
+.touch-btn:focus-visible,
+.select-input:focus-visible,
+.text-input:focus-visible,
+.game-slider:focus-visible,
+.game-switch:has(.game-switch-input:focus-visible) .game-switch-track {
+  outline: 3px solid var(--accent-gold);
+  outline-offset: 2px;
+  box-shadow: 0 0 16px rgba(255, 212, 71, 0.55);
 }
 
 .chunky-panel {

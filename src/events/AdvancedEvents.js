@@ -21,6 +21,16 @@ export class AdvancedEvents {
     this.flightPhase = 0;
 
     this.lavaCorridorTimer = 0;
+    this.lavaCorridorTier = 1;
+    this.auroraBuffTimer = 0;
+  }
+
+  startAuroraBuff(duration = 12) {
+    this.auroraBuffTimer = duration;
+  }
+
+  getScoreMultiplier() {
+    return this.auroraBuffTimer > 0 ? 1.5 : 1.0;
   }
 
   startChaser(duration = 14) {
@@ -80,8 +90,9 @@ export class AdvancedEvents {
     this.flightCarrier.visible = true;
   }
 
-  startLavaCorridor(duration = 10) {
+  startLavaCorridor(duration = 10, dangerTier = 1) {
     this.lavaCorridorTimer = duration;
+    this.lavaCorridorTier = Math.max(1, Math.floor(dangerTier));
   }
 
   update(dt, speed, players, ctx) {
@@ -138,13 +149,19 @@ export class AdvancedEvents {
       }
     }
 
-    // Corredor de Lava
+    // Corredor de Lava (intensidade escalada por Danger Tier)
     if (this.lavaCorridorTimer > 0) {
       this.lavaCorridorTimer -= dt;
-      if (Math.random() < dt * 2.2) {
+      const rate = 2.2 + Math.max(0, (this.lavaCorridorTier || 1) - 1) * 0.45;
+      if (Math.random() < dt * rate) {
         const lane = Math.floor(Math.random() * 3);
         ctx.spawner?._acquire('lava_pool', LANE_X[lane], 0, -110);
       }
+    }
+
+    // Aurora Boreal (Buff)
+    if (this.auroraBuffTimer > 0) {
+      this.auroraBuffTimer = Math.max(0, this.auroraBuffTimer - dt);
     }
   }
 
@@ -161,5 +178,7 @@ export class AdvancedEvents {
     this.flightActive = false;
     if (this.flightCarrier) this.flightCarrier.visible = false;
     this.lavaCorridorTimer = 0;
+    this.lavaCorridorTier = 1;
+    this.auroraBuffTimer = 0;
   }
 }
