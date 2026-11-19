@@ -22,7 +22,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
     "qrcode": "^1.5.4",
-    "three": "^0.170.0",
+    "three": "^0.187.0",
     "ws": "^8.23.0"
   },
   "devDependencies": {
