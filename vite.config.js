@@ -63,6 +63,7 @@ export default defineConfig({
           if (id.includes('node_modules/@supabase') || id.includes('node_modules/qrcode')) return 'vendor-net';
           if (id.includes('/src/content/') || id.includes('\\src\\content\\')) return 'game-content';
           if (id.includes('ClaudeVoxelModels') || id.includes('VoxelLibrary') || id.includes('BossModels') || id.includes('PredatorModels')) return 'game-models';
+          if (id.includes('/src/ui/') || id.includes('\\src\\ui\\')) return 'game-ui';
         }
       }
     }
