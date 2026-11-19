@@ -32,6 +32,28 @@ import { getDinoSpec } from '../dinos/DinoCatalog.js';
 import { DinoPreview3D } from './SelectionScreen.js';
 import { attachModalHelp } from './Menus.js';
 import { renderEggSvg } from './SvgIcons.js';
+import { normalizeLocale } from '../i18n/translations.js';
+import { escapeHtml } from '../security/Sanitize.js';
+
+const OPTIONAL_COLLECTION_GLOB = typeof import.meta.glob === 'function'
+  ? import.meta.glob('../content/collection_expanded.js')
+  : {};
+
+let _collectionVariantsCache = null;
+async function loadOptionalCollectionVariants() {
+  if (_collectionVariantsCache !== null) return _collectionVariantsCache;
+  let items = [];
+  for (const loader of Object.values(OPTIONAL_COLLECTION_GLOB)) {
+    try {
+      const mod = await loader();
+      if (Array.isArray(mod.COLLECTION_VARIANTS)) {
+        items = mod.COLLECTION_VARIANTS;
+      }
+    } catch { /* fallback silencioso */ }
+  }
+  _collectionVariantsCache = items;
+  return items;
+}
 
 export class CustomizationScreen {
   static renderInto(container, { onClose, onApplyCustom, onOpenGacha }) {
@@ -39,6 +61,82 @@ export class CustomizationScreen {
     let subTab = 'colors'; // 'colors' | 'skins' | 'mutations' | 'shop'
     let preview = null;
     let statusMsg = '';
+    let searchQuery = '';
+    let rarityFilter = 'all';
+    let shopCategory = 'all'; // 'all' | 'accessory' | 'trail' | 'extra'
+    let extraCollection = _collectionVariantsCache || [];
+    let destroyed = false;
+
+    const loc = normalizeLocale(Save.data.settings?.lang);
+    const matchesFilter = (item, extraHay = '') => {
+      if (rarityFilter !== 'all') {
+        const rar = String(item.rarity || 'Comum').toLowerCase();
+        if (rar !== rarityFilter.toLowerCase()) return false;
+      }
+      const q = searchQuery.trim().toLowerCase();
+      if (q) {
+        const hay = `${item.name || ''} ${item.id || ''} ${item.desc || ''} ${item.rarity || ''} ${item.category || ''} ${extraHay}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    };
+
+    const getMergedCatalog = () => {
+      const skinIds = new Set(SKIN_VARIANTS.map((v) => v.id));
+      const mutIds = new Set(MUTATIONS.map((m) => m.id));
+      const accIds = new Set(ACCESSORIES_SHOP.map((a) => a.id));
+      const trailIds = new Set(TRAILS_SHOP.map((t) => t.id));
+      const extraSkins = [];
+      const extraMuts = [];
+      const extraAccs = [];
+      const extraTrails = [];
+      for (const item of extraCollection || []) {
+        if (!item || !item.id) continue;
+        const cat = String(item.category || item.type || '').toLowerCase();
+        if (cat.includes('skin') && !skinIds.has(item.id)) {
+          skinIds.add(item.id);
+          extraSkins.push({ badge: item.badge || '✨', rarity: item.rarity || 'Raro', price: item.price ?? 120, desc: item.desc || item.description || 'Variante da coleção expandida.', ...item });
+        } else if (cat.includes('mut') && !mutIds.has(item.id)) {
+          mutIds.add(item.id);
+          extraMuts.push({ badge: item.badge || '🧬', rarity: item.rarity || 'Épico', cost: item.cost ?? item.price ?? 180, desc: item.desc || item.description || 'Mutação evolutiva expandida.', ...item });
+        } else if (cat.includes('trail') || cat.includes('rastro')) {
+          if (!trailIds.has(item.id)) {
+            trailIds.add(item.id);
+            extraTrails.push({ rarity: item.rarity || 'Raro', price: item.price ?? 90, ...item });
+          }
+        } else if ((cat.includes('acc') || cat.includes('aces') || cat.includes('cosmetic')) && !accIds.has(item.id)) {
+          accIds.add(item.id);
+          extraAccs.push({ rarity: item.rarity || 'Raro', price: item.price ?? 90, ...item });
+        }
+      }
+      return {
+        skins: [...SKIN_VARIANTS, ...extraSkins],
+        mutations: [...MUTATIONS, ...extraMuts],
+        accessories: [...ACCESSORIES_SHOP, ...extraAccs],
+        trails: [...TRAILS_SHOP, ...extraTrails]
+      };
+    };
+
+    const renderFilterToolbar = (items, includeShopCat = false) => {
+      const rarities = Array.from(new Set(items.map((x) => x.rarity || 'Comum')));
+      const searchPh = loc === 'en' ? 'Search catalog...' : (loc === 'es' ? 'Buscar en catálogo...' : 'Buscar no catálogo...');
+      return `
+        <div class="catalog-toolbar cust-catalog-toolbar">
+          <input type="search" class="text-input catalog-search" id="cust-search" value="${escapeHtml(searchQuery)}" placeholder="${escapeHtml(searchPh)}" aria-label="${escapeHtml(searchPh)}" />
+          <select class="select-input catalog-select" id="cust-rarity" aria-label="Filtrar por raridade">
+            <option value="all" ${rarityFilter === 'all' ? 'selected' : ''}>Todas raridades</option>
+            ${rarities.map((r) => `<option value="${escapeHtml(r)}" ${rarityFilter === r ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}
+          </select>
+          ${includeShopCat ? `
+            <select class="select-input catalog-select" id="cust-shop-cat" aria-label="Filtrar por categoria">
+              <option value="all" ${shopCategory === 'all' ? 'selected' : ''}>Tudo</option>
+              <option value="accessory" ${shopCategory === 'accessory' ? 'selected' : ''}>Acessórios</option>
+              <option value="trail" ${shopCategory === 'trail' ? 'selected' : ''}>Rastros</option>
+            </select>
+          ` : ''}
+        </div>
+      `;
+    };
 
     const buildPreviewState = () => {
       const cfg = Save.data.customization[playerSlot];
@@ -128,11 +226,15 @@ export class CustomizationScreen {
       if (onApplyCustom) onApplyCustom();
     };
 
-    const render = ({ updatePreview = true } = {}) => {
+    const render = ({ updatePreview = true, restoreSearchFocus = false } = {}) => {
+      if (destroyed) return;
       const savedCardScroll = modalCard ? modalCard.scrollTop : 0;
+      const rightEl = container.querySelector('#cust-right');
+      const savedRightScroll = rightEl ? rightEl.scrollTop : 0;
       const { cfg, preset, dinoId, dinoSpec, activeVariantId, activeMutationId, activeMutationTier, previewCfg } = buildPreviewState();
       const eggStatus = ProgressionManager.getMysteryEggStatus();
       const rotatingShop = ProgressionManager.getRotatingShop();
+      const merged = getMergedCatalog();
 
       container.querySelector('#cust-eggs-val').textContent = Save.data.eggs;
       container.querySelector('#cust-cryst-val').textContent = Save.data.crystals || 0;
@@ -150,74 +252,91 @@ export class CustomizationScreen {
       container.querySelectorAll('[data-stab]').forEach((b) => b.classList.toggle('active', b.getAttribute('data-stab') === subTab));
       container.querySelectorAll('[data-preset]').forEach((b) => b.classList.toggle('active', Number(b.getAttribute('data-preset')) === cfg.activePreset));
 
-      const rightEl = container.querySelector('#cust-right');
+      const filteredSkins = merged.skins.filter((v) => matchesFilter(v));
+      const filteredMuts = merged.mutations.filter((m) => matchesFilter(m));
+      const shopAccs = (shopCategory === 'all' || shopCategory === 'accessory')
+        ? merged.accessories.filter((a) => (a.price || 0) > 0 && matchesFilter(a, 'acessório accessory'))
+        : [];
+      const shopTrails = (shopCategory === 'all' || shopCategory === 'trail')
+        ? merged.trails.filter((t) => (t.price || 0) > 0 && matchesFilter(t, 'rastro trail'))
+        : [];
+
       rightEl.innerHTML = subTab === 'skins' ? `
         <div class="item-card" style="margin-bottom:10px; border-color:#f59e0b;">
-          <strong style="color:#fde047;">✨ Variantes Especiais — ${dinoSpec.name}</strong>
+          <strong style="color:#fde047;">✨ Variantes Especiais (${filteredSkins.length}/${merged.skins.length}) — ${dinoSpec.name}</strong>
           <p style="font-size:0.8rem; color:#d4d4d8; margin:4px 0 0;">
             Desbloqueie Cores Únicas com ovos ou conquiste formas <strong>Shiny ✨</strong>, <strong>Mecânico 🤖</strong> e <strong>Secreta Cósmica 🌌</strong> no Gacha Fóssil 3D!
           </p>
         </div>
-        <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));">
-          ${SKIN_VARIANTS.map((v) => {
+        ${renderFilterToolbar(merged.skins)}
+        <div class="cards-grid cust-scroll-grid" style="grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));">
+          ${filteredSkins.length ? filteredSkins.map((v) => {
             const owned = isSkinVariantUnlocked(dinoId, v.id);
             const equipped = activeVariantId === v.id;
             return `
               <div class="item-card ${equipped ? 'selected' : ''}" style="border-color:${v.primary || '#52525b'};">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-                  <strong style="color:#fafafa;">${v.badge} ${v.name}</strong>
-                  <small style="color:#fde047;">${v.rarity}</small>
+                  <strong style="color:#fafafa;">${v.badge || '✨'} ${escapeHtml(v.name)}</strong>
+                  <small style="color:#fde047;">${escapeHtml(v.rarity || 'Raro')}</small>
                 </div>
-                <p style="font-size:0.76rem; color:#a1a1aa; margin:4px 0 8px;">${v.desc}</p>
+                <p style="font-size:0.76rem; color:#a1a1aa; margin:4px 0 8px;">${escapeHtml(v.desc || '')}</p>
                 ${owned ? `
-                  <button class="tab-btn ${equipped ? 'active' : ''}" data-equip-variant="${v.id}">
+                  <button class="tab-btn ${equipped ? 'active' : ''}" data-equip-variant="${escapeHtml(v.id)}">
                     ${equipped ? '✔ Equipada' : 'Equipar Variante'}
                   </button>
                 ` : (v.gachaOnly ? `
-                  <button class="tab-btn" data-variant-gacha="${v.id}" style="border-color:#c084fc; color:#f5d0fe;">
+                  <button class="tab-btn" data-variant-gacha="${escapeHtml(v.id)}" style="border-color:#c084fc; color:#f5d0fe;">
                     🎲 Exclusiva do Gacha 3D
                   </button>
                 ` : `
-                  <button class="tab-btn" data-buy-variant="${v.id}">
-                    Comprar (${v.price} 🥚)
+                  <button class="tab-btn" data-buy-variant="${escapeHtml(v.id)}">
+                    Comprar (${v.price || 100} 🥚)
                   </button>
                 `)}
               </div>
             `;
-          }).join('')}
+          }).join('') : `<div class="item-card" style="grid-column:1/-1; text-align:center; color:#d8c2a6;">Nenhuma skin encontrada.</div>`}
         </div>
       ` : subTab === 'mutations' ? `
         <div class="item-card" style="margin-bottom:10px; border-color:#5eead4;">
-          <strong style="color:#5eead4;">🧬 Laboratório de Mutações Evolutivas (Nv.1–4)</strong>
+          <strong style="color:#5eead4;">🧬 Laboratório de Mutações Evolutivas (${filteredMuts.length}/${merged.mutations.length})</strong>
           <p style="font-size:0.8rem; color:#cbd5e1; margin:4px 0 0;">
             Evolua até Nv.4 para amplificar poder (como <strong>+2/+4/+6/+8 Patas</strong>!). Toda mutação traz <strong>Prós reais</strong> e <strong>Contras realistas</strong> na física.
           </p>
         </div>
-        <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));">
-          ${MUTATIONS.map((m) => {
+        ${renderFilterToolbar(merged.mutations)}
+        <div class="cards-grid cust-scroll-grid" style="grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));">
+          ${filteredMuts.length ? filteredMuts.map((m) => {
             const owned = isMutationUnlocked(m.id);
             const equipped = activeMutationId === m.id;
             const unlockedLv = owned ? getMutationUnlockedLevel(m.id) : 0;
             const activeLv = owned ? getMutationActiveLevel(m.id) : 1;
             const profile = getMutationComputedProfile(m.id, activeLv);
+            const pros = profile?.pros || m.pros || [];
+            const cons = profile?.cons || m.cons || [];
             const nextCost = getMutationUpgradeCost(m, unlockedLv);
             const crystalCost = getMutationCrystalCost(m, unlockedLv);
             const isMax = unlockedLv >= MAX_MUTATION_LEVEL;
             return `
               <div class="item-card ${equipped ? 'selected' : ''}">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
-                  <strong style="color:#fafafa;">${m.badge} ${m.name}</strong>
-                  <small style="color:#5eead4;">${m.rarity} ${owned ? `• ${profile?.tierLabel || `Nv.${activeLv}`}` : ''}</small>
+                  <strong style="color:#fafafa;">${m.badge || '🧬'} ${escapeHtml(m.name)}</strong>
+                  <small style="color:#5eead4;">${escapeHtml(m.rarity || 'Épico')} ${owned ? `• ${escapeHtml(profile?.tierLabel || `Nv.${activeLv}`)}` : ''}</small>
                 </div>
-                <p style="font-size:0.74rem; color:#cbd5e1; margin:4px 0 4px;">${m.desc}</p>
+                <div class="mut-tradeoff-badges">
+                  <span class="mut-badge-pro" title="Bônus ativos">⬆ ${pros.length} Pró${pros.length === 1 ? '' : 's'}</span>
+                  <span class="mut-badge-con" title="Penalidades reais de trade-off">⬇ ${cons.length} Contra${cons.length === 1 ? '' : 's'}</span>
+                  ${cons.length > 0 ? '<span class="mut-badge-tag">⚖️ Trade-off</span>' : ''}
+                </div>
+                <p style="font-size:0.74rem; color:#cbd5e1; margin:4px 0 4px;">${escapeHtml(m.desc || '')}</p>
                 <div class="mut-tradeoff-list">
-                  ${(profile?.pros || []).map((p) => `<div class="mut-pro">+ ${p}</div>`).join('')}
-                  ${(profile?.cons || []).map((c) => `<div class="mut-con">- ${c}</div>`).join('')}
+                  ${pros.map((p) => `<div class="mut-pro">+ ${escapeHtml(p)}</div>`).join('')}
+                  ${cons.map((c) => `<div class="mut-con">- ${escapeHtml(c)}</div>`).join('')}
                 </div>
                 ${owned && unlockedLv > 1 ? `
                   <div style="display:flex; gap:4px; flex-wrap:wrap; margin:6px 0;">
                     ${[1, 2, 3, 4].filter((lv) => lv <= unlockedLv).map((lv) => `
-                      <button class="tab-btn ${activeLv === lv ? 'active' : ''}" data-mut-tier="${m.id}:${lv}" style="padding:3px 7px; font-size:0.7rem;">
+                      <button class="tab-btn ${activeLv === lv ? 'active' : ''}" data-mut-tier="${escapeHtml(m.id)}:${lv}" style="padding:3px 7px; font-size:0.7rem;">
                         ${m.id === 'extra_limbs' ? `+${lv * 2} Patas` : `Nv.${lv}`}
                       </button>
                     `).join('')}
@@ -225,35 +344,35 @@ export class CustomizationScreen {
                 ` : ''}
                 ${owned ? `
                   <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-                    <button class="tab-btn ${equipped ? 'active' : ''}" data-equip-mut="${m.id}" style="flex:1;">
+                    <button class="tab-btn ${equipped ? 'active' : ''}" data-equip-mut="${escapeHtml(m.id)}" style="flex:1;">
                       ${equipped ? '✔ Ativa' : 'Ativar'}
                     </button>
-                    <button class="tab-btn" data-upgrade-mut="${m.id}" ${isMax ? 'disabled' : ''} style="border-color:#f59e0b; color:#fde047;">
+                    <button class="tab-btn" data-upgrade-mut="${escapeHtml(m.id)}" ${isMax ? 'disabled' : ''} style="border-color:#f59e0b; color:#fde047;">
                       ${isMax ? 'MAX Nv.4' : `⬆ Nv.${unlockedLv + 1} (${nextCost} 🥚)`}
                     </button>
                     ${!isMax ? `
-                      <button class="tab-btn" data-cryst-mut="${m.id}" title="Evoluir instantaneamente usando Cristais 💎" style="border-color:#38bdf8; color:#7dd3fc;">
+                      <button class="tab-btn" data-cryst-mut="${escapeHtml(m.id)}" title="Evoluir instantaneamente usando Cristais 💎" style="border-color:#38bdf8; color:#7dd3fc;">
                         💎 Nv.${unlockedLv + 1} (${crystalCost} 💎)
                       </button>
                     ` : ''}
                   </div>
                 ` : (m.gachaOnly ? `
-                  <button class="tab-btn" data-mut-gacha="${m.id}" style="border-color:#c084fc; color:#f5d0fe; margin-top:6px;">
+                  <button class="tab-btn" data-mut-gacha="${escapeHtml(m.id)}" style="border-color:#c084fc; color:#f5d0fe; margin-top:6px;">
                     🎲 Secreta no Gacha 3D
                   </button>
                 ` : `
                   <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-                    <button class="tab-btn" data-buy-mut="${m.id}" style="flex:1;">
-                      Sintetizar (${m.cost} 🥚)
+                    <button class="tab-btn" data-buy-mut="${escapeHtml(m.id)}" style="flex:1;">
+                      Sintetizar (${m.cost || 150} 🥚)
                     </button>
-                    <button class="tab-btn" data-cryst-mut="${m.id}" title="Desbloquear sem gastar Ovos usando Cristais 💎" style="border-color:#38bdf8; color:#7dd3fc;">
+                    <button class="tab-btn" data-cryst-mut="${escapeHtml(m.id)}" title="Desbloquear sem gastar Ovos usando Cristais 💎" style="border-color:#38bdf8; color:#7dd3fc;">
                       💎 Forjar (${crystalCost} 💎)
                     </button>
                   </div>
                 `)}
               </div>
             `;
-          }).join('')}
+          }).join('') : `<div class="item-card" style="grid-column:1/-1; text-align:center; color:#d8c2a6;">Nenhuma mutação encontrada.</div>`}
         </div>
       ` : subTab === 'colors' ? `
         <div class="field-row"><span>Cor Primária</span><input type="color" id="c-primary" value="${preset.primary}" /></div>
@@ -270,16 +389,16 @@ export class CustomizationScreen {
         <div class="field-row">
           <span>Acessório Desbloqueado</span>
           <select id="c-acc">
-            ${ACCESSORIES_SHOP.filter((a) => Save.data.unlockedAccessories.includes(a.id)).map((a) => `
-              <option value="${a.id}" ${preset.accessory === a.id ? 'selected' : ''}>${a.name}</option>
+            ${merged.accessories.filter((a) => Save.data.unlockedAccessories.includes(a.id)).map((a) => `
+              <option value="${escapeHtml(a.id)}" ${preset.accessory === a.id ? 'selected' : ''}>${escapeHtml(a.name)}</option>
             `).join('')}
           </select>
         </div>
         <div class="field-row">
           <span>Rastro de Corrida</span>
           <select id="c-trail">
-            ${TRAILS_SHOP.filter((t) => Save.data.unlockedTrails.includes(t.id)).map((t) => `
-              <option value="${t.id}" ${preset.trail === t.id ? 'selected' : ''}>${t.name}</option>
+            ${merged.trails.filter((t) => Save.data.unlockedTrails.includes(t.id)).map((t) => `
+              <option value="${escapeHtml(t.id)}" ${preset.trail === t.id ? 'selected' : ''}>${escapeHtml(t.name)}</option>
             `).join('')}
           </select>
         </div>
@@ -342,33 +461,56 @@ export class CustomizationScreen {
             <button class="chunky-btn" id="buy-mystery">Abrir (${MYSTERY_EGG_COST} 🥚)</button>
           </div>
         </div>
-        <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));">
-          ${ACCESSORIES_SHOP.filter((a) => a.price > 0).map((a) => {
+        ${renderFilterToolbar([...merged.accessories, ...merged.trails], true)}
+        <div class="cards-grid cust-scroll-grid" style="grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));">
+          ${shopAccs.map((a) => {
             const owned = Save.data.unlockedAccessories.includes(a.id);
             return `
-              <div class="item-card rarity-${a.rarity.toLowerCase()}">
-                <small style="color:#ffd447;">${a.rarity}</small>
-                <strong>${a.name}</strong>
-                <button class="tab-btn ${owned ? 'active' : ''}" data-buy-acc="${a.id}">
+              <div class="item-card rarity-${String(a.rarity || 'comum').toLowerCase()}">
+                <small style="color:#ffd447;">${escapeHtml(a.rarity || 'Comum')} • Acessório</small>
+                <strong>${escapeHtml(a.name)}</strong>
+                <button class="tab-btn ${owned ? 'active' : ''}" data-buy-acc="${escapeHtml(a.id)}">
                   ${owned ? (preset.accessory === a.id ? 'Equipado' : 'Equipar') : `Comprar (${a.price} 🥚)`}
                 </button>
               </div>
             `;
           }).join('')}
-          ${TRAILS_SHOP.filter((t) => t.price > 0).map((t) => {
+          ${shopTrails.map((t) => {
             const owned = Save.data.unlockedTrails.includes(t.id);
             return `
-              <div class="item-card rarity-${t.rarity.toLowerCase()}">
-                <small style="color:#ffd447;">${t.rarity} • Rastro</small>
-                <strong>${t.name}</strong>
-                <button class="tab-btn ${owned ? 'active' : ''}" data-buy-trail="${t.id}">
+              <div class="item-card rarity-${String(t.rarity || 'comum').toLowerCase()}">
+                <small style="color:#ffd447;">${escapeHtml(t.rarity || 'Comum')} • Rastro</small>
+                <strong>${escapeHtml(t.name)}</strong>
+                <button class="tab-btn ${owned ? 'active' : ''}" data-buy-trail="${escapeHtml(t.id)}">
                   ${owned ? (preset.trail === t.id ? 'Equipado' : 'Equipar') : `Comprar (${t.price} 🥚)`}
                 </button>
               </div>
             `;
           }).join('')}
+          ${(!shopAccs.length && !shopTrails.length) ? `<div class="item-card" style="grid-column:1/-1; text-align:center; color:#d8c2a6;">Nenhum item encontrado na loja.</div>` : ''}
         </div>
       `;
+
+      // Bind filter toolbar events (skins, mutations, shop)
+      const searchInput = rightEl.querySelector('#cust-search');
+      if (searchInput) {
+        searchInput.addEventListener('input', () => {
+          searchQuery = searchInput.value;
+          render({ updatePreview: false, restoreSearchFocus: true });
+        });
+        if (restoreSearchFocus) {
+          searchInput.focus();
+          searchInput.setSelectionRange(searchQuery.length, searchQuery.length);
+        }
+      }
+      rightEl.querySelector('#cust-rarity')?.addEventListener('change', (e) => {
+        rarityFilter = e.target.value;
+        render({ updatePreview: false });
+      });
+      rightEl.querySelector('#cust-shop-cat')?.addEventListener('change', (e) => {
+        shopCategory = e.target.value;
+        render({ updatePreview: false });
+      });
 
       if (updatePreview) {
         preview?.setDino(
@@ -549,7 +691,8 @@ export class CustomizationScreen {
         rightEl.querySelectorAll('[data-buy-acc]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const id = btn.getAttribute('data-buy-acc');
-            const item = ACCESSORIES_SHOP.find((x) => x.id === id);
+            const item = merged.accessories.find((x) => x.id === id);
+            if (!item) return;
             if (!Save.data.unlockedAccessories.includes(id)) {
               if (Save.data.eggs < item.price) {
                 statusMsg = `Ovos insuficientes (precisa ${item.price} 🥚)`;
@@ -570,7 +713,8 @@ export class CustomizationScreen {
         rightEl.querySelectorAll('[data-buy-trail]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const id = btn.getAttribute('data-buy-trail');
-            const item = TRAILS_SHOP.find((x) => x.id === id);
+            const item = merged.trails.find((x) => x.id === id);
+            if (!item) return;
             if (!Save.data.unlockedTrails.includes(id)) {
               if (Save.data.eggs < item.price) {
                 statusMsg = `Ovos insuficientes (precisa ${item.price} 🥚)`;
@@ -589,6 +733,7 @@ export class CustomizationScreen {
         });
       }
 
+      if (rightEl) rightEl.scrollTop = savedRightScroll;
       if (modalCard) modalCard.scrollTop = savedCardScroll;
     };
 
@@ -650,6 +795,7 @@ export class CustomizationScreen {
     });
 
     container.querySelector('#cust-close').addEventListener('click', () => {
+      destroyed = true;
       preview?.destroy();
       if (onApplyCustom) onApplyCustom();
       if (onClose) onClose();
@@ -657,6 +803,15 @@ export class CustomizationScreen {
 
     attachModalHelp(container, 'Personalize cores, evolua mutações com Prós e Contras reais (incluindo +2/+4/+6/+8 Patas!), skins e rastros.');
     render({ updatePreview: false });
-    return () => preview?.destroy();
+    if (_collectionVariantsCache === null) {
+      loadOptionalCollectionVariants().then((loaded) => {
+        extraCollection = loaded;
+        if (!destroyed && loaded.length > 0) render({ updatePreview: false });
+      });
+    }
+    return () => {
+      destroyed = true;
+      preview?.destroy();
+    };
   }
 }

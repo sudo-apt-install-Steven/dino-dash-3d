@@ -474,6 +474,9 @@ export class UIManager {
       case 'credits':
         Menus.renderCreditsModal(this.hud.modalLayer, () => this.openSection('extras'));
         break;
+      case 'bestiary':
+        Menus.renderBestiaryModal(this.hud.modalLayer, back);
+        break;
       case 'profile':
         this.activeCleanup = ProfileModal.renderInto(this.hud.modalLayer, {
           onClose: back,

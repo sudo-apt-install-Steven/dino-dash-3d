@@ -2,9 +2,11 @@
 // mochila, mapa do tesouro, Boss HP, OVNI fuga, Papéis Compartilhados, Touch, Pausa e Game Over.
 import { BACKPACK_ITEMS } from '../systems/Items.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
-import { StatusSystem } from '../systems/StatusSystem.js';
+import { StatusSystem, STATUS_DEFS } from '../systems/StatusSystem.js';
 import { Save } from '../systems/Save.js';
 import { OrientationManager } from '../systems/OrientationManager.js';
+import { normalizeLocale } from '../i18n/translations.js';
+import { escapeHtml } from '../security/Sanitize.js';
 import { renderSkillSvg, renderEggSvg, renderBossObsSvg } from './SvgIcons.js';
 
 export function formatScoreValue(val) {
@@ -80,6 +82,10 @@ export class HUD {
           </div>
           <div class="hud-pill hidden" id="hud-element" style="color:#38bdf8;" data-tip="Elemento ativo: combine com outro ou acerte a fraqueza do Chefe!">✨ Nenhum</div>
           <div class="hud-pill hidden" id="hud-wanted" style="color:#ff4757;" data-tip="Nível de Caçada: aumenta recompensa e atenção de predadores.">🚨 ★</div>
+          <div class="hud-pill hud-danger-pill hidden" id="hud-danger-tier" data-tip="Nível de Perigo dinâmico: aumenta velocidade, densidade e agressividade.">
+            <span id="hud-danger-label">⚠️ Perigo Nv.1</span>
+            <span class="hud-danger-track" aria-hidden="true"><span class="hud-danger-fill" id="hud-danger-fill" style="width:10%"></span></span>
+          </div>
         </div>
 
         <div class="hud-top-right" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
@@ -100,6 +106,21 @@ export class HUD {
             <div class="treasure-track"><div class="treasure-fill" id="map-fill" style="width:0%"></div></div>
             <span id="map-next-portal">Portal em 1000</span>
           </div>
+        </div>
+      </div>
+
+      <div class="hud-debuffs-tray hidden" id="hud-debuffs-tray" role="status" aria-live="polite"></div>
+
+      <div class="hud-predator-telegraph hidden" id="hud-predator-telegraph" role="alert" aria-live="assertive">
+        <div class="telegraph-alert-pill" id="telegraph-alert-pill">
+          <span id="telegraph-icon">⚠️</span>
+          <strong id="telegraph-label">Ataque de Predador!</strong>
+          <span id="telegraph-timer">1.0s</span>
+        </div>
+        <div class="telegraph-lanes" id="telegraph-lanes" aria-hidden="true">
+          <div class="telegraph-lane" data-tlane="-1"><span>◀ ESQ</span></div>
+          <div class="telegraph-lane" data-tlane="0"><span>▲ CENTRO</span></div>
+          <div class="telegraph-lane" data-tlane="1"><span>DIR ▶</span></div>
         </div>
       </div>
 
@@ -507,6 +528,18 @@ export class HUD {
     this.photoOverlay = q('#photo-overlay');
     this.gameOverOverlay = q('#gameover-overlay');
     this.modalLayer = q('#modal-layer');
+    this.dangerTierEl = q('#hud-danger-tier');
+    this.dangerLabelEl = q('#hud-danger-label');
+    this.dangerFillEl = q('#hud-danger-fill');
+    this.debuffsTrayEl = q('#hud-debuffs-tray');
+    this.telegraphEl = q('#hud-predator-telegraph');
+    this.telegraphIconEl = q('#telegraph-icon');
+    this.telegraphLabelEl = q('#telegraph-label');
+    this.telegraphTimerEl = q('#telegraph-timer');
+    this.telegraphLaneEls = Array.from(this.root.querySelectorAll('[data-tlane]'));
+    this._lastDangerKey = '';
+    this._lastDebuffsKey = '';
+    this._lastTelegraphKey = '';
   }
 
   _bindInteractions() {
@@ -796,6 +829,9 @@ export class HUD {
     this.narratorEl.classList.add('hidden');
     this.elementEl?.classList.add('hidden');
     this.wantedEl?.classList.add('hidden');
+    this.setDangerTier(0);
+    this.setActiveDebuffs([]);
+    this.setPredatorTelegraph(null);
   }
 
   setTutorialHud(info) {
@@ -1284,6 +1320,145 @@ export class HUD {
       this.predIntroSkip.onclick = handleSkip;
       this.predIntroEl.onclick = handleSkip;
     }
+  }
+
+  setDangerTier(tierInput) {
+    if (!this.dangerTierEl) return;
+    const obj = (tierInput && typeof tierInput === 'object') ? tierInput : null;
+    const rawTier = obj ? Number(obj.tier ?? obj.level ?? 0) : Number(tierInput ?? 0);
+    const tier = Number.isFinite(rawTier) ? Math.max(0, Math.floor(rawTier)) : 0;
+    if (tier <= 0) {
+      if (this._lastDangerKey !== '0') {
+        this._lastDangerKey = '0';
+        this.dangerTierEl.classList.add('hidden');
+      }
+      return;
+    }
+    const loc = normalizeLocale(Save.data.settings?.lang);
+    const prefix = loc === 'en' ? 'Danger Lv.' : (loc === 'es' ? 'Peligro Nv.' : 'Perigo Nv.');
+    const key = `${tier}:${loc}:${obj?.label || ''}`;
+    if (this._lastDangerKey === key) return;
+    this._lastDangerKey = key;
+
+    const palette = tier >= 9
+      ? '#ec4899'
+      : tier >= 7
+        ? '#ef4444'
+        : tier >= 5
+          ? '#f97316'
+          : tier >= 3
+            ? '#fb923c'
+            : '#facc15';
+    const pct = Math.min(100, Math.max(12, Math.round((tier / 10) * 100)));
+    this.dangerTierEl.classList.remove('hidden');
+    this.dangerTierEl.classList.toggle('danger-critical', tier >= 7);
+    this.dangerTierEl.style.borderColor = palette;
+    this.dangerTierEl.style.color = palette;
+    if (this.dangerLabelEl) {
+      const icon = tier >= 7 ? '☠️' : (tier >= 4 ? '🔥' : '⚠️');
+      this.dangerLabelEl.textContent = `${icon} ${obj?.label || `${prefix}${tier}`}`;
+    }
+    if (this.dangerFillEl) {
+      this.dangerFillEl.style.width = `${pct}%`;
+      this.dangerFillEl.style.background = palette;
+    }
+    if (obj) {
+      const parts = [];
+      if (obj.speedBonus) parts.push(`Vel +${Math.round(obj.speedBonus * 100)}%`);
+      if (obj.densityBonus) parts.push(`Densidade +${Math.round(obj.densityBonus * 100)}%`);
+      if (obj.predatorAggro) parts.push(`Predadores x${Number(obj.predatorAggro).toFixed(1)}`);
+      if (parts.length) this.dangerTierEl.setAttribute('data-tip', `${prefix}${tier}: ${parts.join(' • ')}`);
+    }
+  }
+
+  setActiveDebuffs(list) {
+    if (!this.debuffsTrayEl) return;
+    const arr = Array.isArray(list) ? list.filter(Boolean) : [];
+    if (!arr.length) {
+      if (this._lastDebuffsKey !== '') {
+        this._lastDebuffsKey = '';
+        this.debuffsTrayEl.innerHTML = '';
+        this.debuffsTrayEl.classList.add('hidden');
+      }
+      return;
+    }
+    const maxVisible = 6;
+    const visible = arr.slice(0, maxVisible);
+    const overflow = Math.max(0, arr.length - maxVisible);
+    const key = visible.map((d) => {
+      const id = d.id || d.name || '';
+      const rem = Number(d.remainingSec ?? d.remaining ?? d.duration ?? 0);
+      return `${id}:${Math.round(rem * 10)}:${d.stacks || 1}`;
+    }).join('|') + `|+${overflow}`;
+    if (this._lastDebuffsKey === key) return;
+    this._lastDebuffsKey = key;
+
+    const html = visible.map((d) => {
+      const def = d.id ? STATUS_DEFS[d.id] : null;
+      const icon = escapeHtml(d.icon || def?.icon || '⚠️');
+      const name = escapeHtml(d.name || def?.name || d.id || 'Debuff');
+      const color = d.color || def?.color || '#f97316';
+      const rem = Number(d.remainingSec ?? d.remaining ?? d.duration ?? 0);
+      const timeStr = rem > 0 ? `${rem.toFixed(1)}s` : '';
+      const rawTip = d.counterTip || d.counter || d.tip || def?.desc || '';
+      const shortTip = rawTip.length > 42 ? `${rawTip.slice(0, 39)}...` : rawTip;
+      const stacksBadge = d.stacks > 1 ? `<span class="hud-debuff-stacks">x${d.stacks}</span>` : '';
+      return `
+        <div class="hud-debuff-badge" style="border-color:${escapeHtml(color)};" title="${escapeHtml(rawTip || name)}">
+          <span class="hud-debuff-ico">${icon}</span>
+          <div class="hud-debuff-body">
+            <div class="hud-debuff-head">
+              <strong style="color:${escapeHtml(color)};">${name}</strong>${stacksBadge}
+              ${timeStr ? `<span class="hud-debuff-time">${timeStr}</span>` : ''}
+            </div>
+            ${shortTip ? `<div class="hud-debuff-tip">${escapeHtml(shortTip)}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('') + (overflow > 0 ? `<div class="hud-debuff-more" aria-label="Mais ${overflow} debuffs">+${overflow}</div>` : '');
+
+    this.debuffsTrayEl.innerHTML = html;
+    this.debuffsTrayEl.classList.remove('hidden');
+  }
+
+  setPredatorTelegraph(info) {
+    if (!this.telegraphEl) return;
+    const rem = info ? Number(info.remainingSec ?? info.remaining ?? 0) : 0;
+    if (!info || (info.remainingSec !== undefined && rem <= 0)) {
+      if (this._lastTelegraphKey !== '') {
+        this._lastTelegraphKey = '';
+        this.telegraphEl.classList.add('hidden');
+      }
+      return;
+    }
+    const type = String(info.type || 'pounce');
+    const lane = info.lane;
+    const label = String(info.label || (type === 'roar' ? 'Rugido de Onda!' : (type === 'meteor' ? 'Chuva de Brasas!' : 'Investida de Predador!')));
+    const key = `${type}:${lane}:${Math.round(rem * 10)}:${label}`;
+    if (this._lastTelegraphKey === key) return;
+    this._lastTelegraphKey = key;
+
+    const iconMap = { pounce: '🐾', lunge: '🦷', roar: '📢', swipe: '💢', breath: '🔥', boulder: '🪨', shockwave: '⚡', venom: '☠️' };
+    if (this.telegraphIconEl) this.telegraphIconEl.textContent = info.icon || iconMap[type] || '⚠️';
+    if (this.telegraphLabelEl) this.telegraphLabelEl.textContent = label;
+    if (this.telegraphTimerEl) this.telegraphTimerEl.textContent = rem > 0 ? `${rem.toFixed(1)}s` : '!';
+
+    // Normaliza lane: suporta -1/0/1, 'all'/'zone', ou array de faixas
+    const activeLanes = new Set();
+    if (lane === 'all' || lane === 'zone' || lane === undefined || lane === null) {
+      activeLanes.add(-1); activeLanes.add(0); activeLanes.add(1);
+    } else if (Array.isArray(lane)) {
+      lane.forEach((l) => activeLanes.add(Number(l)));
+    } else {
+      const n = Number(lane);
+      if (Number.isFinite(n)) activeLanes.add(n);
+    }
+
+    for (const laneEl of this.telegraphLaneEls || []) {
+      const idx = Number(laneEl.getAttribute('data-tlane'));
+      laneEl.classList.toggle('active', activeLanes.has(idx));
+    }
+    this.telegraphEl.classList.remove('hidden');
   }
 
   setBossHud(boss) {
