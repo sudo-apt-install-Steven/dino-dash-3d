@@ -730,7 +730,8 @@ export class Menus {
       }
 
       if (tab === 'bosses') {
-        const base = (BOSS_DEFS || []).map((b) => ({
+        const bossList = Array.isArray(BOSS_DEFS) ? BOSS_DEFS : Object.values(BOSS_DEFS || {});
+        const base = bossList.map((b) => ({
           icon: '👑',
           name: b.name,
           subtitle: `${b.title || 'Chefe'} • Bioma: ${b.biomeId || 'geral'} • HP ${b.hp || 5}`,
