@@ -84,6 +84,44 @@ with sync_playwright() as p:
     p2_after = p2_info_after["pl"][1]["l"] if len(p2_info_after["pl"]) > 1 else -1
     assert p2_before >= 0 and p2_after != p2_before, f"Local P2 did not move: {p2_info_before} -> {p2_info_after}; errors={errors}"
 
+    # Expansion modes smoke: raid, boss_fight, free_roam, race, competition + debuffs/HUD
+    expansion_modes = ["raid", "boss_fight", "free_roam", "race", "competition"]
+    modes_ok = []
+    for mode_id in expansion_modes:
+        page.evaluate(f"""() => {{
+          const g = window.__DINO_DASH_GAME__;
+          g.setMode('{mode_id}');
+          g.startRun(false);
+          if (g?.events?.predators?.state === 'intro') g.events.predators.skipIntro(g._eventContext());
+          if (g?.spotlightActive) g._dismissSpotlight?.();
+        }}""")
+        page.wait_for_timeout(300)
+        st = page.evaluate("() => ({ modeId: window.__DINO_DASH_GAME__?.modeId, state: window.__DINO_DASH_GAME__?.state })")
+        assert st["modeId"] == mode_id and st["state"] in ("playing", "paused"), f"Expansion mode {mode_id} failed: {st}"
+        modes_ok.append(mode_id)
+
+    # Debuffs & HUD expansion indicators check
+    debuff_check = page.evaluate("""() => {
+      const g = window.__DINO_DASH_GAME__;
+      const p0 = g?.players?.[0];
+      const hud = g?.ui?.hud;
+      if (!g || !p0 || !hud) return { ok: false, reason: 'missing_game_player_or_hud' };
+      g._applyPlayerStatus?.(p0, 'tar_slow', 4.0);
+      g._applyPlayerStatus?.(p0, 'controls_reversed', 3.0);
+      hud.setDangerTier?.({ tier: 3, label: 'Alto', progress: 0.5 });
+      hud.setActiveDebuffs?.([{ id: 'tar_slow', name: 'Piche', remaining: 3.5, counter: 'Pule!' }]);
+      hud.setPredatorTelegraph?.({ label: 'Investida', lane: 1, remaining: 0.6 });
+      return {
+        ok: true,
+        hasDanger: typeof hud.setDangerTier === 'function',
+        hasDebuffs: typeof hud.setActiveDebuffs === 'function',
+        hasTelegraph: typeof hud.setPredatorTelegraph === 'function',
+        appliedStatuses: Object.keys(p0.statuses || {})
+      };
+    }""")
+    page.wait_for_timeout(200)
+    assert debuff_check.get("ok") is True and debuff_check.get("hasDanger") and debuff_check.get("hasDebuffs") and debuff_check.get("hasTelegraph"), f"Debuff/HUD check failed: {debuff_check}"
+
     ctx.close()
 
     # 2. Mobile landscape 844x390 check
@@ -108,4 +146,4 @@ with sync_playwright() as p:
     browser.close()
 
 assert len(errors) == 0, f"Runtime errors detected: {errors}"
-print(json.dumps({"ok": True, "fps_desktop": fps_desktop, "fps_mobile": fps_mobile, "p1_x": [before_x, after_x], "p2_lane": [p2_before, p2_after]}))
+print(json.dumps({"ok": True, "fps_desktop": fps_desktop, "fps_mobile": fps_mobile, "p1_x": [before_x, after_x], "p2_lane": [p2_before, p2_after], "expansion_modes": modes_ok, "debuff_hud": debuff_check}))

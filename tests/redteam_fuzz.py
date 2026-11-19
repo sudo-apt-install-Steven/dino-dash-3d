@@ -100,10 +100,15 @@ def main():
         page.keyboard.press("KeyP")
         page.wait_for_timeout(100)
 
-        # 3. Mode switching fuzz (solo -> coop -> pvp -> zen -> solo)
-        for mode in ("coop", "pvp", "zen", "solo"):
-            page.evaluate(f"() => {{ const g = window.__DINO_DASH_GAME__; g.setMode('{mode}'); g.startRun(false); if (g?.spotlightActive) g._dismissSpotlight?.(); }}")
+        # 3. Mode switching fuzz (including all 5 expansion modes + debuff stress)
+        modes_to_test = ["coop", "pvp", "zen", "raid", "boss_fight", "free_roam", "race", "competition", "solo"]
+        debuffs_to_fuzz = ["tar_slow", "controls_reversed", "ability_jam", "fog_blind", "heavy_gravity", "bleed_burn"]
+        for idx, mode in enumerate(modes_to_test):
+            page.evaluate(f"() => {{ const g = window.__DINO_DASH_GAME__; g.setMode('{mode}'); g.startRun(false); if (g?.events?.predators?.state === 'intro') g.events.predators.skipIntro(g._eventContext()); if (g?.spotlightActive) g._dismissSpotlight?.(); }}")
             page.wait_for_timeout(200)
+            # Inject debuff during run to verify numeric stability under debuff modifiers
+            debuff_id = debuffs_to_fuzz[idx % len(debuffs_to_fuzz)]
+            page.evaluate(f"() => {{ const g = window.__DINO_DASH_GAME__; const p0 = g?.players?.[0]; if (p0) g._applyPlayerStatus?.(p0, '{debuff_id}', 2.5); }}")
             for _ in range(4):
                 page.keyboard.press(rng.choice(KEYS))
                 page.wait_for_timeout(40)
@@ -113,7 +118,7 @@ def main():
         browser.close()
 
     assert len(errors) == 0, f"RedTeam fuzz detected errors: {errors}"
-    print(json.dumps({"ok": True, "seed": SEED, "steps": 30, "modes_tested": ["coop", "pvp", "zen", "solo"]}))
+    print(json.dumps({"ok": True, "seed": SEED, "steps": 30, "modes_tested": modes_to_test, "debuffs_fuzzed": debuffs_to_fuzz}))
 
 
 if __name__ == "__main__":
