@@ -1,0 +1,79 @@
+{
+  "version": "1.0.0",
+  "_comment": "Ajudas balanceadas (cartas, pactos jurássicos com bônus+penalidade obrigatória, relíquias, itens de mochila) — < 30% do catálogo total e nunca gratuitas.",
+  "families": [
+    {
+      "category": "card",
+      "archetypes": [
+        { "id": "agile_leap", "name": "Salto Elástico", "bonus": "+10% altura de pulo", "penalty": "-6% controle aéreo", "stat": "jumpMult", "bonusVal": 0.10, "penaltyStat": "gravityMult", "penaltyVal": 0.05, "allowedInPerfectMode": true },
+        { "id": "raptor_stride", "name": "Passo de Raptor", "bonus": "+14% vel. de faixa", "penalty": "-8% estamina máx.", "stat": "laneSpeedMult", "bonusVal": 0.14, "penaltyStat": "staminaCostMult", "penaltyVal": 0.08, "allowedInPerfectMode": true },
+        { "id": "focused_mind", "name": "Foco Primitivo", "bonus": "-12% recarga de poder", "penalty": "-10% valor de ovos", "stat": "cooldownMult", "bonusVal": -0.12, "penaltyStat": "eggValueMult", "penaltyVal": -0.10, "allowedInPerfectMode": true },
+        { "id": "keen_sight", "name": "Olho de Águia", "bonus": "+18% resistência a névoa", "penalty": "+6% vel. de obstáculos", "stat": "visionResist", "bonusVal": 0.18, "penaltyStat": "hazardSpeedMult", "penaltyVal": 0.06, "allowedInPerfectMode": true },
+        { "id": "amber_magnet", "name": "Ímã de Âmbar", "bonus": "+1.6 alcance de ímã", "penalty": "-6% ganho de fúria", "stat": "permanentMagnet", "bonusVal": 1.6, "penaltyStat": "furyChargeMult", "penaltyVal": -0.06, "allowedInPerfectMode": true },
+        { "id": "iron_scale", "name": "Escama Reforçada", "bonus": "+1 Escudo (cap rígido)", "penalty": "-8% vel. de faixa", "stat": "shields", "bonusVal": 1, "penaltyStat": "laneSpeedMult", "penaltyVal": -0.08, "allowedInPerfectMode": false },
+        { "id": "vital_root", "name": "Raiz Vital", "bonus": "+1 Vida máx. (cap rígido)", "penalty": "-12% score", "stat": "maxHp", "bonusVal": 1, "penaltyStat": "scoreCardMult", "penaltyVal": -0.12, "allowedInPerfectMode": false },
+        { "id": "alpha_drive", "name": "Impulso Alfa", "bonus": "+15% pontos", "penalty": "+12% duração de debuffs", "stat": "scoreCardMult", "bonusVal": 0.15, "penaltyStat": "debuffDurationMult", "penaltyVal": 0.12, "allowedInPerfectMode": true },
+        { "id": "compact_form", "name": "Postura Compacta", "bonus": "-8% hitbox", "penalty": "-10% altura de pulo", "stat": "cardScaleMult", "bonusVal": -0.08, "penaltyStat": "jumpMult", "penaltyVal": -0.10, "allowedInPerfectMode": true },
+        { "id": "thermal_lungs", "name": "Pulmão Térmico", "bonus": "+25% reserva de O2", "penalty": "+8% gasto de estamina", "stat": "oxygenResist", "bonusVal": 0.25, "penaltyStat": "staminaCostMult", "penaltyVal": 0.08, "allowedInPerfectMode": true },
+        { "id": "blade_claw", "name": "Garra Afiada", "bonus": "+18% dano no ataque Q", "penalty": "+12% recarga do ataque Q", "stat": "attackDamageMult", "bonusVal": 0.18, "penaltyStat": "attackCooldownMult", "penaltyVal": 0.12, "allowedInPerfectMode": true },
+        { "id": "hunter_poise", "name": "Postura de Caçador", "bonus": "+15% poder de habilidade", "penalty": "-10% invulnerabilidade pós-hit", "stat": "abilityPowerMult", "bonusVal": 0.15, "penaltyStat": "postHitInvulnBonus", "penaltyVal": -0.10, "allowedInPerfectMode": true }
+      ]
+    },
+    {
+      "category": "pact",
+      "archetypes": [
+        { "id": "pact_blood", "name": "Pacto de Sangue", "bonus": "+32% pontos (com cap)", "penalty": "-1 Vida máxima obrigatória", "stat": "scoreCardMult", "bonusVal": 0.32, "penaltyStat": "maxHp", "penaltyVal": -1, "allowedInPerfectMode": true },
+        { "id": "pact_glass", "name": "Pacto do Canhão de Vidro", "bonus": "+40% dano contra bosses", "penalty": "Zera escudos e impede novos escudos", "stat": "attackDamageMult", "bonusVal": 0.40, "penaltyStat": "blockShields", "penaltyVal": 1, "allowedInPerfectMode": true },
+        { "id": "pact_fury", "name": "Pacto da Fúria Cega", "bonus": "+45% carga de Fúria", "penalty": "-20% alcance de visão", "stat": "furyChargeMult", "bonusVal": 0.45, "penaltyStat": "visionMult", "penaltyVal": -0.20, "allowedInPerfectMode": true },
+        { "id": "pact_tempo", "name": "Pacto do Cronômetro", "bonus": "-22% recarga de poder", "penalty": "+12% velocidade da pista", "stat": "cooldownMult", "bonusVal": -0.22, "penaltyStat": "speedPenalty", "penaltyVal": 0.12, "allowedInPerfectMode": true },
+        { "id": "pact_greed", "name": "Pacto da Ganância", "bonus": "+35% valor de ovos", "penalty": "+20% agressividade de predadores", "stat": "eggValueMult", "bonusVal": 0.35, "penaltyStat": "predatorAggroBonus", "penaltyVal": 0.20, "allowedInPerfectMode": true },
+        { "id": "pact_titan", "name": "Pacto do Titã Lento", "bonus": "+25% resistência a debuffs", "penalty": "-15% velocidade de faixa", "stat": "debuffResist", "bonusVal": 0.25, "penaltyStat": "laneSpeedMult", "penaltyVal": -0.15, "allowedInPerfectMode": true },
+        { "id": "pact_shadow", "name": "Pacto das Sombras", "bonus": "-10% hitbox", "penalty": "+20% dano de armadilhas", "stat": "cardScaleMult", "bonusVal": -0.10, "penaltyStat": "damageTakenMult", "penaltyVal": 0.20, "allowedInPerfectMode": true },
+        { "id": "pact_storm", "name": "Pacto da Tempestade", "bonus": "+30% poder de habilidade", "penalty": "-25% regeneração de estamina", "stat": "abilityPowerMult", "bonusVal": 0.30, "penaltyStat": "staminaRegenMult", "penaltyVal": -0.25, "allowedInPerfectMode": true },
+        { "id": "pact_fossil", "name": "Pacto Fóssil", "bonus": "+20% altura de pulo", "penalty": "+15% gravidade na queda", "stat": "jumpMult", "bonusVal": 0.20, "penaltyStat": "gravityMult", "penaltyVal": 0.15, "allowedInPerfectMode": true },
+        { "id": "pact_ember", "name": "Pacto das Brasas", "bonus": "Imunidade a Congelamento", "penalty": "+25% duração de Queimadura", "stat": "immuneFrostbite", "bonusVal": 1, "penaltyStat": "burnVuln", "penaltyVal": 0.25, "allowedInPerfectMode": true },
+        { "id": "pact_frost", "name": "Pacto do Gelo Eterno", "bonus": "Imunidade a Queimadura", "penalty": "+25% duração de Congelamento", "stat": "immuneBurn", "bonusVal": 1, "penaltyStat": "frostVuln", "penaltyVal": 0.25, "allowedInPerfectMode": true },
+        { "id": "pact_apex", "name": "Pacto do Ápice", "bonus": "+28% pontos & +18% ataque Q", "penalty": "+1 nível de Danger Tier imediato", "stat": "scoreCardMult", "bonusVal": 0.28, "penaltyStat": "dangerTierOffset", "penaltyVal": 1, "allowedInPerfectMode": true }
+      ]
+    },
+    {
+      "category": "relic",
+      "archetypes": [
+        { "id": "relic_antidote_charm", "name": "Amuleto Purificador", "bonus": "Reduz duração de veneno/sangramento em 25%", "penalty": "Custa 15 ovos na ativação", "costEggs": 15, "allowedInPerfectMode": true },
+        { "id": "relic_solar_lens", "name": "Lente Solar", "bonus": "Ameniza Névoa Cega em 30%", "penalty": "Custa 18 ovos na ativação", "costEggs": 18, "allowedInPerfectMode": true },
+        { "id": "relic_gyro_tooth", "name": "Dente Giroscópio", "bonus": "Reduz Vertigem e Abalo em 30%", "penalty": "Custa 16 ovos na ativação", "costEggs": 16, "allowedInPerfectMode": true },
+        { "id": "relic_anchor_claw", "name": "Garra Âncora", "bonus": "Estabiliza Faixas Escorregadias em 30%", "penalty": "Custa 15 ovos na ativação", "costEggs": 15, "allowedInPerfectMode": true },
+        { "id": "relic_gill_stone", "name": "Pedra Branquial", "bonus": "Reduz Vazamento de O2 em 30%", "penalty": "Custa 14 ovos na ativação", "costEggs": 14, "allowedInPerfectMode": true },
+        { "id": "relic_spark_core", "name": "Núcleo Isolante", "bonus": "Reduz Choque Estático em 30%", "penalty": "Custa 20 ovos na ativação", "costEggs": 20, "allowedInPerfectMode": true },
+        { "id": "relic_hunter_fang", "name": "Presa de Caçador", "bonus": "+12% dano contra bosses", "penalty": "Custa 25 ovos na ativação", "costEggs": 25, "allowedInPerfectMode": true },
+        { "id": "relic_chrono_shard", "name": "Fragmento Temporal", "bonus": "Reduz Maldição de Recarga em 35%", "penalty": "Custa 22 ovos na ativação", "costEggs": 22, "allowedInPerfectMode": true },
+        { "id": "relic_scent_mask", "name": "Talismã Sem Rastro", "bonus": "Reduz Cheiro de Presa em 35%", "penalty": "Custa 20 ovos na ativação", "costEggs": 20, "allowedInPerfectMode": true },
+        { "id": "relic_steady_heart", "name": "Coração Firme", "bonus": "Reduz Exaustão em 30%", "penalty": "Custa 16 ovos na ativação", "costEggs": 16, "allowedInPerfectMode": true },
+        { "id": "relic_truth_eye", "name": "Olho da Verdade", "bonus": "Reduz Miragens em 40%", "penalty": "Custa 20 ovos na ativação", "costEggs": 20, "allowedInPerfectMode": true },
+        { "id": "relic_ward_bone", "name": "Osso Protetor", "bonus": "Reduz Armadura Frágil em 25%", "penalty": "Custa 24 ovos na ativação", "costEggs": 24, "allowedInPerfectMode": false }
+      ]
+    },
+    {
+      "category": "backpack_item",
+      "archetypes": [
+        { "id": "item_antidote_vial", "name": "Frasco de Antídoto", "bonus": "Remove 2 debuffs ativos", "penalty": "Custo: 12 ovos | Recarga: 18s", "costEggs": 12, "cooldownSec": 18, "allowedInPerfectMode": true },
+        { "id": "item_thermal_flare", "name": "Sinalizador Térmico", "bonus": "Ilumina Névoa e derrete Gelo por 4s", "penalty": "Custo: 14 ovos | Recarga: 22s", "costEggs": 14, "cooldownSec": 22, "allowedInPerfectMode": true },
+        { "id": "item_stamina_berry", "name": "Fruta Energética", "bonus": "+35 Estamina imediata", "penalty": "Custo: 10 ovos | Recarga: 16s", "costEggs": 10, "cooldownSec": 16, "allowedInPerfectMode": true },
+        { "id": "item_smoke_decoy", "name": "Isca de Fumaça", "bonus": "Afasta predador por 3s", "penalty": "Custo: 18 ovos | Recarga: 26s", "costEggs": 18, "cooldownSec": 26, "allowedInPerfectMode": true },
+        { "id": "item_oxygen_capsule", "name": "Cápsula de Oxigênio", "bonus": "+45 O2 submerso", "penalty": "Custo: 12 ovos | Recarga: 20s", "costEggs": 12, "cooldownSec": 20, "allowedInPerfectMode": true },
+        { "id": "item_grip_resin", "name": "Resina Aderente", "bonus": "Anula pista escorregadia por 5s", "penalty": "Custo: 12 ovos | Recarga: 20s", "costEggs": 12, "cooldownSec": 20, "allowedInPerfectMode": true },
+        { "id": "item_clarity_tonic", "name": "Tônico de Clareza", "bonus": "Remove Controles Invertidos e Vertigem", "penalty": "Custo: 16 ovos | Recarga: 22s", "costEggs": 16, "cooldownSec": 22, "allowedInPerfectMode": true },
+        { "id": "item_grounding_rod", "name": "Haste de Aterramento", "bonus": "Remove Choque Estático e Silêncio", "penalty": "Custo: 16 ovos | Recarga: 24s", "costEggs": 16, "cooldownSec": 24, "allowedInPerfectMode": true },
+        { "id": "item_gravity_belt", "name": "Cinto Estabilizador", "bonus": "Neutraliza Gravidade Pesada por 5s", "penalty": "Custo: 15 ovos | Recarga: 22s", "costEggs": 15, "cooldownSec": 22, "allowedInPerfectMode": true },
+        { "id": "item_bandage_wrap", "name": "Bandagem Pré-Histórica", "bonus": "Estanca Sangramento e Queimadura", "penalty": "Custo: 12 ovos | Recarga: 18s", "costEggs": 12, "cooldownSec": 18, "allowedInPerfectMode": true },
+        { "id": "item_focus_crystal", "name": "Cristal de Foco", "bonus": "+25% carga de habilidade", "penalty": "Custo: 18 ovos | Recarga: 25s", "costEggs": 18, "cooldownSec": 25, "allowedInPerfectMode": true },
+        { "id": "item_emergency_shell", "name": "Casco Emergencial", "bonus": "+1 Escudo temporário (bloqueado no Perfeito)", "penalty": "Custo: 28 ovos | Recarga: 35s", "costEggs": 28, "cooldownSec": 35, "allowedInPerfectMode": false }
+      ]
+    }
+  ],
+  "tiers": [
+    { "id": "common", "rarity": "comum", "mult": 1.0, "costMult": 1.0, "dangerTierMin": 1 },
+    { "id": "rare", "rarity": "rara", "mult": 1.2, "costMult": 1.25, "dangerTierMin": 2 },
+    { "id": "epic", "rarity": "épica", "mult": 1.4, "costMult": 1.5, "dangerTierMin": 3 }
+  ]
+}

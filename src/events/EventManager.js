@@ -8,22 +8,23 @@ import { BossManager } from './BossManager.js';
 import { PredatorSystem } from './PredatorSystem.js';
 import { Save } from '../systems/Save.js';
 import { ContentLoader } from '../content/ContentLoader.js';
+import { EVENT_ARCHETYPES } from '../content/catalog_expanded.js';
 
-export const EVENT_CATALOG = [
-  // 12 Eventos Principais do Agendador (sem troca de bioma)
-  { id: 'meteor', label: 'Chuva de Meteoros', tier: 'essential', weight: 1.2, minScore: 0, schedulable: true, warningText: '⚠️ ALERTA: CHUVA DE METEOROS EM 2s!', warningColor: '#ff5e1a' },
-  { id: 'herd', label: 'Manada de Herbívoros', tier: 'essential', weight: 1.15, minScore: 0, schedulable: true, warningText: '🦕 ALERTA: MANADA EM FUGA CHEGANDO!', warningColor: '#58d63a' },
-  { id: 'electric_storm', label: 'Tempestade Elétrica', tier: 'essential', weight: 1.1, minScore: 1500, schedulable: true, warningText: '⚡ ALERTA: TEMPESTADE ELÉTRICA! Busque para-raios!', warningColor: '#fde047' },
-  { id: 'sandstorm', label: 'Tempestade de Areia', tier: 'essential', weight: 1.0, minScore: 2000, schedulable: true, warningText: '🌪️ ALERTA: TEMPESTADE DE AREIA SE APROXIMA!', warningColor: '#eab308' },
-  { id: 'ufo', label: 'OVNI Capturador', tier: 'essential', weight: 0.95, minScore: 2500, schedulable: true, warningText: '🛸 ALERTA: SINAL ALIENÍGENA DETECTADO!', warningColor: '#22d3ee' },
-  { id: 'earthquake', label: 'Terremoto & Fissuras', tier: 'essential', weight: 1.05, minScore: 2500, schedulable: true, warningText: '🌋 ALERTA: TREMOR SÍSMICO NA PISTA!', warningColor: '#f97316' },
-  { id: 'eclipse', label: 'Eclipse Sombrio', tier: 'essential', weight: 0.9, minScore: 3500, schedulable: true, warningText: '🌑 ALERTA: ECLIPSE SOMBRIO! Bônus de ovos!', warningColor: '#818cf8' },
-  { id: 'aurora', label: 'Aurora & Orbes', tier: 'bonus', weight: 0.95, minScore: 4000, schedulable: true, warningText: '✨ ALERTA: AURORA BOREAL! Bônus 1.5x de pontos!', warningColor: '#00f5d4' },
-  { id: 'egg_day', label: 'Chuva de Ovos Dourados', tier: 'essential', weight: 1.1, minScore: 0, schedulable: true, warningText: '🥚 ALERTA: CHUVA DE OVOS DOURADOS!', warningColor: '#ffd447' },
-  { id: 'egg_rush', label: 'Fuga de Ovos Raros', tier: 'advanced', weight: 1.0, minScore: 5000, schedulable: true, warningText: '🥚✨ ALERTA: FUGA DE OVOS RAROS NA PISTA!', warningColor: '#fbbf24' },
-  { id: 'lava_corridor', label: 'Travessia / Corredor de Lava', tier: 'advanced', weight: 0.9, minScore: 6000, schedulable: true, warningText: '🔥 ALERTA: CORREDOR DE LAVA À FRENTE!', warningColor: '#ff4500' },
-  { id: 'pterosaur_swarm', label: 'Enxame Aéreo de Pterossauros', tier: 'advanced', weight: 1.05, minScore: 3000, schedulable: true, warningText: '🦅 ALERTA: ENXAME AÉREO SE APROXIMANDO!', warningColor: '#a855f7' },
+// 36 arquétipos agendáveis data-driven (12 originais + 24 novos, sem troca de bioma)
+const SCHEDULABLE_CATALOG = EVENT_ARCHETYPES.map((arch) => ({
+  id: arch.id,
+  label: arch.label,
+  tier: arch.tier || 'advanced',
+  weight: arch.weight ?? 1.0,
+  minScore: arch.minScore ?? 0,
+  durationSec: arch.durationSec ?? 8.5,
+  debuffId: arch.debuffId ?? null,
+  schedulable: true,
+  warningText: arch.warningText,
+  warningColor: arch.warningColor
+}));
 
+const LEGACY_NON_SCHEDULABLE_EVENTS = [
   // Eventos adicionais / legados / invocáveis via Debug
   { id: 'pteros', label: 'Bando de Pterodáctilos', tier: 'essential', weight: 0.6, minScore: 1500, schedulable: false },
   { id: 'merchant', label: 'Mercador de Ovos', tier: 'essential', weight: 0.5, minScore: 3000, schedulable: false },
@@ -43,6 +44,11 @@ export const EVENT_CATALOG = [
   { id: 'magnetic_storm', label: 'Tempestade Magnética', tier: 'bonus', weight: 0.55, minScore: 3500, schedulable: false },
   { id: 'crystal_shower', label: 'Chuva de Cristais', tier: 'bonus', weight: 0.55, minScore: 3500, schedulable: false },
   { id: 'lunar_gravity', label: 'Gravidade Lunar', tier: 'bonus', weight: 0.5, minScore: 5000, schedulable: false }
+];
+
+export const EVENT_CATALOG = [
+  ...SCHEDULABLE_CATALOG,
+  ...LEGACY_NON_SCHEDULABLE_EVENTS
 ];
 
 const TEACHER_FRIENDLY_EVENTS = new Set([
@@ -123,6 +129,7 @@ export class EventManager {
     if (this.world.magneticTimer > 0) active.push('magnetic_storm');
     if (this.world.lunarTimer > 0) active.push('lunar_gravity');
     if (this.world.skySwarm.length > 0) active.push('pterosaur_swarm');
+    if (this.world.activeExpandedEvent) active.push(this.world.activeExpandedEvent.id);
     return active;
   }
 
@@ -180,12 +187,13 @@ export class EventManager {
       id = 'egg_day';
     }
 
+    const dangerTier = Math.max(1, Math.floor(ctx?.dangerTier ?? 1));
     switch (id) {
       case 'meteor':
         ctx.showBanner?.('☄️ CHUVA DE METEOROS! Desvie das sombras vermelhas!', '#ff5e1a');
         ctx.narrator?.say?.('meteor');
         ctx.sfx?.meteor?.();
-        if (!this.headless) this.core.spawnMeteorWave(5);
+        if (!this.headless) this.core.spawnMeteorWave(5, dangerTier);
         break;
       case 'herd':
         ctx.showBanner?.('🦕 MANADA DE HERBÍVOROS! Pule nas costas para carona!', '#58d63a');
@@ -246,7 +254,7 @@ export class EventManager {
         break;
       case 'lava_corridor':
         ctx.showBanner?.('🔥 CORREDOR DE LAVA! Pule entre as plataformas!', '#ff4500');
-        this.advanced.startLavaCorridor(9);
+        this.advanced.startLavaCorridor(9, dangerTier);
         break;
       case 'boss':
         if (this.bosses.activeBoss) return false;
@@ -330,8 +338,13 @@ export class EventManager {
         ctx.showBanner?.('🌙 GRAVIDADE LUNAR! Saltos mais altos e leves por 10s!', '#818cf8');
         this.world.triggerLunarGravity(10);
         break;
-      default:
-        return false;
+      default: {
+        const evDef = CATALOG_MAP.get(id);
+        if (!evDef || !evDef.schedulable) return false;
+        ctx.showBanner?.(evDef.warningText || `⚠️ ${evDef.label.toUpperCase()}!`, evDef.warningColor || '#f97316');
+        this.world.triggerExpandedEvent(evDef, dangerTier, ctx);
+        break;
+      }
     }
 
     if (id !== 'boss' && id !== 'chaser') {

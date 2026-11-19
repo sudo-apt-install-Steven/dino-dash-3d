@@ -65,6 +65,30 @@ export class WorldEvents {
     this.lightningRods = [];
     this.eggRushTimer = 0;
     this.eggRushCd = 0;
+    this.activeExpandedEvent = null;
+  }
+
+  triggerExpandedEvent(evDef, dangerTier = 1, ctx = {}) {
+    if (!evDef) return;
+    const tier = Math.max(1, Math.floor(dangerTier));
+    const intensity = 1 + (tier - 1) * 0.18;
+    const duration = Math.max(5.5, (evDef.durationSec || 8.5) * (1 + (tier - 1) * 0.08));
+    this.activeExpandedEvent = {
+      id: evDef.id,
+      timer: duration,
+      duration,
+      pulseCd: 0.45,
+      pulseInterval: Math.max(0.75, 1.85 / intensity),
+      debuffId: evDef.debuffId || null,
+      dangerTier: tier,
+      debuffApplied: false
+    };
+    if (evDef.id === 'seismic_barrage' || evDef.id === 'sonic_tremor') {
+      ctx.cameraRig?.triggerShake?.(0.45 * Math.min(1.5, intensity), 0.35);
+    }
+    if (evDef.id === 'gale_crosswind' || evDef.id === 'blizzard_squall') {
+      ctx.weather?.setWeather?.('wind');
+    }
   }
 
   // 121. Estampida reversa: vêm por trás (+Z -> -Z)!
@@ -704,6 +728,50 @@ export class WorldEvents {
         ctx.spawner?.spawnEggArc?.(Math.floor(Math.random() * 3), 3, true, -55);
       }
     }
+
+    // 138-161. Eventos Expandidos (24 novos arquétipos escalados por Danger Tier, sem troca de bioma)
+    if (this.activeExpandedEvent) {
+      const ev = this.activeExpandedEvent;
+      ev.timer -= dt;
+      ev.pulseCd -= dt;
+
+      if (!ev.debuffApplied && ev.debuffId) {
+        ev.debuffApplied = true;
+        for (let i = 0; i < players.length; i++) {
+          const p = players[i];
+          if (!p || p.dead) continue;
+          ctx.applyStatus?.(p, ev.debuffId, Math.min(6.5, 3.2 + ev.dangerTier * 0.45));
+        }
+      }
+
+      if (ev.pulseCd <= 0) {
+        ev.pulseCd = ev.pulseInterval;
+        ctx.spawner?.spawnFromCatalog?.(null, {
+          dangerTier: ev.dangerTier,
+          biomeId: ctx.currentBiome?.id
+        });
+        if (ev.id === 'seismic_barrage' || ev.id === 'sonic_tremor' || ev.id === 'cataclysm_gauntlet') {
+          ctx.cameraRig?.triggerShake?.(0.26, 0.16);
+        }
+        if (ev.id === 'ash_fallout' || ev.id === 'venom_mist' || ev.id === 'void_eclipse') {
+          if (ctx.scene?.fog) ctx.scene.fog.density = 0.028;
+        }
+      }
+
+      if (ev.id === 'gale_crosswind') {
+        const push = Math.sin(ev.timer * 2.4) * 1.15 * dt;
+        for (let i = 0; i < players.length; i++) {
+          const p = players[i];
+          if (p && !p.dead && typeof p.x === 'number') {
+            p.x = Math.max(LANE_X[0], Math.min(LANE_X[2], p.x + push));
+          }
+        }
+      }
+
+      if (ev.timer <= 0) {
+        this.activeExpandedEvent = null;
+      }
+    }
   }
 
   clear() {
@@ -746,5 +814,6 @@ export class WorldEvents {
     this.lightningRods = [];
     this.eggRushTimer = 0;
     this.eggRushCd = 0;
+    this.activeExpandedEvent = null;
   }
 }
