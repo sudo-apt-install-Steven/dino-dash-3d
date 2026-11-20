@@ -56,18 +56,20 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: false,
     chunkSizeWarningLimit: 1050,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes('node_modules/three')) return 'vendor-three';
-          if (id.includes('node_modules/@supabase') || id.includes('node_modules/qrcode')) return 'vendor-net';
-          if (id.includes('/src/modes/') || id.includes('\\src\\modes\\')) return 'modes-3d';
-          if (id.includes('VoxelAccessories') || id.includes('LimitedDinoModels') || id.includes('DungeonProps')) return 'voxel-ultra';
-          if (id.includes('ultra_catalog') || id.includes('dungeon_catalog') || id.includes('limited_dinos') || id.includes('extra_biomes')) return 'ultra-content';
-          if (id.includes('/src/content/') || id.includes('\\src\\content\\')) return 'game-content';
-          if (id.includes('ClaudeVoxelModels') || id.includes('VoxelLibrary') || id.includes('BossModels') || id.includes('PredatorModels')) return 'game-models';
-          if (id.includes('CustomizationScreen') || id.includes('SelectionScreen')) return 'game-ui-screens';
-          if (id.includes('/src/ui/') || id.includes('\\src\\ui\\')) return 'game-ui';
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-three', test: /[\\/]node_modules[\\/]three[\\/]/, priority: 40 },
+            { name: 'vendor-net', test: /[\\/]node_modules[\\/](@supabase|qrcode)[\\/]/, priority: 40 },
+            { name: 'modes-3d', test: /[\\/]src[\\/]modes[\\/]/, priority: 30 },
+            { name: 'voxel-ultra', test: /(VoxelAccessories|LimitedDinoModels|DungeonProps)/, priority: 30 },
+            { name: 'ultra-content', test: /(ultra_catalog|dungeon_catalog|limited_dinos|extra_biomes)/, priority: 30 },
+            { name: 'game-content', test: /[\\/]src[\\/]content[\\/]/, priority: 20 },
+            { name: 'game-models', test: /(ClaudeVoxelModels|VoxelLibrary|BossModels|PredatorModels)/, priority: 25 },
+            { name: 'game-ui-screens', test: /(CustomizationScreen|SelectionScreen)/, priority: 25 },
+            { name: 'game-ui', test: /[\\/]src[\\/]ui[\\/]/, priority: 15 }
+          ]
         }
       }
     }
