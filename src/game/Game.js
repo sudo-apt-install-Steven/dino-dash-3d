@@ -57,6 +57,8 @@ import { TvHud } from '../ui/TvHud.js';
 import { startAuthoritativeRun, finishAuthoritativeRun } from '../security/EdgeClient.js';
 import { exportWatermarkedSnapshot } from '../security/Watermark.js';
 
+const FREE_3D_MODES = new Set(['arena_x1', 'boss_arena', 'dungeon_rpg', 'dungeon_rush', 'adventure_open']);
+
 export class Game {
   constructor(canvas, uiRoot) {
     this.canvas = canvas;
@@ -155,6 +157,8 @@ export class Game {
     this.bossRushState = null;
     this.raceState = null;
     this.freeRoamState = null;
+    this.activeFreeMode = null;
+    this._freeModeLaunchToken = 0;
     this.raceAiRacers = [];
     this._predatorHazards = [];
     this._currentDangerTier = { tier: 0, speedBonus: 0, densityBonus: 0, eventFreqBonus: 0, predatorAggro: 1.0 };
@@ -204,6 +208,7 @@ export class Game {
       this.cameraP2.aspect = w / h;
       this.cameraP2.updateProjectionMatrix();
       this.renderer.setSize(w, h);
+      this.activeFreeMode?.onResize?.(w, h);
     };
     window.addEventListener('resize', this._onResize);
     this._unsubOrientation = OrientationManager.onChange(() => this._onResize());
@@ -1130,7 +1135,7 @@ export class Game {
       const slotCustom = slot.customization && typeof slot.customization === 'object' ? slot.customization : null;
       const localCustom = slotCustom || ((pKey === 'p1' || pKey === 'p2') ? getActivePreset(pKey) : {});
       const eqSkinVariant = slotCustom?.skinVariant || (i === 0 ? getEquippedSkinVariant(dinoId) : (slot.skinVariant || localCustom.skinVariant || 'normal'));
-      const eqMutationId = i === 0 ? (Save.data.equippedMutation || 'amber_core') : null;
+      const eqMutationId = i === 0 ? (Save.data.equippedMutation || null) : null;
       const eqMutationTier = (i === 0 && eqMutationId) ? getMutationActiveLevel(eqMutationId) : 1;
       const mutProfile = eqMutationId ? getMutationComputedProfile(eqMutationId, eqMutationTier) : null;
       const hybridsAllowed = !this.multiplayerSession?.active || this.multiplayerSession.allowHybrids !== false;
@@ -1309,7 +1314,77 @@ export class Game {
     }
   }
 
+  _disposeFreeMode() {
+    this._freeModeLaunchToken = (this._freeModeLaunchToken || 0) + 1;
+    if (this.activeFreeMode) {
+      try {
+        this.activeFreeMode.dispose?.();
+      } catch (err) {
+        console.warn('Erro ao encerrar modo 3D livre:', err);
+      }
+      this.activeFreeMode = null;
+    }
+    if (this.world?.worldGroup) this.world.worldGroup.visible = true;
+    if (this.world?.scenery?.group) this.world.scenery.group.visible = true;
+  }
+
+  async _startFree3DMode(modeId, opts = {}) {
+    this._disposeFreeMode();
+    const launchToken = this._freeModeLaunchToken;
+
+    this.state = 'playing';
+    this.photoMode = false;
+    this.pendingRestart = false;
+    this.spotlightActive = false;
+    this.ui?._clearModal?.();
+    this.ui.hud.resetAllOverlays();
+    this.ui.hud.setPlayingUI(false);
+
+    for (const p of this.players) {
+      if (p?.model?.root) this.scene.remove(p.model.root);
+    }
+    this.players = [];
+    this.spawner.reset();
+    this.events.reset();
+    this.abilities.clear();
+    this.particles.clear();
+    this._clearDebris();
+    if (this.world?.worldGroup) this.world.worldGroup.visible = false;
+    if (this.world?.scenery?.group) this.world.scenery.group.visible = false;
+
+    try {
+      let ModeClass = null;
+      const modeOpts = { ...opts, modeId };
+      if (modeId === 'arena_x1') {
+        ({ ArenaX1Mode: ModeClass } = await import('../modes/ArenaX1Mode.js'));
+      } else if (modeId === 'boss_arena') {
+        ({ BossArenaMode: ModeClass } = await import('../modes/BossArenaMode.js'));
+      } else if (modeId === 'dungeon_rpg' || modeId === 'dungeon_rush') {
+        ({ DungeonRPGMode: ModeClass } = await import('../modes/DungeonRPGMode.js'));
+        modeOpts.rush = modeId === 'dungeon_rush';
+      } else if (modeId === 'adventure_open') {
+        ({ AdventureOpenMode: ModeClass } = await import('../modes/AdventureOpenMode.js'));
+      }
+
+      if (launchToken !== this._freeModeLaunchToken || this.state !== 'playing' || !ModeClass) {
+        if (this.world?.worldGroup) this.world.worldGroup.visible = true;
+        if (this.world?.scenery?.group) this.world.scenery.group.visible = true;
+        return;
+      }
+
+      const instance = new ModeClass(this, modeOpts);
+      this.activeFreeMode = instance;
+      await instance.mount();
+    } catch (err) {
+      console.error('Falha ao iniciar modo 3D livre:', modeId, err);
+      this._disposeFreeMode();
+      this.openMainMenu();
+      this.ui?.hud?.showBanner?.('⚠️ Não foi possível iniciar o modo 3D. Tente novamente.', '#ef4444', 3.2);
+    }
+  }
+
   openMainMenu() {
+    this._disposeFreeMode();
     this.state = 'menu';
     this.photoMode = false;
     this.spectatorMode = false;
@@ -1429,7 +1504,7 @@ export class Game {
       nextCardScoreByPeer: new Map()
     };
 
-    const mpNativeModes = new Set(['raid', 'boss_fight', 'race', 'competition', 'coop', 'free_roam']);
+    const mpNativeModes = new Set(['raid', 'boss_fight', 'race', 'competition', 'coop', 'free_roam', 'arena_x1', 'boss_arena', 'dungeon_rpg', 'dungeon_rush', 'adventure_open']);
     this.modeId = mpNativeModes.has(mpMode) ? mpMode : 'solo';
     this.net.broadcastHostStart({
       roomCode: room?.code,
@@ -1462,7 +1537,12 @@ export class Game {
       boss_fight: '👑 BOSS RUSH',
       competition: '🏅 LIGA COMPETITIVA',
       coop: '🤝 COOP TÁTICO',
-      free_roam: '🧪 LIVRE / SANDBOX'
+      free_roam: '🧪 LIVRE / SANDBOX',
+      arena_x1: '⚔️ ARENA X1 3D',
+      boss_arena: '👑 BOSS ARENA 3D',
+      dungeon_rpg: '🏰 MASMORRA RPG 3D',
+      dungeon_rush: '🗝️ CRIPTA INFINITA',
+      adventure_open: '🗺️ AVENTURA ABERTA 3D'
     };
     const modeLabel = mpBannerLabels[mpMode] || (isElim ? '⏳ ELIMINAÇÃO 30s' : '🏁 CORRIDA');
     this.ui.hud.showBanner(`🌐 ${modeLabel} INICIADA (${this.players.length} DINOS)!`, '#58d63a', 3.4);
@@ -1520,7 +1600,7 @@ export class Game {
       nextCardScoreByPeer: new Map()
     };
 
-    const mpNativeModes = new Set(['raid', 'boss_fight', 'race', 'competition', 'coop', 'free_roam']);
+    const mpNativeModes = new Set(['raid', 'boss_fight', 'race', 'competition', 'coop', 'free_roam', 'arena_x1', 'boss_arena', 'dungeon_rpg', 'dungeon_rush', 'adventure_open']);
     this.modeId = mpNativeModes.has(mpMode) ? mpMode : 'solo';
     this.startRun(false, {
       keepMultiplayerSession: true,
@@ -1683,6 +1763,11 @@ export class Game {
     if (typeof isTestTrack === 'object' && isTestTrack !== null) {
       opts = isTestTrack;
       isTestTrack = Boolean(opts.isTestTrack);
+    }
+    this._disposeFreeMode();
+    if (!isTestTrack && FREE_3D_MODES.has(this.modeId)) {
+      this._startFree3DMode(this.modeId, opts);
+      return;
     }
     this.isTestTrack = isTestTrack;
     this.pendingRestart = false;
@@ -1870,23 +1955,31 @@ export class Game {
       pl.model.root.position.y = pl.baseY;
     }
 
-    // Mutação Equipada (ou sorteada apenas se nenhuma estiver selecionada)
+    // Mutação Equipada (respeita null quando o jogador desativou mutações)
     if (!isTestTrack && this.players[0]) {
-      const mut = getMutationDef(Save.data.equippedMutation) || rollRandomMutation();
+      const mut = Save.data.equippedMutation ? getMutationDef(Save.data.equippedMutation) : null;
       this.activeMutation = mut;
-      if (mut.id === 'tiny_core' && !this.players[0].mutationMods) this.players[0].smallHitbox = true;
-      const mutText = `🧬 ${mut.badge || '🧬'} ${mut.name}: ${mut.desc}`;
-      if (Save.data.perfectMode && this.modeId !== 'zen') {
+      if (mut) {
+        if (mut.id === 'tiny_core' && !this.players[0].mutationMods) this.players[0].smallHitbox = true;
+        const mutText = `🧬 ${mut.badge || '🧬'} ${mut.name}: ${mut.desc}`;
+        if (Save.data.perfectMode && this.modeId !== 'zen') {
+          this._pendingStartBanners.push({
+            text: `💎 MODO PERFEITO (1 Vida • Score 2.2x) • ${mutText}`,
+            color: '#38bdf8',
+            dur: 4.2
+          });
+        } else {
+          this._pendingStartBanners.push({
+            text: mutText,
+            color: '#c084fc',
+            dur: 3.4
+          });
+        }
+      } else if (Save.data.perfectMode && this.modeId !== 'zen') {
         this._pendingStartBanners.push({
-          text: `💎 MODO PERFEITO (1 Vida • Score 2.2x) • ${mutText}`,
+          text: '💎 MODO PERFEITO (1 Vida • Score 2.2x)',
           color: '#38bdf8',
-          dur: 4.2
-        });
-      } else {
-        this._pendingStartBanners.push({
-          text: mutText,
-          color: '#c084fc',
-          dur: 3.4
+          dur: 4.0
         });
       }
     }
@@ -2185,6 +2278,7 @@ export class Game {
   }
 
   restartRun() {
+    this._disposeFreeMode();
     this.pendingRestart = false;
     this.ui.hud.showRestartConfirm(false);
     if (this.tutorialState) {
@@ -6191,8 +6285,18 @@ export class Game {
     this.lastTime = now;
 
     this.input.beginFrame();
-    this._updateGlobalKeys();
+    if (!this.activeFreeMode) {
+      this._updateGlobalKeys();
+    }
     this.ui.hud.tickTimers(dt);
+    if (this.activeFreeMode) {
+      if (this.state === 'playing') {
+        this.activeFreeMode.update?.(dt);
+      }
+      this.renderer.render(this.scene, this.camera);
+      this.input.endFrame();
+      return;
+    }
     if (this.state === 'playing' && !this.radialWheelOpen && !this.spotlightActive && this.radialCooldown > 0) {
       this.radialCooldown = Math.max(0, this.radialCooldown - dt);
     }
@@ -6390,6 +6494,7 @@ export class Game {
   }
 
   destroy() {
+    this._disposeFreeMode();
     cancelAnimationFrame(this._rafId);
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('pointerdown', this._unlockAudio);

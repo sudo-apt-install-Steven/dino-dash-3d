@@ -1,4 +1,6 @@
-// Catálogo completo de 20 dinossauros (19 + 1 secreto) com atributos balanceados, classes, habilidades e custos.
+// Catálogo completo de 63 dinossauros (50 principais + 13 limitados/eventos) com atributos balanceados, classes, habilidades e custos.
+import { LIMITED_DINO_CATALOG, getDinoDisplayName } from '../content/limited_dinos.js';
+export { getDinoDisplayName };
 
 export const DINO_CLASSES = {
   carnivore: {
@@ -782,7 +784,8 @@ export const DINO_CATALOG = [
       pt: 'Híbrido alado cristalino nascido das fendas temporais entre a Terra Oca e a Estação Orbital.',
       en: 'Crystalline winged hybrid born from temporal rifts linking Hollow Earth and the Orbital Station.'
     }
-  }
+  },
+  ...LIMITED_DINO_CATALOG
 ];
 
 export function getDinoSpec(id) {

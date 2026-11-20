@@ -61,8 +61,12 @@ export default defineConfig({
         manualChunks(id) {
           if (id.includes('node_modules/three')) return 'vendor-three';
           if (id.includes('node_modules/@supabase') || id.includes('node_modules/qrcode')) return 'vendor-net';
+          if (id.includes('/src/modes/') || id.includes('\\src\\modes\\')) return 'modes-3d';
+          if (id.includes('VoxelAccessories') || id.includes('LimitedDinoModels') || id.includes('DungeonProps')) return 'voxel-ultra';
+          if (id.includes('ultra_catalog') || id.includes('dungeon_catalog') || id.includes('limited_dinos') || id.includes('extra_biomes')) return 'ultra-content';
           if (id.includes('/src/content/') || id.includes('\\src\\content\\')) return 'game-content';
           if (id.includes('ClaudeVoxelModels') || id.includes('VoxelLibrary') || id.includes('BossModels') || id.includes('PredatorModels')) return 'game-models';
+          if (id.includes('CustomizationScreen') || id.includes('SelectionScreen')) return 'game-ui-screens';
           if (id.includes('/src/ui/') || id.includes('\\src\\ui\\')) return 'game-ui';
         }
       }

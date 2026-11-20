@@ -1,12 +1,19 @@
 // Personalização de cores, padrões, acessórios, rastros, presets, loja e mutações aleatórias.
 import { Save } from '../systems/Save.js';
 import {
+  ACCESSORY_SLOTS,
+  ACCESSORY_SLOT_META,
+  getAccessorySlot
+} from '../models/VoxelAccessories.js';
+import {
   NEW_ACCESSORY_ARCHETYPES,
   NEW_SKIN_ARCHETYPES,
   NEW_TRAIL_ARCHETYPES,
   NEW_PATTERN_ARCHETYPES,
   NEW_MUTATION_ARCHETYPES
 } from '../content/collection_expanded.js';
+
+export { ACCESSORY_SLOTS, ACCESSORY_SLOT_META, getAccessorySlot };
 
 export const PATTERNS = [
   { id: 'solid', label: 'Liso' },
@@ -474,20 +481,23 @@ export function applySkinVariantToColors(baseColors, variantId) {
 }
 
 export function getMutationDef(id) {
+  if (!id) return null;
   return MUTATIONS.find((m) => m.id === id) || null;
 }
 
 export function isMutationUnlocked(id) {
+  if (!id) return false;
   return (Save.data.unlockedMutations || ['amber_core']).includes(id);
 }
 
 export function getMutationUnlockedLevel(id) {
-  if (!isMutationUnlocked(id)) return 0;
+  if (!id || !isMutationUnlocked(id)) return 0;
   const lv = Number(Save.data.mutationLevels?.[id] || 1);
   return Math.max(1, Math.min(MAX_MUTATION_LEVEL, lv));
 }
 
 export function getMutationActiveLevel(id) {
+  if (!id) return 0;
   const maxLv = getMutationUnlockedLevel(id);
   if (maxLv <= 0) return 1;
   const active = Number(Save.data.mutationActiveTiers?.[id] || maxLv);
@@ -614,6 +624,145 @@ export function getActivePreset(playerKey = 'p1') {
   return cfg.presets[cfg.activePreset] || cfg.presets[0];
 }
 
+export function getEquippedAccessories(preset) {
+  if (!preset || typeof preset !== 'object') return [];
+  const raw = Array.isArray(preset.accessories) && preset.accessories.length
+    ? preset.accessories
+    : (preset.accessory && preset.accessory !== 'none' ? [preset.accessory] : []);
+  const seenSlots = new Set();
+  const seenIds = new Set();
+  const out = [];
+  for (const id of raw) {
+    if (typeof id !== 'string' || !id || id === 'none' || seenIds.has(id)) continue;
+    const slot = getAccessorySlot(id);
+    if (slot) {
+      if (seenSlots.has(slot)) continue;
+      seenSlots.add(slot);
+    }
+    seenIds.add(id);
+    out.push(id);
+    if (out.length >= ACCESSORY_SLOTS.length) break;
+  }
+  return out;
+}
+
+export function toggleAccessoryInPreset(preset, accId) {
+  if (!preset || typeof preset !== 'object') {
+    return { equipped: false, slot: null, accessories: [] };
+  }
+  const current = getEquippedAccessories(preset);
+  if (!accId || accId === 'none') {
+    preset.accessories = [];
+    preset.accessory = 'none';
+    Save.save();
+    return { equipped: false, slot: null, accessories: [] };
+  }
+  const slot = getAccessorySlot(accId);
+  let equipped = false;
+  let next;
+  if (current.includes(accId)) {
+    next = current.filter((id) => id !== accId);
+    equipped = false;
+  } else {
+    next = slot ? current.filter((id) => getAccessorySlot(id) !== slot) : [...current];
+    next.push(accId);
+    equipped = true;
+  }
+  preset.accessories = next.slice(0, ACCESSORY_SLOTS.length);
+  preset.accessory = preset.accessories[0] || 'none';
+  Save.save();
+  return { equipped, slot, accessories: [...preset.accessories] };
+}
+
+export function clearAllAccessories(preset) {
+  if (!preset || typeof preset !== 'object') return [];
+  preset.accessories = [];
+  preset.accessory = 'none';
+  Save.save();
+  return [];
+}
+
+export function toggleMutation(mutationId) {
+  if (!mutationId) {
+    Save.data.equippedMutation = null;
+    Save.save();
+    return null;
+  }
+  if (Save.data.equippedMutation === mutationId) {
+    Save.data.equippedMutation = null;
+  } else {
+    Save.data.equippedMutation = mutationId;
+  }
+  Save.save();
+  return Save.data.equippedMutation;
+}
+
+export function deactivateMutation() {
+  Save.data.equippedMutation = null;
+  Save.save();
+  return null;
+}
+
+export function resetPresetToDefault(slot = 'p1', dinoId = Save.data.selectedDino) {
+  const cfg = Save.data.customization?.[slot] || Save.data.customization?.p1;
+  const preset = cfg?.presets?.[cfg.activePreset] || cfg?.presets?.[0];
+  if (!preset) return null;
+
+  const curSkin = getEquippedSkinVariant(dinoId);
+  const curMut = Save.data.equippedMutation || null;
+  const curAccs = getEquippedAccessories(preset);
+  const isAlreadyDefault = (
+    !preset.useCustomColors &&
+    (preset.pattern || 'solid') === 'solid' &&
+    curAccs.length === 0 &&
+    (preset.trail || 'dust') === 'dust' &&
+    (preset.landingEffect || 'dust') === 'dust' &&
+    (preset.deathEffect || 'cubes') === 'cubes' &&
+    curSkin === 'normal' &&
+    curMut === null
+  );
+
+  if (!isAlreadyDefault && cfg) {
+    cfg._lastCustomBackup = {
+      preset: JSON.parse(JSON.stringify(preset)),
+      skinVariant: curSkin,
+      equippedMutation: curMut,
+      dinoId,
+      savedAt: Date.now()
+    };
+  }
+
+  preset.useCustomColors = false;
+  preset.pattern = 'solid';
+  preset.accessories = [];
+  preset.accessory = 'none';
+  preset.trail = 'dust';
+  preset.landingEffect = 'dust';
+  preset.deathEffect = 'cubes';
+  if (!Save.data.equippedSkinVariants) Save.data.equippedSkinVariants = {};
+  Save.data.equippedSkinVariants[dinoId] = 'normal';
+  Save.data.equippedMutation = null;
+  Save.save();
+  return preset;
+}
+
+export function restoreLastCustomization(slot = 'p1', dinoId = Save.data.selectedDino) {
+  const cfg = Save.data.customization?.[slot] || Save.data.customization?.p1;
+  const backup = cfg?._lastCustomBackup;
+  if (!cfg || !backup || !backup.preset) return false;
+  const preset = cfg.presets?.[cfg.activePreset] || cfg.presets?.[0];
+  if (!preset) return false;
+
+  Object.assign(preset, JSON.parse(JSON.stringify(backup.preset)));
+  preset.accessories = getEquippedAccessories(preset);
+  preset.accessory = preset.accessories[0] || 'none';
+  if (!Save.data.equippedSkinVariants) Save.data.equippedSkinVariants = {};
+  Save.data.equippedSkinVariants[dinoId || backup.dinoId || Save.data.selectedDino] = backup.skinVariant || 'normal';
+  Save.data.equippedMutation = backup.equippedMutation || null;
+  Save.save();
+  return true;
+}
+
 export function randomizePreset(preset) {
   const palette = ['#3fa34d', '#e05a2b', '#2d7dd2', '#8338ec', '#e9c46a', '#f72585', '#1f8a8c', '#ff9f1c'];
   const pick = () => palette[Math.floor(Math.random() * palette.length)];
@@ -625,7 +774,9 @@ export function randomizePreset(preset) {
   preset.spikes = pick();
   preset.pattern = PATTERNS[Math.floor(Math.random() * PATTERNS.length)].id;
   const unlockedAcc = Save.data.unlockedAccessories || ['none'];
-  preset.accessory = unlockedAcc[Math.floor(Math.random() * unlockedAcc.length)];
+  const pickedAcc = unlockedAcc[Math.floor(Math.random() * unlockedAcc.length)];
+  preset.accessory = pickedAcc || 'none';
+  preset.accessories = pickedAcc && pickedAcc !== 'none' ? [pickedAcc] : [];
   Save.save();
   return preset;
 }

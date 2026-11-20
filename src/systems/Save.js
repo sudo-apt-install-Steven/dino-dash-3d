@@ -10,7 +10,7 @@ const IDB_STORE = 'saves';
 const IDB_KEY = 'primary';
 const CHECKPOINT_COOKIE = 'dd3d_chk';
 
-export const SAVE_SCHEMA_VERSION = 4;
+export const SAVE_SCHEMA_VERSION = 5;
 export const MAX_SAVE_IMPORT_BYTES = 512 * 1024;
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -28,18 +28,20 @@ const DEFAULT_SAVE = {
   customization: {
     p1: {
       activePreset: 0,
+      _lastCustomBackup: null,
       presets: [
-        { useCustomColors: false, primary: '#3fa34d', secondary: '#c7e89b', eye: '#ffd54f', spots: '#1e5b2b', spikes: '#e87a24', pattern: 'solid', accessory: 'none', trail: 'dust', landingEffect: 'dust', deathEffect: 'cubes' },
-        { useCustomColors: true, primary: '#e05a2b', secondary: '#ffd89c', eye: '#ffffff', spots: '#781d0c', spikes: '#ffca3a', pattern: 'stripes', accessory: 'none', trail: 'fire', landingEffect: 'sparks', deathEffect: 'cubes' },
-        { useCustomColors: true, primary: '#2d7dd2', secondary: '#a7e8ff', eye: '#ffeb3b', spots: '#143c6d', spikes: '#52e3e1', pattern: 'spots', accessory: 'none', trail: 'stars', landingEffect: 'dust', deathEffect: 'cubes' }
+        { useCustomColors: false, primary: '#3fa34d', secondary: '#c7e89b', eye: '#ffd54f', spots: '#1e5b2b', spikes: '#e87a24', pattern: 'solid', accessory: 'none', accessories: [], trail: 'dust', landingEffect: 'dust', deathEffect: 'cubes' },
+        { useCustomColors: true, primary: '#e05a2b', secondary: '#ffd89c', eye: '#ffffff', spots: '#781d0c', spikes: '#ffca3a', pattern: 'stripes', accessory: 'none', accessories: [], trail: 'fire', landingEffect: 'sparks', deathEffect: 'cubes' },
+        { useCustomColors: true, primary: '#2d7dd2', secondary: '#a7e8ff', eye: '#ffeb3b', spots: '#143c6d', spikes: '#52e3e1', pattern: 'spots', accessory: 'none', accessories: [], trail: 'stars', landingEffect: 'dust', deathEffect: 'cubes' }
       ]
     },
     p2: {
       activePreset: 0,
+      _lastCustomBackup: null,
       presets: [
-        { useCustomColors: false, primary: '#e07a24', secondary: '#ffe3a8', eye: '#ffffff', spots: '#7d2f0c', spikes: '#f4d35e', pattern: 'stripes', accessory: 'none', trail: 'dust', landingEffect: 'dust', deathEffect: 'cubes' },
-        { useCustomColors: true, primary: '#8338ec', secondary: '#e0b1ff', eye: '#52ffe8', spots: '#3a0ca3', spikes: '#ffbe0b', pattern: 'neon', accessory: 'none', trail: 'rainbow', landingEffect: 'sparks', deathEffect: 'cubes' },
-        { useCustomColors: true, primary: '#2a9d8f', secondary: '#b7f4ea', eye: '#ffd166', spots: '#154d46', spikes: '#e76f51', pattern: 'camo', accessory: 'none', trail: 'dust', landingEffect: 'dust', deathEffect: 'cubes' }
+        { useCustomColors: false, primary: '#e07a24', secondary: '#ffe3a8', eye: '#ffffff', spots: '#7d2f0c', spikes: '#f4d35e', pattern: 'stripes', accessory: 'none', accessories: [], trail: 'dust', landingEffect: 'dust', deathEffect: 'cubes' },
+        { useCustomColors: true, primary: '#8338ec', secondary: '#e0b1ff', eye: '#52ffe8', spots: '#3a0ca3', spikes: '#ffbe0b', pattern: 'neon', accessory: 'none', accessories: [], trail: 'rainbow', landingEffect: 'sparks', deathEffect: 'cubes' },
+        { useCustomColors: true, primary: '#2a9d8f', secondary: '#b7f4ea', eye: '#ffd166', spots: '#154d46', spikes: '#e76f51', pattern: 'camo', accessory: 'none', accessories: [], trail: 'dust', landingEffect: 'dust', deathEffect: 'cubes' }
       ]
     }
   },
@@ -166,6 +168,7 @@ const DEFAULT_SAVE = {
       positions: {}
     },
     disableGachaVoluntary: false,
+    personalNames: false,
     audio: { music: 0.45, sfx: 0.75, muted: false },
     accessibility: {
       oneHand: false,
@@ -265,8 +268,30 @@ function mergeDefaults(target, defaults) {
   return target;
 }
 
+function migratePresetAccessories(customization) {
+  if (!customization || typeof customization !== 'object') return;
+  for (const key of ['p1', 'p2']) {
+    const slot = customization[key];
+    if (!slot || typeof slot !== 'object') continue;
+    if (slot._lastCustomBackup === undefined) slot._lastCustomBackup = null;
+    if (!Array.isArray(slot.presets)) continue;
+    for (const preset of slot.presets) {
+      if (!preset || typeof preset !== 'object') continue;
+      if (!Array.isArray(preset.accessories)) {
+        preset.accessories = (preset.accessory && preset.accessory !== 'none') ? [preset.accessory] : [];
+      } else {
+        preset.accessories = preset.accessories.filter((a) => typeof a === 'string' && a && a !== 'none');
+        if (!preset.accessories.length && preset.accessory && preset.accessory !== 'none') {
+          preset.accessories = [preset.accessory];
+        }
+      }
+      preset.accessory = preset.accessories[0] || 'none';
+    }
+  }
+}
+
 /**
- * Migra saves de versões antigas (v1/v2/v3 ou campos legados) para o schema atual v4.
+ * Migra saves de versões antigas (v1/v2/v3/v4 ou campos legados) para o schema atual v5.
  */
 export function migrateSaveData(rawObj, sourceVersion = 1) {
   const clean = sanitizePlainObject(rawObj) || {};
@@ -288,7 +313,11 @@ export function migrateSaveData(rawObj, sourceVersion = 1) {
   if (migrated.network?.nickname && (!migrated.profile || !migrated.profile.nickname)) {
     migrated.profile = { ...(migrated.profile || {}), nickname: migrated.network.nickname };
   }
-  if (sourceVersion < 4) {
+  migratePresetAccessories(migrated.customization);
+  if (migrated.equippedMutation === '' || migrated.equippedMutation === 'none') {
+    migrated.equippedMutation = null;
+  }
+  if (sourceVersion < SAVE_SCHEMA_VERSION) {
     migrated.schemaVersion = SAVE_SCHEMA_VERSION;
   }
   return migrated;
@@ -417,6 +446,10 @@ class SaveSystem {
     const prevBenchVer = clean?.benchmarkVersion || 1;
     const loaded = mergeDefaults(deepClone(clean), DEFAULT_SAVE);
     loaded.schemaVersion = SAVE_SCHEMA_VERSION;
+    migratePresetAccessories(loaded.customization);
+    if (loaded.equippedMutation === '' || loaded.equippedMutation === 'none' || loaded.equippedMutation === undefined) {
+      loaded.equippedMutation = null;
+    }
 
     const freeStarters = DEFAULT_SAVE.unlockedDinos;
     if (!Array.isArray(loaded.unlockedDinos)) loaded.unlockedDinos = [...freeStarters];

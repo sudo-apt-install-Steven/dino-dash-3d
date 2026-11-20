@@ -7,6 +7,16 @@ import {
   SKIN_VARIANTS,
   MUTATIONS,
   MAX_MUTATION_LEVEL,
+  ACCESSORY_SLOTS,
+  ACCESSORY_SLOT_META,
+  getAccessorySlot,
+  getEquippedAccessories,
+  toggleAccessoryInPreset,
+  clearAllAccessories,
+  toggleMutation,
+  deactivateMutation,
+  resetPresetToDefault,
+  restoreLastCustomization,
   getSkinVariantDef,
   isSkinVariantUnlocked,
   unlockSkinVariant,
@@ -144,13 +154,14 @@ export class CustomizationScreen {
       const dinoId = Save.data.selectedDino || 'trex';
       const dinoSpec = getDinoSpec(dinoId);
       const activeVariantId = playerSlot === 'p1' ? getEquippedSkinVariant(dinoId) : (preset.skinVariant || 'normal');
-      const activeMutationId = Save.data.equippedMutation || 'amber_core';
-      const activeMutationTier = getMutationActiveLevel(activeMutationId);
+      const activeMutationId = Save.data.equippedMutation || null;
+      const activeMutationTier = activeMutationId ? getMutationActiveLevel(activeMutationId) : 0;
+      const equippedAccs = getEquippedAccessories(preset);
       const effectiveColors = applySkinVariantToColors(dinoSpec.colors || {}, activeVariantId);
       const previewCfg = activeVariantId && activeVariantId !== 'normal'
-        ? { ...preset, ...effectiveColors, useCustomColors: true }
-        : preset;
-      return { cfg, preset, dinoId, dinoSpec, activeVariantId, activeMutationId, activeMutationTier, previewCfg };
+        ? { ...preset, ...effectiveColors, accessories: equippedAccs, useCustomColors: true }
+        : { ...preset, accessories: equippedAccs };
+      return { cfg, preset, dinoId, dinoSpec, activeVariantId, activeMutationId, activeMutationTier, equippedAccs, previewCfg };
     };
 
     const initial = buildPreviewState();
@@ -172,6 +183,7 @@ export class CustomizationScreen {
             <button class="tab-btn active" data-pslot="p1">Jogador 1</button>
             <button class="tab-btn" data-pslot="p2">Jogador 2</button>
             <button class="tab-btn active" data-stab="colors">Cores & Padrões</button>
+            <button class="tab-btn" data-stab="accessories">🎒 Acessórios (Multi-Slot)</button>
             <button class="tab-btn" data-stab="skins">✨ Skins & Mecânico</button>
             <button class="tab-btn" data-stab="mutations">🧬 Mutações DNA</button>
             <button class="tab-btn" data-stab="shop">Loja & Ovos</button>
@@ -192,6 +204,10 @@ export class CustomizationScreen {
               <div style="display:flex; gap:8px; margin-top:10px;">
                 <button class="chunky-btn orange" id="cust-random" style="flex:1;">🎲 Aleatório</button>
                 <button class="chunky-btn secondary" id="cust-native" style="padding:12px 14px;">Cores Nativas</button>
+              </div>
+              <div style="display:flex; gap:8px; margin-top:8px;">
+                <button class="tab-btn" id="cust-reset-default" style="flex:1; border-color:#f59e0b; color:#fde047;">🦖 Dino 100% Padrão</button>
+                <button class="tab-btn" id="cust-restore-backup" style="flex:1; border-color:#38bdf8; color:#7dd3fc;" ${initial.cfg._lastCustomBackup ? '' : 'disabled'}>♻️ Restaurar Visual</button>
               </div>
             </div>
 
@@ -231,10 +247,13 @@ export class CustomizationScreen {
       const savedCardScroll = modalCard ? modalCard.scrollTop : 0;
       const rightEl = container.querySelector('#cust-right');
       const savedRightScroll = rightEl ? rightEl.scrollTop : 0;
-      const { cfg, preset, dinoId, dinoSpec, activeVariantId, activeMutationId, activeMutationTier, previewCfg } = buildPreviewState();
+      const { cfg, preset, dinoId, dinoSpec, activeVariantId, activeMutationId, activeMutationTier, equippedAccs, previewCfg } = buildPreviewState();
       const eggStatus = ProgressionManager.getMysteryEggStatus();
       const rotatingShop = ProgressionManager.getRotatingShop();
       const merged = getMergedCatalog();
+
+      const restoreBtn = container.querySelector('#cust-restore-backup');
+      if (restoreBtn) restoreBtn.disabled = !cfg._lastCustomBackup;
 
       container.querySelector('#cust-eggs-val').textContent = Save.data.eggs;
       container.querySelector('#cust-cryst-val').textContent = Save.data.crystals || 0;
@@ -254,6 +273,14 @@ export class CustomizationScreen {
 
       const filteredSkins = merged.skins.filter((v) => matchesFilter(v));
       const filteredMuts = merged.mutations.filter((m) => matchesFilter(m));
+      const unlockedAccItems = merged.accessories.filter(
+        (a) => a.id !== 'none' && Save.data.unlockedAccessories.includes(a.id) && matchesFilter(a, getAccessorySlot(a.id) || '')
+      );
+      const accBySlot = {};
+      for (const accId of equippedAccs) {
+        const sl = getAccessorySlot(accId);
+        if (sl && !accBySlot[sl]) accBySlot[sl] = accId;
+      }
       const shopAccs = (shopCategory === 'all' || shopCategory === 'accessory')
         ? merged.accessories.filter((a) => (a.price || 0) > 0 && matchesFilter(a, 'acessório accessory'))
         : [];
@@ -261,7 +288,51 @@ export class CustomizationScreen {
         ? merged.trails.filter((t) => (t.price || 0) > 0 && matchesFilter(t, 'rastro trail'))
         : [];
 
-      rightEl.innerHTML = subTab === 'skins' ? `
+      rightEl.innerHTML = subTab === 'accessories' ? `
+        <div class="item-card" style="margin-bottom:10px; border-color:#f59e0b;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div>
+              <strong style="color:#fde047;">🎒 Acessórios Multi-Slot (${equippedAccs.length}/${ACCESSORY_SLOTS.length} ativos)</strong>
+              <p style="font-size:0.78rem; color:#d4d4d8; margin:3px 0 0;">
+                Combine até 6 acessórios simultâneos (1 por slot: Cabeça, Rosto, Pescoço, Costas, Ombros e Aura)!
+              </p>
+            </div>
+            <button class="tab-btn" id="cust-clear-accs" ${equippedAccs.length ? '' : 'disabled'} style="border-color:#ef4444; color:#fca5a5;">
+              🧹 Remover Todos Acessórios
+            </button>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+            ${ACCESSORY_SLOTS.map((slotId) => {
+              const meta = ACCESSORY_SLOT_META[slotId] || { icon: '🎒', label: slotId };
+              const eqId = accBySlot[slotId] || null;
+              const eqItem = eqId ? merged.accessories.find((a) => a.id === eqId) : null;
+              return `
+                <div class="hud-pill" style="display:inline-flex; align-items:center; gap:5px; font-size:0.75rem; ${eqId ? 'border-color:#58d63a; color:#bbf7d0;' : 'opacity:0.65;'}">
+                  <span>${meta.icon} ${escapeHtml(meta.label)}: <strong>${eqItem ? escapeHtml(eqItem.name) : 'Vazio'}</strong></span>
+                  ${eqId ? `<button type="button" class="tab-btn" data-unequip-acc="${escapeHtml(eqId)}" title="Remover" style="padding:1px 6px; font-size:0.72rem; border-color:#ef4444; color:#fca5a5;">×</button>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+        ${renderFilterToolbar(merged.accessories)}
+        <div class="cards-grid cust-scroll-grid" style="grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));">
+          ${unlockedAccItems.length ? unlockedAccItems.map((a) => {
+            const isEq = equippedAccs.includes(a.id);
+            const sl = getAccessorySlot(a.id);
+            const slMeta = sl ? ACCESSORY_SLOT_META[sl] : null;
+            return `
+              <div class="item-card ${isEq ? 'selected' : ''} rarity-${String(a.rarity || 'comum').toLowerCase()}">
+                <small style="color:#ffd447;">${slMeta ? `${slMeta.icon} ${escapeHtml(slMeta.label)}` : '🎒 Extra'} • ${escapeHtml(a.rarity || 'Comum')}</small>
+                <strong>${escapeHtml(a.name)}</strong>
+                <button class="tab-btn ${isEq ? 'active' : ''}" data-toggle-acc="${escapeHtml(a.id)}">
+                  ${isEq ? '✔ Equipado (Remover)' : 'Equipar'}
+                </button>
+              </div>
+            `;
+          }).join('') : `<div class="item-card" style="grid-column:1/-1; text-align:center; color:#d8c2a6;">Nenhum acessório desbloqueado corresponde ao filtro. Desbloqueie na aba Loja & Ovos!</div>`}
+        </div>
+      ` : subTab === 'skins' ? `
         <div class="item-card" style="margin-bottom:10px; border-color:#f59e0b;">
           <strong style="color:#fde047;">✨ Variantes Especiais (${filteredSkins.length}/${merged.skins.length}) — ${dinoSpec.name}</strong>
           <p style="font-size:0.8rem; color:#d4d4d8; margin:4px 0 0;">
@@ -299,10 +370,19 @@ export class CustomizationScreen {
         </div>
       ` : subTab === 'mutations' ? `
         <div class="item-card" style="margin-bottom:10px; border-color:#5eead4;">
-          <strong style="color:#5eead4;">🧬 Laboratório de Mutações Evolutivas (${filteredMuts.length}/${merged.mutations.length})</strong>
-          <p style="font-size:0.8rem; color:#cbd5e1; margin:4px 0 0;">
-            Evolua até Nv.4 para amplificar poder (como <strong>+2/+4/+6/+8 Patas</strong>!). Toda mutação traz <strong>Prós reais</strong> e <strong>Contras realistas</strong> na física.
-          </p>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div>
+              <strong style="color:#5eead4;">🧬 Laboratório de Mutações Evolutivas (${filteredMuts.length}/${merged.mutations.length})</strong>
+              <p style="font-size:0.8rem; color:#cbd5e1; margin:4px 0 0;">
+                Evolua até Nv.4 para amplificar poder (como <strong>+2/+4/+6/+8 Patas</strong>!). Toda mutação traz <strong>Prós reais</strong> e <strong>Contras realistas</strong> na física.
+              </p>
+            </div>
+            ${activeMutationId ? `
+              <button class="tab-btn" id="cust-clear-mut" style="border-color:#ef4444; color:#fca5a5;">
+                🚫 Desativar Mutação
+              </button>
+            ` : '<span class="hud-pill" style="font-size:0.75rem; opacity:0.8;">Sem mutação ativa</span>'}
+          </div>
         </div>
         ${renderFilterToolbar(merged.mutations)}
         <div class="cards-grid cust-scroll-grid" style="grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));">
@@ -345,7 +425,7 @@ export class CustomizationScreen {
                 ${owned ? `
                   <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
                     <button class="tab-btn ${equipped ? 'active' : ''}" data-equip-mut="${escapeHtml(m.id)}" style="flex:1;">
-                      ${equipped ? '✔ Ativa' : 'Ativar'}
+                      ${equipped ? '✔ Ativa (Desativar)' : 'Ativar'}
                     </button>
                     <button class="tab-btn" data-upgrade-mut="${escapeHtml(m.id)}" ${isMax ? 'disabled' : ''} style="border-color:#f59e0b; color:#fde047;">
                       ${isMax ? 'MAX Nv.4' : `⬆ Nv.${unlockedLv + 1} (${nextCost} 🥚)`}
@@ -465,12 +545,13 @@ export class CustomizationScreen {
         <div class="cards-grid cust-scroll-grid" style="grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));">
           ${shopAccs.map((a) => {
             const owned = Save.data.unlockedAccessories.includes(a.id);
+            const isEq = equippedAccs.includes(a.id);
             return `
-              <div class="item-card rarity-${String(a.rarity || 'comum').toLowerCase()}">
+              <div class="item-card ${isEq ? 'selected' : ''} rarity-${String(a.rarity || 'comum').toLowerCase()}">
                 <small style="color:#ffd447;">${escapeHtml(a.rarity || 'Comum')} • Acessório</small>
                 <strong>${escapeHtml(a.name)}</strong>
                 <button class="tab-btn ${owned ? 'active' : ''}" data-buy-acc="${escapeHtml(a.id)}">
-                  ${owned ? (preset.accessory === a.id ? 'Equipado' : 'Equipar') : `Comprar (${a.price} 🥚)`}
+                  ${owned ? (isEq ? '✔ Equipado (Remover)' : 'Equipar') : `Comprar (${a.price} 🥚)`}
                 </button>
               </div>
             `;
@@ -520,7 +601,35 @@ export class CustomizationScreen {
         );
       }
 
-      if (subTab === 'skins') {
+      if (subTab === 'accessories') {
+        rightEl.querySelector('#cust-clear-accs')?.addEventListener('click', () => {
+          clearAllAccessories(preset);
+          statusMsg = '🧹 Todos os acessórios foram removidos!';
+          if (onApplyCustom) onApplyCustom();
+          render({ updatePreview: true });
+        });
+        rightEl.querySelectorAll('[data-unequip-acc]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-unequip-acc');
+            toggleAccessoryInPreset(preset, id);
+            statusMsg = 'Acessório removido do slot.';
+            if (onApplyCustom) onApplyCustom();
+            render({ updatePreview: true });
+          });
+        });
+        rightEl.querySelectorAll('[data-toggle-acc]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-toggle-acc');
+            const item = merged.accessories.find((x) => x.id === id);
+            const res = toggleAccessoryInPreset(preset, id);
+            statusMsg = res.equipped
+              ? `🎒 ${item?.name || id} equipado (${res.accessories.length}/${ACCESSORY_SLOTS.length} slots)!`
+              : `🎒 ${item?.name || id} removido.`;
+            if (onApplyCustom) onApplyCustom();
+            render({ updatePreview: true });
+          });
+        });
+      } else if (subTab === 'skins') {
         rightEl.querySelectorAll('[data-equip-variant]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const vid = btn.getAttribute('data-equip-variant');
@@ -560,13 +669,20 @@ export class CustomizationScreen {
           });
         });
       } else if (subTab === 'mutations') {
+        rightEl.querySelector('#cust-clear-mut')?.addEventListener('click', () => {
+          deactivateMutation();
+          statusMsg = '🚫 Mutação desativada! Seu dino está puro.';
+          if (onApplyCustom) onApplyCustom();
+          render({ updatePreview: true });
+        });
         rightEl.querySelectorAll('[data-equip-mut]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const mid = btn.getAttribute('data-equip-mut');
             const mdef = getMutationDef(mid);
-            Save.data.equippedMutation = mid;
-            Save.save();
-            statusMsg = `🧬 Mutação "${mdef?.name || mid}" ativada!`;
+            const nextMut = toggleMutation(mid);
+            statusMsg = nextMut
+              ? `🧬 Mutação "${mdef?.name || mid}" ativada!`
+              : `🚫 Mutação "${mdef?.name || mid}" desativada!`;
             if (onApplyCustom) onApplyCustom();
             render({ updatePreview: true });
           });
@@ -656,7 +772,15 @@ export class CustomizationScreen {
         bind('#c-spots', 'spots');
         bind('#c-spikes', 'spikes');
         rightEl.querySelector('#c-pattern')?.addEventListener('change', (e) => { preset.pattern = e.target.value; refreshPreview(); });
-        rightEl.querySelector('#c-acc')?.addEventListener('change', (e) => { preset.accessory = e.target.value; refreshPreview(); });
+        rightEl.querySelector('#c-acc')?.addEventListener('change', (e) => {
+          const val = e.target.value;
+          if (val === 'none') {
+            clearAllAccessories(preset);
+          } else {
+            toggleAccessoryInPreset(preset, val);
+          }
+          refreshPreview();
+        });
         rightEl.querySelector('#c-trail')?.addEventListener('change', (e) => { preset.trail = e.target.value; refreshPreview(); });
         rightEl.querySelector('#c-landing')?.addEventListener('change', (e) => { preset.landingEffect = e.target.value; refreshPreview(); });
         rightEl.querySelector('#c-death')?.addEventListener('change', (e) => { preset.deathEffect = e.target.value; refreshPreview(); });
@@ -702,9 +826,10 @@ export class CustomizationScreen {
               Save.addEggs(-item.price);
               Save.data.unlockedAccessories.push(id);
             }
-            preset.accessory = id;
-            Save.save();
-            statusMsg = `${item.name} equipado!`;
+            const res = toggleAccessoryInPreset(preset, id);
+            statusMsg = res.equipped
+              ? `${item.name} equipado (${res.accessories.length}/${ACCESSORY_SLOTS.length} slots)!`
+              : `${item.name} removido.`;
             if (onApplyCustom) onApplyCustom();
             render({ updatePreview: true });
           });
@@ -790,6 +915,24 @@ export class CustomizationScreen {
       if (playerSlot === 'p1') setEquippedSkinVariant(dinoId, 'normal');
       Save.save();
       statusMsg = '🦎 Cores nativas da espécie restauradas!';
+      if (onApplyCustom) onApplyCustom();
+      render({ updatePreview: true });
+    });
+
+    container.querySelector('#cust-reset-default')?.addEventListener('click', () => {
+      const { dinoId } = buildPreviewState();
+      resetPresetToDefault(playerSlot, dinoId);
+      statusMsg = '🦖 Dino 100% Padrão restaurado (cores, acessórios, skin e mutação limpos)!';
+      if (onApplyCustom) onApplyCustom();
+      render({ updatePreview: true });
+    });
+
+    container.querySelector('#cust-restore-backup')?.addEventListener('click', () => {
+      const { dinoId } = buildPreviewState();
+      const ok = restoreLastCustomization(playerSlot, dinoId);
+      statusMsg = ok
+        ? '♻️ Visual personalizado anterior restaurado!'
+        : 'Nenhum visual salvo para restaurar.';
       if (onApplyCustom) onApplyCustom();
       render({ updatePreview: true });
     });

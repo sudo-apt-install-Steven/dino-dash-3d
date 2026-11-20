@@ -4,9 +4,11 @@ import * as THREE from 'three';
 import { getDinoSpec } from './DinoCatalog.js';
 import { applySkinVariantToColors, getMutationActiveLevel, getMutationComputedProfile } from './DinoCustomization.js';
 import { buildClaudeAccessoryGroup } from '../models/ClaudeVoxelModels.js';
+import { attachSculptedAccessory, buildSculptedAccessoryStandalone, getAccessorySlot } from '../models/VoxelAccessories.js';
+import { LIMITED_BODY_SPECS, applyLimitedDinoDetails } from '../models/LimitedDinoModels.js';
 
-const AQUATIC_SPECIES = ['mosasaurus', 'elasmosaurus', 'dunkleosteus', 'liopleurodon', 'plesiosaurus', 'kronosaurus', 'archelon'];
-const FLYING_SPECIES = ['quetzalcoatlus', 'pteranodon', 'tapejara', 'dimorphodon', 'hatzegopteryx', 'archaeopteryx', 'microraptor', 'chrono_wyvern'];
+const AQUATIC_SPECIES = ['mosasaurus', 'elasmosaurus', 'dunkleosteus', 'liopleurodon', 'plesiosaurus', 'kronosaurus', 'archelon', 'abissal_espectral'];
+const FLYING_SPECIES = ['quetzalcoatlus', 'pteranodon', 'tapejara', 'dimorphodon', 'hatzegopteryx', 'archaeopteryx', 'microraptor', 'chrono_wyvern', 'dragao_lunar'];
 
 const SHARED_BOX = new THREE.BoxGeometry(1, 1, 1);
 
@@ -116,12 +118,15 @@ export class DinoFactory {
     const matPupil = createMat('#111111', { roughness: 0.2 });
     const matTooth = createMat('#f7f4e8', { roughness: 0.35 });
 
-    // Proporções por espécie (suporta híbridos cabeça/corpo/cauda!)
-    const isQuadruped = ['triceratops', 'styracosaurus', 'stegosaurus', 'ankylosaurus', 'brachiosaurus', 'kentrosaurus', 'diplodocus', 'argentinosaurus', 'amargasaurus', 'edmontonia'].includes(bodyId);
+    // Proporções por espécie (suporta híbridos cabeça/corpo/cauda e dinos limitados!)
+    const limitedSpec = LIMITED_BODY_SPECS[bodyId] || null;
+    const isQuadruped = ['triceratops', 'styracosaurus', 'stegosaurus', 'ankylosaurus', 'brachiosaurus', 'kentrosaurus', 'diplodocus', 'argentinosaurus', 'amargasaurus', 'edmontonia'].includes(bodyId)
+      || Boolean(limitedSpec?.proportions?.quadruped);
     const isAquatic = AQUATIC_SPECIES.includes(bodyId);
     const isFlying = FLYING_SPECIES.includes(bodyId);
     const isTailAquatic = AQUATIC_SPECIES.includes(tailId);
-    const bodyScale = bodyId === 'compsognathus' || bodyId === 'dimorphodon' ? 0.68
+    const bodyScale = limitedSpec?.scale ?? (
+      bodyId === 'compsognathus' || bodyId === 'dimorphodon' ? 0.68
       : bodyId === 'microraptor' ? 0.72
       : bodyId === 'archaeopteryx' ? 0.78
       : bodyId === 'oviraptor' ? 0.8
@@ -137,7 +142,8 @@ export class DinoFactory {
       : bodyId === 'acrocanthosaurus' ? 1.1
       : bodyId === 'raptor' || bodyId === 'dilophosaurus' || bodyId === 'deinonychus' || bodyId === 'utahraptor' || bodyId === 'cyber_raptor' ? 0.9
       : bodyId === 'ankylosaurus' || bodyId === 'kentrosaurus' || bodyId === 'dunkleosteus' || bodyId === 'edmontonia' || bodyId === 'chrono_wyvern' ? 1.05
-      : 1.0;
+      : 1.0
+    );
 
     // Rig hierárquico para animações procedurais
     const rig = new THREE.Group();
@@ -753,9 +759,47 @@ export class DinoFactory {
       armR = buildArm(torsoW * 0.48);
     }
 
-    // Acessórios cúbicos + Mutações 3D (incluindo +2/+4/+6/+8 Patas articuladas) + skins sazonais
+    // Detalhes esculpidos exclusivos dos 13 dinossauros limitados
+    if (limitedSpec) {
+      applyLimitedDinoDetails(bodyId, {
+        root,
+        rig,
+        torso,
+        neckPivot,
+        headGroup,
+        jaw,
+        eyeGroups,
+        tailSegments,
+        torsoW,
+        torsoH,
+        torsoD,
+        colors,
+        materials: { matPrimary, matPrimaryDark, matSecondary, matSpots, matSpikes, matEyeWhite, matEyeIris, matPupil, matTooth },
+        addVoxel,
+        createMat
+      });
+    }
+
+    // Acessórios cúbicos (multi-slot simultâneo até 6 slots) + Mutações 3D (incluindo +2/+4/+6/+8 Patas articuladas) + skins sazonais
     const extraLegs = [];
-    DinoFactory._attachAccessory(accessory, headGroup, torso, torsoW, torsoH, torsoD);
+    const rawAccList = Array.isArray(customConfig?.accessories) && customConfig.accessories.length
+      ? customConfig.accessories
+      : (accessory && accessory !== 'none' ? [accessory] : []);
+    const usedSlots = new Set();
+    const accList = [];
+    for (const accId of rawAccList) {
+      if (!accId || accId === 'none') continue;
+      const slot = getAccessorySlot(accId);
+      if (slot && usedSlots.has(slot)) continue;
+      if (slot) usedSlots.add(slot);
+      accList.push(accId);
+    }
+    for (const accId of accList) {
+      const sculpted = attachSculptedAccessory(accId, headGroup, torso, torsoW, torsoH, torsoD);
+      if (!sculpted) {
+        DinoFactory._attachAccessory(accId, headGroup, torso, torsoW, torsoH, torsoD);
+      }
+    }
     DinoFactory._attachMutation(mutationId, headGroup, torso, torsoW, torsoH, torsoD, {
       mutationTier,
       matPrimary,
@@ -766,8 +810,11 @@ export class DinoFactory {
       isAquatic,
       isFlying
     });
-    if (customConfig?.partyCrown && accessory !== 'crown') {
-      DinoFactory._attachAccessory('crown', headGroup, torso, torsoW, torsoH, torsoD);
+    if (customConfig?.partyCrown && !accList.includes('crown') && !usedSlots.has('head')) {
+      const sculptedCrown = attachSculptedAccessory('crown', headGroup, torso, torsoW, torsoH, torsoD);
+      if (!sculptedCrown) {
+        DinoFactory._attachAccessory('crown', headGroup, torso, torsoW, torsoH, torsoD);
+      }
     }
     const season = customConfig?.season;
     if (season === 'xmas') {
@@ -1389,11 +1436,16 @@ export class DinoFactory {
   static buildAccessoryStandalone(accessoryId, fallbackHex = '#ffd447') {
     const root = new THREE.Group();
     const inner = new THREE.Group();
-    const headGroup = new THREE.Group();
-    const torso = new THREE.Group();
-    DinoFactory._attachAccessory(accessoryId, headGroup, torso, 1.0, 1.0, 1.08);
-    if (headGroup.children.length > 0) inner.add(headGroup);
-    if (torso.children.length > 0) inner.add(torso);
+    const sculpted = buildSculptedAccessoryStandalone(accessoryId);
+    if (sculpted?.slot && sculpted.root?.children?.length > 0) {
+      inner.add(sculpted.root);
+    } else {
+      const headGroup = new THREE.Group();
+      const torso = new THREE.Group();
+      DinoFactory._attachAccessory(accessoryId, headGroup, torso, 1.0, 1.0, 1.08);
+      if (headGroup.children.length > 0) inner.add(headGroup);
+      if (torso.children.length > 0) inner.add(torso);
+    }
 
     const box = new THREE.Box3().setFromObject(inner);
     if (box.isEmpty()) {

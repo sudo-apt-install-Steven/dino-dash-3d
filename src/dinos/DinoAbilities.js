@@ -358,6 +358,114 @@ export class DinoAbilities {
         gameCtx.clearNearbyObstacles?.(player.x, player.z, 18, true);
         gameCtx.showFloatText?.(player, 'PULSO TEMPORAL!', '#c084fc');
         break;
+      // === 13 DINOSSAUROS LIMITADOS / EVENTOS (ULTRA EXPANSÃO) ===
+      case 'scary_raptor':
+        player.turboTimer = Math.max(player.turboTimer || 0, player.abilityDuration);
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.75);
+        this._spawnWave(player.x, player.z, '#1fb6c8', 18);
+        for (let k = -1; k <= 1; k++) {
+          this._spawnProjectile(player.x + k * 0.65, 1.1, player.z - 0.8, k * 2.2, -50, this.plasmaMat);
+        }
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 22, true);
+        gameCtx.spawnEggRain?.(3);
+        gameCtx.showFloatText?.(player, 'INFECÇÃO FÓSSIL!', '#facc15');
+        break;
+      case 'dracorex_solar':
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.8);
+        this._spawnWave(player.x, player.z, '#facc15', 22);
+        for (let i = -1; i <= 1; i++) {
+          this._spawnProjectile(player.x + i * 0.55, 1.2, player.z - 0.9, i * 1.2, -56, this.spikeMat);
+        }
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 28, false);
+        gameCtx.showFloatText?.(player, 'RAIO SOLAR!', '#fde047');
+        break;
+      case 'nebulossauro':
+        player.magnetTimer = Math.max(player.magnetTimer || 0, player.abilityDuration + 2.2);
+        this._spawnWave(player.x, player.z, '#a855f7', 20);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 18, true);
+        gameCtx.healPartner?.(player);
+        gameCtx.showFloatText?.(player, 'TROMBETA ESTELAR!', '#c084fc');
+        break;
+      case 'cristaloceratops':
+        player.ramTimer = Math.max(player.ramTimer || 0, player.abilityDuration);
+        player.shields = Math.min(5, (player.shields || 0) + 1);
+        this._spawnWave(player.x, player.z, '#38bdf8', 18);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 22, false);
+        gameCtx.showFloatText?.(player, 'CARGA DE CRISTAL!', '#7ff0ff');
+        break;
+      case 'abissal_espectral':
+        player.diveTimer = Math.max(player.diveTimer || 0, player.abilityDuration);
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration);
+        this._spawnWave(player.x, player.z, '#22d3ee', 20);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 20, true);
+        gameCtx.showFloatText?.(player, 'MARÉ FANTASMA!', '#67e8f9');
+        break;
+      case 'pirofenix_rex':
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.85);
+        this._spawnWave(player.x, player.z, '#f97316', 28);
+        gameCtx.cameraRig?.triggerShake(0.6, 0.3);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 34, false);
+        gameCtx.showFloatText?.(player, 'EXPLOSÃO FÊNIX!', '#fb923c');
+        break;
+      case 'cryo_spino_aurora':
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.85);
+        player.ramTimer = Math.max(player.ramTimer || 0, player.abilityDuration);
+        this._spawnWave(player.x, player.z, '#34d399', 20);
+        for (let k = -1; k <= 1; k++) {
+          this._spawnProjectile(player.x + k * 0.7, 1.1, player.z - 0.8, k * 1.4, -48, this.plasmaMat);
+        }
+        gameCtx.showFloatText?.(player, 'VELA BOREAL!', '#5eead4');
+        break;
+      case 'dragao_lunar':
+        player.extraJumps = Math.max(player.extraJumps || 0, 2);
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.85);
+        this._spawnWave(player.x, player.z, '#c084fc', 22);
+        for (let k = -1; k <= 1; k++) {
+          this._spawnProjectile(player.x + k * 0.8, 2.4, player.z - 0.8, k * 2.0, -52, this.chronoMat);
+        }
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 24, true);
+        gameCtx.showFloatText?.(player, 'SOPRO DE ECLIPSE!', '#e0e7ff');
+        break;
+      case 'meca_indominus_zero':
+        player.stealth = true;
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.85);
+        this._spawnWave(player.x, player.z, '#38bdf8', 26);
+        for (let i = 0; i < 4; i++) {
+          this._spawnProjectile(player.x + (i - 1.5) * 0.65, 1.1, player.z - 1.0, 0, -58, this.plasmaMat);
+        }
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 32, false);
+        gameCtx.showFloatText?.(player, 'SOBRECARGA ZERO!', '#38bdf8');
+        break;
+      case 'lich_rex_dungeon':
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.75);
+        player.shields = Math.min(5, (player.shields || 0) + 1);
+        this._spawnWave(player.x, player.z, '#4ade80', 24);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 26, false);
+        gameCtx.showFloatText?.(player, 'DECRETO NECRÓTICO!', '#4ade80');
+        break;
+      case 'gladiador_carno':
+        player.ramTimer = Math.max(player.ramTimer || 0, player.abilityDuration);
+        player.turboTimer = Math.max(player.turboTimer || 0, player.abilityDuration * 0.85);
+        this._spawnWave(player.x, player.z, '#f59e0b', 18);
+        gameCtx.pushPvPRival?.(player);
+        gameCtx.stunPvPRival?.(player);
+        gameCtx.showFloatText?.(player, 'INVESTIDA DA ARENA!', '#fcd34d');
+        break;
+      case 'crono_raptor':
+        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration);
+        player.turboTimer = Math.max(player.turboTimer || 0, player.abilityDuration);
+        this._spawnWave(player.x, player.z, '#c084fc', 16);
+        gameCtx.showFloatText?.(player, 'SALTO CRONOLÓGICO!', '#c084fc');
+        break;
+      case 'florassauro_primavera':
+        player.stamina = Math.min(player.maxStamina || 100, (player.stamina || 0) + 70);
+        player.shields = Math.min(5, (player.shields || 0) + 1);
+        player.magnetTimer = Math.max(player.magnetTimer || 0, player.abilityDuration);
+        this._spawnWave(player.x, player.z, '#f472b6', 20);
+        gameCtx.healPartner?.(player);
+        gameCtx.clearNearbyObstacles?.(player.x, player.z, 18, true);
+        gameCtx.showFloatText?.(player, 'DESABROCHAR VITAL!', '#4ade80');
+        break;
       default:
         break;
     }
