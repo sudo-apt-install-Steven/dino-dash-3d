@@ -799,17 +799,65 @@ function buildGroup(accId) {
   return g;
 }
 
+function detectHeadFrill(headGroup) {
+  if (!headGroup) return null;
+  if (headGroup.userData?.hasFrill) {
+    return { topY: headGroup.userData.frillTopY ?? 0.87, frontZ: headGroup.userData.frillFrontZ ?? 0.06 };
+  }
+  let maxTopY = 0;
+  let minFrontZ = Infinity;
+  let found = false;
+  for (const ch of headGroup.children || []) {
+    if (!ch || !ch.isMesh) continue;
+    const sx = Math.abs(ch.scale?.x || 0);
+    const sy = Math.abs(ch.scale?.y || 0);
+    const sz = Math.abs(ch.scale?.z || 0);
+    const topY = (ch.position?.y || 0) + sy * 0.5;
+    if (sx >= 0.75 && sy >= 0.55 && sz <= 0.32 && topY >= 0.55 && (ch.position?.z || 0) >= -0.05) {
+      const frontZ = (ch.position?.z || 0) - sz * 0.5;
+      if (topY > maxTopY) maxTopY = topY;
+      if (frontZ < minFrontZ) minFrontZ = frontZ;
+      found = true;
+    }
+  }
+  return found ? { topY: maxTopY, frontZ: minFrontZ } : null;
+}
+
 /** Monta e anexa o acessório (único por ID). Retorna o Group (ou null se desconhecido). */
 export function attachSculptedAccessory(accId, headGroup, torso, torsoW = 0.78, torsoH = 0.72, torsoD = 1.08) {
   if (!accId || accId === 'none') return null;
   const g = buildGroup(accId);
   if (!g) return null;
   const slot = g.userData.slot;
+  const base = g.userData.accessoryId;
   let parent = torso;
-  if (slot === 'head') { parent = headGroup; g.position.set(0, 0.42, -0.18); }
+  if (slot === 'head') {
+    parent = headGroup;
+    const frill = detectHeadFrill(headGroup);
+    if (frill) {
+      if (base === 'halo') {
+        g.position.set(0, Math.max(0.62, frill.topY - 0.2), -0.24);
+      } else {
+        const box = new THREE.Box3().setFromObject(g);
+        const rawMaxZ = Number.isFinite(box.max.z) ? box.max.z : 0.4;
+        const scale = rawMaxZ > 0.42 ? 0.82 : 0.92;
+        g.scale.setScalar(scale);
+        const targetZ = Math.min(-0.34, frill.frontZ - 0.03 - rawMaxZ * scale);
+        g.position.set(0, 0.46, targetZ);
+      }
+    } else {
+      g.position.set(0, 0.42, -0.18);
+    }
+  }
   else if (slot === 'face') { parent = headGroup; g.position.set(0, 0.25, -0.59); }
   else if (slot === 'neck') g.position.set(0, torsoH * 0.4, -torsoD * 0.38);
-  else if (slot === 'back') g.position.set(0, torsoH * 0.9, torsoD * 0.1);
+  else if (slot === 'back') {
+    if (base === 'turtle_shell') {
+      g.position.set(0, torsoH * 0.6, -torsoD * 0.36);
+    } else {
+      g.position.set(0, torsoH * 0.74, torsoD * 0.1);
+    }
+  }
   else if (slot === 'shoulders') { g.position.set(0, torsoH * 0.82, 0); g.scale.x = Math.max(0.6, torsoW / 0.78); }
   else if (slot === 'aura') g.position.set(0, torsoH * 0.5, 0);
   g.userData.baseY = g.position.y;
