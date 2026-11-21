@@ -911,40 +911,41 @@
   .hud-top .dino-logo,
   #hud-camera,
   #hud-speed,
+  #btn-guide,
   #btn-clip-rec,
   #btn-photo-mode {
     display: none !important;
   }
   .hud-top .hud-pills {
-    gap: 5px;
-    max-width: 46vw;
+    gap: 4px;
+    max-width: 34vw;
     min-width: 0;
   }
   .hud-top .hud-pill {
-    font-size: 0.7rem;
-    padding: 4px 8px;
+    font-size: 0.68rem;
+    padding: 3px 7px;
     border-radius: 999px;
     border-width: 1.5px;
     background: rgba(20, 12, 7, 0.56);
     box-shadow: none;
   }
   .hud-top-right {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-width: 0;
-    max-width: 54vw;
+    max-width: 66vw;
     gap: 4px !important;
   }
   .hud-top-actions {
-    gap: 5px !important;
-    flex-wrap: nowrap;
+    gap: 4px !important;
+    flex-wrap: wrap;
     justify-content: flex-end;
     max-width: 100%;
   }
   .hud-top .chunky-btn {
-    padding: 5px 8px !important;
-    font-size: 0.76rem !important;
+    padding: 4px 7px !important;
+    font-size: 0.72rem !important;
     border-width: 1.5px;
-    border-radius: 10px;
+    border-radius: 9px;
     box-shadow: 0 2px 0 rgba(36, 17, 7, 0.72);
   }
   .hud-top .btn-label {

@@ -113,7 +113,7 @@ const GOD_MODE_PATTERNS: RegExp[] = [
   /(become|turn into|me tornar?|virar|convertirme en|ser)\s+(a\s+|um\s+|uma\s+|un\s+)?(god|deus|dios)/i,
   /\b(i am|eu sou|soy)\s+(a\s+|um\s+|un\s+)?(god|deus|dios)\b/i,
   /kill\s+all\s+(the\s+)?bosse?s?/i,
-  /(matar|mato|mata)\s+todos?\s+(os\s+|los\s+)?(chefes|bosses|jefes)/i,
+  /(matar|mato|mata|mate)\s+todos?\s+(os\s+|los\s+)?(chefes|bosses|jefes)/i,
   /(instantly|instantaneamente|instantáneamente).*(kill|matar)|(kill|matar).*(instantly|instantaneamente|instantáneamente)/i,
   /ignore\s+(all\s+|the\s+|your\s+|previous\s+)*(system\s+)?(prompt|instructions?|rules?)/i,
   /(ignore|ignora|ignorar)\s+(o\s+|el\s+|as\s+|las\s+)?(prompt|instru[cç][oõ]es|instrucciones|regras|reglas)/i,

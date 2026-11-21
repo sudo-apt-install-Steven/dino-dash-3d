@@ -296,6 +296,50 @@ const SCOPED_CSS = `
     border-color: rgba(251, 191, 36, 0.65);
     background: rgba(251, 191, 36, 0.1);
   }
+  @media (max-width: 640px) {
+    .m3d-dng-top {
+      z-index: 6;
+      gap: 6px;
+    }
+    .m3d-dng-top .m3d-btn {
+      padding: 6px 8px;
+      font-size: 11px;
+    }
+    .m3d-dng-hero-bar {
+      top: 142px;
+      left: 10px;
+      padding: 5px 9px;
+      font-size: 11px;
+      max-width: calc(100vw - 132px);
+    }
+    .m3d-mm-wrap {
+      top: 142px;
+      right: 10px;
+      gap: 4px;
+      z-index: 4;
+    }
+    .m3d-mm-wrap .m3d-minimap {
+      padding: 6px;
+      gap: 3px;
+    }
+    .m3d-mm-cell {
+      width: 17px;
+      height: 17px;
+      font-size: 9px;
+    }
+    .m3d-dng-cambar {
+      bottom: 164px;
+      left: 10px;
+      gap: 4px;
+    }
+    .m3d-dng-cambar .m3d-btn {
+      padding: 5px 8px;
+      font-size: 11px;
+    }
+    .m3d-dng-cam-hint {
+      display: none;
+    }
+  }
 `;
 
 export class DungeonRPGMode extends Mode3DBase {
@@ -950,7 +994,13 @@ export class DungeonRPGMode extends Mode3DBase {
       }
     }
 
-    // 4) Portas N/S/E/W (destrancadas quando a sala está limpa, start ou NPC)
+    // 4) Atalho universal [E] para abrir o Painel do Mestre IA em qualquer sala (consistente com botão "📜 Mestre [E]")
+    if (interactPressed) {
+      this._openEncounterPanel();
+      return;
+    }
+
+    // 5) Portas N/S/E/W (destrancadas quando a sala está limpa, start ou NPC)
     const doorsOpen = room.cleared || room.type === 'start' || room.type === 'npc' || room.type === 'merchant';
     if (this._doorCooldown <= 0) {
       for (const d of this._doorMarkers || []) {

@@ -493,7 +493,7 @@ export class UIManager {
         break;
       case 'profile':
         this.activeCleanup = ProfileModal.renderInto(this.hud.modalLayer, {
-          initialTab: opts?.initialTab || 'profile',
+          initialTab: sectionOpts?.initialTab || 'profile',
           onClose: back,
           onOpenAchievements: () => this.openSection('achievements'),
           onOpenSave: () => this.openSection('save_data'),

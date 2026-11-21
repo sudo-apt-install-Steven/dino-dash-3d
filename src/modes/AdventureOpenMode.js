@@ -1358,6 +1358,41 @@ export class AdventureOpenMode extends Mode3DBase {
         .m3d-ow-dialog-role { font-size: 11px; color: #a1a1aa; font-weight: 600; }
         .m3d-ow-dialog-body { font-size: 13px; line-height: 1.45; color: #e4e4e7; margin-bottom: 12px; }
         .m3d-ow-dialog-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
+        @media (max-width: 640px) {
+          .m3d-adv-actions {
+            z-index: 6;
+            gap: 4px;
+          }
+          .m3d-adv-actions .m3d-btn {
+            padding: 6px 8px;
+            font-size: 11px;
+          }
+          .m3d-adv-panel {
+            top: 56px;
+            left: 8px;
+            max-width: calc(100vw - 140px);
+            padding: 8px 10px;
+            font-size: 11px;
+          }
+          .m3d-ow-radar-wrap {
+            top: 56px;
+            right: 8px;
+            width: 118px;
+            padding: 7px;
+          }
+          .m3d-ow-radar-head {
+            font-size: 9.5px;
+            gap: 4px;
+            flex-wrap: wrap;
+          }
+          .m3d-ow-radar-disc {
+            width: 96px;
+            height: 96px;
+          }
+          .m3d-ow-radar-legend {
+            display: none;
+          }
+        }
       </style>
 
       <!-- Painel de Exploração, Objetivos, Frutas e Energia -->
@@ -1547,11 +1582,7 @@ export class AdventureOpenMode extends Mode3DBase {
   // Controle de Câmera ([C] Presets + Zoom 🔍-/🔍+)
   // ---------------------------------------------------------------------------
   cycleCameraPreset() {
-    if (this.rig && typeof this.rig.cyclePreset === 'function') {
-      this.rig.cyclePreset();
-    } else {
-      this._applyCameraPreset((this.camPresetIdx + 1) % CAMERA_PRESETS.length);
-    }
+    return this._applyCameraPreset((this.camPresetIdx + 1) % CAMERA_PRESETS.length);
   }
 
   _applyCameraPreset(idx) {

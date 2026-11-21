@@ -145,7 +145,7 @@ export class HUD {
 
       <div class="banner-toast hidden" id="hud-banner"></div>
       <div class="context-hint-toast hidden" id="hud-context-hint"></div>
-      <div class="chunky-panel hidden" id="hud-tutorial-box" style="position:fixed; top:76px; left:50%; transform:translateX(-50%); z-index:26; padding:11px 16px; width:min(590px, 94vw); pointer-events:auto; border-color:#38bdf8; background:rgba(15, 23, 42, 0.94);">
+      <div class="chunky-panel hidden" id="hud-tutorial-box" style="position:fixed; top:108px; left:50%; transform:translateX(-50%); z-index:26; padding:11px 16px; width:min(590px, 94vw); pointer-events:auto; border-color:#38bdf8; background:rgba(15, 23, 42, 0.94);">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
           <strong id="tut-step-title" style="color:#ffd447; font-size:0.95rem;">🎓 Tutorial</strong>
           <div style="display:flex; gap:8px; align-items:center;">
