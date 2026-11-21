@@ -1,6 +1,97 @@
-// ===== CORE (shared logic: guardrail, clamp, deterministic local DM) =====
+// ===== CORE (shared logic: guardrail, clamp, 6-tier dice classifier, deterministic local DM) =====
 export const DICE_TYPES = ['d2', 'd3', 'd4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'];
 const DICE_SIDES = { d2: 2, d3: 3, d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 100 };
+
+export const ROLL_OUTCOME_TIERS = {
+  critical: {
+    tier: 'critical', rank: 6, success: true, isCrit: true, isFumble: false,
+    icon: '🌟', label: 'CRÍTICO!', color: '#fbbf24', effectMult: 2.0, nextRollBonus: 1, counterDmgMult: 0
+  },
+  great_success: {
+    tier: 'great_success', rank: 5, success: true, isCrit: false, isFumble: false,
+    icon: '🔥', label: 'SUCESSO COM SOBRA!', color: '#34d399', effectMult: 1.4, nextRollBonus: 2, counterDmgMult: 0
+  },
+  narrow_success: {
+    tier: 'narrow_success', rank: 4, success: true, isCrit: false, isFumble: false,
+    icon: '✅', label: 'SUCESSO POR POUCO!', color: '#22d3ee', effectMult: 1.0, nextRollBonus: 0, counterDmgMult: 0
+  },
+  minor_fail: {
+    tier: 'minor_fail', rank: 3, success: false, isCrit: false, isFumble: false,
+    icon: '⚠️', label: 'FALHA MENOR', color: '#f59e0b', effectMult: 0.4, nextRollBonus: 0, counterDmgMult: 0.5
+  },
+  fail: {
+    tier: 'fail', rank: 2, success: false, isCrit: false, isFumble: false,
+    icon: '❌', label: 'FALHA', color: '#f87171', effectMult: 0, nextRollBonus: 0, counterDmgMult: 1.0
+  },
+  critical_fail: {
+    tier: 'critical_fail', rank: 1, success: false, isCrit: false, isFumble: true,
+    icon: '💀', label: 'FALHA CRÍTICA!', color: '#ef4444', effectMult: 0, nextRollBonus: 0, counterDmgMult: 1.75
+  }
+};
+
+const TIER_FLAVOR = {
+  pt: {
+    critical: 'Execução lendária! O golpe brilha com poder jurássico (2.0× efeito + ovos extras e faísca na arma)!',
+    great_success: 'Vitória dominante! Efeito amplificado (1.4×) e +2 de vantagem na próxima rolagem!',
+    narrow_success: 'Por um triz! Sua manobra funciona dramaticamente no limite!',
+    minor_fail: 'Passou raspando! Efeito parcial ou contra-ataque bem reduzido.',
+    fail: 'A manobra falha e a masmorra cobra seu preço.',
+    critical_fail: 'Desastre épico! Você perde o equilíbrio e abre a guarda totalmente!'
+  },
+  en: {
+    critical: 'Legendary execution! 2.0x power plus bonus eggs and weapon spark!',
+    great_success: 'Dominant success! 1.4x effect plus +2 advantage on your next roll!',
+    narrow_success: 'Just by a hair! Your move succeeds dramatically!',
+    minor_fail: 'Narrow miss! Partial grazing effect or reduced counter-damage.',
+    fail: 'Your action fails and the foe seizes the opening.',
+    critical_fail: 'Dramatic fumble! Extra counter-damage or trap trigger!'
+  },
+  es: {
+    critical: '¡Ejecución legendaria! 2.0x efecto más huevos extra y chispa de arma!',
+    great_success: '¡Éxito sobrado! 1.4x efecto y +2 de ventaja en tu próxima tirada!',
+    narrow_success: '¡Por los pelos! Tu maniobra triunfa dramáticamente!',
+    minor_fail: 'Fallo leve: roza el objetivo con daño reducido.',
+    fail: 'La acción falla y el enemigo contraataca.',
+    critical_fail: '¡Pifia crítica! Contraataque devastador o trampa activada!'
+  }
+};
+
+/**
+ * Classifica o resultado de uma rolagem de dados de RPG de mesa em 6 tiers distintos.
+ * @param {number} rawRoll - Valor bruto do dado (sem bônus)
+ * @param {number} sides - Número de lados do dado (ex.: 20 para d20)
+ * @param {number} total - Total final (rawRoll + bônus)
+ * @param {number} dc - Classe de Dificuldade (meta)
+ */
+export function classifyRollOutcome(rawRoll, sides, total, dc) {
+  const raw = Number(rawRoll) || 1;
+  const s = Math.max(2, Number(sides) || 20);
+  const tot = Number.isFinite(Number(total)) ? Number(total) : raw;
+  const target = Number.isFinite(Number(dc)) ? Number(dc) : 10;
+  const margin = tot - target;
+
+  let base;
+  if ((raw === s && s >= 6) || tot >= target + 8) {
+    base = ROLL_OUTCOME_TIERS.critical;
+  } else if ((raw === 1 && s >= 4) || tot <= target - 9) {
+    base = ROLL_OUTCOME_TIERS.critical_fail;
+  } else if (tot >= target + 4) {
+    base = ROLL_OUTCOME_TIERS.great_success;
+  } else if (tot >= target) {
+    base = ROLL_OUTCOME_TIERS.narrow_success;
+  } else if (tot >= target - 4) {
+    base = ROLL_OUTCOME_TIERS.minor_fail;
+  } else {
+    base = ROLL_OUTCOME_TIERS.fail;
+  }
+
+  return { ...base, rawRoll: raw, sides: s, total: tot, dc: target, margin };
+}
+
+export function getTierNarrative(tier, lang = 'pt') {
+  const l = lang && TIER_FLAVOR[lang] ? lang : 'pt';
+  return TIER_FLAVOR[l][tier] || TIER_FLAVOR.pt.narrow_success;
+}
 
 const GOD_MODE_PATTERNS = [
   /infinite\s*(hp|health|life|lives|eggs|gold|mana)/i,
@@ -243,21 +334,26 @@ export function evaluateLocalDungeonAction(ctx) {
   const die = hit ? hit.die : 'd20';
   const baseDc = hit ? hit.dc : 11;
   const stat = hit ? hit.stat : 0;
+  const weaponBonus = clampInt(c.weaponBonus, 0, 4, 0);
   const dc = baseDc + Math.min(6, Math.floor((floor - 1) / 2));
   const hasEnemy = c.enemy !== null && c.enemy !== undefined && c.enemy !== false;
   const offensive = ['combat', 'stealth', 'acrobatic', 'diplomacy', 'magic'].includes(intent) || intent === 'generic';
+  const wName = cleanLine(c.weaponName || '', 40);
+  const winLine = wName && offensive && weaponBonus > 0 && lang === 'pt'
+    ? `${N.win[intent]} (${wName} +${weaponBonus})`
+    : N.win[intent];
 
   return clampDecisionToContract({
     possible: true,
     diceType: die,
     diceCount: intent === 'magic' && floor >= 5 ? 2 : 1,
     dc,
-    statBonus: stat + (floor >= 6 ? 1 : 0),
-    enemyDamage: offensive ? (hasEnemy || c.enemy === undefined ? 2 + Math.floor(floor / 2) : 0) : 0,
+    statBonus: stat + weaponBonus + (floor >= 6 ? 1 : 0),
+    enemyDamage: offensive ? (hasEnemy || c.enemy === undefined ? 2 + Math.floor(floor / 2) + Math.floor(weaponBonus / 2) : 0) : 0,
     playerHeal: intent === 'heal' ? 2 : 0,
     eggReward: intent === 'inspect' ? 5 + floor * 3 : intent === 'heal' ? 0 : 3 + floor * 2,
     playerDamage: intent === 'heal' || intent === 'inspect' ? 0 : 1 + Math.floor(floor / 3),
-    narrative: N.win[intent],
+    narrative: winLine,
     failNarrative: N.lose[intent],
     suggestions: base.suggestions,
     intent,
@@ -305,9 +401,13 @@ export class AIDungeonClient {
         body: JSON.stringify({
           actionText: sanitizeActionText(safeCtx.actionText),
           floor: safeCtx.floor,
-          hp: safeCtx.hp,
-          maxHp: safeCtx.maxHp,
+          hp: safeCtx.hp ?? safeCtx.playerHp,
+          maxHp: safeCtx.maxHp ?? safeCtx.playerMaxHp,
           enemy: safeCtx.enemy ?? null,
+          weaponBonus: clampInt(safeCtx.weaponBonus, 0, 4, 0),
+          weaponName: cleanLine(safeCtx.weaponName || '', 40) || undefined,
+          roomType: cleanLine(safeCtx.roomType || '', 20) || undefined,
+          npcName: cleanLine(safeCtx.npcName || '', 40) || undefined,
           lang: safeCtx.lang,
           mode: 'evaluate'
         }),

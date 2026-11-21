@@ -424,31 +424,46 @@ export function separateMovers(a, b) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Câmera orbital
+// Câmera orbital / ThirdPersonRig com presets controláveis (Isométrica, 3ª Pessoa, Topo)
 // ---------------------------------------------------------------------------------------------
+
+export const CAMERA_PRESETS = {
+  isometric: { id: 'isometric', label: 'Isométrica', pitch: 0.68, distance: 11.5, height: 1.4, autoFollow: false },
+  third_person: { id: 'third_person', label: '3ª Pessoa', pitch: 0.38, distance: 8.2, height: 1.35, autoFollow: true },
+  top_down: { id: 'top_down', label: 'Topo', pitch: 1.18, distance: 14.5, height: 1.1, autoFollow: false }
+};
+
+export const CAMERA_PRESET_ORDER = ['isometric', 'third_person', 'top_down'];
 
 export class OrbitCameraRig {
   constructor(camera, domTarget, opts = {}) {
     this.camera = camera;
     this.dom = domTarget;
-    this.yaw = opts.yaw ?? 0;
-    this.pitch = opts.pitch ?? 0.52;
-    this.distance = opts.distance ?? 9;
     this.minDistance = opts.minDistance ?? 4.5;
     this.maxDistance = opts.maxDistance ?? 22;
-    this.height = opts.height ?? 1.3;
     this.minPitch = opts.minPitch ?? 0.12;
-    this.maxPitch = opts.maxPitch ?? 1.25;
+    this.maxPitch = opts.maxPitch ?? 1.32;
     this.smooth = opts.smooth ?? 8;
-    this.autoFollow = opts.autoFollow ?? false;
+    this.onPresetChange = typeof opts.onPresetChange === 'function' ? opts.onPresetChange : null;
+
+    const initialPreset = opts.preset && CAMERA_PRESETS[opts.preset] ? CAMERA_PRESETS[opts.preset] : null;
+    this.presetId = initialPreset ? initialPreset.id : 'isometric';
+    this.yaw = opts.yaw ?? 0;
+    this.pitch = opts.pitch ?? (initialPreset ? initialPreset.pitch : 0.52);
+    this.distance = clamp(opts.distance ?? (initialPreset ? initialPreset.distance : 9), this.minDistance, this.maxDistance);
+    this.height = opts.height ?? (initialPreset ? initialPreset.height : 1.3);
+    this.autoFollow = opts.autoFollow ?? (initialPreset ? initialPreset.autoFollow : false);
+
     this.target = new THREE.Vector3();
     this._lookAt = new THREE.Vector3();
     this._desired = new THREE.Vector3();
     this._shake = 0;
     this._initialized = false;
     this._drag = null;
+    this._suppressContext = false;
     this._listeners = [];
     if (domTarget && typeof window !== 'undefined') this._bindPointer();
+    if (opts.cycleKey && typeof window !== 'undefined') this._bindCycleKey(opts.cycleKey === true ? 'KeyC' : opts.cycleKey);
   }
 
   _on(el, type, fn, o) {
@@ -456,28 +471,89 @@ export class OrbitCameraRig {
     this._listeners.push(() => el.removeEventListener(type, fn, o));
   }
 
+  _isUiTarget(target) {
+    if (!target || target === this.dom) return false;
+    if (typeof target.closest === 'function') {
+      return !!target.closest('button, input, textarea, select, a, .m3d-rpg-panel, .m3d-dice-tray, .m3d-modal, .m3d-npc-card, .m3d-hero-modal, .m3d-stick, .m3d-touch-btns');
+    }
+    return false;
+  }
+
   _bindPointer() {
     const el = this.dom;
     this._on(el, 'pointerdown', (e) => {
+      if (this._isUiTarget(e.target)) return;
+      if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
       if (e.pointerType === 'touch' && e.clientX < window.innerWidth * 0.45) return; // metade esquerda = joystick
-      this._drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      this._drag = { id: e.pointerId, x: e.clientX, y: e.clientY, button: e.button, moved: false };
     });
     this._on(window, 'pointermove', (e) => {
       if (!this._drag || this._drag.id !== e.pointerId) return;
       const dx = e.clientX - this._drag.x;
       const dy = e.clientY - this._drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 2) this._drag.moved = true;
       this._drag.x = e.clientX;
       this._drag.y = e.clientY;
       this.yaw -= dx * 0.0065;
       this.pitch = clamp(this.pitch + dy * 0.0045, this.minPitch, this.maxPitch);
     });
-    const end = (e) => { if (this._drag?.id === e.pointerId) this._drag = null; };
+    const end = (e) => {
+      if (this._drag?.id === e.pointerId) {
+        if (this._drag.button === 2 && this._drag.moved) this._suppressContext = true;
+        this._drag = null;
+      }
+    };
     this._on(window, 'pointerup', end);
     this._on(window, 'pointercancel', end);
+    this._on(el, 'contextmenu', (e) => {
+      if (this._suppressContext || this._drag?.button === 2) {
+        e.preventDefault();
+        this._suppressContext = false;
+      }
+    });
     this._on(el, 'wheel', (e) => {
+      if (this._isUiTarget(e.target)) return;
       e.preventDefault();
-      this.distance = clamp(this.distance * (1 + Math.sign(e.deltaY) * 0.08), this.minDistance, this.maxDistance);
+      this.adjustZoom(Math.sign(e.deltaY) * Math.max(0.55, this.distance * 0.08));
     }, { passive: false });
+  }
+
+  _bindCycleKey(code) {
+    this._on(window, 'keydown', (e) => {
+      if (e.code !== code || e.repeat) return;
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable) return;
+      this.cyclePreset();
+    });
+  }
+
+  setPreset(id) {
+    const preset = CAMERA_PRESETS[id];
+    if (!preset) return null;
+    this.presetId = preset.id;
+    this.pitch = clamp(preset.pitch, this.minPitch, this.maxPitch);
+    this.distance = clamp(preset.distance, this.minDistance, this.maxDistance);
+    this.height = preset.height;
+    this.autoFollow = preset.autoFollow;
+    if (this.onPresetChange) this.onPresetChange(preset, this);
+    return preset;
+  }
+
+  cyclePreset() {
+    const idx = CAMERA_PRESET_ORDER.indexOf(this.presetId);
+    const nextId = CAMERA_PRESET_ORDER[(idx + 1) % CAMERA_PRESET_ORDER.length];
+    return this.setPreset(nextId);
+  }
+
+  getPresetLabel() {
+    return CAMERA_PRESETS[this.presetId]?.label || CAMERA_PRESETS.isometric.label;
+  }
+
+  adjustZoom(delta) {
+    const d = Number(delta);
+    if (!Number.isFinite(d)) return this.distance;
+    this.distance = clamp(this.distance + d, this.minDistance, this.maxDistance);
+    return this.distance;
   }
 
   shake(amount = 0.3) { this._shake = Math.max(this._shake, amount); }
@@ -532,6 +608,8 @@ export class OrbitCameraRig {
     this._drag = null;
   }
 }
+
+export const ThirdPersonRig = OrbitCameraRig;
 
 // ---------------------------------------------------------------------------------------------
 // Controles touch

@@ -14,7 +14,22 @@ export const DUNGEON_THEME_IDS = [
   'amber_mine'
 ];
 
-export const ROOM_TYPES = ['start', 'combat', 'trap', 'treasure', 'shrine', 'puzzle', 'merchant', 'boss'];
+export const ROOM_TYPES = ['start', 'combat', 'trap', 'treasure', 'shrine', 'puzzle', 'merchant', 'npc', 'boss'];
+
+export const DUNGEON_NPC_IDS = [
+  'fossil_smith',
+  'jurassic_oracle',
+  'wandering_merchant',
+  'wounded_hunter',
+  'rune_guardian'
+];
+
+const WEAPON_IDS_BY_TIER = [
+  ['obsidian_claw', 'amber_fang'],
+  ['solar_fang', 'frost_halberd', 'venom_tailblade'],
+  ['scary_fossil_blade', 'seismic_hammer', 'cyber_plasma_spear'],
+  ['runic_staff', 'void_rex_greatsword']
+];
 
 const DIRS = [
   { dir: 'N', opp: 'S', dx: 0, dy: -1 },
@@ -138,7 +153,11 @@ export function generateFloor(floor = 1, seed = 1337, themeId = null, catalogRol
       trap: null,
       relic: null,
       roomEvent: null,
-      merchantOffers: null
+      merchantOffers: null,
+      npcId: null,
+      hasMapScroll: false,
+      weaponId: null,
+      npcInteracted: false
     };
     grid.set(keyOf(x, y), node);
     nodes.push(node);
@@ -203,19 +222,31 @@ export function generateFloor(floor = 1, seed = 1337, themeId = null, catalogRol
     walk = parentMap.get(walk);
   }
 
-  // Distribui tipos ricos nas salas intermediárias
+  // Distribui tipos ricos nas salas intermediárias (garante NPC, Tesouro, Combate, Armadilha e Enigma em todo andar)
   const midRooms = nodes.filter((n) => n.id !== start.id && n.id !== farthest.id);
-  const poolTypes = ['combat', 'trap', 'treasure', 'shrine', 'puzzle', 'merchant', 'combat', 'combat', 'trap'];
+  const poolTypes = ['combat', 'npc', 'treasure', 'trap', 'puzzle', 'combat', 'shrine', 'merchant', 'combat'];
   midRooms.forEach((room, idx) => {
     room.type = poolTypes[idx % poolTypes.length];
     if (room.type === 'merchant' || room.type === 'treasure') room.cleared = false;
+    if (room.type === 'npc') room.cleared = true; // Salas de NPC são seguras e não trancam as portas
   });
+
+  // Escolhe NPC determinístico para a sala de NPC (garante variedade entre andares)
+  const primaryNpcId = DUNGEON_NPC_IDS[(safeFloor - 1 + Math.floor(rng() * DUNGEON_NPC_IDS.length)) % DUNGEON_NPC_IDS.length];
+  const weaponTierIdx = Math.min(WEAPON_IDS_BY_TIER.length - 1, Math.floor((safeFloor - 1) / 2));
+  const pickWeaponId = (boost = 0) => {
+    const tier = WEAPON_IDS_BY_TIER[Math.min(WEAPON_IDS_BY_TIER.length - 1, weaponTierIdx + boost)];
+    return pick(rng, tier);
+  };
 
   // Preenche dados via ultra_catalog.js (ou fallbacks locais)
   const rollEnc = catalogRollers?.rollDungeonEncounter;
   const rollTrap = catalogRollers?.rollDungeonTrap;
   const rollRelic = catalogRollers?.rollDungeonRelic;
   const rollEvt = catalogRollers?.rollDungeonRoomEvent;
+
+  const npcRoomIds = [];
+  let mapScrollRoomId = null;
 
   for (const room of nodes) {
     room.doorList = Object.keys(room.doors);
@@ -236,13 +267,37 @@ export function generateFloor(floor = 1, seed = 1337, themeId = null, catalogRol
       room.trap = rollTrap ? rollTrap(rng, safeFloor, resolvedTheme) : fallbackTrap(rng, safeFloor);
     } else if (room.type === 'treasure') {
       room.relic = rollRelic ? rollRelic(rng, safeFloor) : fallbackRelic(rng, safeFloor);
+      room.weaponId = pickWeaponId(rng() < 0.35 ? 1 : 0);
     } else if (room.type === 'shrine' || room.type === 'puzzle') {
       room.roomEvent = rollEvt ? rollEvt(rng, safeFloor, resolvedTheme) : fallbackRoomEvent(rng, safeFloor, room.type);
+    } else if (room.type === 'npc') {
+      room.npcId = primaryNpcId;
+      room.weaponId = pickWeaponId(primaryNpcId === 'rune_guardian' || primaryNpcId === 'fossil_smith' ? 1 : 0);
+      room.relic = rollRelic ? rollRelic(rng, safeFloor) : fallbackRelic(rng, safeFloor);
+      if (primaryNpcId === 'jurassic_oracle' || primaryNpcId === 'wandering_merchant') {
+        room.hasMapScroll = true;
+        if (!mapScrollRoomId) mapScrollRoomId = room.id;
+      }
+      npcRoomIds.push(room.id);
     } else if (room.type === 'merchant') {
+      room.npcId = 'wandering_merchant';
+      room.weaponId = pickWeaponId(0);
+      room.hasMapScroll = true;
+      if (!mapScrollRoomId) mapScrollRoomId = room.id;
       room.merchantOffers = [
         { kind: 'heal', label: 'Poção de Âmbar (+3 HP)', cost: 20, heal: 3 },
         { kind: 'relic', label: (rollRelic ? rollRelic(rng, safeFloor) : fallbackRelic(rng, safeFloor)), cost: 35 }
       ];
+      npcRoomIds.push(room.id);
+    }
+  }
+
+  // Garante 100% que todo andar tenha pelo menos 1 Pergaminho do Mapa da Masmorra (no baú se não estiver com Oráculo/Mercador)
+  if (!mapScrollRoomId) {
+    const treasureRoom = nodes.find((r) => r.type === 'treasure') || midRooms[0];
+    if (treasureRoom) {
+      treasureRoom.hasMapScroll = true;
+      mapScrollRoomId = treasureRoom.id;
     }
   }
 
@@ -254,6 +309,8 @@ export function generateFloor(floor = 1, seed = 1337, themeId = null, catalogRol
     roomsById: Object.fromEntries(nodes.map((r) => [r.id, r])),
     startRoomId: start.id,
     bossRoomId: farthest.id,
-    pathToBoss
+    pathToBoss,
+    npcRoomIds,
+    mapScrollRoomId
   };
 }
