@@ -33,11 +33,11 @@ test('Sanitize: sanitizeNickname, roomCode, roomPassword, hexColor', () => {
   assert.equal(sanitizeHexColor('javascript:alert(1)', '#ffffff'), '#ffffff');
 });
 
-test('Modes: >= 22 unique modes (including expansion modes) and valid fallback', () => {
-  assert.ok(GAME_MODES.length >= 22, `Expected >= 22 modes, got ${GAME_MODES.length}`);
+test('Modes: >= 27 unique modes (including Ultra 3D modes) and valid fallback', () => {
+  assert.ok(GAME_MODES.length >= 27, `Expected >= 27 modes, got ${GAME_MODES.length}`);
   const ids = new Set(GAME_MODES.map((m) => m.id));
   assert.equal(ids.size, GAME_MODES.length);
-  for (const reqId of ['raid', 'boss_fight', 'free_roam', 'race', 'competition', 'coop']) {
+  for (const reqId of ['raid', 'boss_fight', 'free_roam', 'race', 'competition', 'coop', 'arena_x1', 'boss_arena', 'dungeon_rpg', 'dungeon_rush', 'adventure_open']) {
     assert.ok(ids.has(reqId), `Missing required mode: ${reqId}`);
   }
   for (const m of GAME_MODES) {
@@ -46,8 +46,8 @@ test('Modes: >= 22 unique modes (including expansion modes) and valid fallback',
   assert.equal(getModeDef('nonexistent_mode').id, 'solo');
 });
 
-test('DinoCatalog: 50 unique species with valid attributes', () => {
-  assert.equal(DINO_CATALOG.length, 50);
+test('DinoCatalog: >= 63 unique species with valid attributes', () => {
+  assert.ok(DINO_CATALOG.length >= 63, `Expected >= 63 dinos, got ${DINO_CATALOG.length}`);
   const ids = new Set(DINO_CATALOG.map((d) => d.id));
   assert.equal(ids.size, DINO_CATALOG.length);
   for (const d of DINO_CATALOG) {
@@ -55,13 +55,15 @@ test('DinoCatalog: 50 unique species with valid attributes', () => {
     assert.ok(d.stats && d.stats.speed > 0 && d.stats.jump > 0);
   }
   assert.equal(getDinoSpec('trex').id, 'trex');
+  assert.equal(getDinoSpec('scary_raptor').id, 'scary_raptor');
 });
 
-test('Biomes & Difficulty: 25 biomes and valid difficulty presets', () => {
-  assert.equal(BIOMES.length, 25);
+test('Biomes & Difficulty: >= 30 biomes and valid difficulty presets', () => {
+  assert.ok(BIOMES.length >= 30, `Expected >= 30 biomes, got ${BIOMES.length}`);
   const ids = new Set(BIOMES.map((b) => b.id));
   assert.equal(ids.size, BIOMES.length);
   assert.equal(getBiomeById('desert').id, 'desert');
+  assert.equal(getBiomeById('amber_canyon').id, 'amber_canyon');
   for (const key of ['easy', 'normal', 'hard', 'insane']) {
     assert.ok(DIFFICULTY_PRESETS[key]);
   }

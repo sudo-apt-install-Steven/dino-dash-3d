@@ -1,8 +1,8 @@
 // Tela de Seleção 3D de Dinossauros: modelo girando (arrastar para rotacionar),
 // barras de atributos, passiva, habilidade, árvore de níveis 1-10 e botão "Testar".
 import * as THREE from 'three';
-import { DINO_CATALOG, DINO_CLASSES, getDinoSpec, getDinoHabitat, getEffectiveDinoHabitat, getDinoSwimCapabilities } from '../dinos/DinoCatalog.js';
-import { getDinoSkins, getEquippedSkinVariant, SKIN_VARIANTS } from '../dinos/DinoCustomization.js';
+import { DINO_CATALOG, DINO_CLASSES, getDinoSpec, getDinoDisplayName, getDinoHabitat, getEffectiveDinoHabitat, getDinoSwimCapabilities } from '../dinos/DinoCatalog.js';
+import { getDinoSkins, getEquippedSkinVariant, getEquippedAccessories, SKIN_VARIANTS } from '../dinos/DinoCustomization.js';
 import { DinoFactory } from '../dinos/DinoFactory.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { Save } from '../systems/Save.js';
@@ -227,6 +227,11 @@ export class SelectionScreen {
     );
     const dynamicRarities = Array.from(new Set(allNonSecret.map((d) => getDinoRarity(d))));
     const hasSecret = Save.data.unlockedDinos.includes('ghostgold');
+    const isDinoOwned = (d) => (d.isLimited
+      ? Save.data.unlockedDinos.includes(d.id)
+      : (Save.data.unlockedDinos.includes(d.id) || (d.unlockCost || 0) === 0));
+    const displayNameOf = (d) => getDinoDisplayName(d, Save.data.settings);
+    const limitedCount = allNonSecret.filter((d) => d.isLimited).length;
     const unlockedCount = DINO_CATALOG.filter((d) => Save.data.unlockedDinos.includes(d.id)).length;
 
     container.innerHTML = `
@@ -235,6 +240,9 @@ export class SelectionScreen {
           <div class="modal-header">
             <h2 id="sel-heading">🦖 Dinossauros (${unlockedCount}/${DINO_CATALOG.length})</h2>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button type="button" class="tab-btn sel-personal-toggle ${Save.data.settings?.personalNames ? 'active' : ''}" id="sel-personal-names-btn" title="Alterna nomes alternativos pessoais (ex: Raptor Fóssil Estelar ↔ Scary Monsters)" style="padding:6px 12px; font-size:0.78rem; border-color:#38bdf8; color:#e0f2fe; box-shadow:0 0 12px rgba(56,189,248,0.28);">
+                ✨ Modo Pessoal: ${Save.data.settings?.personalNames ? 'ON' : 'OFF'}
+              </button>
               <span class="hud-pill">🥚 Ovos: <strong id="sel-eggs-val">${Save.data.eggs}</strong></span>
               <button class="chunky-btn secondary" id="sel-close">Voltar</button>
             </div>
@@ -266,6 +274,14 @@ export class SelectionScreen {
           </div>
 
           <div class="sel-bottom-dock" id="sel-bottom-dock">
+            <div class="sel-featured-scary" id="sel-featured-scary" role="button" tabindex="0" title="Clique para selecionar ou liberar Scary Monsters / Raptor Fóssil Estelar">
+              <div class="sel-featured-scary-info">
+                <span class="sel-featured-badge">⭐ DESTAQUE</span>
+                <strong class="sel-featured-title">Scary Monsters / Raptor Fóssil Estelar</strong>
+                <span class="sel-featured-sub">Habilidades Únicas • Vírus Jurássico, Garra Estelar &amp; Bote Dimensional!</span>
+              </div>
+              <button type="button" class="chunky-btn sel-featured-btn" id="sel-featured-scary-btn">⚡ Liberar &amp; Equipar</button>
+            </div>
             <div class="catalog-toolbar sel-catalog-toolbar">
               <input type="search" class="text-input catalog-search" id="sel-search" placeholder="${loc === 'en' ? 'Search dinosaur or ability...' : (loc === 'es' ? 'Buscar dinosaurio o habilidad...' : 'Buscar dinossauro ou habilidade...')}" aria-label="Buscar dinossauro" />
               <select class="select-input catalog-select" id="sel-rarity-filter" aria-label="Filtrar por raridade ou desbloqueio">
@@ -278,6 +294,7 @@ export class SelectionScreen {
             </div>
             <div class="tabs-row sel-filter-tabs" id="sel-filter-tabs">
               <button class="tab-btn active" data-cfilter="all">Todos (${DINO_CATALOG.length})</button>
+              <button class="tab-btn" data-cfilter="limited" style="border-color:#f59e0b; color:#fde047;">⭐ Limitados / Eventos (${limitedCount})</button>
               ${Object.entries(DINO_CLASSES).map(([k, info]) => `
                 <button class="tab-btn" data-cfilter="${k}">${info.name.pt}</button>
               `).join('')}
@@ -295,6 +312,7 @@ export class SelectionScreen {
       const baseCustom = Save.data.customization.p1.presets[Save.data.customization.p1.activePreset];
       return {
         ...(baseCustom || {}),
+        accessories: getEquippedAccessories(baseCustom),
         skinVariant: getEquippedSkinVariant(id),
         mutation: Save.data.equippedMutation || null
       };
@@ -304,7 +322,7 @@ export class SelectionScreen {
 
     const equipDino = (id, notify = true) => {
       const targetSpec = getDinoSpec(id);
-      const owned = Save.data.unlockedDinos.includes(id) || (targetSpec.unlockCost || 0) === 0;
+      const owned = isDinoOwned(targetSpec);
       if (!owned) return false;
       const hadHybrid = Boolean(Save.data.hybrid?.enabled);
       if (hadHybrid) {
@@ -317,9 +335,10 @@ export class SelectionScreen {
       Save.save();
       if (onSelect) onSelect(id);
       if (notify) {
+        const dName = displayNameOf(targetSpec);
         noticeMsg = hadHybrid
-          ? `✅ ${targetSpec.name} equipado! (Modo Híbrido desativado para correr com este dino)`
-          : `★ ${targetSpec.name} equipado para a próxima corrida!`;
+          ? `✅ ${dName} equipado! (Modo Híbrido desativado para correr com este dino)`
+          : `★ ${dName} equipado para a próxima corrida!`;
       }
       return true;
     };
@@ -330,9 +349,10 @@ export class SelectionScreen {
       listEl.querySelectorAll('[data-dino-id]').forEach((btn) => {
         const id = btn.getAttribute('data-dino-id');
         const d = getDinoSpec(id);
-        const owned = Save.data.unlockedDinos.includes(id) || (d.unlockCost || 0) === 0;
+        const owned = isDinoOwned(d);
         btn.classList.toggle('active', id === currentId);
-        btn.textContent = `${id === Save.data.selectedDino ? '★ ' : (!owned ? '🔒 ' : '')}${d.name}`;
+        const prefix = id === Save.data.selectedDino ? '★ ' : (!owned ? (d.isLimited ? '⭐🔒 ' : '🔒 ') : (d.isLimited ? '⭐ ' : ''));
+        btn.textContent = `${prefix}${displayNameOf(d)}`;
       });
     };
 
@@ -342,15 +362,20 @@ export class SelectionScreen {
       const savedListScroll = listEl.scrollTop;
       const q = searchQuery.trim().toLowerCase();
       const filteredDinos = allNonSecret.filter((d) => {
-        if (classFilter !== 'all' && d.dinoClass !== classFilter) return false;
-        const owned = Save.data.unlockedDinos.includes(d.id) || (d.unlockCost || 0) === 0;
+        if (classFilter === 'limited') {
+          if (!d.isLimited) return false;
+        } else if (classFilter !== 'all' && d.dinoClass !== classFilter) {
+          return false;
+        }
+        const owned = isDinoOwned(d);
         if (rarityFilter === '__unlocked' && !owned) return false;
         if (rarityFilter === '__locked' && owned) return false;
         if (rarityFilter !== 'all' && rarityFilter !== '__unlocked' && rarityFilter !== '__locked') {
           if (getDinoRarity(d) !== rarityFilter) return false;
         }
         if (q) {
-          const hay = `${d.name} ${d.id} ${d.ability?.name || ''} ${d.ability?.desc || ''} ${getDinoRarity(d)}`.toLowerCase();
+          const extraKeys = d.id === 'scary_raptor' ? 'scary monsters jojo diego brando raptor fossil estelar' : '';
+          const hay = `${displayNameOf(d)} ${d.name || ''} ${d.publicName || ''} ${d.personalName || ''} ${d.id} ${d.eventTag || ''} ${d.ability?.name || ''} ${d.ability?.desc || ''} ${getDinoRarity(d)} ${extraKeys}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
@@ -361,15 +386,17 @@ export class SelectionScreen {
 
       listEl.innerHTML = `
         ${filteredDinos.length ? filteredDinos.map((d) => {
-          const owned = Save.data.unlockedDinos.includes(d.id) || (d.unlockCost || 0) === 0;
+          const owned = isDinoOwned(d);
           const rar = getDinoRarity(d);
+          const dName = displayNameOf(d);
+          const prefix = d.id === Save.data.selectedDino ? '★ ' : (!owned ? (d.isLimited ? '⭐🔒 ' : '🔒 ') : (d.isLimited ? '⭐ ' : ''));
           return `
-            <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${escapeHtml(d.id)}" title="${escapeHtml(d.name)} (${escapeHtml(rar)})" style="min-height:40px; width:100%;">
-              ${d.id === Save.data.selectedDino ? '★ ' : (!owned ? '🔒 ' : '')}${escapeHtml(d.name)}
+            <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${escapeHtml(d.id)}" title="${escapeHtml(dName)} (${escapeHtml(rar)})" style="min-height:40px; width:100%;">
+              ${prefix}${escapeHtml(dName)}
             </button>
           `;
         }).join('') : `<div style="grid-column:1/-1; text-align:center; color:#d8c2a6; font-size:0.82rem; padding:10px;">Nenhum dinossauro encontrado.</div>`}
-        ${(!hasSecret && !q && rarityFilter === 'all') ? `<button class="tab-btn" id="sel-secret-locked" style="opacity:0.75; min-height:40px; width:100%;">🔒 ??? (Secreto)</button>` : ''}
+        ${(!hasSecret && !q && rarityFilter === 'all' && classFilter !== 'limited') ? `<button class="tab-btn" id="sel-secret-locked" style="opacity:0.75; min-height:40px; width:100%;">🔒 ??? (Secreto)</button>` : ''}
       `;
       listEl.scrollTop = savedListScroll;
 
@@ -397,12 +424,19 @@ export class SelectionScreen {
       const cls = DINO_CLASSES[spec.dinoClass] || DINO_CLASSES.carnivore;
       const level = Save.data.dinoLevels[currentId] || 1;
       const upgradeCost = ProgressionManager.getSkillUpgradeCost(level);
-      const isUnlocked = Save.data.unlockedDinos.includes(currentId) || (spec.unlockCost || 0) === 0;
+      const isUnlocked = isDinoOwned(spec);
       const isEquipped = isUnlocked && currentId === Save.data.selectedDino;
+      const specDisplayName = displayNameOf(spec);
       const curUnlocked = DINO_CATALOG.filter((d) => Save.data.unlockedDinos.includes(d.id)).length;
 
       container.querySelector('#sel-heading').textContent = `🦖 Dinossauros (${curUnlocked}/${DINO_CATALOG.length})`;
       container.querySelector('#sel-eggs-val').textContent = Save.data.eggs;
+      const pNamesBtn = container.querySelector('#sel-personal-names-btn');
+      if (pNamesBtn) {
+        const pnOn = !!Save.data.settings?.personalNames;
+        pNamesBtn.classList.toggle('active', pnOn);
+        pNamesBtn.textContent = `✨ Modo Pessoal: ${pnOn ? 'ON' : 'OFF'}`;
+      }
 
       const hybridBanner = container.querySelector('#sel-hybrid-banner');
       if (hybridBanner) {
@@ -417,14 +451,33 @@ export class SelectionScreen {
         noticeEl.style.display = 'none';
       }
 
+      const lockReason = spec.isLimited
+        ? `⭐ ${spec.unlockCondition?.label || spec.eventTag || 'Exclusivo de Evento / Modo Especial'}`
+        : `🔒 Custo: ${spec.unlockCost} 🥚`;
       container.querySelector('#sel-lock-hint').textContent =
-        `Arraste para girar o modelo 3D • ${isUnlocked ? (isEquipped && !Save.data.hybrid?.enabled ? '★ Equipado Agora' : '✔ Desbloqueado') : `🔒 Custo: ${spec.unlockCost} 🥚`}`;
+        `Arraste para girar o modelo 3D • ${isUnlocked ? (isEquipped && !Save.data.hybrid?.enabled ? '★ Equipado Agora' : '✔ Desbloqueado') : lockReason}`;
+
+      const scarySpec = getDinoSpec('scary_raptor');
+      const scaryOwned = scarySpec ? isDinoOwned(scarySpec) : false;
+      const scaryEquipped = scaryOwned && Save.data.selectedDino === 'scary_raptor' && !Save.data.hybrid?.enabled;
+      const featuredCard = container.querySelector('#sel-featured-scary');
+      const featuredBtn = container.querySelector('#sel-featured-scary-btn');
+      if (featuredCard) {
+        featuredCard.classList.toggle('is-active', currentId === 'scary_raptor');
+      }
+      if (featuredBtn) {
+        featuredBtn.textContent = scaryEquipped
+          ? '✔ Equipado'
+          : (scaryOwned ? '★ Equipar Agora' : '⚡ Liberar & Equipar');
+      }
 
       const confirmBtn = container.querySelector('#sel-confirm');
       confirmBtn.className = `chunky-btn ${isUnlocked ? '' : 'orange'}`;
       confirmBtn.textContent = isUnlocked
         ? (isEquipped && !Save.data.hybrid?.enabled ? '✔ Equipado • Voltar' : '★ Equipar Agora')
-        : `🔓 Liberar (${spec.unlockCost} 🥚)`;
+        : (currentId === 'scary_raptor'
+          ? '⚡ Liberar Grátis (Destaque)'
+          : (spec.isLimited ? '⭐ Evento / Modo' : `🔓 Liberar (${spec.unlockCost} 🥚)`));
 
       const activePreset = Save.data.customization.p1.presets[Save.data.customization.p1.activePreset];
       const skins = getDinoSkins(spec);
@@ -477,15 +530,24 @@ export class SelectionScreen {
         : '';
 
       const detailsEl = container.querySelector('#sel-details');
+      const limitedBadge = spec.isLimited ? `
+        <div class="hud-pill" style="border-color:#f59e0b; color:#fde047; background:rgba(245,158,11,0.14); font-size:0.78rem;">
+          ⭐ ${escapeHtml(spec.eventTag || 'Edição Limitada')} • ${escapeHtml(spec.unlockCondition?.label || 'Desbloqueável em Evento / Modo')} (Fora do Gacha)
+        </div>
+      ` : '';
+      const passiveText = typeof spec.passive === 'string'
+        ? spec.passive
+        : (spec.passive?.desc || cls.passive.pt);
       detailsEl.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-          <h3 style="font-size:1.35rem; color:#ffd447;">${spec.name}</h3>
+          <h3 style="font-size:1.35rem; color:#ffd447;">${escapeHtml(specDisplayName)}</h3>
           <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
             <span class="hud-pill">${habLabel}</span>${varPill}
             <span class="hud-pill">${cls.name.pt} • Nv.${level}/10</span>
           </div>
         </div>
-        <div style="font-size:0.84rem; color:#9ce6e0;">Passiva: ${cls.passive.pt}</div>
+        ${limitedBadge}
+        <div style="font-size:0.84rem; color:#9ce6e0;">Passiva: ${escapeHtml(passiveText)}</div>
         ${swimTipLine}
         <div class="item-card" style="padding:10px;">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
@@ -568,19 +630,71 @@ export class SelectionScreen {
       if (onPlayRoar) onPlayRoar(currentId);
     });
 
+    container.querySelector('#sel-personal-names-btn')?.addEventListener('click', () => {
+      if (!Save.data.settings) Save.data.settings = {};
+      Save.data.settings.personalNames = !Save.data.settings.personalNames;
+      Save.save();
+      noticeMsg = Save.data.settings.personalNames
+        ? '✨ Modo Pessoal ativado! Nomes especiais exibidos.'
+        : '✨ Modo Pessoal desativado (nomes públicos restaurados).';
+      updateContent({ updatePreview: false, rebuildList: true });
+    });
+
+    const unlockAndSelectScaryRaptor = () => {
+      const scarySpec = getDinoSpec('scary_raptor');
+      if (!scarySpec) return;
+      let justUnlocked = false;
+      if (!Save.data.unlockedDinos.includes('scary_raptor')) {
+        Save.data.unlockedDinos.push('scary_raptor');
+        justUnlocked = true;
+      }
+      currentId = 'scary_raptor';
+      equipDino('scary_raptor', false);
+      noticeMsg = justUnlocked
+        ? `⭐ ${displayNameOf(scarySpec)} desbloqueado e equipado com 1 clique!`
+        : `★ ${displayNameOf(scarySpec)} equipado para a próxima corrida!`;
+      if (onPlayRoar) onPlayRoar('scary_raptor');
+      updateContent({ updatePreview: true, rebuildList: true, resetDetailsScroll: true });
+    };
+
+    const featuredCardEl = container.querySelector('#sel-featured-scary');
+    featuredCardEl?.addEventListener('click', (e) => {
+      if (e.target?.closest?.('#sel-featured-scary-btn')) return;
+      unlockAndSelectScaryRaptor();
+    });
+    featuredCardEl?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        unlockAndSelectScaryRaptor();
+      }
+    });
+    container.querySelector('#sel-featured-scary-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      unlockAndSelectScaryRaptor();
+    });
+
     container.querySelector('#sel-confirm').addEventListener('click', () => {
       const spec = getDinoSpec(currentId);
-      const isUnlocked = Save.data.unlockedDinos.includes(currentId) || (spec.unlockCost || 0) === 0;
+      const isUnlocked = isDinoOwned(spec);
       if (!isUnlocked) {
-        const cost = spec.unlockCost || 0;
-        if ((Save.data.eggs || 0) < cost) {
-          noticeMsg = `Você precisa de ${cost} 🥚 para desbloquear ${spec.name} (ou clique Testar)!`;
+        if (currentId === 'scary_raptor') {
+          if (!Save.data.unlockedDinos.includes('scary_raptor')) Save.data.unlockedDinos.push('scary_raptor');
+          noticeMsg = `⭐ ${displayNameOf(spec)} desbloqueado e equipado!`;
+        } else if (spec.isLimited) {
+          noticeMsg = `⭐ ${displayNameOf(spec)} é Exclusivo! Como liberar: ${spec.unlockCondition?.label || spec.eventTag || 'Eventos / Modos Especiais'} (clique Testar para experimentar!).`;
           updateContent();
           return;
+        } else {
+          const cost = spec.unlockCost || 0;
+          if ((Save.data.eggs || 0) < cost) {
+            noticeMsg = `Você precisa de ${cost} 🥚 para desbloquear ${displayNameOf(spec)} (ou clique Testar)!`;
+            updateContent();
+            return;
+          }
+          Save.addEggs(-cost);
+          if (!Save.data.unlockedDinos.includes(currentId)) Save.data.unlockedDinos.push(currentId);
+          noticeMsg = `🎉 ${displayNameOf(spec)} desbloqueado e equipado!`;
         }
-        Save.addEggs(-cost);
-        if (!Save.data.unlockedDinos.includes(currentId)) Save.data.unlockedDinos.push(currentId);
-        noticeMsg = `🎉 ${spec.name} desbloqueado e equipado!`;
       }
       equipDino(currentId, false);
       preview?.destroy();
@@ -590,7 +704,7 @@ export class SelectionScreen {
 
     container.querySelector('#sel-test').addEventListener('click', () => {
       const spec = getDinoSpec(currentId);
-      const isUnlocked = Save.data.unlockedDinos.includes(currentId) || (spec.unlockCost || 0) === 0;
+      const isUnlocked = isDinoOwned(spec);
       if (isUnlocked) {
         equipDino(currentId, false);
       }

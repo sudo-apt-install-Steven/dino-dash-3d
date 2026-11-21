@@ -41,6 +41,13 @@ const MP_MODES = [
   { id: 'race', label: '🏁 Corrida Competitiva' },
   { id: 'coop', label: '🤝 Cooperativo' },
   { id: 'duel', label: '⚔️ Duelo PvP' },
+  { id: 'arena_x1', label: '⚔️ Arena X1 Livre (PvP)' },
+  { id: 'boss_arena', label: '👑 Boss Arena 3D' },
+  { id: 'dungeon_rpg', label: '🏰 Masmorra RPG Coop' },
+  { id: 'raid', label: '🐉 Raid Colossal' },
+  { id: 'boss_fight', label: '👑 Boss Rush Pista' },
+  { id: 'competition', label: '🏅 Liga Competitiva' },
+  { id: 'free_roam', label: '🧪 Livre / Sandbox' },
   { id: 'elimination', label: '⏳ Eliminação 30s' },
   { id: 'shared_controls', label: '👥 Controles Compartilhados' },
   { id: 'relay', label: '🔄 Revezamento' }
@@ -56,7 +63,18 @@ function pingBadge(ms) {
 export class MultiplayerLobby {
   static renderInto(container, net, callbacks = {}) {
     const onMobile = isMobileDevice();
-    let transport = callbacks.initialTransport || (net.supabase.isConfigured() && !net.lan.connected ? 'supabase' : (net.transportType || 'lan'));
+    const isHttpsPage = typeof window !== 'undefined' && window.location?.protocol === 'https:';
+    const initTr = callbacks.initialTransport;
+    let lanSubmode = initTr === 'lan_local'
+      ? 'local_channel'
+      : (net.lanSubmode || (isHttpsPage ? 'local_channel' : 'ws'));
+    net.setLanSubmode?.(lanSubmode);
+    let transport = initTr === 'lan_local'
+      ? 'lan'
+      : (initTr || (net.supabase.isConfigured() && !net.lan.connected && !net.local?.connected ? 'supabase' : (net.transportType === 'supabase' ? 'supabase' : 'lan')));
+    let lanHostInput = net.lanCustomHost || '';
+    let lanHostError = '';
+    let showMixedContentNotice = false;
     let nickname = sanitizeNickname(Save.data.network?.nickname || `Dino_${Math.floor(10 + Math.random() * 89)}`, 'Dino', 18);
     let roomName = 'Sala Jurássica';
     let joinCode = sanitizeRoomCode(callbacks.initialRoom || '');
@@ -193,20 +211,26 @@ export class MultiplayerLobby {
           render();
           const res = await net.joinRoom(c, {
             transport,
+            lanSubmode,
+            wsUrl: transport === 'lan' && lanSubmode === 'ws' ? lanHostInput : undefined,
             password: joinPassword,
             name: nickname,
             dinoId: Save.data.selectedDino || 'trex',
             customization: getLocalCustomization(),
             role: onMobile ? 'mobile_player' : 'screen'
           });
-          if (!res.ok) statusMsg = `⚠️ ${res.message}`;
-          else if (statusMsg.startsWith('⏳') && net.isConnected) statusMsg = '';
+          if (!res.ok) {
+            statusMsg = `⚠️ ${res.message}`;
+            if (res.mixedContent || (isHttpsPage && transport === 'lan' && lanSubmode === 'ws')) {
+              showMixedContentNotice = true;
+            }
+          } else if (statusMsg.startsWith('⏳') && net.isConnected) statusMsg = '';
           render();
         };
       });
     };
     const refreshRooms = async () => {
-      publicRooms = await net.listRooms(transport);
+      publicRooms = await net.listRooms(transport, lanSubmode);
       if (net.isConnected) return;
       const listEl = container.querySelector('#mp-public-rooms-list');
       if (!listEl) return; // nunca re-renderiza a tela inteira (preserva campos de texto)
@@ -284,10 +308,23 @@ export class MultiplayerLobby {
         Save.save();
       } catch {}
 
+      if (transport === 'lan' && lanSubmode === 'ws' && lanHostInput) {
+        const v = net.setLanCustomHost?.(lanHostInput);
+        if (v && !v.ok) {
+          lanHostError = v.reason;
+          statusMsg = `⚠️ ${v.reason}`;
+          render();
+          return;
+        }
+        lanHostError = '';
+      }
+
       statusMsg = '⏳ Criando sala...';
       render();
       const res = await net.createRoom({
         transport,
+        lanSubmode,
+        wsUrl: transport === 'lan' && lanSubmode === 'ws' ? lanHostInput : undefined,
         roomName,
         password: roomPassword,
         maxPlayers,
@@ -330,6 +367,9 @@ export class MultiplayerLobby {
           pausePolicy
         }
       });
+      if (!res.ok && (res.mixedContent || (isHttpsPage && transport === 'lan' && lanSubmode === 'ws'))) {
+        showMixedContentNotice = true;
+      }
       statusMsg = res.ok ? '' : res.message;
       render();
     };
@@ -361,15 +401,58 @@ export class MultiplayerLobby {
 
             ${!connected ? `
               <div class="tabs-row" style="align-items:center;">
-                <button class="tab-btn ${transport === 'lan' ? 'active' : ''}" data-tr="lan">📡 LAN Wi-Fi Local</button>
+                <button class="tab-btn ${transport === 'lan' ? 'active' : ''}" data-tr="lan">📡 LAN Local</button>
                 <button class="tab-btn ${transport === 'supabase' ? 'active' : ''}" data-tr="supabase">☁️ Online Global</button>
                 <button class="chunky-btn secondary" id="mp-test-conn" style="padding:6px 12px; font-size:0.8rem;">🔌 Testar Conexão</button>
                 <button class="chunky-btn orange" id="mp-friends-quick" style="padding:6px 12px; font-size:0.8rem; margin-left:auto;">🤝 Sala de Amigos (1 Toque)</button>
               </div>
 
+              ${transport === 'lan' ? `
+                <div class="item-card" style="border-color:#38bdf8; background:rgba(15,23,42,0.72); display:flex; flex-direction:column; gap:8px;">
+                  <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                    <button class="tab-btn ${lanSubmode === 'local_channel' ? 'active' : ''}" data-lan-sub="local_channel" style="font-size:0.78rem; padding:6px 10px;">
+                      🖥️ Local Instantâneo (Sem servidor — abas/mesmo PC)
+                    </button>
+                    <button class="tab-btn ${lanSubmode === 'ws' ? 'active' : ''}" data-lan-sub="ws" style="font-size:0.78rem; padding:6px 10px;">
+                      📡 LAN Wi-Fi (npm run host)
+                    </button>
+                  </div>
+                  ${lanSubmode === 'local_channel' ? `
+                    <div style="font-size:0.78rem; color:#bae6fd; line-height:1.35;">
+                      ✅ Funciona na hora (inclusive em HTTPS), sem servidor externo! Crie uma sala aqui e abra outra aba/janela neste mesmo navegador para entrar pelo código ou pela lista pública.
+                    </div>
+                  ` : `
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:flex-end;">
+                      <label style="flex:1 1 240px; font-size:0.78rem;">
+                        Endereço do Host LAN (opcional — padrão: host atual porta 5174):
+                        <input class="text-input" id="mp-lan-host" value="${escapeHtml(lanHostInput)}" placeholder="192.168.1.10:5174 ou ws://localhost:5174" maxlength="80" style="width:100%; margin-top:3px;" />
+                      </label>
+                      <button class="chunky-btn secondary" id="mp-lan-discover" style="padding:7px 12px; font-size:0.78rem;">🔌 Testar &amp; Descobrir</button>
+                    </div>
+                    ${lanHostError ? `<div style="font-size:0.76rem; color:#fca5a5;">⚠️ ${escapeHtml(lanHostError)}</div>` : ''}
+                    ${net.lastLanInfo?.ips?.length ? `
+                      <div style="font-size:0.74rem; color:#86efac;">
+                        🟢 IPs LAN detectados: <strong>${net.lastLanInfo.ips.map((ip) => `${escapeHtml(ip)}:${net.lastLanInfo.port || 5174}`).join(' • ')}</strong>
+                      </div>
+                    ` : ''}
+                  `}
+                  ${isHttpsPage && lanSubmode === 'ws' && (showMixedContentNotice || connTest?.mixedContent) ? `
+                    <div class="item-card" style="border-color:#f59e0b; background:rgba(120,53,15,0.45); font-size:0.78rem; color:#fef3c7; display:flex; flex-direction:column; gap:6px;">
+                      <div>
+                        <strong>🔒 Restrição HTTPS (Mixed Content):</strong> Navegadores bloqueiam conexões <code>ws://</code> abertas a partir de páginas <code>https://</code> (como Vercel). Para jogar agora sem erro:
+                      </div>
+                      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                        <button class="chunky-btn" id="mp-switch-local-instant" style="padding:6px 10px; font-size:0.76rem;">🖥️ Usar Local Instantâneo (Sem Servidor)</button>
+                        <button class="chunky-btn secondary" id="mp-switch-online-global" style="padding:6px 10px; font-size:0.76rem; border-color:#38bdf8; color:#bae6fd;">☁️ Trocar para Online Global (mesmo Wi-Fi)</button>
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+              ` : ''}
+
               ${connTest ? `
                 <div class="item-card" style="border-color:${connTest.ok ? '#58d63a' : '#ff4757'}; font-size:0.84rem;">
-                  <strong>Diagnóstico:</strong> ${connTest.qualityLabel} • Ping: <strong>${connTest.avgPingMs} ms</strong> • Jitter: ${connTest.jitterMs} ms • Perda: ${connTest.packetLoss}%
+                  <strong>Diagnóstico:</strong> ${escapeHtml(connTest.qualityLabel)} • Ping: <strong>${connTest.avgPingMs} ms</strong> • Jitter: ${connTest.jitterMs} ms • Perda: ${connTest.packetLoss}%
                 </div>
               ` : ''}
 
@@ -580,7 +663,9 @@ export class MultiplayerLobby {
                     const notReadyPlayers = playerPeers.filter((p) => !p.ready);
                     const allPlayersReady = playerPeers.length > 0 && notReadyPlayers.length === 0;
                     const readyCount = playerPeers.filter((p) => p.ready).length;
-                    const trLabel = net.transportType === 'supabase' ? '☁️ Online' : '📡 LAN Wi-Fi';
+                    const trLabel = net.transportType === 'supabase'
+                      ? '☁️ Online'
+                      : (net.transportType === 'lan_local' ? '🖥️ Local Instantâneo' : '📡 LAN Wi-Fi');
                     const resolvedCfg = net.resolveRoomConfig(room);
                     const roomMpMode = resolvedCfg.mpMode;
                     const modeLabel = MP_MODES.find((m) => m.id === roomMpMode)?.label || '🏁 Corrida';
@@ -858,40 +943,141 @@ export class MultiplayerLobby {
       });
 
       if (!connected) {
+        const captureFormInputs = () => {
+          const nickEl = container.querySelector('#mp-nick') || container.querySelector('#mp-join-nick');
+          if (nickEl) nickname = String(nickEl.value || '').slice(0, 18);
+          const rnEl = container.querySelector('#mp-room-name');
+          if (rnEl) roomName = String(rnEl.value || '').slice(0, 28);
+          const rpEl = container.querySelector('#mp-room-pass');
+          if (rpEl) roomPassword = String(rpEl.value || '').slice(0, 12);
+          const codeEl = container.querySelector('#mp-code');
+          if (codeEl) joinCode = sanitizeRoomCode(codeEl.value);
+          const jpEl = container.querySelector('#mp-join-pass');
+          if (jpEl) joinPassword = String(jpEl.value || '').slice(0, 12);
+          const lhEl = container.querySelector('#mp-lan-host');
+          if (lhEl) lanHostInput = String(lhEl.value || '').trim().slice(0, 80);
+        };
+
+        const runLanDiscoverOrTest = async () => {
+          captureFormInputs();
+          lanHostError = '';
+          if (transport === 'lan' && lanSubmode === 'ws') {
+            const v = net.setLanCustomHost?.(lanHostInput);
+            if (lanHostInput && v && !v.ok) {
+              lanHostError = v.reason;
+              connTest = { ok: false, avgPingMs: 0, jitterMs: 0, packetLoss: 100, qualityLabel: v.reason };
+              statusMsg = '';
+              render();
+              return;
+            }
+          }
+          statusMsg = '⏳ Testando conexão...';
+          render();
+          connTest = await net.runConnectionTest(transport, {
+            lanSubmode,
+            wsUrl: transport === 'lan' && lanSubmode === 'ws' ? lanHostInput : undefined
+          });
+          if (!connTest.ok && (connTest.mixedContent || (isHttpsPage && transport === 'lan' && lanSubmode === 'ws'))) {
+            showMixedContentNotice = true;
+          }
+          statusMsg = '';
+          render();
+          if (connTest.ok) refreshRooms();
+        };
+
         container.querySelectorAll('[data-tr]').forEach((b) => {
-          b.onclick = () => { transport = b.getAttribute('data-tr'); connTest = null; statusMsg = ''; refreshRooms(); };
+          b.onclick = () => {
+            captureFormInputs();
+            transport = b.getAttribute('data-tr');
+            connTest = null;
+            statusMsg = '';
+            lanHostError = '';
+            showMixedContentNotice = false;
+            render();
+            refreshRooms();
+          };
+        });
+        container.querySelectorAll('[data-lan-sub]').forEach((b) => {
+          b.onclick = () => {
+            captureFormInputs();
+            lanSubmode = b.getAttribute('data-lan-sub') === 'ws' ? 'ws' : 'local_channel';
+            net.setLanSubmode?.(lanSubmode);
+            connTest = null;
+            statusMsg = '';
+            lanHostError = '';
+            showMixedContentNotice = false;
+            render();
+            refreshRooms();
+          };
+        });
+        container.querySelector('#mp-lan-host')?.addEventListener('input', (e) => {
+          lanHostInput = String(e.target.value || '').trim().slice(0, 80);
+          lanHostError = '';
+        });
+        container.querySelector('#mp-lan-discover')?.addEventListener('click', runLanDiscoverOrTest);
+        container.querySelector('#mp-switch-local-instant')?.addEventListener('click', () => {
+          captureFormInputs();
+          transport = 'lan';
+          lanSubmode = 'local_channel';
+          net.setLanSubmode?.('local_channel');
+          connTest = null;
+          statusMsg = '✅ Modo Local Instantâneo ativado! Crie ou entre em uma sala agora.';
+          lanHostError = '';
+          showMixedContentNotice = false;
+          render();
+          refreshRooms();
+        });
+        container.querySelector('#mp-switch-online-global')?.addEventListener('click', () => {
+          captureFormInputs();
+          transport = 'supabase';
+          connTest = null;
+          statusMsg = '✅ Modo Online Global ativado (funciona no mesmo Wi-Fi e na internet).';
+          lanHostError = '';
+          showMixedContentNotice = false;
+          render();
+          refreshRooms();
         });
         container.querySelector('#mp-pub-sel')?.addEventListener('change', (e) => {
           const cb = container.querySelector('#mp-pub');
           if (cb) cb.checked = e.target.value === 'public';
         });
-        container.querySelector('#mp-test-conn').onclick = async () => {
-          statusMsg = '⏳ Testando conexão...';
-          render();
-          connTest = await net.runConnectionTest(transport);
-          statusMsg = '';
-          render();
-        };
+        container.querySelector('#mp-test-conn').onclick = runLanDiscoverOrTest;
         container.querySelector('#mp-refresh').onclick = refreshRooms;
-        container.querySelector('#mp-friends-quick')?.addEventListener('click', () => doCreateRoom({ friendsQuick: true }));
-        container.querySelector('#mp-create').onclick = () => doCreateRoom({ friendsQuick: false });
+        container.querySelector('#mp-friends-quick')?.addEventListener('click', () => { captureFormInputs(); doCreateRoom({ friendsQuick: true }); });
+        container.querySelector('#mp-create').onclick = () => { captureFormInputs(); doCreateRoom({ friendsQuick: false }); };
         container.querySelector('#mp-join').onclick = async () => {
+          captureFormInputs();
           joinCode = sanitizeRoomCode(container.querySelector('#mp-code').value);
           joinPassword = sanitizeRoomPassword(container.querySelector('#mp-join-pass')?.value || '');
           nickname = sanitizeNickname(container.querySelector('#mp-join-nick')?.value || nickname, 'Dino', 18);
           try { Save.data.network.nickname = nickname; Save.save(); } catch {}
+          if (transport === 'lan' && lanSubmode === 'ws' && lanHostInput) {
+            const v = net.setLanCustomHost?.(lanHostInput);
+            if (v && !v.ok) {
+              lanHostError = v.reason;
+              statusMsg = `⚠️ ${v.reason}`;
+              render();
+              return;
+            }
+          }
           statusMsg = '⏳ Entrando na sala...';
           render();
           const res = await net.joinRoom(joinCode, {
             transport,
+            lanSubmode,
+            wsUrl: transport === 'lan' && lanSubmode === 'ws' ? lanHostInput : undefined,
             password: joinPassword,
             name: nickname,
             dinoId: Save.data.selectedDino || 'trex',
             customization: getLocalCustomization(),
             role: onMobile ? 'mobile_player' : 'screen'
           });
-          if (!res.ok) statusMsg = `⚠️ ${res.message}`;
-          else if (statusMsg.startsWith('⏳') && net.isConnected) statusMsg = '';
+          if (!res.ok) {
+            statusMsg = `⚠️ ${res.message}`;
+            if (res.mixedContent || (isHttpsPage && transport === 'lan' && lanSubmode === 'ws')) {
+              showMixedContentNotice = true;
+            }
+          } else if (statusMsg.startsWith('⏳') && net.isConnected) statusMsg = '';
           render();
         };
         container.querySelector('#mp-close-rules-preview')?.addEventListener('click', () => {

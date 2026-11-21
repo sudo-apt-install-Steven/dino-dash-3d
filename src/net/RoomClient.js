@@ -1,13 +1,27 @@
-// Gerenciador Unificado de Sala Multiplayer (estilo Jackbox): suporta LAN WebSocket & Supabase Realtime,
+// Gerenciador Unificado de Sala Multiplayer (estilo Jackbox): suporta LAN WebSocket, Local Instantâneo (BroadcastChannel) & Supabase Realtime,
 // envio limitado de estado (rate-limit por delta), interpolação e teste de conexão.
-import { TransportLAN } from './TransportLAN.js';
+import { TransportLAN, normalizeLanHost } from './TransportLAN.js';
+import { TransportLocalChannel } from './TransportLocalChannel.js';
 import { TransportSupabase } from './TransportSupabase.js';
+
+const LAN_HOST_STORAGE_KEY = 'dd3d_lan_host_v1';
 
 export class RoomClient {
   constructor() {
     this.lan = new TransportLAN();
+    this.local = new TransportLocalChannel();
     this.supabase = new TransportSupabase();
-    this.transportType = 'lan'; // 'lan' | 'supabase'
+    const isHttps = typeof window !== 'undefined' && window.location?.protocol === 'https:';
+    this.lanSubmode = isHttps ? 'local_channel' : 'ws'; // 'local_channel' | 'ws'
+    this.lanCustomHost = '';
+    try {
+      const savedHost = window.localStorage?.getItem(LAN_HOST_STORAGE_KEY) || '';
+      if (savedHost) {
+        const res = this.lan.setCustomHost(savedHost);
+        if (res.ok) this.lanCustomHost = savedHost;
+      }
+    } catch {}
+    this.transportType = this.lanSubmode === 'local_channel' ? 'lan_local' : 'lan'; // 'lan' | 'lan_local' | 'supabase'
     this.peerId = `d_${Math.random().toString(36).slice(2, 9)}`;
     this.room = null;
     this.chatLog = [];
@@ -20,7 +34,33 @@ export class RoomClient {
     this.sessionToken = this._initSessionToken();
 
     this._wireTransport(this.lan, 'lan');
+    this._wireTransport(this.local, 'lan_local');
     this._wireTransport(this.supabase, 'supabase');
+  }
+
+  setLanSubmode(submode) {
+    this.lanSubmode = submode === 'ws' ? 'ws' : 'local_channel';
+    return this.lanSubmode;
+  }
+
+  setLanCustomHost(hostInput) {
+    const trimmed = String(hostInput || '').trim();
+    const res = this.lan.setCustomHost(trimmed);
+    if (res.ok) {
+      this.lanCustomHost = trimmed;
+      try {
+        if (trimmed) window.localStorage?.setItem(LAN_HOST_STORAGE_KEY, trimmed);
+        else window.localStorage?.removeItem(LAN_HOST_STORAGE_KEY);
+      } catch {}
+    }
+    return res;
+  }
+
+  _resolveTransportKey(transport, lanSubmode = this.lanSubmode) {
+    if (transport === 'supabase') return 'supabase';
+    if (transport === 'lan_local') return 'lan_local';
+    if (transport === 'lan') return lanSubmode === 'local_channel' ? 'lan_local' : 'lan';
+    return this.transportType || 'lan';
   }
 
   _initSessionToken() {
@@ -101,7 +141,9 @@ export class RoomClient {
   }
 
   get activeTransport() {
-    return this.transportType === 'supabase' ? this.supabase : this.lan;
+    if (this.transportType === 'supabase') return this.supabase;
+    if (this.transportType === 'lan_local') return this.local;
+    return this.lan;
   }
 
   get pingMs() {
@@ -194,20 +236,42 @@ export class RoomClient {
   }
 
   async createRoom(opts = {}) {
-    this.transportType = opts.transport || 'lan';
+    if (opts.lanSubmode) this.setLanSubmode(opts.lanSubmode);
+    const trKey = this._resolveTransportKey(opts.transport || this.transportType, opts.lanSubmode);
+    this.transportType = trKey;
     this.chatLog = [];
     this.lastSentInputs = null;
 
-    if (this.transportType === 'supabase') {
+    if (trKey === 'supabase') {
       if (!this.supabase.isConfigured()) {
-        return { ok: false, message: 'Supabase não configurado no .env. Use LAN WebSocket ou adicione VITE_SUPABASE_URL.' };
+        return { ok: false, message: 'Supabase não configurado no .env. Use LAN Local ou adicione VITE_SUPABASE_URL.' };
       }
       return await this.supabase.connectAndJoin({ ...opts, isCreate: true, peerId: this.peerId });
     }
 
+    if (trKey === 'lan_local') {
+      const ok = await this.local.connect();
+      if (!ok) {
+        return { ok: false, message: 'BroadcastChannel não suportado neste navegador.' };
+      }
+      this.lastLanInfo = await this.local.discoverLanInfo();
+      this.local.send({ type: 'create_room', peerId: this.peerId, ...opts });
+      return { ok: true };
+    }
+
+    if (opts.wsUrl) {
+      const v = normalizeLanHost(opts.wsUrl);
+      if (!v.ok) return { ok: false, message: v.reason };
+    }
     const ok = await this.lan.connect(opts.wsUrl);
     if (!ok) {
-      return { ok: false, message: 'Servidor LAN offline! Execute "npm run host" no terminal para jogar em LAN.' };
+      if (this.lan.lastError === 'mixed_content') {
+        return { ok: false, mixedContent: true, message: 'Navegador bloqueou ws:// a partir de HTTPS (mixed content). Use "Local Instantâneo" ou "Online Global".' };
+      }
+      if (this.lan.lastError === 'invalid_host') {
+        return { ok: false, message: 'Endereço do Host LAN inválido. Use localhost ou IP de rede local (192.168.x.x, 10.x.x.x, 172.16-31.x.x).' };
+      }
+      return { ok: false, message: 'Servidor LAN offline! Execute "npm run host" no terminal ou use "Local Instantâneo".' };
     }
     this.lastLanInfo = await this.lan.discoverLanInfo();
     this.lan.send({ type: 'create_room', peerId: this.peerId, ...opts });
@@ -215,22 +279,43 @@ export class RoomClient {
   }
 
   async joinRoom(code, opts = {}) {
-    this.transportType = opts.transport || 'lan';
+    if (opts.lanSubmode) this.setLanSubmode(opts.lanSubmode);
+    const trKey = this._resolveTransportKey(opts.transport || this.transportType, opts.lanSubmode);
+    this.transportType = trKey;
     this.chatLog = [];
     this.lastSentInputs = null;
     const cleanCode = String(code || '').toUpperCase().trim();
     if (!cleanCode) return { ok: false, message: 'Informe o código de 4 letras.' };
 
-    if (this.transportType === 'supabase') {
+    if (trKey === 'supabase') {
       if (!this.supabase.isConfigured()) {
         return { ok: false, message: 'Supabase não configurado no .env.' };
       }
       return await this.supabase.connectAndJoin({ ...opts, code: cleanCode, isCreate: false, peerId: this.peerId });
     }
 
+    if (trKey === 'lan_local') {
+      const ok = await this.local.connect();
+      if (!ok) {
+        return { ok: false, message: 'BroadcastChannel não suportado neste navegador.' };
+      }
+      this.local.send({ type: 'join_room', code: cleanCode, peerId: this.peerId, sessionToken: this.sessionToken, ...opts });
+      return { ok: true };
+    }
+
+    if (opts.wsUrl) {
+      const v = normalizeLanHost(opts.wsUrl);
+      if (!v.ok) return { ok: false, message: v.reason };
+    }
     const ok = await this.lan.connect(opts.wsUrl);
     if (!ok) {
-      return { ok: false, message: 'Servidor LAN não encontrado! Confirme se o PC executou "npm run host".' };
+      if (this.lan.lastError === 'mixed_content') {
+        return { ok: false, mixedContent: true, message: 'Navegador bloqueou ws:// a partir de HTTPS (mixed content). Use "Local Instantâneo" ou "Online Global".' };
+      }
+      if (this.lan.lastError === 'invalid_host') {
+        return { ok: false, message: 'Endereço do Host LAN inválido. Use localhost ou IP de rede local (192.168.x.x, 10.x.x.x, 172.16-31.x.x).' };
+      }
+      return { ok: false, message: 'Servidor LAN não encontrado! Confirme se o PC executou "npm run host" ou use "Local Instantâneo".' };
     }
     this.lan.send({ type: 'join_room', code: cleanCode, peerId: this.peerId, sessionToken: this.sessionToken, ...opts });
     return { ok: true };
@@ -282,14 +367,17 @@ export class RoomClient {
     });
   }
 
-  async listRooms(transport = this.transportType) {
-    if (transport === 'supabase') return await this.supabase.listPublicRooms();
+  async listRooms(transport = this.transportType, lanSubmode = this.lanSubmode) {
+    const trKey = this._resolveTransportKey(transport, lanSubmode);
+    if (trKey === 'supabase') return await this.supabase.listPublicRooms();
+    if (trKey === 'lan_local') return await this.local.listPublicRooms();
     return await this.lan.listPublicRooms();
   }
 
-  async runConnectionTest(transport = this.transportType) {
+  async runConnectionTest(transport = this.transportType, opts = {}) {
+    const trKey = this._resolveTransportKey(transport, opts.lanSubmode);
     const samples = [];
-    if (transport === 'supabase') {
+    if (trKey === 'supabase') {
       const configured = this.supabase.isConfigured();
       return {
         ok: configured,
@@ -300,11 +388,39 @@ export class RoomClient {
       };
     }
 
+    if (trKey === 'lan_local') {
+      const ok = await this.local.connect();
+      return {
+        ok,
+        avgPingMs: ok ? 1 : 0,
+        jitterMs: 0,
+        packetLoss: ok ? 0 : 100,
+        qualityLabel: ok ? 'Local Instantâneo Pronto (Abas/Mesmo PC, sem servidor)' : 'BroadcastChannel indisponível neste navegador'
+      };
+    }
+
+    if (opts.wsUrl !== undefined) {
+      const v = this.setLanCustomHost(opts.wsUrl);
+      if (opts.wsUrl && !v.ok) {
+        return { ok: false, avgPingMs: 0, jitterMs: 0, packetLoss: 100, qualityLabel: v.reason };
+      }
+    }
+
     const info = await this.lan.discoverLanInfo();
     this.lastLanInfo = info;
-    const ok = await this.lan.connect();
+    const ok = await this.lan.connect(opts.wsUrl);
     if (!ok) {
-      return { ok: false, avgPingMs: 0, jitterMs: 0, packetLoss: 100, qualityLabel: 'Servidor LAN desligado (rode npm run host)' };
+      const isMixed = this.lan.lastError === 'mixed_content';
+      return {
+        ok: false,
+        mixedContent: isMixed,
+        avgPingMs: 0,
+        jitterMs: 0,
+        packetLoss: 100,
+        qualityLabel: isMixed
+          ? 'Bloqueado pelo navegador em HTTPS (mixed content: ws:// em página https://)'
+          : 'Servidor LAN desligado (rode npm run host ou informe o IP LAN)'
+      };
     }
 
     for (let i = 0; i < 3; i++) {
@@ -337,6 +453,9 @@ export class RoomClient {
 
   getShareUrl(code = this.room?.code) {
     if (!code) return window.location.origin;
+    if (this.transportType === 'lan_local') {
+      return `${window.location.origin}/?room=${code}&transport=lan_local`;
+    }
     const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
     const lanIp = isLocalHost && this.lastLanInfo?.ips?.[0] ? this.lastLanInfo.ips[0] : window.location.hostname;
     const port = window.location.port ? `:${window.location.port}` : '';
@@ -542,6 +661,7 @@ export class RoomClient {
       this.activeTransport.send({ type: 'leave_room' });
     }
     this.lan.disconnect();
+    this.local.disconnect();
     this.supabase.disconnect();
     this.room = null;
     this.lastSentInputs = null;

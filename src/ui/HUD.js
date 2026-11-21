@@ -94,6 +94,7 @@ export class HUD {
             <button class="chunky-btn secondary mob-only" id="btn-mob-cam" style="padding:5px 8px; font-size:0.75rem;" data-tip="Trocar ângulo de câmera (Tecla C).">📷</button>
             <button class="chunky-btn secondary mob-only" id="btn-mob-edit-hud" style="padding:5px 8px; font-size:0.75rem;" data-tip="Editar tamanho, modo canhoto e posição dos botões touch.">🛠️</button>
             <button class="chunky-btn secondary" id="btn-guide" style="padding:5px 10px; font-size:0.75rem;" data-tip="Abre o Guia Visual de obstáculos, status e chefes.">📖<span class="btn-label"> Guia</span></button>
+            <button class="chunky-btn secondary" id="btn-glossary" style="padding:5px 10px; font-size:0.75rem; border-color:#38bdf8; color:#bae6fd;" data-tip="Abre o Glossário Rápido (Aura Vermelha, Buff, Debuff, Estamina, Roda X e Brânquias).">📖<span class="btn-label"> Glossário</span></button>
             <button class="chunky-btn secondary" id="btn-clip-rec" style="padding:5px 10px; font-size:0.75rem;" data-tip="Gravar clipe curto da corrida (.webm).">🎥<span class="btn-label"> Clipe</span></button>
             ${import.meta.env.DEV ? `<button class="chunky-btn secondary ${Save.data.devMode ? '' : 'hidden'}" id="btn-debug" style="padding:5px 10px; font-size:0.75rem;" data-tip="Painel de Depuração e Testes (F9).">🛠️<span class="btn-label"> Debug</span></button>` : ''}
             <button class="chunky-btn secondary" id="btn-photo-mode" style="padding:5px 10px; font-size:0.75rem;" data-tip="Modo Foto (pausa para capturar cena).">📷</button>
@@ -144,15 +145,16 @@ export class HUD {
 
       <div class="banner-toast hidden" id="hud-banner"></div>
       <div class="context-hint-toast hidden" id="hud-context-hint"></div>
-      <div class="chunky-panel hidden" id="hud-tutorial-box" style="position:fixed; top:76px; left:50%; transform:translateX(-50%); z-index:26; padding:10px 16px; width:min(540px, 92vw); pointer-events:auto; border-color:#38bdf8;">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;">
+      <div class="chunky-panel hidden" id="hud-tutorial-box" style="position:fixed; top:108px; left:50%; transform:translateX(-50%); z-index:26; padding:11px 16px; width:min(590px, 94vw); pointer-events:auto; border-color:#38bdf8; background:rgba(15, 23, 42, 0.94);">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
           <strong id="tut-step-title" style="color:#ffd447; font-size:0.95rem;">🎓 Tutorial</strong>
           <div style="display:flex; gap:8px; align-items:center;">
             <span id="tut-step-progress" class="hud-pill" style="font-size:0.75rem; padding:2px 8px;">1/6</span>
-            <button class="chunky-btn secondary" id="tut-skip" style="padding:3px 9px; font-size:0.72rem;">Sair</button>
+            <button class="chunky-btn secondary" id="tut-glossary-btn" style="padding:4px 9px; font-size:0.72rem; border-color:#38bdf8; color:#bae6fd;">📖 Glossário</button>
+            <button class="chunky-btn orange" id="tut-skip" style="padding:4px 12px; font-size:0.78rem; font-weight:900;">⏭ Pular Tutorial</button>
           </div>
         </div>
-        <div id="tut-step-desc" style="font-size:0.86rem; color:#fef3c7;">Siga as instruções na pista!</div>
+        <div id="tut-step-desc" style="font-size:0.86rem; color:#fef3c7; line-height:1.4;">Siga as instruções na pista!</div>
       </div>
       <div class="float-callouts" id="hud-floats"></div>
       <div class="narrator-sub hidden" id="hud-narrator"></div>
@@ -167,8 +169,8 @@ export class HUD {
             <div class="meter-pill" data-tip="Corações de vida e Escudos absorvem impactos.">
               <div id="hud-hp-text">❤️ 3/3 • 🛡️ 0</div>
             </div>
-            <div class="meter-pill hidden" id="hud-oxygen-pill" data-tip="Oxigênio submerso: suba à tona ou pegue Bolhas 🫧 / Máscara Abissal!">
-              <span>🫧 <span class="btn-label">O₂</span> <strong id="lbl-oxygen">100%</strong></span>
+            <div class="meter-pill hidden" id="hud-oxygen-pill" data-tip="Oxigênio / Brânquias: aquáticos com brânquias têm 100% O₂ no fundo do mar; anfíbios têm fôlego estendido; terrestres respiram na superfície, em Bolhas 🫧 ou com Roda [X]!">
+              <span><span id="lbl-oxygen-prefix">🫧 <span class="btn-label">O₂</span> </span><strong id="lbl-oxygen">100%</strong></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-oxygen" style="width:100%; background:#38bdf8;"></div></div>
             </div>
             <div class="meter-pill hidden" id="hud-companion-pill" data-tip="Filhote Companheiro ativo: coleta ovos/bolhas e dispara bônus na corrida e via Roda [X].">
@@ -292,10 +294,56 @@ export class HUD {
         <div class="chunky-panel gameover-card">
           <h2>⏸ PAUSADO</h2>
           <button class="chunky-btn" id="btn-resume">Continuar</button>
+          <button class="chunky-btn secondary" id="btn-pause-glossary" style="border-color:#38bdf8; color:#bae6fd;">📖 Glossário</button>
           <button class="chunky-btn secondary mob-only" id="btn-pause-rotate">🔄 Deitar / Alternar Paisagem</button>
           <button class="chunky-btn secondary" id="btn-pause-cam">📷 Trocar Câmera (C)</button>
           <button class="chunky-btn orange" id="btn-pause-restart">Reiniciar (R)</button>
           <button class="chunky-btn secondary" id="btn-pause-menu">Menu Principal</button>
+        </div>
+      </div>
+
+      <!-- Glossário Rápido (Linguagem Simples / Kid-Friendly) -->
+      <div class="overlay-center hidden" id="glossary-overlay" style="z-index:55;">
+        <div class="chunky-panel gameover-card" style="width:min(700px, 95vw); max-height:88vh; overflow-y:auto; text-align:left; padding:16px 20px; border-color:#38bdf8;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+            <h2 style="margin:0; color:#ffd447; font-size:1.25rem;">📖 Glossário Rápido do Dino Dash</h2>
+            <button class="chunky-btn" id="btn-glossary-close" style="padding:6px 14px; font-size:0.82rem;">✅ Entendi! Voltar</button>
+          </div>
+          <p style="margin:0 0 12px; font-size:0.84rem; color:#bae6fd;">Explicação direta e fácil do que significa cada cor, barra e botão na corrida:</p>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px;">
+            <div class="item-card" style="padding:10px 12px; border-color:#ef4444; background:rgba(69, 10, 10, 0.72);">
+              <strong style="color:#fca5a5; font-size:0.9rem;">🔴 Aura Vermelha = PERIGO!</strong>
+              <div style="font-size:0.8rem; color:#fef2f2; margin-top:4px; line-height:1.35;">Todo obstáculo, espinho ou armadilha com anel/borda vermelha tira vida! <b>Desvie (A/D)</b>, <b>Pule (W/↑)</b> ou <b>Ataque (Q)</b>.</div>
+            </div>
+            <div class="item-card" style="padding:10px 12px; border-color:#34d399; background:rgba(6, 78, 59, 0.68);">
+              <strong style="color:#6ee7b7; font-size:0.9rem;">🟢 Buff (Poder Bom Temporário)</strong>
+              <div style="font-size:0.8rem; color:#ecfdf5; margin-top:4px; line-height:1.35;">Itens com <b>Aura Verde ou Dourada</b> ajudam você! Dão Escudo 🛡️, Turbo ⚡, Ímã de Ovos 🧲, Cura ❤️ ou Invencibilidade ✨.</div>
+            </div>
+            <div class="item-card" style="padding:10px 12px; border-color:#c084fc; background:rgba(59, 7, 100, 0.65);">
+              <strong style="color:#e9d5ff; font-size:0.9rem;">🟣 Debuff (Efeito Ruim Temporário)</strong>
+              <div style="font-size:0.8rem; color:#f3e8ff; margin-top:4px; line-height:1.35;">Efeito que atrapalha por alguns segundos (como <b>Lama</b> que deixa lento ou <b>Veneno</b>). Limpe usando <b>Foco Tático [X]</b>, Oásis ou Antídoto [E]!</div>
+            </div>
+            <div class="item-card" style="padding:10px 12px; border-color:#10b981; background:rgba(20, 83, 45, 0.65);">
+              <strong style="color:#86efac; font-size:0.9rem;">🏃 Estamina (Energia Física)</strong>
+              <div style="font-size:0.8rem; color:#f0fdf4; margin-top:4px; line-height:1.35;">Barra verde usada para <b>Pulo Duplo no ar</b>, <b>Deslizar (S)</b>, <b>Planar</b> e <b>Foco (Shift / X)</b>. Recarrega sozinha no chão ou comendo frutas 🍉!</div>
+            </div>
+            <div class="item-card" style="padding:10px 12px; border-color:#f97316; background:rgba(67, 20, 7, 0.72);">
+              <strong style="color:#fdba74; font-size:0.9rem;">🔥 Fúria (Tecla F)</strong>
+              <div style="font-size:0.8rem; color:#fff7ed; margin-top:4px; line-height:1.35;">Enche coletando ovos, frutas e fazendo rasantes. Ao chegar em <b>100%</b>, aperte <b>[F]</b> para ficar <b>GIGANTE e Invencível</b>!</div>
+            </div>
+            <div class="item-card" style="padding:10px 12px; border-color:#38bdf8; background:rgba(12, 74, 110, 0.72);">
+              <strong style="color:#7dd3fc; font-size:0.9rem;">🧭 Roda Tática (Tecla X)</strong>
+              <div style="font-size:0.8rem; color:#f0f9ff; margin-top:4px; line-height:1.35;">Pausa a ação para você escolher: trocar <b>Habitat</b>, usar <b>Mochila</b>, comandar <b>Mascote</b> ou ativar <b>Foco Tático (+28% Hab e +45% Oxigênio O₂)</b>!</div>
+            </div>
+            <div class="item-card" style="padding:10px 12px; border-color:#facc15; background:rgba(66, 32, 6, 0.72);">
+              <strong style="color:#fde047; font-size:0.9rem;">🎒 Mochila (Tecla E)</strong>
+              <div style="font-size:0.8rem; color:#fefce8; margin-top:4px; line-height:1.35;">Guarda até 3 itens coletados na pista (Escudo, Turbo, Antídoto). Aperte <b>[E]</b> a qualquer momento para usar o item guardado!</div>
+            </div>
+            <div class="item-card" style="padding:10px 12px; border-color:#22d3ee; background:rgba(8, 51, 68, 0.78);">
+              <strong style="color:#67e8f9; font-size:0.9rem;">🫧 Oxigênio / Brânquias</strong>
+              <div style="font-size:0.8rem; color:#ecfeff; margin-top:4px; line-height:1.35;"><b>Aquáticos Puros (Brânquias):</b> O₂ infinito (100%) no fundo do mar e secam devagar na superfície (mergulhe com S/↓!). <b>Anfíbios:</b> 50s de fôlego submerso. <b>Terrestres:</b> suba com W/↑, pegue Bolhas 🫧 ou use Roda [X]!</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -472,6 +520,7 @@ export class HUD {
     this.hudBottom = q('#hud-bottom-bar');
 
     this.pauseOverlay = q('#pause-overlay');
+    this.glossaryOverlay = q('#glossary-overlay');
     this.spotlightOverlay = q('#hud-spotlight-overlay');
     this.spotlightCard = q('#spotlight-card');
     this.spotlightIcon = q('#spotlight-icon');
@@ -488,6 +537,7 @@ export class HUD {
     this.mpReviveBtn = q('#btn-mp-revive');
     this.mpReviveLbl = q('#lbl-mp-revive');
     this.oxygenPill = q('#hud-oxygen-pill');
+    this.oxygenPrefix = q('#lbl-oxygen-prefix');
     this.oxygenLbl = q('#lbl-oxygen');
     this.oxygenBar = q('#bar-oxygen');
     this.companionPill = q('#hud-companion-pill');
@@ -607,6 +657,13 @@ export class HUD {
     this.root.querySelector('#btn-photo-mode').addEventListener('click', () => this.callbacks.onTogglePhoto?.());
     this.root.querySelector('#btn-debug')?.addEventListener('click', () => this.callbacks.onOpenDebug?.());
     this.root.querySelector('#btn-guide').addEventListener('click', () => this.callbacks.onOpenGuide?.());
+    this.root.querySelector('#btn-glossary')?.addEventListener('click', () => this.toggleGlossary(true));
+    this.root.querySelector('#btn-pause-glossary')?.addEventListener('click', () => this.toggleGlossary(true));
+    this.root.querySelector('#tut-glossary-btn')?.addEventListener('click', () => this.toggleGlossary(true));
+    this.root.querySelector('#btn-glossary-close')?.addEventListener('click', () => this.toggleGlossary(false));
+    this.root.querySelector('#glossary-overlay')?.addEventListener('click', (e) => {
+      if (e.target.id === 'glossary-overlay') this.toggleGlossary(false);
+    });
     this.root.querySelector('#tut-skip').addEventListener('click', () => this.callbacks.onSkipTutorial?.());
     this.root.querySelector('#btn-clip-rec').addEventListener('click', () => this.callbacks.onRecordClip?.());
     this.root.querySelector('#btn-fury-melee')?.addEventListener('click', () => this.callbacks.onTriggerFury?.());
@@ -802,6 +859,7 @@ export class HUD {
   resetAllOverlays() {
     this.hideGameOver();
     this.showPause(false);
+    this.glossaryOverlay?.classList.add('hidden');
     this.showRestartConfirm(false);
     this.hideMerchant();
     this.showPhotoMode(false);
@@ -834,6 +892,19 @@ export class HUD {
     this.setPredatorTelegraph(null);
   }
 
+  toggleGlossary(force = null) {
+    if (!this.glossaryOverlay) return false;
+    const isCurrentlyOpen = !this.glossaryOverlay.classList.contains('hidden');
+    const nextShow = force !== null ? Boolean(force) : !isCurrentlyOpen;
+    this.glossaryOverlay.classList.toggle('hidden', !nextShow);
+    if (nextShow) {
+      Save.data.glossarySeen = true;
+      try { Save.save(); } catch {}
+    }
+    this.callbacks.onToggleGlossary?.(nextShow);
+    return nextShow;
+  }
+
   setTutorialHud(info) {
     if (!this.tutBox) return;
     const active = !!info?.active;
@@ -841,7 +912,11 @@ export class HUD {
     if (active) {
       this.tutTitle.textContent = info.title || '🎓 Tutorial';
       this.tutProgress.textContent = info.progressText || `${info.step || 1}/${info.total || 6}`;
-      this.tutDesc.textContent = info.desc || '';
+      if (info.html) {
+        this.tutDesc.innerHTML = info.html;
+      } else {
+        this.tutDesc.textContent = info.desc || '';
+      }
     }
   }
 
@@ -903,18 +978,23 @@ export class HUD {
     });
   }
 
-  _applyOxygenVisuals(pct) {
-    const o2 = Math.max(0, Math.min(100, Math.round(Number(pct ?? 100))));
+  _applyOxygenVisuals(pct, isNaturalGillsHabitat = false) {
+    const o2 = isNaturalGillsHabitat ? 100 : Math.max(0, Math.min(100, Math.round(Number(pct ?? 100))));
     if (this.oxygenPill) {
-      this.oxygenPill.classList.toggle('o2-critical', o2 <= 30);
-      this.oxygenPill.classList.toggle('o2-warn', o2 > 30 && o2 <= 60);
-      this.oxygenPill.classList.toggle('o2-safe', o2 > 60);
+      this.oxygenPill.classList.toggle('o2-critical', !isNaturalGillsHabitat && o2 <= 30);
+      this.oxygenPill.classList.toggle('o2-warn', !isNaturalGillsHabitat && o2 > 30 && o2 <= 60);
+      this.oxygenPill.classList.toggle('o2-safe', isNaturalGillsHabitat || o2 > 60);
+      this.oxygenPill.style.borderColor = isNaturalGillsHabitat ? '#22d3ee' : '';
     }
     if (this.oxygenBar) {
       this.oxygenBar.style.width = `${o2}%`;
-      this.oxygenBar.style.background = o2 <= 30
-        ? 'linear-gradient(90deg, #dc2626, #ef4444)'
-        : (o2 <= 60 ? 'linear-gradient(90deg, #d97706, #facc15)' : 'linear-gradient(90deg, #16a34a, #4ade80)');
+      if (isNaturalGillsHabitat) {
+        this.oxygenBar.style.background = 'linear-gradient(90deg, #10b981, #22d3ee)';
+      } else {
+        this.oxygenBar.style.background = o2 <= 30
+          ? 'linear-gradient(90deg, #dc2626, #ef4444)'
+          : (o2 <= 60 ? 'linear-gradient(90deg, #d97706, #facc15)' : 'linear-gradient(90deg, #16a34a, #4ade80)');
+      }
     }
   }
 
@@ -1097,14 +1177,33 @@ export class HUD {
     const submergedNow = !!(player.inSubmerged || (player.diveDepth || 0) > 0.25);
     this.submergedTint?.classList.toggle('hidden', !submergedNow);
 
+    const physiology = player.aquaticPhysiology || (player.isAquaticNative ? 'aquatic_gills' : 'terrestrial');
+    const isGillsUnderwater = physiology === 'aquatic_gills' && (submergedNow || player.inSubmerged);
     const showO2 = !!(player.inWater || submergedNow || (player.oxygen ?? 100) < 99);
-    const o2 = Math.max(0, Math.min(100, Math.round(player.oxygen ?? 100)));
+    const o2 = isGillsUnderwater ? 100 : Math.max(0, Math.min(100, Math.round(player.oxygen ?? 100)));
     if (this.oxygenPill) {
       this.oxygenPill.classList.toggle('hidden', !showO2);
       if (this.oxygenLbl) {
-        this.oxygenLbl.textContent = player.isAquaticNative ? `Brânquias ${o2}%` : `${o2}%`;
+        if (physiology === 'aquatic_gills') {
+          if (this.oxygenPrefix) this.oxygenPrefix.innerHTML = '';
+          if (isGillsUnderwater) {
+            this.oxygenLbl.textContent = '🫧 Brânquias 100% • Habitat Natural';
+            this.oxygenLbl.style.color = '#67e8f9';
+          } else {
+            this.oxygenLbl.textContent = `💧 Umidade Brânquias ${o2}%`;
+            this.oxygenLbl.style.color = '#bae6fd';
+          }
+        } else if (physiology === 'amphibious_hybrid') {
+          if (this.oxygenPrefix) this.oxygenPrefix.innerHTML = '';
+          this.oxygenLbl.textContent = `🫧 Fôlego Anfíbio ${o2}%`;
+          this.oxygenLbl.style.color = '#a5f3fc';
+        } else {
+          if (this.oxygenPrefix) this.oxygenPrefix.innerHTML = '🫧 <span class="btn-label">O₂</span> ';
+          this.oxygenLbl.textContent = `${o2}%`;
+          this.oxygenLbl.style.color = '';
+        }
       }
-      this._applyOxygenVisuals(o2);
+      this._applyOxygenVisuals(o2, isGillsUnderwater);
     }
 
     const petStatus = extra?.companionStatus || null;

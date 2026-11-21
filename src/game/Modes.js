@@ -5,6 +5,7 @@ export const MODE_CATEGORIES = [
   { id: 'competitive', label: 'Competitivos', icon: '🏁' },
   { id: 'cooperative', label: 'Cooperativos', icon: '🤝' },
   { id: 'boss_challenge', label: 'Desafios & Boss', icon: '👑' },
+  { id: 'exploration_rpg', label: 'Aventura & RPG 3D', icon: '🏰' },
   { id: 'sandbox', label: 'Livre & Sandbox', icon: '🧪' }
 ];
 
@@ -358,6 +359,77 @@ export const GAME_MODES = [
     unranked: true,
     desc: 'Controle de bioma, velocidade e spawn sob demanda! Sem morte, sem ranking e sem conquistas validadas.',
     tooltip: 'Teclas [1]/[2] velocidade, [3] trocar bioma, [4] onda de obstáculos, [5] invocar boss.'
+  },
+
+  // === ULTRA EXPANSÃO 3D (MODOS LIVRES 360°) ===
+  {
+    id: 'arena_x1',
+    tier: 'ultra',
+    category: 'competitive',
+    icon: '⚔️',
+    difficultyTag: 'Combate 3D',
+    name: 'Arena X1 Livre (PvP 3D)',
+    players: 2,
+    supportsMultiplayer: true,
+    supportsLocalCoop: true,
+    isFree3DMode: true,
+    ranked: true,
+    desc: 'Combate 3D livre 1v1 em 6 arenas com combos (Q), ataque pesado (E), defesa/parry (Shift), dash e Especial (F)!',
+    tooltip: 'Enfrente IA inteligente ou 2P local em Melhor de 3 rounds com pilares destrutíveis e orbes de fúria.'
+  },
+  {
+    id: 'boss_arena',
+    tier: 'ultra',
+    category: 'boss_challenge',
+    icon: '👑',
+    difficultyTag: 'Colossal 3D',
+    name: 'Boss Arena 3D Livre',
+    players: 1,
+    supportsMultiplayer: true,
+    isFree3DMode: true,
+    ranked: true,
+    desc: 'Arena 360° livre contra chefes colossais com telegraphs AoE luminosos, cristais de stagger e 3 fases!',
+    tooltip: 'Movimente-se livremente em 3D, quebre cristais para atordoar o chefe e domine os 3 estágios de fúria.'
+  },
+  {
+    id: 'dungeon_rpg',
+    tier: 'ultra',
+    category: 'exploration_rpg',
+    icon: '🏰',
+    difficultyTag: 'RPG + Dados',
+    name: 'Masmorra RPG 3D (IA + Dados)',
+    players: 1,
+    supportsMultiplayer: true,
+    isFree3DMode: true,
+    ranked: true,
+    desc: 'Explore masmorras 3D em 5 andares com Mestre IA, rolagem de dados 3D (d4–d20), enigmas, relíquias e chefe final!',
+    tooltip: 'Escolha ações táticas ou escreva sua própria jogada para o Mestre IA avaliar com testes de dados!'
+  },
+  {
+    id: 'dungeon_rush',
+    tier: 'ultra',
+    category: 'exploration_rpg',
+    icon: '🗝️',
+    difficultyTag: 'Roguelike',
+    name: 'Cripta Infinita (Roguelike)',
+    players: 1,
+    isFree3DMode: true,
+    ranked: true,
+    desc: 'Masmorra 3D sem limite de andares com dificuldade crescente, relíquias acumulativas e armadilhas letais.',
+    tooltip: 'Quantos andares da Cripta Infinita você consegue conquistar com um único dino?'
+  },
+  {
+    id: 'adventure_open',
+    tier: 'ultra',
+    category: 'exploration_rpg',
+    icon: '🗺️',
+    difficultyTag: 'Mundo Aberto',
+    name: 'Aventura Aberta 3D',
+    players: 1,
+    isFree3DMode: true,
+    ranked: true,
+    desc: 'Explore um mundo aberto 3D com chunks dinâmicos: encontre 3 Relíquias, ative o Altar do Bioma e vença o Guardião!',
+    tooltip: 'Liberdade total 360° com ninhos de ovos, patrulhas de dinos IA e portais de bioma.'
   }
 ];
 
@@ -382,6 +454,27 @@ export const STORY_CHAPTERS = [
     biome: 'alien_planet',
     targetScore: 1500,
     dialogue: 'Salte pela baixa gravidade e derrote a ameaça alienígena para salvar os dinos!'
+  },
+  {
+    id: 4,
+    title: 'Capítulo 4: Cidadela Submersa',
+    biome: 'sunken_citadel',
+    targetScore: 2200,
+    dialogue: 'As ruínas atlantes emergiram! Navegue pelas correntes de coral e desperte o tridente antigo.'
+  },
+  {
+    id: 5,
+    title: 'Capítulo 5: Floresta de Cogumelos Gigantes',
+    biome: 'giant_shroom_forest',
+    targetScore: 3000,
+    dialogue: 'Os esporos luminescentes escondem portais para as catacumbas jurássicas. Não perca o ritmo!'
+  },
+  {
+    id: 6,
+    title: 'Capítulo 6: Deserto de Cinzas & O Guardião Final',
+    biome: 'ash_wastes',
+    targetScore: 4000,
+    dialogue: 'Sob a tempestade de cinzas vulcânicas, enfrente o teste supremo para selar a fenda temporal!'
   }
 ];
 

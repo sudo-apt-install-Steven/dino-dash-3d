@@ -10,6 +10,7 @@ import { PREDATOR_CATALOG } from '../events/PredatorModels.js';
 import { STATUS_DEFS } from '../systems/StatusSystem.js';
 import { ACHIEVEMENTS_CATALOG, ProgressionManager } from '../systems/Progression.js';
 import { Save } from '../systems/Save.js';
+import { AuthProfile } from '../systems/AuthProfile.js';
 import { isMobileDevice } from '../systems/DeviceDetector.js';
 import { normalizeLocale } from '../i18n/translations.js';
 import { escapeHtml } from '../security/Sanitize.js';
@@ -45,6 +46,7 @@ const MODE_CATEGORY_META = [
   { id: 'competitive', icon: '⚔️', label: { 'pt-BR': 'Competitivos', en: 'Competitive', es: 'Competitivos' } },
   { id: 'cooperative', icon: '🤝', label: { 'pt-BR': 'Cooperativos', en: 'Cooperative', es: 'Cooperativos' } },
   { id: 'challenge', icon: '👑', label: { 'pt-BR': 'Desafios / Boss', en: 'Challenges / Boss', es: 'Desafíos / Jefe' } },
+  { id: 'exploration_rpg', icon: '🏰', label: { 'pt-BR': 'Aventura & RPG', en: 'Adventure & RPG', es: 'Aventura y RPG' } },
   { id: 'free', icon: '🌿', label: { 'pt-BR': 'Livre', en: 'Free', es: 'Libre' } }
 ];
 
@@ -60,22 +62,28 @@ const MODE_DISPLAY_FALLBACKS = {
   rival_ai: { cat: 'competitive', icon: '🤖', diff: 'Difícil', tone: 'hard' },
   race: { cat: 'competitive', icon: '🏁', diff: 'Velocidade', tone: 'medium' },
   competition: { cat: 'competitive', icon: '🥇', diff: 'Ranqueado', tone: 'hard' },
+  arena_x1: { cat: 'competitive', icon: '⚔️', diff: 'Combate 3D', tone: 'hard' },
   coop: { cat: 'cooperative', icon: '🤝', diff: 'Coop', tone: 'normal' },
   shared_controls: { cat: 'cooperative', icon: '🎮', diff: 'Party', tone: 'medium' },
   relay: { cat: 'cooperative', icon: '🏃', diff: 'Coop', tone: 'normal' },
   raid: { cat: 'cooperative', icon: '🐉', diff: 'Extremo', tone: 'extreme' },
   boss_fight: { cat: 'challenge', icon: '👑', diff: 'Boss Rush', tone: 'extreme' },
+  boss_arena: { cat: 'challenge', icon: '👑', diff: 'Colossal 3D', tone: 'extreme' },
   hardcore: { cat: 'challenge', icon: '💀', diff: 'Extremo', tone: 'extreme' },
   chaos: { cat: 'challenge', icon: '🌀', diff: 'Caótico', tone: 'hard' },
   wave_survival: { cat: 'challenge', icon: '🌊', diff: 'Difícil', tone: 'hard' },
   daily_challenge: { cat: 'challenge', icon: '📅', diff: 'Desafio', tone: 'medium' },
+  dungeon_rpg: { cat: 'exploration_rpg', icon: '🏰', diff: 'RPG + Dados', tone: 'hard' },
+  dungeon_rush: { cat: 'exploration_rpg', icon: '🗝️', diff: 'Roguelike', tone: 'extreme' },
+  adventure_open: { cat: 'exploration_rpg', icon: '🗺️', diff: 'Mundo Aberto', tone: 'normal' },
   zen: { cat: 'free', icon: '🧘', diff: 'Livre', tone: 'free' },
   free_roam: { cat: 'free', icon: '🗺️', diff: 'Livre', tone: 'free' }
 };
 
 function classifyModeCategory(mode) {
   const rawCat = String(mode?.category || '').toLowerCase();
-  if (['classic', 'competitive', 'cooperative', 'challenge', 'free'].includes(rawCat)) return rawCat;
+  if (['classic', 'competitive', 'cooperative', 'challenge', 'exploration_rpg', 'free'].includes(rawCat)) return rawCat;
+  if (rawCat.includes('rpg') || rawCat.includes('explor') || rawCat.includes('advent')) return 'exploration_rpg';
   if (rawCat.includes('coop')) return 'cooperative';
   if (rawCat.includes('boss') || rawCat.includes('chal') || rawCat.includes('desaf')) return 'challenge';
   if (rawCat.includes('comp') || rawCat.includes('pvp') || rawCat.includes('race')) return 'competitive';
@@ -299,12 +307,18 @@ export class Menus {
   static renderMainMenu(container, state, actions) {
     const title = Save.data.activeTitle || 'Iniciante';
     const prestigeLv = Save.data.prestige?.level || 0;
+    const cachedUser = AuthProfile.getCachedUser?.() || null;
+    const localNick = Save.data.profile?.nickname || Save.data.network?.nickname || 'Dino';
+    const isLogged = !!cachedUser;
     container.innerHTML = `
       <div class="main-menu-wrap">
-        <div class="chunky-panel main-menu-panel" style="width:min(420px, 92vw); padding:20px; gap:12px;">
+        <div class="chunky-panel main-menu-panel" style="width:min(436px, 93vw); padding:20px; gap:11px;">
           <div>
             <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
-              <div class="dino-logo" id="main-dino-logo" style="font-size:2.15rem; cursor:pointer; user-select:none;" title="Dino Dash 3D">DINO <span class="dash-accent">DASH 3D</span></div>
+              <div class="dino-logo" id="main-dino-logo" style="font-size:2.05rem; cursor:pointer; user-select:none;" title="Dino Dash 3D">DINO <span class="dash-accent">DASH 3D</span></div>
+              <button type="button" class="menu-account-pill ${isLogged ? 'is-logged' : ''}" id="menu-account-pill" title="${isLogged ? 'Gerenciar conta conectada na nuvem' : 'Entrar ou criar conta sem e-mail (Nick + Senha)'}">
+                ${isLogged ? `☁️ @${escapeHtml(localNick)}` : '🔑 Entrar / Criar Conta'}
+              </button>
               <div class="mob-only" style="display:flex; gap:5px; align-items:center;">
                 <button type="button" class="inline-change-btn" id="menu-rotate-btn" style="padding:4px 8px; border-color:#38bdf8; color:#7dd3fc;">🔄 ${state.isLandscape ? 'Paisagem' : 'Deitar'}</button>
                 ${isMobileDevice() ? `<button type="button" class="inline-change-btn" id="menu-ctrl-btn" style="padding:4px 8px; border-color:#58d63a; color:#86efac;">🎮 Controle</button>` : ''}
@@ -345,6 +359,19 @@ export class Menus {
           ` : ''}
 
           <button class="chunky-btn" id="menu-play" style="font-size:1.28rem; padding:15px;">▶ Jogar Agora</button>
+
+          <div class="menu-quick3d-box">
+            <div class="menu-quick3d-header">
+              <span>✨ Novos Modos 3D</span>
+              <span class="menu-quick3d-tag">NOVO</span>
+            </div>
+            <div class="menu-quick3d-grid">
+              <button type="button" class="menu-quick3d-btn" data-quick-mode="dungeon_rpg" title="Explore masmorras 3D com dados RPG e Mestre IA">🏰 Masmorra RPG</button>
+              <button type="button" class="menu-quick3d-btn" data-quick-mode="adventure_open" title="Mundo aberto 3D com biomas, segredos e exploração livre">🗺️ Mundo Aberto</button>
+              <button type="button" class="menu-quick3d-btn" data-quick-mode="arena_x1" title="Combate 3D direto 1v1 em arena jurássica">⚔️ Arena X1</button>
+            </div>
+          </div>
+
           <button class="chunky-btn orange" data-nav="multiplayer" style="font-size:1.02rem; padding:11px;">🌐 Multiplayer</button>
 
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
@@ -402,6 +429,44 @@ export class Menus {
       const pop = container.querySelector('#menu-crystals-popover');
       if (pop) pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
     });
+
+    const acctPill = container.querySelector('#menu-account-pill');
+    acctPill?.addEventListener('click', () => {
+      if (typeof window !== 'undefined') window.__DINO_PROFILE_INITIAL_TAB__ = 'account';
+      if (typeof actions.onOpenAccount === 'function') {
+        actions.onOpenAccount();
+      } else {
+        actions.onNavigate?.('profile');
+      }
+    });
+    if (acctPill) {
+      AuthProfile.getCurrentUser?.().then((user) => {
+        if (!acctPill.isConnected) return;
+        if (user) {
+          const nick = Save.data.profile?.nickname || Save.data.network?.nickname || user.user_metadata?.nickname || 'Dino';
+          acctPill.classList.add('is-logged');
+          acctPill.textContent = `☁️ @${nick}`;
+          acctPill.title = 'Gerenciar conta conectada na nuvem';
+        } else {
+          acctPill.classList.remove('is-logged');
+          acctPill.textContent = '🔑 Entrar / Criar Conta';
+          acctPill.title = 'Entrar ou criar conta sem e-mail (Nick + Senha)';
+        }
+      }).catch(() => {});
+    }
+
+    container.querySelectorAll('[data-quick-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const modeId = btn.getAttribute('data-quick-mode');
+        if (!modeId) return;
+        if (typeof actions.onQuickPlayMode === 'function') {
+          actions.onQuickPlayMode(modeId);
+        } else {
+          actions.onNavigate?.('modes');
+        }
+      });
+    });
+
     container.querySelector('#menu-play').addEventListener('click', actions.onPlay);
     container.querySelector('#menu-rotate-btn')?.addEventListener('click', () => actions.onToggleLandscape?.());
     container.querySelector('#menu-ctrl-btn')?.addEventListener('click', () => actions.onOpenController?.());
@@ -706,7 +771,64 @@ export class Menus {
     let query = '';
     let limit = 48;
     let extra = _bestiaryExtraCache || { debuffVariants: [], eventVariants: [], hazardVariants: [], predatorVariants: [], bossAffixes: [] };
+    let ultraEntries = null;
+    let ultraLoading = false;
     let destroyed = false;
+
+    const loadUltraCatalog = () => {
+      if (ultraEntries || ultraLoading) return;
+      ultraLoading = true;
+      import('../content/ultra_catalog.js').then((mod) => {
+        const list = [];
+        for (const e of (mod.DUNGEON_ENCOUNTERS || [])) {
+          list.push({
+            icon: '⚔️',
+            name: e.name,
+            subtitle: `Encontro Masmorra • Andar ${e.floorMin}+ • ${e.diceHint}`,
+            desc: `HP ${e.hp} • ATK ${e.atk} • Traço: ${e.trait || 'elite'} • Elemento: ${e.element || 'físico'}.`,
+            counter: `Fraqueza: ${e.weakness || 'ataque pesado'}. Recompensa: +${e.rewardEggs || 0} ovos.`,
+            accent: '#f97316'
+          });
+        }
+        for (const t of (mod.DUNGEON_TRAPS || [])) {
+          list.push({
+            icon: '🪤',
+            name: t.name,
+            subtitle: `Armadilha • Andar ${t.floorMin}+ • ${t.diceHint}`,
+            desc: `Dano ${t.damage} • Elemento: ${t.element || 'físico'}${t.debuffId ? ` • Debuff: ${t.debuffId}` : ''}.`,
+            counter: t.counterplay || 'Role d20 de agilidade ou esquive antes do disparo.',
+            accent: '#ef4444'
+          });
+        }
+        for (const r of (mod.DUNGEON_RELICS || [])) {
+          list.push({
+            icon: '🏺',
+            name: r.name,
+            subtitle: `Relíquia • ${r.rarity} • Andar ${r.floorMin}+`,
+            desc: `Bônus: +${r.bonus?.value ?? 0} ${r.bonus?.stat || ''} • Trade-off: -${r.penalty?.value ?? 0} ${r.penalty?.stat || ''}.`,
+            counter: 'Combine com a classe do seu dino para maximizar sinergia na Masmorra RPG.',
+            accent: '#a855f7'
+          });
+        }
+        for (const m of (mod.X1_COMBAT_MOVES || [])) {
+          list.push({
+            icon: '🥊',
+            name: m.name,
+            subtitle: `Golpe X1 • ${m.element} • CD ${m.cooldown}s`,
+            desc: `Multiplicador ${m.damageMult}x • Estamina ${m.staminaCost} • Alcance ${m.range}.`,
+            counter: 'Use Defesa/Parry [Shift] ou Dash [Espaço] no momento do impacto.',
+            accent: '#38bdf8'
+          });
+        }
+        ultraEntries = list;
+        ultraLoading = false;
+        if (!destroyed) render();
+      }).catch(() => {
+        ultraEntries = [];
+        ultraLoading = false;
+        if (!destroyed) render();
+      });
+    };
 
     const buildEntries = () => {
       if (tab === 'predators') {
@@ -770,6 +892,14 @@ export class Menus {
         return [...base, ...vars];
       }
 
+      if (tab === 'ultra') {
+        if (!ultraEntries) {
+          loadUltraCatalog();
+          return [];
+        }
+        return ultraEntries;
+      }
+
       // events + hazards
       const baseEvents = (EVENT_CATALOG || []).map((e) => ({
         icon: e.icon || '☄️',
@@ -821,6 +951,7 @@ export class Menus {
               <button class="tab-btn ${tab === 'bosses' ? 'active' : ''}" data-btab="bosses">👑 Chefes</button>
               <button class="tab-btn ${tab === 'debuffs' ? 'active' : ''}" data-btab="debuffs">☠️ Debuffs</button>
               <button class="tab-btn ${tab === 'events' ? 'active' : ''}" data-btab="events">☄️ Eventos</button>
+              <button class="tab-btn ${tab === 'ultra' ? 'active' : ''}" data-btab="ultra">🏰 Masmorras & Relíquias</button>
             </div>
             <div class="catalog-toolbar">
               <input type="search" class="text-input catalog-search" id="bestiary-search" value="${escapeHtml(query)}" placeholder="${escapeHtml(L.searchPh)}" aria-label="${escapeHtml(L.searchPh)}" />
@@ -900,6 +1031,7 @@ export class Menus {
       : (BIOMES.find((b) => b.id === selectedBiome)?.tier || 'essential');
     const essCount = BIOMES.filter((b) => b.tier === 'essential').length;
     const advCount = BIOMES.filter((b) => b.tier === 'advanced').length;
+    const ultraCount = BIOMES.filter((b) => b.tier === 'ultra').length;
     const render = () => {
       const list = BIOMES.filter((b) => b.tier === tab);
       container.innerHTML = `
@@ -927,6 +1059,7 @@ export class Menus {
             <div class="tabs-row">
               <button class="tab-btn ${tab === 'essential' ? 'active' : ''}" data-btab="essential">Essenciais (${essCount})</button>
               <button class="tab-btn ${tab === 'advanced' ? 'active' : ''}" data-btab="advanced">Avançados (${advCount})</button>
+              <button class="tab-btn ${tab === 'ultra' ? 'active' : ''}" data-btab="ultra">✨ Ultra (${ultraCount})</button>
             </div>
             <div class="cards-grid">
               ${list.map((b) => {

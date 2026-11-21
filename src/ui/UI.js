@@ -22,7 +22,7 @@ import { PerfMonitor } from '../systems/PerfMonitor.js';
 import { OrientationManager } from '../systems/OrientationManager.js';
 import { isMobileDevice } from '../systems/DeviceDetector.js';
 import { getModeDef } from '../game/Modes.js';
-import { getDinoSpec, getEffectiveDinoHabitat } from '../dinos/DinoCatalog.js';
+import { getDinoSpec, getDinoDisplayName, getEffectiveDinoHabitat } from '../dinos/DinoCatalog.js';
 import { getBiomeById, isAquaticBiome } from '../world/Biomes.js';
 
 export class UIManager {
@@ -142,7 +142,7 @@ export class UIManager {
       {
         modeName: modeDef.name,
         diffName: diffCfg.name,
-        dinoName: dinoSpec.name,
+        dinoName: getDinoDisplayName(dinoSpec, Save.data.settings),
         effectiveLives,
         biomeLabel,
         fossilCrates: GachaSystem.getCrateCount(),
@@ -158,6 +158,20 @@ export class UIManager {
           this.game.sfx.click();
           this._clearModal();
           this.game.startRun();
+        },
+        onQuickPlayMode: (modeId) => {
+          this.game.sfx.click();
+          this._clearModal();
+          if (typeof this.game.startQuickMode === 'function') {
+            this.game.startQuickMode(modeId);
+          } else {
+            this.game.modeId = modeId;
+            this.game.startRun();
+          }
+        },
+        onOpenAccount: () => {
+          this.game.sfx.click();
+          this.openSection('profile', { initialTab: 'account' });
         },
         onToggleLandscape: () => {
           this.game.sfx.click();
@@ -479,6 +493,7 @@ export class UIManager {
         break;
       case 'profile':
         this.activeCleanup = ProfileModal.renderInto(this.hud.modalLayer, {
+          initialTab: sectionOpts?.initialTab || 'profile',
           onClose: back,
           onOpenAchievements: () => this.openSection('achievements'),
           onOpenSave: () => this.openSection('save_data'),

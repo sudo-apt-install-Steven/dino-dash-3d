@@ -94,21 +94,21 @@ export class World {
     // Solo esquerdo e solo além-rio para que o leito do rio nunca fique coberto
     this.groundMat = new THREE.MeshStandardMaterial({ color: '#d89c54', roughness: 0.94 });
     const groundLeft = new THREE.Mesh(new THREE.BoxGeometry(105, 1, 220), this.groundMat);
-    groundLeft.position.set(-57, -0.52, -70);
+    groundLeft.position.set(-57, -0.58, -70);
     groundLeft.receiveShadow = true;
     this.worldGroup.add(groundLeft);
     this.groundLeft = groundLeft;
 
     const groundRight = new THREE.Mesh(new THREE.BoxGeometry(100, 1, 220), this.groundMat);
-    groundRight.position.set(66.5, -0.52, -70);
+    groundRight.position.set(66.5, -0.58, -70);
     groundRight.receiveShadow = true;
     this.worldGroup.add(groundRight);
     this.groundRight = groundRight;
 
-    // Fundo do leito do rio (rebaixado para suportar mergulho 3D real no rio e oceano!)
+    // Fundo do leito do rio (rebaixado abaixo do seabedMesh para zero z-fighting ao mergulhar!)
     this.riverBedMat = new THREE.MeshStandardMaterial({ color: '#0d4f82', roughness: 0.9 });
     const riverBed = new THREE.Mesh(new THREE.BoxGeometry(11.6, 0.5, 220), this.riverBedMat);
-    riverBed.position.set(11.6, -4.85, -70);
+    riverBed.position.set(11.6, -5.20, -70);
     riverBed.receiveShadow = true;
     this.worldGroup.add(riverBed);
     this.riverBed = riverBed;
@@ -127,16 +127,19 @@ export class World {
     this.worldGroup.add(track);
     this.track = track;
 
-    // Guias das 3 faixas + trilhos luminosos nas bordas da pista
+    // Guias das 3 faixas + trilhos luminosos nas bordas da pista (polygonOffset elimina z-fighting)
     this.laneStripeMat = new THREE.MeshStandardMaterial({
       color: '#cf9244',
       roughness: 0.85,
       emissive: '#6e4518',
-      emissiveIntensity: 0.22
+      emissiveIntensity: 0.22,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
     });
     for (const lx of [-1.2, 1.2]) {
-      const divider = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.045, 210), this.laneStripeMat);
-      divider.position.set(lx, 0.018, -70);
+      const divider = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.02, 210), this.laneStripeMat);
+      divider.position.set(lx, 0.048, -70);
       divider.receiveShadow = true;
       this.worldGroup.add(divider);
     }
@@ -180,22 +183,39 @@ export class World {
     // Sombra circular nítida e anel luminoso da faixa sob o jogador principal
     this.playerShadowMesh = new THREE.Mesh(
       new THREE.CircleGeometry(0.62, 18),
-      new THREE.MeshBasicMaterial({ color: '#0f0804', transparent: true, opacity: 0.42, depthWrite: false })
+      new THREE.MeshBasicMaterial({
+        color: '#0f0804',
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2
+      })
     );
     this.playerShadowMesh.rotation.x = -Math.PI / 2;
-    this.playerShadowMesh.position.set(0, 0.032, 0);
+    this.playerShadowMesh.position.set(0, 0.062, 0);
     this.scene.add(this.playerShadowMesh);
 
     this.playerLaneRingMesh = new THREE.Mesh(
       new THREE.RingGeometry(0.56, 0.72, 24),
-      new THREE.MeshBasicMaterial({ color: '#fde047', transparent: true, opacity: 0.65, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({
+        color: '#fde047',
+        transparent: true,
+        opacity: 0.65,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2
+      })
     );
     this.playerLaneRingMesh.rotation.x = -Math.PI / 2;
-    this.playerLaneRingMesh.position.set(0, 0.036, 0);
+    this.playerLaneRingMesh.position.set(0, 0.068, 0);
     this.scene.add(this.playerLaneRingMesh);
 
     // Faixas transversais móveis para dar forte sensação de velocidade
-    const barGeo = new THREE.BoxGeometry(TRACK_WIDTH - 0.6, 0.025, 0.42);
+    const barGeo = new THREE.BoxGeometry(TRACK_WIDTH - 0.6, 0.016, 0.42);
     this.trackStripes = new THREE.InstancedMesh(barGeo, this.laneStripeMat, 36);
     this.trackStripes.receiveShadow = true;
     this.worldGroup.add(this.trackStripes);
@@ -214,7 +234,7 @@ export class World {
     this.worldGroup.add(bankLeft);
     this.bankLeft = bankLeft;
 
-    // Leito oceânico real a y = -4.6 (visível ao mergulhar abaixo de y = 0!)
+    // Leito oceânico real a y = -4.6 (camadas separadas + polygonOffset para zero z-fighting!)
     this.seabedGroup = new THREE.Group();
     this.seabedGroup.visible = false;
     this.seabedMat = new THREE.MeshStandardMaterial({
@@ -228,17 +248,31 @@ export class World {
     seabedMesh.receiveShadow = true;
     this.seabedGroup.add(seabedMesh);
 
-    const seabedRailMat = new THREE.MeshBasicMaterial({ color: '#38bdf8', transparent: true, opacity: 0.55 });
+    const seabedRailMat = new THREE.MeshBasicMaterial({
+      color: '#38bdf8',
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
+    });
     for (const rx of [-3.6, -1.2, 1.2, 3.6, 6.4, 8.8, 11.2, 13.6]) {
-      const sRail = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 200), seabedRailMat);
-      sRail.position.set(rx, -4.57, -70);
+      const sRail = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.05, 200), seabedRailMat);
+      sRail.position.set(rx, -4.555, -70);
       this.seabedGroup.add(sRail);
     }
     this.seabedBars = [];
-    const seabedBarMat = new THREE.MeshStandardMaterial({ color: '#155e75', roughness: 0.8 });
+    const seabedBarMat = new THREE.MeshStandardMaterial({
+      color: '#155e75',
+      roughness: 0.8,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
+    });
     for (let i = 0; i < 22; i++) {
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.08, 0.55), seabedBarMat);
-      bar.position.set(i % 2 === 0 ? 0 : 10, -4.56, -155 + i * 8);
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.05, 0.55), seabedBarMat);
+      bar.position.set(i % 2 === 0 ? 0 : 10, -4.50, -155 + i * 8);
       this.seabedGroup.add(bar);
       this.seabedBars.push(bar);
     }
@@ -580,6 +614,10 @@ export class World {
     if (this.seabedGroup) {
       this.seabedGroup.visible = Boolean(sub && !isSubBiome);
     }
+    if (this.riverBed) {
+      this.riverBed.visible = !sub || isSubBiome;
+      this.riverBed.position.y = -5.20;
+    }
 
     // Fog azul subaquático ao submergir (sem depender da cor do bioma de superfície, evitando névoa laranja debaixo d'água)
     if (this.scene?.fog && this.scene?.background) {
@@ -637,9 +675,9 @@ export class World {
       this.riverMat.needsUpdate = true;
     }
 
-    if (this.groundLeft) this.groundLeft.position.y = -0.52;
+    if (this.groundLeft) this.groundLeft.position.y = -0.58;
     if (this.groundRight) {
-      this.groundRight.position.y = isSubBiome ? -0.52 : ((sub || this.aquaticChannelActive) ? -5.15 : -0.52);
+      this.groundRight.position.y = isSubBiome ? -0.58 : ((sub || this.aquaticChannelActive) ? -5.15 : -0.58);
     }
     if (this.bankLeft) this.bankLeft.visible = true;
     if (this.bankRight) this.bankRight.visible = true;
@@ -838,16 +876,16 @@ export class World {
   }
 
   updatePlayerFocus(x, y, z, accentColor = '#fde047') {
-    const floorRefY = (this.submergedActive && !this._isSubmergedBiome && y < -0.5) ? -4.57 : 0;
+    const floorRefY = (this.submergedActive && !this._isSubmergedBiome && y < -0.5) ? -4.50 : 0;
     const heightAboveFloor = Math.max(0, y - floorRefY);
     if (this.playerShadowMesh) {
-      this.playerShadowMesh.position.set(x, floorRefY + 0.032, z);
+      this.playerShadowMesh.position.set(x, floorRefY + 0.062, z);
       const shadowScale = Math.max(0.45, 1.0 - Math.min(4.2, heightAboveFloor) * 0.13);
       this.playerShadowMesh.scale.set(shadowScale, shadowScale, 1);
       this.playerShadowMesh.material.opacity = Math.max(0.18, 0.48 - heightAboveFloor * 0.06);
     }
     if (this.playerLaneRingMesh) {
-      this.playerLaneRingMesh.position.set(x, floorRefY + 0.036, z);
+      this.playerLaneRingMesh.position.set(x, floorRefY + 0.068, z);
       const pulse = 1 + Math.sin(this.time * 6) * 0.06;
       this.playerLaneRingMesh.scale.set(pulse, pulse, 1);
       if (accentColor) this.playerLaneRingMesh.material.color.set(accentColor);
@@ -960,7 +998,7 @@ export class World {
 
     for (let i = 0; i < 36; i++) {
       const z = -170 + i * 6 + this.scrollOffset;
-      this._dummy.position.set(0, 0.02, z);
+      this._dummy.position.set(0, 0.036, z);
       this._dummy.rotation.set(0, 0, 0);
       this._dummy.scale.set(1, 1, 1);
       this._dummy.updateMatrix();

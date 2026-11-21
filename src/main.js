@@ -1,6 +1,7 @@
 import './styles/main.css';
 import './styles/menus.css';
 import './styles/controller.css';
+import './styles/modes3d.css';
 import { Game } from './game/Game.js';
 import { Save } from './systems/Save.js';
 import { PerfMonitor } from './systems/PerfMonitor.js';

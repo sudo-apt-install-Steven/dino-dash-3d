@@ -11,7 +11,9 @@ import { Achievements, TROPHY_TIERS } from '../systems/Achievements.js';
 import {
   AuthProfile,
   PROFILE_BANNERS,
-  PROFILE_FRAMES
+  PROFILE_FRAMES,
+  validateNickname,
+  evaluatePasswordStrength
 } from '../systems/AuthProfile.js';
 import { escapeHtml } from '../security/Sanitize.js';
 import { attachModalHelp } from './Menus.js';
@@ -137,15 +139,28 @@ class ProfileAvatar3D {
 }
 
 export class ProfileModal {
-  static renderInto(container, { onClose, onOpenAchievements, onOpenSave, onOpenLegal, onProfileUpdated } = {}) {
-    let activeTab = 'profile'; // 'profile' | 'account' | 'showcase'
-    let authSubTab = 'login'; // 'login' | 'register' | 'recover'
+  static _pendingInitialTab = null;
+
+  static requestTab(tab) {
+    ProfileModal._pendingInitialTab = tab;
+  }
+
+  static renderInto(container, { initialTab, onClose, onOpenAchievements, onOpenSave, onOpenLegal, onProfileUpdated } = {}) {
+    const winTab = typeof window !== 'undefined' ? window.__DINO_PROFILE_INITIAL_TAB__ : null;
+    if (typeof window !== 'undefined' && winTab) delete window.__DINO_PROFILE_INITIAL_TAB__;
+    const requestedTab = initialTab || ProfileModal._pendingInitialTab || winTab || 'profile';
+    ProfileModal._pendingInitialTab = null;
+    let activeTab = ['profile', 'account', 'showcase'].includes(requestedTab) ? requestedTab : 'profile';
+    let authSubTab = 'login'; // 'login' | 'register'
     let statusMsg = '';
     let statusTone = '#6ee7b7';
     let currentUser = null;
     let avatarPreview = null;
+    let nickCheckTimer = null;
+    let nickCheckSeq = 0;
 
     const cleanupAvatar = () => {
+      clearTimeout(nickCheckTimer);
       if (avatarPreview) {
         avatarPreview.destroy();
         avatarPreview = null;
@@ -281,61 +296,101 @@ export class ProfileModal {
 
               ${activeTab === 'account' ? `
                 ${currentUser ? `
-                  <div class="item-card" style="gap:8px; border-color:#22c55e;">
-                    <strong style="color:#6ee7b7;">☁️ Conta Conectada</strong>
+                  <div class="item-card" style="gap:10px; border-color:#22c55e; background:linear-gradient(145deg, rgba(6,78,59,0.28), rgba(20,11,6,0.88));">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                      <strong style="color:#6ee7b7; font-size:1.02rem;">☁️ Conta Conectada: @${escapeHtml(prof.nickname)}</strong>
+                      <span class="hud-pill" style="font-size:0.74rem; color:#86efac; border-color:rgba(34,197,94,0.45);">🛡️ Protegida (Nick + Senha)</span>
+                    </div>
                     <div style="font-size:0.82rem; color:#f5ead7;">
-                      ID: <code>${escapeHtml(currentUser.id.slice(0, 12))}...</code> • E-mail: <strong>${escapeHtml(currentUser.email || 'OAuth')}</strong>
+                      ID: <code>${escapeHtml(currentUser.id.slice(0, 12))}...</code> • Acesso: <strong>${currentUser.email && !currentUser.email.endsWith('@player.dinodash.internal') ? escapeHtml(currentUser.email) : 'Apelido + Senha (Sem E-mail)'}</strong>
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
                       <button type="button" class="chunky-btn" id="prof-sync-now">🔄 Migrar / Sincronizar Progresso Local</button>
                       <button type="button" class="chunky-btn secondary" id="prof-link-google">🔗 Vincular Google</button>
                       <button type="button" class="chunky-btn secondary" id="prof-link-discord">🔗 Vincular Discord</button>
+                      <button type="button" class="chunky-btn secondary" id="prof-logout-local">🚪 Sair</button>
                       <button type="button" class="chunky-btn orange" id="prof-logout-all">🚪 Sair (Todos Dispositivos)</button>
                     </div>
                   </div>
                 ` : `
                   <div class="item-card" style="gap:10px;">
-                    <div class="tabs-row" style="gap:6px;">
-                      <button type="button" class="tab-btn ${authSubTab === 'login' ? 'active' : ''}" data-asub="login">Entrar</button>
-                      <button type="button" class="tab-btn ${authSubTab === 'register' ? 'active' : ''}" data-asub="register">Criar Conta</button>
-                      <button type="button" class="tab-btn ${authSubTab === 'recover' ? 'active' : ''}" data-asub="recover">Recuperar Senha</button>
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                      <div class="tabs-row" style="gap:6px;">
+                        <button type="button" class="tab-btn ${authSubTab === 'login' ? 'active' : ''}" data-asub="login">🔑 Entrar</button>
+                        <button type="button" class="tab-btn ${authSubTab === 'register' ? 'active' : ''}" data-asub="register">✨ Criar Conta (Sem E-mail)</button>
+                      </div>
+                      <span class="hud-pill" style="font-size:0.72rem; color:#fde68a; border-color:rgba(251,191,36,0.45);">🛡️ Limite de segurança: 1 conta por PC/navegador</span>
                     </div>
 
                     ${authSubTab === 'login' ? `
                       <form id="auth-login-form" style="display:flex; flex-direction:column; gap:8px;">
-                        <input type="text" id="auth-login-id" class="text-input" placeholder="Apelido (nick) ou E-mail" required />
-                        <input type="password" id="auth-login-pw" class="text-input" placeholder="Senha" required />
-                        <button type="submit" class="chunky-btn">🔑 Entrar</button>
+                        <label style="display:flex; flex-direction:column; gap:3px; font-size:0.78rem; color:#e5d3bc;">
+                          <span>Apelido (Nick)</span>
+                          <input type="text" id="auth-login-id" class="text-input" maxlength="64" autocomplete="username" placeholder="Seu apelido (ex: RexAlfa99)" value="${escapeHtml(AuthProfile.getLocalCreatedAccountNick() || '')}" required />
+                        </label>
+                        <label style="display:flex; flex-direction:column; gap:3px; font-size:0.78rem; color:#e5d3bc;">
+                          <span>Senha</span>
+                          <input type="password" id="auth-login-pw" class="text-input" autocomplete="current-password" placeholder="Sua senha" required />
+                        </label>
+                        <button type="submit" class="chunky-btn" id="auth-login-submit">🔑 Entrar na Conta</button>
                       </form>
                     ` : ''}
 
                     ${authSubTab === 'register' ? `
-                      <form id="auth-reg-form" style="display:flex; flex-direction:column; gap:8px;">
-                        <input type="text" id="auth-reg-nick" class="text-input" maxlength="16" placeholder="Apelido único (3–16 chars)" required />
-                        <input type="email" id="auth-reg-email" class="text-input" placeholder="Seu e-mail (para confirmação e recuperação)" required />
-                        <input type="password" id="auth-reg-pw" class="text-input" placeholder="Senha (mín. 8 chars, letras e números)" required />
-                        <input type="password" id="auth-reg-pw2" class="text-input" placeholder="Confirmar senha" required />
-                        <label style="font-size:0.78rem; color:#fde68a; display:flex; align-items:center; gap:6px;">
-                          <input type="checkbox" id="auth-reg-terms" checked />
-                          <span>Aceito os Termos de Uso e Política de Privacidade (LGPD / ECA Digital).</span>
-                        </label>
-                        <label style="font-size:0.76rem; color:#d8c2a6; display:flex; align-items:center; gap:6px;">
-                          <input type="checkbox" id="auth-reg-minor" />
-                          <span>Sou menor de 18 anos e possuo consentimento dos pais/responsáveis.</span>
-                        </label>
-                        <button type="submit" class="chunky-btn">✨ Criar Conta e Migrar Progresso</button>
-                      </form>
-                    ` : ''}
-
-                    ${authSubTab === 'recover' ? `
-                      <form id="auth-rec-form" style="display:flex; flex-direction:column; gap:8px;">
-                        <input type="text" id="auth-rec-id" class="text-input" placeholder="Informe seu Apelido ou E-mail" required />
-                        <button type="submit" class="chunky-btn secondary">📧 Enviar Link de Recuperação</button>
-                      </form>
+                      ${AuthProfile.hasLocalCreatedAccount() ? `
+                        <div class="item-card" style="border-color:#f59e0b; background:rgba(245,158,11,0.12); padding:10px 12px; gap:6px;">
+                          <strong style="color:#fde047; font-size:0.86rem;">🛡️ Limite de segurança: 1 conta por PC/navegador</strong>
+                          <span style="font-size:0.8rem; color:#fef3c7;">
+                            Este navegador/PC já possui a conta <strong>@${escapeHtml(AuthProfile.getLocalCreatedAccountNick() || 'existente')}</strong> criada. Use a aba <strong>Entrar</strong> para acessar sua conta.
+                          </span>
+                          <div>
+                            <button type="button" class="chunky-btn secondary" id="auth-switch-to-login" style="padding:7px 12px; font-size:0.8rem;">🔑 Ir para Entrar</button>
+                          </div>
+                        </div>
+                      ` : `
+                        <form id="auth-reg-form" style="display:flex; flex-direction:column; gap:9px;">
+                          <div style="font-size:0.78rem; color:#bae6fd; background:rgba(14,116,144,0.18); border:1px solid rgba(56,189,248,0.35); border-radius:10px; padding:8px 10px;">
+                            ⚡ <strong>Cadastro instantâneo sem e-mail:</strong> escolha apenas um Apelido único e uma Senha forte. Seu progresso de convidado será migrado automaticamente!
+                          </div>
+                          <label style="display:flex; flex-direction:column; gap:4px; font-size:0.78rem; color:#e5d3bc;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+                              <span>Apelido único (3–16 chars: letras, números, "_" ou "-")</span>
+                              <span id="auth-nick-status" style="font-size:0.75rem; font-weight:800; color:#94a3b8;">Digite seu apelido...</span>
+                            </div>
+                            <input type="text" id="auth-reg-nick" class="text-input" maxlength="16" autocomplete="username" placeholder="Ex: RaptorEstelar" required />
+                          </label>
+                          <label style="display:flex; flex-direction:column; gap:4px; font-size:0.78rem; color:#e5d3bc;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
+                              <span>Senha (mín. 8 chars, letras e números)</span>
+                              <span id="auth-pw-strength-lbl" style="font-size:0.74rem; font-weight:800; color:#94a3b8;">Digite uma senha</span>
+                            </div>
+                            <input type="password" id="auth-reg-pw" class="text-input" maxlength="128" autocomplete="new-password" placeholder="Crie uma senha forte" required />
+                            <div class="meter-bar" style="height:6px; margin-top:2px;">
+                              <div id="auth-pw-strength-bar" class="meter-fill" style="width:0%; background:#94a3b8;"></div>
+                            </div>
+                          </label>
+                          <label style="display:flex; flex-direction:column; gap:4px; font-size:0.78rem; color:#e5d3bc;">
+                            <span>Confirmar Senha</span>
+                            <input type="password" id="auth-reg-pw2" class="text-input" maxlength="128" autocomplete="new-password" placeholder="Repita a senha" required />
+                          </label>
+                          <label style="font-size:0.78rem; color:#fde68a; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="auth-reg-terms" checked />
+                            <span>Aceito os Termos de Uso e Política de Privacidade (LGPD / ECA Digital).</span>
+                          </label>
+                          <label style="font-size:0.76rem; color:#d8c2a6; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="auth-reg-minor" />
+                            <span>Sou menor de 18 anos e possuo consentimento dos pais/responsáveis.</span>
+                          </label>
+                          <div style="font-size:0.74rem; color:#fcd34d;">
+                            🛡️ Limite de segurança: 1 conta por PC/navegador. Guarde bem seu apelido e senha!
+                          </div>
+                          <button type="submit" class="chunky-btn" id="auth-reg-submit">✨ Criar Conta e Migrar Progresso</button>
+                        </form>
+                      `}
                     ` : ''}
 
                     <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                      <span style="font-size:0.78rem; color:#d8c2a6;">Login rápido:</span>
+                      <span style="font-size:0.78rem; color:#d8c2a6;">Login rápido opcional:</span>
                       <button type="button" class="chunky-btn secondary" id="auth-oauth-google">G Google</button>
                       <button type="button" class="chunky-btn secondary" id="auth-oauth-discord">💬 Discord</button>
                     </div>
@@ -445,21 +500,77 @@ export class ProfileModal {
       });
 
       // Auth handlers
+      container.querySelector('#auth-switch-to-login')?.addEventListener('click', () => {
+        authSubTab = 'login';
+        render();
+      });
+
+      const regNickInput = container.querySelector('#auth-reg-nick');
+      const nickStatusEl = container.querySelector('#auth-nick-status');
+      if (regNickInput && nickStatusEl) {
+        regNickInput.addEventListener('input', () => {
+          clearTimeout(nickCheckTimer);
+          const raw = regNickInput.value.trim();
+          if (!raw) {
+            nickStatusEl.textContent = 'Digite seu apelido...';
+            nickStatusEl.style.color = '#94a3b8';
+            return;
+          }
+          const local = validateNickname(raw);
+          if (!local.ok) {
+            nickStatusEl.textContent = `❌ ${local.error}`;
+            nickStatusEl.style.color = '#fca5a5';
+            return;
+          }
+          nickStatusEl.textContent = '⏳ Verificando...';
+          nickStatusEl.style.color = '#fde68a';
+          const seq = ++nickCheckSeq;
+          nickCheckTimer = setTimeout(async () => {
+            const check = await AuthProfile.checkNicknameAvailability(raw);
+            if (seq !== nickCheckSeq) return;
+            if (!check.valid || !check.available) {
+              nickStatusEl.textContent = `❌ ${check.error || check.message || 'Inválido ou em uso'}`;
+              nickStatusEl.style.color = '#fca5a5';
+            } else {
+              nickStatusEl.textContent = check.offline ? '✅ Formato válido' : '✅ Disponível';
+              nickStatusEl.style.color = '#6ee7b7';
+            }
+          }, 350);
+        });
+      }
+
+      const regPwInput = container.querySelector('#auth-reg-pw');
+      const pwLbl = container.querySelector('#auth-pw-strength-lbl');
+      const pwBar = container.querySelector('#auth-pw-strength-bar');
+      if (regPwInput && pwLbl && pwBar) {
+        regPwInput.addEventListener('input', () => {
+          const st = evaluatePasswordStrength(regPwInput.value);
+          pwLbl.textContent = st.label;
+          pwLbl.style.color = st.color;
+          pwBar.style.width = `${Math.min(100, st.score * 25)}%`;
+          pwBar.style.background = st.color;
+        });
+      }
+
       container.querySelector('#auth-login-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const btn = container.querySelector('#auth-login-submit');
+        if (btn) btn.disabled = true;
         const identifier = container.querySelector('#auth-login-id')?.value || '';
         const password = container.querySelector('#auth-login-pw')?.value || '';
         const res = await AuthProfile.login({ identifier, password });
         statusTone = res.ok ? '#6ee7b7' : '#fca5a5';
-        statusMsg = res.ok ? `✅ Bem-vindo(a), ${res.nickname || 'Jogador'}!` : `⚠️ ${res.error}`;
+        statusMsg = res.ok ? `✅ Bem-vindo(a), @${res.nickname || 'Jogador'}!` : `⚠️ ${res.error}`;
+        if (res.ok) onProfileUpdated?.();
         render();
       });
 
       container.querySelector('#auth-reg-form')?.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const btn = container.querySelector('#auth-reg-submit');
+        if (btn) btn.disabled = true;
         const res = await AuthProfile.register({
           nickname: container.querySelector('#auth-reg-nick')?.value || '',
-          email: container.querySelector('#auth-reg-email')?.value || '',
           password: container.querySelector('#auth-reg-pw')?.value || '',
           confirmPassword: container.querySelector('#auth-reg-pw2')?.value || '',
           acceptTerms: !!container.querySelector('#auth-reg-terms')?.checked,
@@ -467,14 +578,7 @@ export class ProfileModal {
         });
         statusTone = res.ok ? '#6ee7b7' : '#fca5a5';
         statusMsg = res.ok ? `✅ ${res.message}` : `⚠️ ${res.error}`;
-        render();
-      });
-
-      container.querySelector('#auth-rec-form')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const res = await AuthProfile.recoverPassword(container.querySelector('#auth-rec-id')?.value || '');
-        statusTone = res.ok ? '#6ee7b7' : '#fca5a5';
-        statusMsg = res.ok ? `📧 ${res.message}` : `⚠️ ${res.error}`;
+        if (res.ok) onProfileUpdated?.();
         render();
       });
 
@@ -501,10 +605,18 @@ export class ProfileModal {
         const res = await AuthProfile.linkOAuthIdentity('discord');
         if (!res.ok) { statusTone = '#fca5a5'; statusMsg = `⚠️ ${res.error}`; render(); }
       });
+      container.querySelector('#prof-logout-local')?.addEventListener('click', async () => {
+        await AuthProfile.logout('local');
+        statusTone = '#ffd447';
+        statusMsg = '🚪 Sessão encerrada neste navegador.';
+        onProfileUpdated?.();
+        render();
+      });
       container.querySelector('#prof-logout-all')?.addEventListener('click', async () => {
         await AuthProfile.logout('global');
         statusTone = '#ffd447';
         statusMsg = '🚪 Sessão encerrada em todos os dispositivos.';
+        onProfileUpdated?.();
         render();
       });
 

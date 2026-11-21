@@ -1,5 +1,6 @@
-// Definição completa dos 15 mapas/biomas (5 Essenciais + 10 Avançados),
+// Definição completa dos 30 mapas/biomas (5 Essenciais + 20 Avançados + 5 Ultra Expansão),
 // suas paletas visuais, mecânicas únicas e bosses associados.
+import { EXTRA_BIOMES } from '../content/extra_biomes.js';
 
 export const BIOMES = [
   // === 5 BIOMAS ESSENCIAIS ===
@@ -413,7 +414,8 @@ export const BIOMES = [
       river: '#818cf8', riverEmissive: '#6366f1', sun: '#e0f2fe', sunGlow: '#38bdf8',
       scenery: { pebble: '#94a3b8', rock: '#475569', flora: '#38bdf8', flower: '#c084fc', mesa: '#1e3a5f', cloud: '#64748b', wood: '#334155', emissiveFlora: '#38bdf8', emissiveFlower: '#c084fc', emissiveIntensity: 0.45 }
     }
-  }
+  },
+  ...EXTRA_BIOMES
 ];
 
 export function getBiomeById(id) {
