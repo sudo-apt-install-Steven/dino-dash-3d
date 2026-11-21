@@ -240,7 +240,7 @@ export class SelectionScreen {
           <div class="modal-header">
             <h2 id="sel-heading">🦖 Dinossauros (${unlockedCount}/${DINO_CATALOG.length})</h2>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <button type="button" class="tab-btn ${Save.data.settings?.personalNames ? 'active' : ''}" id="sel-personal-names-btn" title="Alterna nomes alternativos pessoais (ex: Raptor Fóssil Estelar ↔ Scary Monsters)" style="padding:5px 10px; font-size:0.76rem;">
+              <button type="button" class="tab-btn sel-personal-toggle ${Save.data.settings?.personalNames ? 'active' : ''}" id="sel-personal-names-btn" title="Alterna nomes alternativos pessoais (ex: Raptor Fóssil Estelar ↔ Scary Monsters)" style="padding:6px 12px; font-size:0.78rem; border-color:#38bdf8; color:#e0f2fe; box-shadow:0 0 12px rgba(56,189,248,0.28);">
                 ✨ Modo Pessoal: ${Save.data.settings?.personalNames ? 'ON' : 'OFF'}
               </button>
               <span class="hud-pill">🥚 Ovos: <strong id="sel-eggs-val">${Save.data.eggs}</strong></span>
@@ -274,6 +274,14 @@ export class SelectionScreen {
           </div>
 
           <div class="sel-bottom-dock" id="sel-bottom-dock">
+            <div class="sel-featured-scary" id="sel-featured-scary" role="button" tabindex="0" title="Clique para selecionar ou liberar Scary Monsters / Raptor Fóssil Estelar">
+              <div class="sel-featured-scary-info">
+                <span class="sel-featured-badge">⭐ DESTAQUE</span>
+                <strong class="sel-featured-title">Scary Monsters / Raptor Fóssil Estelar</strong>
+                <span class="sel-featured-sub">Habilidades Únicas • Vírus Jurássico, Garra Estelar &amp; Bote Dimensional!</span>
+              </div>
+              <button type="button" class="chunky-btn sel-featured-btn" id="sel-featured-scary-btn">⚡ Liberar &amp; Equipar</button>
+            </div>
             <div class="catalog-toolbar sel-catalog-toolbar">
               <input type="search" class="text-input catalog-search" id="sel-search" placeholder="${loc === 'en' ? 'Search dinosaur or ability...' : (loc === 'es' ? 'Buscar dinosaurio o habilidad...' : 'Buscar dinossauro ou habilidade...')}" aria-label="Buscar dinossauro" />
               <select class="select-input catalog-select" id="sel-rarity-filter" aria-label="Filtrar por raridade ou desbloqueio">
@@ -366,7 +374,8 @@ export class SelectionScreen {
           if (getDinoRarity(d) !== rarityFilter) return false;
         }
         if (q) {
-          const hay = `${displayNameOf(d)} ${d.name} ${d.personalName || ''} ${d.id} ${d.eventTag || ''} ${d.ability?.name || ''} ${d.ability?.desc || ''} ${getDinoRarity(d)}`.toLowerCase();
+          const extraKeys = d.id === 'scary_raptor' ? 'scary monsters jojo diego brando raptor fossil estelar' : '';
+          const hay = `${displayNameOf(d)} ${d.name || ''} ${d.publicName || ''} ${d.personalName || ''} ${d.id} ${d.eventTag || ''} ${d.ability?.name || ''} ${d.ability?.desc || ''} ${getDinoRarity(d)} ${extraKeys}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
@@ -448,11 +457,27 @@ export class SelectionScreen {
       container.querySelector('#sel-lock-hint').textContent =
         `Arraste para girar o modelo 3D • ${isUnlocked ? (isEquipped && !Save.data.hybrid?.enabled ? '★ Equipado Agora' : '✔ Desbloqueado') : lockReason}`;
 
+      const scarySpec = getDinoSpec('scary_raptor');
+      const scaryOwned = scarySpec ? isDinoOwned(scarySpec) : false;
+      const scaryEquipped = scaryOwned && Save.data.selectedDino === 'scary_raptor' && !Save.data.hybrid?.enabled;
+      const featuredCard = container.querySelector('#sel-featured-scary');
+      const featuredBtn = container.querySelector('#sel-featured-scary-btn');
+      if (featuredCard) {
+        featuredCard.classList.toggle('is-active', currentId === 'scary_raptor');
+      }
+      if (featuredBtn) {
+        featuredBtn.textContent = scaryEquipped
+          ? '✔ Equipado'
+          : (scaryOwned ? '★ Equipar Agora' : '⚡ Liberar & Equipar');
+      }
+
       const confirmBtn = container.querySelector('#sel-confirm');
       confirmBtn.className = `chunky-btn ${isUnlocked ? '' : 'orange'}`;
       confirmBtn.textContent = isUnlocked
         ? (isEquipped && !Save.data.hybrid?.enabled ? '✔ Equipado • Voltar' : '★ Equipar Agora')
-        : (spec.isLimited ? '⭐ Evento / Modo' : `🔓 Liberar (${spec.unlockCost} 🥚)`);
+        : (currentId === 'scary_raptor'
+          ? '⚡ Liberar Grátis (Destaque)'
+          : (spec.isLimited ? '⭐ Evento / Modo' : `🔓 Liberar (${spec.unlockCost} 🥚)`));
 
       const activePreset = Save.data.customization.p1.presets[Save.data.customization.p1.activePreset];
       const skins = getDinoSkins(spec);
@@ -615,24 +640,61 @@ export class SelectionScreen {
       updateContent({ updatePreview: false, rebuildList: true });
     });
 
+    const unlockAndSelectScaryRaptor = () => {
+      const scarySpec = getDinoSpec('scary_raptor');
+      if (!scarySpec) return;
+      let justUnlocked = false;
+      if (!Save.data.unlockedDinos.includes('scary_raptor')) {
+        Save.data.unlockedDinos.push('scary_raptor');
+        justUnlocked = true;
+      }
+      currentId = 'scary_raptor';
+      equipDino('scary_raptor', false);
+      noticeMsg = justUnlocked
+        ? `⭐ ${displayNameOf(scarySpec)} desbloqueado e equipado com 1 clique!`
+        : `★ ${displayNameOf(scarySpec)} equipado para a próxima corrida!`;
+      if (onPlayRoar) onPlayRoar('scary_raptor');
+      updateContent({ updatePreview: true, rebuildList: true, resetDetailsScroll: true });
+    };
+
+    const featuredCardEl = container.querySelector('#sel-featured-scary');
+    featuredCardEl?.addEventListener('click', (e) => {
+      if (e.target?.closest?.('#sel-featured-scary-btn')) return;
+      unlockAndSelectScaryRaptor();
+    });
+    featuredCardEl?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        unlockAndSelectScaryRaptor();
+      }
+    });
+    container.querySelector('#sel-featured-scary-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      unlockAndSelectScaryRaptor();
+    });
+
     container.querySelector('#sel-confirm').addEventListener('click', () => {
       const spec = getDinoSpec(currentId);
       const isUnlocked = isDinoOwned(spec);
       if (!isUnlocked) {
-        if (spec.isLimited) {
+        if (currentId === 'scary_raptor') {
+          if (!Save.data.unlockedDinos.includes('scary_raptor')) Save.data.unlockedDinos.push('scary_raptor');
+          noticeMsg = `⭐ ${displayNameOf(spec)} desbloqueado e equipado!`;
+        } else if (spec.isLimited) {
           noticeMsg = `⭐ ${displayNameOf(spec)} é Exclusivo! Como liberar: ${spec.unlockCondition?.label || spec.eventTag || 'Eventos / Modos Especiais'} (clique Testar para experimentar!).`;
           updateContent();
           return;
+        } else {
+          const cost = spec.unlockCost || 0;
+          if ((Save.data.eggs || 0) < cost) {
+            noticeMsg = `Você precisa de ${cost} 🥚 para desbloquear ${displayNameOf(spec)} (ou clique Testar)!`;
+            updateContent();
+            return;
+          }
+          Save.addEggs(-cost);
+          if (!Save.data.unlockedDinos.includes(currentId)) Save.data.unlockedDinos.push(currentId);
+          noticeMsg = `🎉 ${displayNameOf(spec)} desbloqueado e equipado!`;
         }
-        const cost = spec.unlockCost || 0;
-        if ((Save.data.eggs || 0) < cost) {
-          noticeMsg = `Você precisa de ${cost} 🥚 para desbloquear ${displayNameOf(spec)} (ou clique Testar)!`;
-          updateContent();
-          return;
-        }
-        Save.addEggs(-cost);
-        if (!Save.data.unlockedDinos.includes(currentId)) Save.data.unlockedDinos.push(currentId);
-        noticeMsg = `🎉 ${displayNameOf(spec)} desbloqueado e equipado!`;
       }
       equipDino(currentId, false);
       preview?.destroy();

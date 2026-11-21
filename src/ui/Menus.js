@@ -10,6 +10,7 @@ import { PREDATOR_CATALOG } from '../events/PredatorModels.js';
 import { STATUS_DEFS } from '../systems/StatusSystem.js';
 import { ACHIEVEMENTS_CATALOG, ProgressionManager } from '../systems/Progression.js';
 import { Save } from '../systems/Save.js';
+import { AuthProfile } from '../systems/AuthProfile.js';
 import { isMobileDevice } from '../systems/DeviceDetector.js';
 import { normalizeLocale } from '../i18n/translations.js';
 import { escapeHtml } from '../security/Sanitize.js';
@@ -306,12 +307,18 @@ export class Menus {
   static renderMainMenu(container, state, actions) {
     const title = Save.data.activeTitle || 'Iniciante';
     const prestigeLv = Save.data.prestige?.level || 0;
+    const cachedUser = AuthProfile.getCachedUser?.() || null;
+    const localNick = Save.data.profile?.nickname || Save.data.network?.nickname || 'Dino';
+    const isLogged = !!cachedUser;
     container.innerHTML = `
       <div class="main-menu-wrap">
-        <div class="chunky-panel main-menu-panel" style="width:min(420px, 92vw); padding:20px; gap:12px;">
+        <div class="chunky-panel main-menu-panel" style="width:min(436px, 93vw); padding:20px; gap:11px;">
           <div>
             <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
-              <div class="dino-logo" id="main-dino-logo" style="font-size:2.15rem; cursor:pointer; user-select:none;" title="Dino Dash 3D">DINO <span class="dash-accent">DASH 3D</span></div>
+              <div class="dino-logo" id="main-dino-logo" style="font-size:2.05rem; cursor:pointer; user-select:none;" title="Dino Dash 3D">DINO <span class="dash-accent">DASH 3D</span></div>
+              <button type="button" class="menu-account-pill ${isLogged ? 'is-logged' : ''}" id="menu-account-pill" title="${isLogged ? 'Gerenciar conta conectada na nuvem' : 'Entrar ou criar conta sem e-mail (Nick + Senha)'}">
+                ${isLogged ? `☁️ @${escapeHtml(localNick)}` : '🔑 Entrar / Criar Conta'}
+              </button>
               <div class="mob-only" style="display:flex; gap:5px; align-items:center;">
                 <button type="button" class="inline-change-btn" id="menu-rotate-btn" style="padding:4px 8px; border-color:#38bdf8; color:#7dd3fc;">🔄 ${state.isLandscape ? 'Paisagem' : 'Deitar'}</button>
                 ${isMobileDevice() ? `<button type="button" class="inline-change-btn" id="menu-ctrl-btn" style="padding:4px 8px; border-color:#58d63a; color:#86efac;">🎮 Controle</button>` : ''}
@@ -352,6 +359,19 @@ export class Menus {
           ` : ''}
 
           <button class="chunky-btn" id="menu-play" style="font-size:1.28rem; padding:15px;">▶ Jogar Agora</button>
+
+          <div class="menu-quick3d-box">
+            <div class="menu-quick3d-header">
+              <span>✨ Novos Modos 3D</span>
+              <span class="menu-quick3d-tag">NOVO</span>
+            </div>
+            <div class="menu-quick3d-grid">
+              <button type="button" class="menu-quick3d-btn" data-quick-mode="dungeon_rpg" title="Explore masmorras 3D com dados RPG e Mestre IA">🏰 Masmorra RPG</button>
+              <button type="button" class="menu-quick3d-btn" data-quick-mode="adventure_open" title="Mundo aberto 3D com biomas, segredos e exploração livre">🗺️ Mundo Aberto</button>
+              <button type="button" class="menu-quick3d-btn" data-quick-mode="arena_x1" title="Combate 3D direto 1v1 em arena jurássica">⚔️ Arena X1</button>
+            </div>
+          </div>
+
           <button class="chunky-btn orange" data-nav="multiplayer" style="font-size:1.02rem; padding:11px;">🌐 Multiplayer</button>
 
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
@@ -409,6 +429,44 @@ export class Menus {
       const pop = container.querySelector('#menu-crystals-popover');
       if (pop) pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
     });
+
+    const acctPill = container.querySelector('#menu-account-pill');
+    acctPill?.addEventListener('click', () => {
+      if (typeof window !== 'undefined') window.__DINO_PROFILE_INITIAL_TAB__ = 'account';
+      if (typeof actions.onOpenAccount === 'function') {
+        actions.onOpenAccount();
+      } else {
+        actions.onNavigate?.('profile');
+      }
+    });
+    if (acctPill) {
+      AuthProfile.getCurrentUser?.().then((user) => {
+        if (!acctPill.isConnected) return;
+        if (user) {
+          const nick = Save.data.profile?.nickname || Save.data.network?.nickname || user.user_metadata?.nickname || 'Dino';
+          acctPill.classList.add('is-logged');
+          acctPill.textContent = `☁️ @${nick}`;
+          acctPill.title = 'Gerenciar conta conectada na nuvem';
+        } else {
+          acctPill.classList.remove('is-logged');
+          acctPill.textContent = '🔑 Entrar / Criar Conta';
+          acctPill.title = 'Entrar ou criar conta sem e-mail (Nick + Senha)';
+        }
+      }).catch(() => {});
+    }
+
+    container.querySelectorAll('[data-quick-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const modeId = btn.getAttribute('data-quick-mode');
+        if (!modeId) return;
+        if (typeof actions.onQuickPlayMode === 'function') {
+          actions.onQuickPlayMode(modeId);
+        } else {
+          actions.onNavigate?.('modes');
+        }
+      });
+    });
+
     container.querySelector('#menu-play').addEventListener('click', actions.onPlay);
     container.querySelector('#menu-rotate-btn')?.addEventListener('click', () => actions.onToggleLandscape?.());
     container.querySelector('#menu-ctrl-btn')?.addEventListener('click', () => actions.onOpenController?.());
