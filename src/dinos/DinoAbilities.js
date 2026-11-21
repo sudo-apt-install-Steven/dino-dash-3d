@@ -13,6 +13,7 @@ export class DinoAbilities {
     this.spikeMat = new THREE.MeshBasicMaterial({ color: '#ff6b35' });
     this.plasmaMat = new THREE.MeshBasicMaterial({ color: '#38bdf8' });
     this.chronoMat = new THREE.MeshBasicMaterial({ color: '#c084fc' });
+    this.goldenClawMat = new THREE.MeshBasicMaterial({ color: '#facc15' });
   }
 
   getPassiveSpec(dinoId) {
@@ -360,15 +361,21 @@ export class DinoAbilities {
         break;
       // === 13 DINOSSAUROS LIMITADOS / EVENTOS (ULTRA EXPANSÃO) ===
       case 'scary_raptor':
-        player.turboTimer = Math.max(player.turboTimer || 0, player.abilityDuration);
-        player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.75);
         this._spawnWave(player.x, player.z, '#1fb6c8', 18);
+        this._spawnWave(player.x, player.z, '#facc15', 14);
         for (let k = -1; k <= 1; k++) {
-          this._spawnProjectile(player.x + k * 0.65, 1.1, player.z - 0.8, k * 2.2, -50, this.plasmaMat);
+          this._spawnProjectile(player.x + k * 0.65, 1.1, player.z - 0.8, k * 2.2, -52, this.goldenClawMat);
         }
-        gameCtx.clearNearbyObstacles?.(player.x, player.z, 22, true);
-        gameCtx.spawnEggRain?.(3);
-        gameCtx.showFloatText?.(player, 'INFECÇÃO FÓSSIL!', '#facc15');
+        if (typeof gameCtx.convertNearbyObstaclesToAllies === 'function') {
+          gameCtx.convertNearbyObstaclesToAllies(player);
+        } else {
+          gameCtx.clearNearbyObstacles?.(player.x, player.z, 28, true);
+          gameCtx.spawnEggRain?.(4);
+        }
+        player.turboTimer = Math.max(player.turboTimer || 0, 2.4, player.abilityDuration || 0);
+        player.invulnTimer = Math.max(player.invulnTimer || 0, 2.2);
+        player.extraJumps = Math.max(player.extraJumps || 0, 1);
+        gameCtx.showFloatText?.(player, '🦖 INFECÇÃO JURÁSSICA!', '#facc15');
         break;
       case 'dracorex_solar':
         player.invulnTimer = Math.max(player.invulnTimer || 0, player.abilityDuration * 0.8);
