@@ -931,3 +931,66 @@ export function getEffectiveDinoHabitat(specOrId, { hybrid = null, mutationId = 
     ...swimCaps
   };
 }
+
+const AQUATIC_GILLS_IDS = new Set([
+  'mosasaurus',
+  'plesiosaurus',
+  'kronosaurus',
+  'megalodon',
+  'dunkleosteus',
+  'elasmosaurus',
+  'liopleurodon',
+  'ichthyosaurus',
+  'abissal_espectral'
+]);
+
+const AMPHIBIOUS_HYBRID_IDS = new Set([
+  'spinosaurus',
+  'baryonyx',
+  'sarcosuchus',
+  'suchomimus',
+  'deinosuchus',
+  'cryo_spino_aurora'
+]);
+
+/**
+ * Classifica a fisiologia aquática realista de um dinossauro ou híbrido:
+ * - 'aquatic_gills': puramente aquático (brânquias / vida marinha plena)
+ * - 'amphibious_hybrid': semi-aquático ou híbrido que mistura aquático + terra/voo
+ * - 'terrestrial': terrestre ou voador sem fisiologia aquática
+ */
+export function getDinoAquaticPhysiology(specOrId, { hybrid = null, mutationId = null } = {}) {
+  const grantsLandWalk = mutationId === 'extra_limbs';
+
+  if (hybrid?.enabled) {
+    const partIds = [
+      hybrid.body || hybrid.bodyId,
+      hybrid.head || hybrid.headId,
+      hybrid.tail || hybrid.tailId,
+      hybrid.limbsId
+    ].filter(Boolean).map((id) => String(id).toLowerCase());
+
+    const availableModes = getHybridAvailableModes(hybrid, mutationId);
+    const hasAmphibiousPart = partIds.some((pid) => AMPHIBIOUS_HYBRID_IDS.has(pid));
+    const hasAquaticPart = availableModes.includes('aquatic') || partIds.some((pid) => AQUATIC_GILLS_IDS.has(pid));
+
+    if (!hasAquaticPart && !hasAmphibiousPart) return 'terrestrial';
+    if (hasAmphibiousPart || grantsLandWalk || availableModes.includes('land') || availableModes.includes('flying')) {
+      return 'amphibious_hybrid';
+    }
+    return 'aquatic_gills';
+  }
+
+  const rawId = typeof specOrId === 'string'
+    ? specOrId.toLowerCase()
+    : (specOrId?.id ? String(specOrId.id).toLowerCase() : '');
+
+  if (AMPHIBIOUS_HYBRID_IDS.has(rawId)) return 'amphibious_hybrid';
+  if (AQUATIC_GILLS_IDS.has(rawId)) return grantsLandWalk ? 'amphibious_hybrid' : 'aquatic_gills';
+
+  const spec = typeof specOrId === 'string' ? getDinoSpec(specOrId) : (specOrId || getDinoSpec('trex'));
+  const habitat = getDinoHabitat(spec);
+  if (habitat === 'amphibious') return 'amphibious_hybrid';
+  if (habitat === 'aquatic') return grantsLandWalk ? 'amphibious_hybrid' : 'aquatic_gills';
+  return 'terrestrial';
+}

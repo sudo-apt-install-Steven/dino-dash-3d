@@ -219,11 +219,19 @@ export function buildVoxelCactusShooter(cactusMat, cactusDarkMat, flowerMat) {
 
 export function buildVoxelSpineShot(flowerMat) {
   const g = new THREE.Group();
-  const tipMat = new THREE.MeshStandardMaterial({ color: '#fef08a', emissive: '#facc15', emissiveIntensity: 0.7 });
-  addVoxelBox(g, 0.18, 0.18, 0.82, 0, 0.75, 0, flowerMat);
-  addVoxelBox(g, 0.12, 0.12, 0.28, 0, 0.75, 0.52, tipMat);
-  addVoxelBox(g, 0.42, 0.08, 0.22, 0, 0.75, -0.22, flowerMat);
-  addVoxelBox(g, 0.08, 0.42, 0.22, 0, 0.75, -0.22, flowerMat);
+  const coreMat = new THREE.MeshStandardMaterial({
+    color: '#ff2e3b',
+    emissive: '#ef4444',
+    emissiveIntensity: 0.75,
+    roughness: 0.35
+  });
+  const tipMat = new THREE.MeshStandardMaterial({ color: '#fef08a', emissive: '#facc15', emissiveIntensity: 0.85 });
+  // Projétil de espinho ampliado para leitura instantânea (>= 0.74 largura × >= 0.80 altura)
+  addVoxelBox(g, 0.34, 0.34, 1.05, 0, 0.76, 0, coreMat);
+  addVoxelBox(g, 0.24, 0.24, 0.42, 0, 0.76, 0.64, tipMat);
+  addVoxelBox(g, 0.78, 0.16, 0.34, 0, 0.76, -0.18, flowerMat);
+  addVoxelBox(g, 0.16, 0.82, 0.34, 0, 0.76, -0.18, flowerMat);
+  addVoxelBox(g, 0.56, 0.56, 0.18, 0, 0.76, 0.2, tipMat, 0, 0, Math.PI / 4);
   return { group: g };
 }
 
@@ -467,7 +475,7 @@ export const VOXEL_AUDIT_REPORT = [
 // Cache de materiais para os 28 arquétipos expandidos (zero alocação repetida)
 const _expMatCache = new Map();
 function getCachedVoxelMat(color, opts = {}) {
-  const key = `${color}|${opts.emissive || ''}|${opts.emissiveIntensity || 0}|${opts.opacity ?? 1}|${opts.metalness || 0}`;
+  const key = `${color}|${opts.emissive || ''}|${opts.emissiveIntensity || 0}|${opts.opacity ?? 1}|${opts.metalness || 0}|${opts.polygonOffset ? 1 : 0}|${opts.depthWrite === false ? 0 : 1}`;
   let m = _expMatCache.get(key);
   if (!m) {
     m = new THREE.MeshStandardMaterial({
@@ -477,7 +485,11 @@ function getCachedVoxelMat(color, opts = {}) {
       emissive: opts.emissive || '#000000',
       emissiveIntensity: opts.emissiveIntensity ?? 0,
       transparent: (opts.opacity ?? 1) < 1,
-      opacity: opts.opacity ?? 1
+      opacity: opts.opacity ?? 1,
+      depthWrite: opts.depthWrite ?? true,
+      polygonOffset: !!opts.polygonOffset,
+      polygonOffsetFactor: opts.polygonOffset ? -1 : 0,
+      polygonOffsetUnits: opts.polygonOffset ? -1 : 0
     });
     _expMatCache.set(key, m);
   }
@@ -493,14 +505,20 @@ export function buildVoxelExpandedHazard(archetype, primaryColor = '#ef4444', ac
   const baseMat = getCachedVoxelMat(primaryColor, { roughness: 0.65, metalness: 0.2 });
   const darkMat = getCachedVoxelMat('#1e293b', { roughness: 0.45, metalness: 0.5 });
   const glowMat = getCachedVoxelMat(accentColor, { emissive: accentColor, emissiveIntensity: 0.85, roughness: 0.3 });
-  const warnMat = getCachedVoxelMat('#ff2e2e', { emissive: '#ff2e2e', emissiveIntensity: 0.9, opacity: 0.78 });
+  const warnMat = getCachedVoxelMat('#ff2e3b', {
+    emissive: '#ff2e3b',
+    emissiveIntensity: 0.9,
+    opacity: 0.78,
+    depthWrite: false,
+    polygonOffset: true
+  });
 
   // Telégrafo de solo universal (visível antes da ativação para fairness garantida)
   const telegraphMesh = new THREE.Group();
-  addVoxelBox(telegraphMesh, 1.9, 0.05, 0.22, 0, 0.04, 0.85, warnMat);
-  addVoxelBox(telegraphMesh, 1.9, 0.05, 0.22, 0, 0.04, -0.85, warnMat);
-  addVoxelBox(telegraphMesh, 0.22, 0.05, 1.8, -0.88, 0.04, 0, warnMat);
-  addVoxelBox(telegraphMesh, 0.22, 0.05, 1.8, 0.88, 0.04, 0, warnMat);
+  addVoxelBox(telegraphMesh, 1.9, 0.04, 0.22, 0, 0.044, 0.85, warnMat);
+  addVoxelBox(telegraphMesh, 1.9, 0.04, 0.22, 0, 0.044, -0.85, warnMat);
+  addVoxelBox(telegraphMesh, 0.22, 0.04, 1.8, -0.88, 0.044, 0, warnMat);
+  addVoxelBox(telegraphMesh, 0.22, 0.04, 1.8, 0.88, 0.044, 0, warnMat);
   g.add(telegraphMesh);
 
   const activePart = new THREE.Group();

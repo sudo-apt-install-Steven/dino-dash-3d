@@ -49,8 +49,46 @@ import {
 } from '../models/ClaudeVoxelModels.js';
 
 const BOX_GEO = new THREE.BoxGeometry(1, 1, 1);
-const DANGER_TRIM_MAT = new THREE.MeshBasicMaterial({ color: '#ff3b30', transparent: true, opacity: 0.72 });
-const SAFE_AURA_MAT = new THREE.MeshBasicMaterial({ color: '#4ade80', transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+const AURA_RING_GEO = new THREE.RingGeometry(0.42, 0.56, 20);
+const DANGER_TRIM_MAT = new THREE.MeshBasicMaterial({
+  color: '#ff2e3b',
+  transparent: true,
+  opacity: 0.82,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -2,
+  polygonOffsetUnits: -2
+});
+const DANGER_RING_MAT = new THREE.MeshBasicMaterial({
+  color: '#ff2e3b',
+  transparent: true,
+  opacity: 0.46,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -2,
+  polygonOffsetUnits: -2
+});
+const SAFE_AURA_GREEN_MAT = new THREE.MeshBasicMaterial({
+  color: '#34d399',
+  transparent: true,
+  opacity: 0.48,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -2,
+  polygonOffsetUnits: -2
+});
+const SAFE_AURA_GOLD_MAT = new THREE.MeshBasicMaterial({
+  color: '#facc15',
+  transparent: true,
+  opacity: 0.5,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -2,
+  polygonOffsetUnits: -2
+});
 
 function makeBox(parent, w, h, d, x, y, z, mat) {
   const m = new THREE.Mesh(BOX_GEO, mat);
@@ -62,14 +100,72 @@ function makeBox(parent, w, h, d, x, y, z, mat) {
   return m;
 }
 
-function addDangerTrim(parent, w, d) {
-  const trimGroup = new THREE.Group();
-  makeBox(trimGroup, w + 0.14, 0.05, 0.07, 0, 0.03, d * 0.5 + 0.04, DANGER_TRIM_MAT);
-  makeBox(trimGroup, w + 0.14, 0.05, 0.07, 0, 0.03, -d * 0.5 - 0.04, DANGER_TRIM_MAT);
-  makeBox(trimGroup, 0.07, 0.05, d, -w * 0.5 - 0.04, 0.03, 0, DANGER_TRIM_MAT);
-  makeBox(trimGroup, 0.07, 0.05, d, w * 0.5 + 0.04, 0.03, 0, DANGER_TRIM_MAT);
-  parent.add(trimGroup);
-  return trimGroup;
+function makeAuraBar(parent, w, h, d, x, y, z, mat) {
+  const m = new THREE.Mesh(BOX_GEO, mat);
+  m.scale.set(w, h, d);
+  m.position.set(x, y, z);
+  m.renderOrder = 4;
+  parent.add(m);
+  return m;
+}
+
+/**
+ * Aura vermelha universal de perigo (GPU-light: materiais compartilhados, 0 draw calls extras de animação).
+ * Combina moldura carmesim pulsante + anel luminoso vermelho de base.
+ */
+export function createUniversalDangerAura(w, d, opts = {}) {
+  const auraGroup = new THREE.Group();
+  auraGroup.name = 'universal_danger_aura';
+  auraGroup.userData.isDangerAura = true;
+
+  const effW = Math.max(0.85, Number(w) || 1.0);
+  const effD = Math.max(0.85, Number(d) || 1.0);
+  const yOff = opts.yOffset !== undefined ? opts.yOffset : 0.045;
+  const barThick = opts.barThick ?? 0.085;
+  const barH = 0.036;
+
+  makeAuraBar(auraGroup, effW + 0.18, barH, barThick, 0, yOff, effD * 0.5 + 0.05, DANGER_TRIM_MAT);
+  makeAuraBar(auraGroup, effW + 0.18, barH, barThick, 0, yOff, -effD * 0.5 - 0.05, DANGER_TRIM_MAT);
+  makeAuraBar(auraGroup, barThick, barH, effD + 0.04, -effW * 0.5 - 0.05, yOff, 0, DANGER_TRIM_MAT);
+  makeAuraBar(auraGroup, barThick, barH, effD + 0.04, effW * 0.5 + 0.05, yOff, 0, DANGER_TRIM_MAT);
+
+  const ring = new THREE.Mesh(AURA_RING_GEO, DANGER_RING_MAT);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = yOff - 0.004;
+  ring.scale.set(Math.max(0.95, effW * 1.12), Math.max(0.95, effD * 1.12), 1);
+  ring.renderOrder = 3;
+  auraGroup.add(ring);
+
+  if (opts.floating) {
+    const halo = new THREE.Mesh(AURA_RING_GEO, DANGER_RING_MAT);
+    halo.position.y = yOff + 0.34;
+    halo.scale.set(Math.max(0.85, effW * 0.92), Math.max(0.85, effW * 0.92), 1);
+    halo.renderOrder = 3;
+    auraGroup.add(halo);
+  }
+
+  return auraGroup;
+}
+
+/**
+ * Aura sutil verde/dourada para coletáveis e itens benéficos (VERMELHO = PERIGO vs VERDE/OURO = BOM).
+ */
+export function createSafePickupAura(radius = 0.68, opts = {}) {
+  const mat = opts.color === 'gold' ? SAFE_AURA_GOLD_MAT : SAFE_AURA_GREEN_MAT;
+  const ring = new THREE.Mesh(AURA_RING_GEO, mat);
+  ring.name = 'safe_pickup_aura';
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = opts.yOffset !== undefined ? opts.yOffset : 0.045;
+  const s = Math.max(0.55, Number(radius) || 0.68) * 1.85;
+  ring.scale.set(s, s, 1);
+  ring.renderOrder = 3;
+  return ring;
+}
+
+function addDangerTrim(parent, w, d, opts = {}) {
+  const aura = createUniversalDangerAura(w, d, opts);
+  parent.add(aura);
+  return aura;
 }
 
 export function createSeededRng(seedStr) {
@@ -97,6 +193,7 @@ export class Spawner {
     this.spawnTimer = 1.65;
     this.difficultyId = 'normal';
     this.showRedHazardSignage = true;
+    this.redHazardSignageOverride = null;
     this.minSafePaths = 2;
     this.habitatMode = 'land';
     this.isAquaticBiome = false;
@@ -310,16 +407,21 @@ export class Spawner {
   }
 
   _makeCatalogHazard(arch) {
+    const effW = Math.max(0.85, Number(arch.width) || 1.5);
+    const effH = Math.max(0.82, Number(arch.height) || 1.5);
+    const effD = Math.max(0.85, Number(arch.depth) || 1.2);
     const built = buildVoxelExpandedHazard(arch.id, arch.color || '#ef4444', arch.accent || '#facc15');
+    const aura = addDangerTrim(built.group, effW, effD, { yOffset: 0.046 });
     return this._reg(arch.id, built.group, {
       isCatalogHazard: true,
       archetype: arch.id,
       movement: arch.movement || 'static_gap',
       telegraphMesh: built.telegraphMesh,
       activePart: built.activePart,
-      width: arch.width || 1.5,
-      height: arch.height || 1.5,
-      depth: arch.depth || 1.2,
+      dangerVisuals: [aura],
+      width: effW,
+      height: effH,
+      depth: effD,
       damage: arch.damage ?? 1,
       debuffId: arch.debuffId || null,
       debuffDuration: arch.debuffDuration || 4.0,
@@ -330,7 +432,7 @@ export class Spawner {
       baseX: 0,
       lockedX: false,
       extraSpeed: 0,
-      canJumpOver: arch.height <= 1.25,
+      canJumpOver: effH <= 1.25,
       canDuckUnder: arch.id === 'double_wall_gap' || arch.id === 'bone_pendulum' || arch.id === 'corrosive_cloud' || arch.id === 'seeker_drone'
     });
   }
@@ -395,9 +497,10 @@ export class Spawner {
     duckOverlay.scale.setScalar(0.09);
     duckOverlay.position.set(0, -0.25, 0.35);
     g.add(duckOverlay);
+    const aura = addDangerTrim(g, 1.32, 0.95, { yOffset: -0.34, floating: true });
     return this._reg('bird', g, {
       wingL, wingR, flapPhase: 0, baseY: 1.6, duckOverlay,
-      dangerVisuals: [duckOverlay],
+      dangerVisuals: [duckOverlay, aura],
       halfW: 0.65, minY: -0.34, maxY: 0.36, halfD: 0.45,
       extraSpeed: 4.5, stompable: true, color: '#a86438'
     }, { y: 0.85, label: '⬇ ABAIXAR / PISAR', color: '#38bdf8' });
@@ -405,15 +508,17 @@ export class Spawner {
 
   _makeScorpion() {
     const g = new THREE.Group();
-    makeBox(g, 0.72, 0.36, 0.85, 0, 0.22, 0, this.scorpionMat);
-    makeBox(g, 0.22, 0.2, 0.45, -0.45, 0.25, 0.35, this.scorpionMat); // pinça E
-    makeBox(g, 0.22, 0.2, 0.45, 0.45, 0.25, 0.35, this.scorpionMat); // pinça D
-    makeBox(g, 0.2, 0.55, 0.2, 0, 0.55, -0.35, this.scorpionMat); // cauda
-    makeBox(g, 0.18, 0.18, 0.26, 0, 0.78, -0.2, this.beakMat); // ferrão
+    makeBox(g, 0.78, 0.42, 0.9, 0, 0.24, 0, this.scorpionMat);
+    makeBox(g, 0.24, 0.22, 0.48, -0.48, 0.28, 0.38, this.scorpionMat); // pinça E
+    makeBox(g, 0.24, 0.22, 0.48, 0.48, 0.28, 0.38, this.scorpionMat); // pinça D
+    makeBox(g, 0.22, 0.62, 0.22, 0, 0.58, -0.36, this.scorpionMat); // cauda
+    makeBox(g, 0.22, 0.22, 0.28, 0, 0.86, -0.2, this.beakMat); // ferrão
+    const aura = addDangerTrim(g, 1.15, 1.05);
     return this._reg('scorpion', g, {
-      walkPhase: 0, halfW: 0.55, minY: 0, maxY: 0.78, halfD: 0.5,
+      walkPhase: 0, halfW: 0.56, minY: 0, maxY: 0.86, halfD: 0.52,
+      dangerVisuals: [aura],
       extraSpeed: 2.0, stompable: true, color: '#8b1e3f'
-    }, { y: 1.4, label: '⬆ PISAR / [Q]', color: '#f43f5e' });
+    }, { y: 1.45, label: '⬆ PISAR / [Q]', color: '#f43f5e' });
   }
 
   _makeLog() {
@@ -440,10 +545,11 @@ export class Spawner {
     const floorSign = buildHazardFloorSign();
     floorSign.scale.setScalar(0.088);
     g.add(cleanModel, warnModel, floorSign);
+    const aura = addDangerTrim(g, 1.65, 1.15);
     return this._reg('tall_rock', g, {
       halfW: 0.82, minY: 0, maxY: 2.85, halfD: 0.55,
       cleanVisuals: [cleanModel],
-      dangerVisuals: [warnModel, floorSign],
+      dangerVisuals: [warnModel, floorSign, aura],
       wallJumpable: true, unjumpable: true, color: '#64748b'
     }, { y: 3.15, label: '⛔ MUITO ALTO! ⬅➡', color: '#ef4444' });
   }
@@ -508,6 +614,7 @@ export class Spawner {
       platHolder.add(v);
     });
     g.add(platHolder);
+    g.add(createSafePickupAura(0.72, { color: 'gold' }));
 
     return this._reg('powerup', g, {
       crate, cube, platHolder, variants, mat, powerId: 'shield', isBackpack: false,
@@ -549,9 +656,10 @@ export class Spawner {
       const floorSign = buildHazardFloorSign();
       floorSign.scale.setScalar(0.085);
       g.add(floorSign);
+      const aura = addDangerTrim(g, w + 0.16, d + 0.16);
       return this._reg(kind, g, {
         halfW: w * 0.46, minY: 0, maxY: 0.4, halfD: d * 0.46,
-        isFloorHazard: true, dangerVisuals: [floorSign], color: '#7dd3fc'
+        isFloorHazard: true, dangerVisuals: [floorSign, aura], color: '#7dd3fc'
       }, { y: 1.15, label: '❄️ GELO FRÁGIL', color: '#7dd3fc' });
     }
     // Poça de lava com borda de pedra basáltica multi-peças
@@ -563,9 +671,10 @@ export class Spawner {
     const floorSign = buildHazardFloorSign();
     floorSign.scale.setScalar(0.088);
     g.add(floorSign);
+    const aura = addDangerTrim(g, w + 0.2, d + 0.2);
     return this._reg(kind, g, {
       halfW: w * 0.46, minY: 0, maxY: 0.4, halfD: d * 0.46,
-      isFloorHazard: true, dangerVisuals: [floorSign], color: '#ff5e00'
+      isFloorHazard: true, dangerVisuals: [floorSign, aura], color: '#ff5e00'
     }, { y: 1.15, label: '🔥 LAVA PULE', color: '#ff5e00' });
   }
 
@@ -595,8 +704,9 @@ export class Spawner {
 
   _makeMudPool() {
     const { group: g, b1, b2 } = buildVoxelMudPool(this.mudMat, this.mudBubbleMat, this.rockMat);
+    const aura = addDangerTrim(g, 2.14, 2.42);
     return this._reg('mud_pool', g, {
-      b1, b2, halfW: 0.88, minY: 0, maxY: 0.35, halfD: 1.0, color: '#a16207'
+      b1, b2, halfW: 0.88, minY: 0, maxY: 0.35, halfD: 1.0, dangerVisuals: [aura], color: '#a16207'
     }, { y: 1.05, label: '🟤 LAMA LENTA', color: '#fbbf24' });
   }
 
@@ -607,8 +717,9 @@ export class Spawner {
     const floorSign = buildHazardFloorSign();
     floorSign.scale.setScalar(0.085);
     g.add(model, floorSign);
+    const aura = addDangerTrim(g, 1.98, 2.22);
     return this._reg('toxic_pool', g, {
-      poolModel: model, dangerVisuals: [floorSign], halfW: 0.86, minY: 0, maxY: 0.42, halfD: 0.95, color: '#a3e635'
+      poolModel: model, dangerVisuals: [floorSign, aura], halfW: 0.86, minY: 0, maxY: 0.42, halfD: 0.95, color: '#a3e635'
     }, { y: 1.15, label: '☠️ POÇA TÓXICA', color: '#bef264' });
   }
 
@@ -643,6 +754,7 @@ export class Spawner {
   _makeFruit() {
     const mat = new THREE.MeshStandardMaterial({ color: '#ef4444', emissive: '#dc2626', emissiveIntensity: 0.25 });
     const { group: g } = buildVoxelFruit(mat, this.cactusMat, this.logMat);
+    g.add(createSafePickupAura(0.62, { color: 'green' }));
     return this._reg('fruit', g, { mat, halfW: 0.42, minY: 0.1, maxY: 1.0, halfD: 0.42, color: '#4ade80' }, { y: 1.35, label: '🍉 FRUTA +FÚRIA', color: '#4ade80' });
   }
 
@@ -691,12 +803,14 @@ export class Spawner {
 
   _makeCactusShooter() {
     const { group: g } = buildVoxelCactusShooter(this.cactusMat, this.cactusDarkMat, this.flowerMat);
-    return this._reg('cactus_shooter', g, { shot: false, halfW: 0.48, minY: 0, maxY: 1.5, halfD: 0.42, breakable: true, color: '#ec4899' }, { y: 2.05, label: '🎯 ATIRADOR [Q]', color: '#ec4899' });
+    const aura = addDangerTrim(g, 1.08, 0.95);
+    return this._reg('cactus_shooter', g, { shot: false, halfW: 0.48, minY: 0, maxY: 1.5, halfD: 0.42, breakable: true, dangerVisuals: [aura], color: '#ec4899' }, { y: 2.05, label: '🎯 ATIRADOR [Q]', color: '#ec4899' });
   }
 
   _makeSpineShot() {
     const { group: g } = buildVoxelSpineShot(this.flowerMat);
-    return this._reg('cactus_spine', g, { extraSpeed: 11, halfW: 0.25, minY: 0.45, maxY: 1.1, halfD: 0.45, color: '#ff6ca8' }, { y: 1.3, label: '⚡ ESPINHO [Q]', color: '#fb7185' });
+    const aura = addDangerTrim(g, 0.92, 1.05, { yOffset: 0.045, floating: true });
+    return this._reg('cactus_spine', g, { extraSpeed: 11, halfW: 0.38, minY: 0.34, maxY: 1.16, halfD: 0.55, dangerVisuals: [aura], color: '#ff2e3b' }, { y: 1.48, label: '⚡ ESPINHO [Q]', color: '#fb7185' });
   }
 
   _makeGravityZone() {
@@ -735,17 +849,20 @@ export class Spawner {
 
   _makeAmberCrystal() {
     const g = buildVoxelAmberCrystal();
-    return this._reg('amber_crystal', g, { halfW: 0.56, minY: 0, maxY: 1.48, halfD: 0.52, breakable: true, color: '#f59e0b' }, { y: 1.9, label: '🔶 ÂMBAR [Q]', color: '#fbbf24' });
+    const aura = addDangerTrim(g, 1.22, 1.18);
+    return this._reg('amber_crystal', g, { halfW: 0.56, minY: 0, maxY: 1.48, halfD: 0.52, breakable: true, dangerVisuals: [aura], color: '#f59e0b' }, { y: 1.9, label: '🔶 ÂMBAR [Q]', color: '#fbbf24' });
   }
 
   _makeGeyserVent() {
     const g = buildVoxelGeyserVent(this.rockMat);
-    return this._reg('geyser_vent', g, { halfW: 0.68, minY: 0, maxY: 1.9, halfD: 0.68, color: '#bae6fd' }, { y: 2.45, label: '💨 GÊISER ⬅➡', color: '#bae6fd' });
+    const aura = addDangerTrim(g, 1.48, 1.48);
+    return this._reg('geyser_vent', g, { halfW: 0.68, minY: 0, maxY: 1.9, halfD: 0.68, dangerVisuals: [aura], color: '#bae6fd' }, { y: 2.45, label: '💨 GÊISER ⬅➡', color: '#bae6fd' });
   }
 
   _makeTarPit() {
     const g = buildVoxelTarPit();
-    return this._reg('tar_pit', g, { halfW: 0.86, minY: 0, maxY: 0.4, halfD: 0.96, isFloorHazard: true, color: '#52525b' }, { y: 1.12, label: '🖤 PICHE PULE', color: '#d4d4d8' });
+    const aura = addDangerTrim(g, 2.02, 2.26);
+    return this._reg('tar_pit', g, { halfW: 0.86, minY: 0, maxY: 0.4, halfD: 0.96, isFloorHazard: true, dangerVisuals: [aura], color: '#52525b' }, { y: 1.12, label: '🖤 PICHE PULE', color: '#d4d4d8' });
   }
 
   _makeStalactite() {
@@ -755,7 +872,8 @@ export class Spawner {
     const floorSign = buildHazardFloorSign();
     floorSign.scale.setScalar(0.08);
     g.add(model, floorSign);
-    return this._reg('falling_stalactite', g, { halfW: 0.62, minY: 0, maxY: 1.85, halfD: 0.62, breakable: true, unjumpable: true, dangerVisuals: [floorSign], color: '#38bdf8' }, { y: 2.2, label: '❄️ ESTALACTITE [Q]', color: '#38bdf8' });
+    const aura = addDangerTrim(g, 1.32, 1.32);
+    return this._reg('falling_stalactite', g, { halfW: 0.62, minY: 0, maxY: 1.85, halfD: 0.62, breakable: true, unjumpable: true, dangerVisuals: [floorSign, aura], color: '#38bdf8' }, { y: 2.2, label: '❄️ ESTALACTITE [Q]', color: '#38bdf8' });
   }
 
   _makeShopGate() {
@@ -766,12 +884,14 @@ export class Spawner {
 
   _makeElectricPylon() {
     const g = buildVoxelElectricPylon();
-    return this._reg('electric_pylon', g, { halfW: 0.66, minY: 0, maxY: 1.68, halfD: 0.36, color: '#facc15' }, { y: 2.05, label: '⚡ BOBINA ⬅➡', color: '#fde047' });
+    const aura = addDangerTrim(g, 1.52, 0.86);
+    return this._reg('electric_pylon', g, { halfW: 0.66, minY: 0, maxY: 1.68, halfD: 0.36, dangerVisuals: [aura], color: '#facc15' }, { y: 2.05, label: '⚡ BOBINA ⬅➡', color: '#fde047' });
   }
 
   _makeSpikeBarricade() {
     const g = buildVoxelSpikeBarricade(this.logMat);
-    return this._reg('spike_barricade', g, { halfW: 0.72, minY: 0, maxY: 1.12, halfD: 0.32, breakable: true, color: '#d97706' }, { y: 1.55, label: '🪵 BARRICADA [W/Q]', color: '#fbbf24' });
+    const aura = addDangerTrim(g, 1.58, 0.82);
+    return this._reg('spike_barricade', g, { halfW: 0.72, minY: 0, maxY: 1.12, halfD: 0.32, breakable: true, dangerVisuals: [aura], color: '#d97706' }, { y: 1.55, label: '🪵 BARRICADA [W/Q]', color: '#fbbf24' });
   }
 
   _makeOasisZone() {
@@ -821,8 +941,9 @@ export class Spawner {
     makeBox(g, 0.12, 0.78, 0.12, -0.26, -0.28, 0, this.jellyMat);
     makeBox(g, 0.12, 0.86, 0.12, 0, -0.32, 0, this.bubbleMat);
     makeBox(g, 0.12, 0.78, 0.12, 0.26, -0.28, 0, this.jellyMat);
+    const aura = addDangerTrim(g, 1.08, 1.08, { yOffset: -0.36, floating: true });
     return this._reg('jellyfish_swarm', g, {
-      bobPhase: 0, baseY: 1.52, halfW: 0.48, minY: -0.36, maxY: 0.42, halfD: 0.46, breakable: true, color: '#c084fc'
+      bobPhase: 0, baseY: 1.52, halfW: 0.48, minY: -0.36, maxY: 0.42, halfD: 0.46, breakable: true, dangerVisuals: [aura], color: '#c084fc'
     }, { y: 0.85, label: '🪼 ÁGUA-VIVA ⬇ / [Q]', color: '#e879f9' });
   }
 
@@ -846,6 +967,7 @@ export class Spawner {
     makeBox(core, 0.66, 0.66, 0.66, 0, 0.55, 0, this.bubbleMat);
     makeBox(core, 0.36, 0.84, 0.36, 0, 0.55, 0, this.iceCrackMat);
     g.add(core);
+    g.add(createSafePickupAura(0.76, { color: 'green' }));
     return this._reg('oxygen_bubble', g, {
       core, halfW: 0.68, minY: 0.05, maxY: 1.55, halfD: 0.68, nonHazard: true, color: '#38bdf8'
     }, { y: 1.45, label: '🫧 +OXIGÊNIO (O2)', color: '#67e8f9' });
@@ -896,6 +1018,7 @@ export class Spawner {
     ring.position.y = 0.72;
     g.add(ring);
     const core = makeBox(g, 0.34, 0.34, 0.34, 0, 0.72, 0, this.bubbleMat);
+    g.add(createSafePickupAura(0.92, { color: 'gold' }));
     return this._reg('current_ring', g, {
       ring, core, halfW: 0.88, minY: -0.1, maxY: 1.55, halfD: 0.65,
       nonHazard: true, color: '#22d3ee'
@@ -916,17 +1039,22 @@ export class Spawner {
 
   setDifficultyId(id) {
     this.difficultyId = id || 'normal';
-    this.showRedHazardSignage = id === 'easy' || id === 'normal';
-    this.minSafePaths = this.showRedHazardSignage ? 2 : 1;
+    const isGentle = this.difficultyId === 'easy' || this.difficultyId === 'normal';
+    this.showRedHazardSignage = this.redHazardSignageOverride !== null ? this.redHazardSignageOverride : true;
+    this.minSafePaths = isGentle ? 2 : 1;
   }
 
   setDifficultyConfig(diff) {
     if (!diff) return;
     this.difficultyId = diff.id || 'normal';
-    this.showRedHazardSignage = diff.showRedHazardSignage !== undefined
-      ? !!diff.showRedHazardSignage
-      : (this.difficultyId === 'easy' || this.difficultyId === 'normal');
-    this.minSafePaths = Math.max(1, diff.minSafePaths ?? (this.showRedHazardSignage ? 2 : 1));
+    const isGentle = this.difficultyId === 'easy' || this.difficultyId === 'normal';
+    this.showRedHazardSignage = this.redHazardSignageOverride !== null ? this.redHazardSignageOverride : true;
+    this.minSafePaths = Math.max(1, diff.minSafePaths ?? (isGentle ? 2 : 1));
+  }
+
+  setRedHazardSignage(enabled) {
+    this.redHazardSignageOverride = enabled === null || enabled === undefined ? null : !!enabled;
+    this.showRedHazardSignage = this.redHazardSignageOverride !== null ? this.redHazardSignageOverride : true;
   }
 
   setBossManager(bossManager) {
@@ -1747,10 +1875,30 @@ export class Spawner {
 
     const dangerTier = Math.max(1, Math.floor(ctx?.dangerTier ?? this._estimateDangerTier(ctx?.score ?? 0)));
     const spawnZ = ctx?.spawnZ ?? -102;
-    const variant = this.rollHazard(rand, {
-      dangerTier,
-      biomeId: ctx?.biomeId ?? this.biomeId
-    });
+    const isEasyOrNormal = this.difficultyId === 'easy' || this.difficultyId === 'normal';
+    const MICRO_FLOOR_SURPRISE_IDS = new Set([
+      'retractable_spike',
+      'net_trap',
+      'quicksand_pit',
+      'shockwave_emitter',
+      'emerging_tentacle',
+      'oscillating_laser'
+    ]);
+
+    let variant = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const cand = this.rollHazard(rand, {
+        dangerTier,
+        biomeId: ctx?.biomeId ?? this.biomeId
+      });
+      if (!cand || !this.pools[cand.archetype]) continue;
+      const isMicroOrSurprise = MICRO_FLOOR_SURPRISE_IDS.has(cand.archetype)
+        || (Number(cand.height) > 0 && Number(cand.height) < 0.75)
+        || (Number(cand.width) > 0 && Number(cand.width) < 0.85);
+      if (isEasyOrNormal && isMicroOrSurprise) continue;
+      variant = cand;
+      break;
+    }
     if (!variant || !this.pools[variant.archetype]) return null;
 
     // Fairness: encontra uma faixa livre que preserve pelo menos 1 caminho seguro
@@ -1788,9 +1936,9 @@ export class Spawner {
     obs.baseX = x;
     obs.lockedX = false;
     obs.extraSpeed = Math.max(0, ((variant.speedMult || 1) * tierSpeedBonus - 1) * 14);
-    obs.width = variant.width || obs.width;
-    obs.height = variant.height || obs.height;
-    obs.depth = variant.depth || obs.depth;
+    obs.width = Math.max(0.85, variant.width || obs.width);
+    obs.height = Math.max(0.82, variant.height || obs.height);
+    obs.depth = Math.max(0.85, variant.depth || obs.depth);
     if (obs.telegraphMesh) obs.telegraphMesh.visible = true;
 
     // Em Danger Tiers altos, pode adicionar um segundo hazard complementar mantendo 1 faixa segura
@@ -1808,6 +1956,12 @@ export class Spawner {
   update(dt, speed, score, players = [], magneticActive = false) {
     this.elapsed += dt;
     this.magneticStormActive = !!magneticActive;
+    // Pulso suave de opacidade nos materiais compartilhados de aura (0 draw calls extras!)
+    const auraPulse = 0.5 + 0.5 * Math.sin(this.elapsed * 6.4);
+    DANGER_TRIM_MAT.opacity = 0.66 + auraPulse * 0.28;
+    DANGER_RING_MAT.opacity = 0.34 + auraPulse * 0.26;
+    SAFE_AURA_GREEN_MAT.opacity = 0.36 + auraPulse * 0.2;
+    SAFE_AURA_GOLD_MAT.opacity = 0.38 + auraPulse * 0.22;
     if (this.oasisReliefTimer > 0) {
       this.oasisReliefTimer = Math.max(0, this.oasisReliefTimer - dt);
     }
