@@ -1,10 +1,18 @@
-// Sistema de Contas (Supabase Auth + Edge Function nick-login), OAuth Google/Discord,
-// Migração Convidado->Conta, Perfil do Jogador (local e nuvem) e Exclusão LGPD (D2, D3, D8).
+// Sistema de Contas (Supabase Auth + Edge Function nick-login), Nick + Senha sem e-mail obrigatório,
+// limite de 1 conta por PC/navegador (localStorage + IndexedDB + Cookie + servidor),
+// OAuth Google/Discord, Migração Convidado->Conta, Perfil do Jogador e Exclusão LGPD (D2, D3, D8).
 import { Save } from './Save.js';
 import { getSupabaseClient } from '../net/TransportSupabase.js';
 import { requestCloudDataWipe } from '../security/EdgeClient.js';
 
 export const NICKNAME_CHANGE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+const DEVICE_STORAGE_KEY = 'dino_dash_device_id_v1';
+const DEVICE_COOKIE_KEY = 'dd_dev_id';
+const CREATED_ACCOUNT_STORAGE_KEY = 'dino_dash_created_account_v1';
+const CREATED_ACCOUNT_COOKIE_KEY = 'dd_acct_created';
+const IDB_NAME = 'dino_dash_auth_vault';
+const IDB_STORE = 'kv';
 
 export const PROFILE_BANNERS = [
   { id: 'amber_classic', name: 'Âmbar Jurássico', gradient: 'linear-gradient(135deg, #451a03, #92400e)' },
@@ -29,13 +37,266 @@ const BLOCKED_TERMS = [
   /p[e3]nd[e3]j[o0]/i, /c[a@]br[o0]n/i, /gilipoll/i
 ];
 
+const RESERVED_NICK_WORDS = new Set([
+  'admin', 'administrator', 'root', 'moderator', 'mod', 'system',
+  'null', 'undefined', 'select', 'union', 'drop', 'insert',
+  'delete', 'script', 'alert', 'eval', 'staff', 'support',
+  'owner', 'superuser', 'dinodash', 'guest', 'convidado'
+]);
+
+const MALICIOUS_PAYLOAD_PATTERNS = [
+  /['";<>`]/,
+  /--/,
+  /\/\*/,
+  /\*\//,
+  /\bunion\s+select\b/i,
+  /\bor\s+1\s*=\s*1\b/i,
+  /\band\s+1\s*=\s*1\b/i,
+  /\bdrop\s+table\b/i,
+  /\binsert\s+into\b/i,
+  /\bdelete\s+from\b/i,
+  /javascript:/i,
+  /\bon(error|load|click|mouseover)\s*=/i,
+  /<\s*script/i
+];
+
+const DEVICE_ID_REGEX = /^[a-zA-Z0-9_-]{12,128}$/;
+
+let _idbCacheDeviceId = null;
+let _idbCacheCreatedAccount = null;
+
+function readCookie(name) {
+  if (typeof document === 'undefined' || !document.cookie) return '';
+  const prefix = `${name}=`;
+  const parts = document.cookie.split(';');
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(prefix)) {
+      try {
+        return decodeURIComponent(trimmed.slice(prefix.length));
+      } catch {
+        return trimmed.slice(prefix.length);
+      }
+    }
+  }
+  return '';
+}
+
+function writeCookie(name, value, maxAgeSec = 31536000) {
+  if (typeof document === 'undefined') return;
+  try {
+    const secure = typeof window !== 'undefined' && window.location?.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; SameSite=Lax; max-age=${maxAgeSec}${secure}`;
+  } catch {
+    // Ignora em ambientes sem cookie
+  }
+}
+
+function openAuthIdb() {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') {
+      resolve(null);
+      return;
+    }
+    try {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function idbGet(key) {
+  const db = await openAuthIdb();
+  if (!db) return null;
+  return await new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => {
+        db.close();
+        resolve(req.result ?? null);
+      };
+      req.onerror = () => {
+        db.close();
+        resolve(null);
+      };
+    } catch {
+      try { db.close(); } catch {}
+      resolve(null);
+    }
+  });
+}
+
+async function idbSet(key, value) {
+  const db = await openAuthIdb();
+  if (!db) return;
+  await new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); resolve(); };
+    } catch {
+      try { db.close(); } catch {}
+      resolve();
+    }
+  });
+}
+
+async function idbDelete(key) {
+  const db = await openAuthIdb();
+  if (!db) return;
+  await new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); resolve(); };
+    } catch {
+      try { db.close(); } catch {}
+      resolve();
+    }
+  });
+}
+
+function generateRandomDeviceId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `dd_${hex}`;
+  }
+  const fallback = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}${Math.random().toString(36).slice(2, 10)}`;
+  return `dd_${fallback.replace(/[^a-zA-Z0-9_-]/g, '')}`.slice(0, 48);
+}
+
+/**
+ * Triple-persisted Device ID (localStorage + IndexedDB + Cookie SameSite=Lax 1 ano)
+ * para garantir o limite de 1 conta por PC/navegador.
+ */
+export async function getOrCreateDeviceId() {
+  let lsId = '';
+  try {
+    if (typeof localStorage !== 'undefined') {
+      lsId = localStorage.getItem(DEVICE_STORAGE_KEY) || '';
+    }
+  } catch {}
+
+  const ckId = readCookie(DEVICE_COOKIE_KEY);
+  let idbId = _idbCacheDeviceId || '';
+  if (!idbId) {
+    const stored = await idbGet(DEVICE_STORAGE_KEY);
+    if (typeof stored === 'string' && DEVICE_ID_REGEX.test(stored)) {
+      idbId = stored;
+      _idbCacheDeviceId = stored;
+    }
+  }
+
+  let resolved = '';
+  for (const candidate of [idbId, lsId, ckId]) {
+    if (candidate && DEVICE_ID_REGEX.test(candidate)) {
+      resolved = candidate;
+      break;
+    }
+  }
+
+  if (!resolved) {
+    resolved = generateRandomDeviceId();
+  }
+
+  _idbCacheDeviceId = resolved;
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(DEVICE_STORAGE_KEY, resolved);
+    }
+  } catch {}
+  writeCookie(DEVICE_COOKIE_KEY, resolved, 31536000);
+  await idbSet(DEVICE_STORAGE_KEY, resolved);
+
+  // Aproveita para hidratar cache do marcador de conta criada do IndexedDB
+  if (!_idbCacheCreatedAccount) {
+    const idbAcct = await idbGet(CREATED_ACCOUNT_STORAGE_KEY);
+    if (typeof idbAcct === 'string' && idbAcct.trim()) {
+      _idbCacheCreatedAccount = idbAcct.trim();
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(CREATED_ACCOUNT_STORAGE_KEY, _idbCacheCreatedAccount);
+        }
+      } catch {}
+      writeCookie(CREATED_ACCOUNT_COOKIE_KEY, _idbCacheCreatedAccount, 31536000);
+    }
+  }
+
+  return resolved;
+}
+
+export function hasLocalCreatedAccount() {
+  if (_idbCacheCreatedAccount) return true;
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(CREATED_ACCOUNT_STORAGE_KEY)) {
+      return true;
+    }
+  } catch {}
+  if (readCookie(CREATED_ACCOUNT_COOKIE_KEY)) return true;
+  return false;
+}
+
+export function getLocalCreatedAccountNick() {
+  if (_idbCacheCreatedAccount) return _idbCacheCreatedAccount;
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const v = localStorage.getItem(CREATED_ACCOUNT_STORAGE_KEY);
+      if (v) return v;
+    }
+  } catch {}
+  return readCookie(CREATED_ACCOUNT_COOKIE_KEY) || '';
+}
+
+export function markLocalCreatedAccount(nick) {
+  const clean = String(nick ?? '').trim() || 'player';
+  _idbCacheCreatedAccount = clean;
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(CREATED_ACCOUNT_STORAGE_KEY, clean);
+    }
+  } catch {}
+  writeCookie(CREATED_ACCOUNT_COOKIE_KEY, clean, 31536000);
+  void idbSet(CREATED_ACCOUNT_STORAGE_KEY, clean);
+}
+
+function clearLocalCreatedAccountMarker() {
+  _idbCacheCreatedAccount = null;
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(CREATED_ACCOUNT_STORAGE_KEY);
+    }
+  } catch {}
+  writeCookie(CREATED_ACCOUNT_COOKIE_KEY, '', 0);
+  void idbDelete(CREATED_ACCOUNT_STORAGE_KEY);
+}
+
 export function validateNickname(nick) {
   const s = String(nick ?? '').trim();
+  if (MALICIOUS_PAYLOAD_PATTERNS.some((rx) => rx.test(s))) {
+    return { ok: false, error: 'Apelido contém caracteres ou termos não permitidos.' };
+  }
   if (s.length < 3 || s.length > 16) {
     return { ok: false, error: 'Apelido deve ter entre 3 e 16 caracteres.' };
   }
   if (!/^[a-zA-Z0-9_-]+$/.test(s)) {
     return { ok: false, error: 'Apelido aceita apenas letras, números, "_" e "-".' };
+  }
+  if (RESERVED_NICK_WORDS.has(s.toLowerCase())) {
+    return { ok: false, error: 'Este apelido é reservado pelo sistema. Escolha outro.' };
   }
   if (BLOCKED_TERMS.some((rx) => rx.test(s))) {
     return { ok: false, error: 'Escolha um apelido apropriado.' };
@@ -60,6 +321,23 @@ export function validatePassword(pw) {
   return { ok: true };
 }
 
+export function evaluatePasswordStrength(pw) {
+  const s = String(pw ?? '');
+  if (!s) return { score: 0, label: 'Digite uma senha', color: '#94a3b8' };
+  let score = 0;
+  if (s.length >= 8) score++;
+  if (s.length >= 12) score++;
+  if (/[a-z]/.test(s) && /[A-Z]/.test(s)) score++;
+  if (/\d/.test(s)) score++;
+  if (/[^a-zA-Z0-9]/.test(s)) score++;
+  if (s.length < 8 || !/[a-zA-Z]/.test(s) || !/\d/.test(s)) {
+    return { score: 1, label: 'Fraca (mín. 8 chars, letras + números)', color: '#f87171' };
+  }
+  if (score <= 2) return { score: 2, label: 'Razoável', color: '#fbbf24' };
+  if (score <= 3) return { score: 3, label: 'Boa', color: '#38bdf8' };
+  return { score: 4, label: 'Forte 🛡️', color: '#4ade80' };
+}
+
 export function sanitizeBio(raw, maxLen = 160) {
   let clean = String(raw ?? '')
     .replace(/[\u0000-\u001F\u007F<>`"'\\]/g, '')
@@ -79,6 +357,26 @@ class AuthProfileSystem {
 
   isOnlineConfigured() {
     return !!getSupabaseClient();
+  }
+
+  getCachedUser() {
+    return this._cachedUser;
+  }
+
+  async getOrCreateDeviceId() {
+    return await getOrCreateDeviceId();
+  }
+
+  hasLocalCreatedAccount() {
+    return hasLocalCreatedAccount();
+  }
+
+  getLocalCreatedAccountNick() {
+    return getLocalCreatedAccountNick();
+  }
+
+  markLocalCreatedAccount(nick) {
+    markLocalCreatedAccount(nick);
   }
 
   async getCurrentSession() {
@@ -155,15 +453,56 @@ class AuthProfileSystem {
     }
   }
 
-  async register({ nickname, email, password, confirmPassword, acceptTerms = true, isMinorConsent = false }) {
+  async checkNicknameAvailability(nick) {
+    const localCheck = validateNickname(nick);
+    if (!localCheck.ok) {
+      return { ok: false, valid: false, available: false, error: localCheck.error };
+    }
+    const res = await this._invokeNickLogin({
+      action: 'check_nick',
+      nickname: localCheck.value
+    });
+    if (res.offline) {
+      return { ok: true, valid: true, available: true, offline: true, message: 'Formato válido (modo offline).' };
+    }
+    if (!res.ok) {
+      return { ok: false, valid: true, available: false, error: res.error };
+    }
+    return {
+      ok: true,
+      valid: res.valid !== false,
+      available: !!res.available,
+      message: res.message || (res.available ? 'Apelido disponível!' : 'Este apelido já está em uso.'),
+      error: res.error || ''
+    };
+  }
+
+  async register({ nickname, email = '', password, confirmPassword, acceptTerms = true, isMinorConsent = false }) {
     if (!acceptTerms) {
       return { ok: false, error: 'É necessário aceitar os Termos de Uso e Política de Privacidade.' };
     }
+
+    const deviceId = await getOrCreateDeviceId();
+
+    // Bloqueio imediato local (em adição à validação server-side em device_account_registry)
+    if (hasLocalCreatedAccount()) {
+      const existingNick = getLocalCreatedAccountNick();
+      return {
+        ok: false,
+        error: existingNick
+          ? `Este navegador/PC já possui a conta "@${existingNick}" criada. Faça login na sua conta existente.`
+          : 'Este navegador/PC já possui uma conta criada. Faça login na sua conta existente.'
+      };
+    }
+
     const nickCheck = validateNickname(nickname);
     if (!nickCheck.ok) return nickCheck;
 
-    const emailCheck = validateEmail(email);
-    if (!emailCheck.ok) return emailCheck;
+    const cleanEmail = String(email ?? '').trim().toLowerCase();
+    if (cleanEmail) {
+      const emailCheck = validateEmail(cleanEmail);
+      if (!emailCheck.ok) return emailCheck;
+    }
 
     const pwCheck = validatePassword(password);
     if (!pwCheck.ok) return pwCheck;
@@ -172,15 +511,19 @@ class AuthProfileSystem {
       return { ok: false, error: 'As senhas não conferem.' };
     }
 
-    const res = await this._invokeNickLogin({
+    const payload = {
       action: 'register',
       nickname: nickCheck.value,
-      email: emailCheck.value,
       password,
+      deviceId,
       isMinorConsent: !!isMinorConsent
-    });
+    };
+    if (cleanEmail) payload.email = cleanEmail;
 
+    const res = await this._invokeNickLogin(payload);
     if (!res.ok) return res;
+
+    markLocalCreatedAccount(nickCheck.value);
 
     if (!Save.data.profile) Save.data.profile = {};
     Save.data.profile.nickname = nickCheck.value;
@@ -191,6 +534,7 @@ class AuthProfileSystem {
     if (res.session?.access_token && res.session?.refresh_token) {
       const client = getSupabaseClient();
       await client?.auth.setSession(res.session);
+      await this.getCurrentSession();
       await this.migrateGuestProgressToAccount();
     }
 
@@ -200,7 +544,7 @@ class AuthProfileSystem {
   async login({ identifier, password }) {
     const idClean = String(identifier ?? '').trim();
     if (!idClean || !password) {
-      return { ok: false, error: 'Informe seu apelido/e-mail e senha.' };
+      return { ok: false, error: 'Informe seu apelido e senha.' };
     }
 
     const res = await this._invokeNickLogin({
@@ -214,6 +558,7 @@ class AuthProfileSystem {
     const client = getSupabaseClient();
     if (client && res.session?.access_token && res.session?.refresh_token) {
       await client.auth.setSession(res.session);
+      await this.getCurrentSession();
       if (res.nickname) {
         if (!Save.data.profile) Save.data.profile = {};
         Save.data.profile.nickname = res.nickname;
@@ -487,6 +832,7 @@ class AuthProfileSystem {
       await client.auth.signOut().catch(() => {});
     }
 
+    clearLocalCreatedAccountMarker();
     await Save.wipeAllLocalData();
     this._cachedUser = null;
     return { ok: true, cloudStatus };

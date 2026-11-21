@@ -2597,3 +2597,272 @@ button:focus-visible {
     grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
   }
 }
+
+/* ============================================================================
+   Micro-interações GPU, Top Account Pill, Quick-Launch 3D, Scary Raptor & Alerts
+   ============================================================================ */
+
+.item-card {
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.2s ease;
+}
+
+button.item-card:hover,
+.mode-card:hover {
+  transform: translate3d(0, -3px, 0);
+  border-color: rgba(255, 212, 71, 0.72);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 212, 71, 0.2);
+}
+
+button.item-card:active {
+  transform: translate3d(0, 1px, 0) scale(0.988);
+}
+
+.tab-btn {
+  transition:
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.18s ease;
+}
+
+.tab-btn:hover:not(:disabled) {
+  transform: translate3d(0, -1px, 0);
+  border-color: rgba(255, 212, 71, 0.65);
+}
+
+.tab-btn:active:not(:disabled) {
+  transform: translate3d(0, 1px, 0) scale(0.97);
+}
+
+/* Top Account Pill no Menu Principal */
+.menu-account-pill {
+  pointer-events: auto;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 2px solid rgba(251, 191, 36, 0.65);
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.85), rgba(34, 21, 13, 0.92));
+  color: #fef3c7;
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    filter 0.16s ease;
+}
+
+.menu-account-pill:hover {
+  transform: translate3d(0, -2px, 0);
+  filter: brightness(1.08);
+  box-shadow: 0 8px 20px rgba(251, 191, 36, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.menu-account-pill:active {
+  transform: translate3d(0, 1px, 0) scale(0.97);
+}
+
+.menu-account-pill.is-logged {
+  border-color: rgba(52, 211, 153, 0.72);
+  background: linear-gradient(135deg, rgba(6, 78, 59, 0.88), rgba(15, 23, 42, 0.92));
+  color: #a7f3d0;
+}
+
+/* Barra Quick-Launch "✨ Novos Modos 3D" no Menu Principal */
+.menu-quick3d-box {
+  background: linear-gradient(145deg, rgba(14, 116, 144, 0.22), rgba(24, 14, 9, 0.9));
+  border: 2px solid rgba(56, 189, 248, 0.55);
+  border-radius: 14px;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(125, 211, 252, 0.22);
+}
+
+.menu-quick3d-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  font-weight: 900;
+  color: #7dd3fc;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.menu-quick3d-tag {
+  background: linear-gradient(135deg, #22d3ee, #34d399);
+  color: #052e16;
+  font-size: 0.64rem;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 999px;
+  letter-spacing: 0.06em;
+}
+
+.menu-quick3d-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.menu-quick3d-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  border: 1.5px solid rgba(56, 189, 248, 0.45);
+  border-radius: 10px;
+  padding: 8px 6px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #f0f9ff;
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-align: center;
+  line-height: 1.15;
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.menu-quick3d-btn:hover {
+  transform: translate3d(0, -2px, 0);
+  background: rgba(14, 116, 144, 0.55);
+  border-color: #67e8f9;
+  box-shadow: 0 6px 16px rgba(34, 211, 238, 0.25);
+}
+
+.menu-quick3d-btn:active {
+  transform: translate3d(0, 1px, 0) scale(0.96);
+}
+
+/* Card Destaque Ouro-Ciano do Scary Monsters / Raptor Fóssil Estelar */
+.sel-featured-scary {
+  pointer-events: auto;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 2px solid #fbbf24;
+  background: linear-gradient(125deg, rgba(245, 158, 11, 0.24) 0%, rgba(14, 116, 144, 0.28) 55%, rgba(15, 23, 42, 0.9) 100%);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4), 0 0 18px rgba(56, 189, 248, 0.2);
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.sel-featured-scary:hover {
+  transform: translate3d(0, -2px, 0);
+  border-color: #67e8f9;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.48), 0 0 22px rgba(251, 191, 36, 0.32);
+}
+
+.sel-featured-scary.is-active {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.45), 0 10px 24px rgba(0, 0, 0, 0.42);
+}
+
+.sel-featured-scary-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 180px;
+  flex: 1;
+}
+
+.sel-featured-badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #fbbf24, #22d3ee);
+  color: #09090b;
+}
+
+.sel-featured-title {
+  font-size: 0.92rem;
+  color: #fef08a;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.65);
+}
+
+.sel-featured-sub {
+  font-size: 0.74rem;
+  color: #bae6fd;
+}
+
+.sel-featured-btn {
+  padding: 8px 14px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/* Callout pulsante vermelho de perigo (Tutorial / Alertas) */
+@keyframes ddDangerPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.65), 0 8px 20px rgba(0, 0, 0, 0.45);
+    border-color: rgba(248, 113, 113, 0.9);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0), 0 10px 26px rgba(239, 68, 68, 0.35);
+    border-color: #ef4444;
+  }
+}
+
+.tutorial-danger-callout,
+.danger-callout-pulse {
+  border: 2px solid #ef4444;
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.92), rgba(69, 10, 10, 0.94));
+  color: #fee2e2;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 800;
+  animation: ddDangerPulse 1.35s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+@media (max-width: 520px) {
+  .menu-quick3d-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item-card,
+  .tab-btn,
+  .menu-account-pill,
+  .menu-quick3d-btn,
+  .sel-featured-scary,
+  .tutorial-danger-callout,
+  .danger-callout-pulse {
+    animation: none !important;
+    transition: none !important;
+  }
+  button.item-card:hover,
+  .mode-card:hover,
+  .tab-btn:hover:not(:disabled),
+  .menu-account-pill:hover,
+  .menu-quick3d-btn:hover,
+  .sel-featured-scary:hover {
+    transform: none !important;
+  }
+}

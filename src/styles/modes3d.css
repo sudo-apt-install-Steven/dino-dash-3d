@@ -30,7 +30,11 @@
   background: rgba(9, 9, 11, 0.84);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  transition: transform 0.12s ease, background-color 0.15s ease, border-color 0.15s ease;
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .m3d-btn {
@@ -445,6 +449,217 @@
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
+@keyframes m3d-modal-in {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.96); }
+  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes m3d-danger-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7), 0 10px 28px rgba(0, 0, 0, 0.5);
+    border-color: rgba(248, 113, 113, 0.9);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0), 0 12px 32px rgba(239, 68, 68, 0.35);
+    border-color: #ef4444;
+  }
+}
+
+.m3d-modal {
+  will-change: transform, opacity;
+  animation: m3d-modal-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.m3d-rpg-panel {
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease;
+}
+
+.m3d-sug-btn {
+  transition:
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.16s ease,
+    border-color 0.16s ease;
+}
+.m3d-sug-btn:hover { transform: translate3d(0, -1px, 0); }
+.m3d-sug-btn:active { transform: translate3d(0, 1px, 0) scale(0.98); }
+
+/* RPG Outcome Tier Badges (Masmorra RPG / Rolagem de Dados) */
+.m3d-tier-crit,
+.m3d-tier-great,
+.m3d-tier-narrow,
+.m3d-tier-minor,
+.m3d-tier-fail,
+.m3d-tier-fumble {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.m3d-tier-crit {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.32), rgba(251, 191, 36, 0.22));
+  border-color: rgba(251, 191, 36, 0.8);
+  color: #fef08a;
+  box-shadow: 0 0 14px rgba(251, 191, 36, 0.38);
+}
+
+.m3d-tier-great {
+  background: rgba(16, 185, 129, 0.24);
+  border-color: rgba(52, 211, 153, 0.65);
+  color: #6ee7b7;
+}
+
+.m3d-tier-narrow {
+  background: rgba(14, 165, 233, 0.22);
+  border-color: rgba(56, 189, 248, 0.55);
+  color: #7dd3fc;
+}
+
+.m3d-tier-minor {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(251, 146, 60, 0.55);
+  color: #fdba74;
+}
+
+.m3d-tier-fail {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(248, 113, 113, 0.6);
+  color: #fca5a5;
+}
+
+.m3d-tier-fumble {
+  background: linear-gradient(135deg, rgba(153, 27, 27, 0.55), rgba(225, 29, 72, 0.35));
+  border-color: rgba(244, 63, 94, 0.85);
+  color: #ffe4e6;
+  box-shadow: 0 0 14px rgba(244, 63, 94, 0.4);
+  animation: m3d-danger-pulse 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+/* Pulsing Red Danger Tutorial Callout */
+.m3d-danger-callout,
+.m3d-tutorial-danger {
+  position: absolute;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(460px, calc(100% - 28px));
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(127, 29, 29, 0.92), rgba(24, 9, 11, 0.94));
+  border: 2px solid #ef4444;
+  color: #fee2e2;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  animation: m3d-danger-pulse 1.3s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+/* Barra de Controle de Câmera 3D */
+.m3d-cam-bar {
+  position: absolute;
+  bottom: 46px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: rgba(9, 9, 11, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.m3d-cam-btn {
+  cursor: pointer;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(24, 24, 27, 0.85);
+  color: #e4e4e7;
+  font-size: 12px;
+  font-weight: 700;
+  transition:
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.m3d-cam-btn:hover {
+  background: rgba(39, 39, 42, 0.95);
+  border-color: rgba(56, 189, 248, 0.55);
+  transform: translate3d(0, -1px, 0);
+}
+
+.m3d-cam-btn.is-active {
+  background: rgba(14, 165, 233, 0.25);
+  border-color: #38bdf8;
+  color: #7dd3fc;
+}
+
+/* Minimapa do Mundo Aberto (Aventura Aberta 3D) */
+.m3d-open-minimap {
+  position: absolute;
+  top: 66px;
+  right: 16px;
+  width: 168px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(9, 9, 11, 0.86);
+  border: 1px solid rgba(16, 185, 129, 0.42);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+
+.m3d-open-mm-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 800;
+  color: #6ee7b7;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.m3d-open-mm-canvas {
+  display: block;
+  width: 150px;
+  height: 150px;
+  border-radius: 10px;
+  background: radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.14), rgba(9, 9, 11, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.m3d-open-mm-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 10px;
+  color: #a1a1aa;
+}
+
+.m3d-open-mm-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 3px;
+  vertical-align: middle;
+}
+
 @media (max-width: 760px) {
   .m3d-controls-hint { display: none; }
   .m3d-x1-top { gap: 8px; }
@@ -452,13 +667,28 @@
   .m3d-boss-top { width: calc(100% - 28px); top: 56px; }
   .m3d-rpg-suggestions { grid-template-columns: 1fr; }
   .m3d-player-pill { bottom: 148px; width: 170px; }
+  .m3d-open-minimap { width: 132px; padding: 6px; top: 60px; right: 10px; }
+  .m3d-open-mm-canvas { width: 118px; height: 118px; }
+  .m3d-cam-bar { bottom: 10px; right: 10px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .m3d-banner,
+  .m3d-modal,
+  .m3d-rpg-panel,
   .m3d-btn,
-  .m3d-tbtn {
+  .m3d-sug-btn,
+  .m3d-cam-btn,
+  .m3d-tbtn,
+  .m3d-tier-fumble,
+  .m3d-danger-callout,
+  .m3d-tutorial-danger {
     animation: none !important;
     transition: none !important;
+  }
+  .m3d-btn:active,
+  .m3d-sug-btn:hover,
+  .m3d-cam-btn:hover {
+    transform: none !important;
   }
 }
