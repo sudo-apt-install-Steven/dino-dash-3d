@@ -13,6 +13,7 @@ import { DinoFactory } from '../dinos/DinoFactory.js';
 import { buildVoxelGoldenEgg, buildVoxelDebris } from '../models/VoxelLibrary.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { DinoAbilities } from '../dinos/DinoAbilities.js';
+import * as DinoCatalogMod from '../dinos/DinoCatalog.js';
 import { getDinoSpec, getDinoHabitat, getEffectiveDinoHabitat, getDinoSwimCapabilities } from '../dinos/DinoCatalog.js';
 import {
   getActivePreset,
@@ -58,6 +59,43 @@ import { startAuthoritativeRun, finishAuthoritativeRun } from '../security/EdgeC
 import { exportWatermarkedSnapshot } from '../security/Watermark.js';
 
 const FREE_3D_MODES = new Set(['arena_x1', 'boss_arena', 'dungeon_rpg', 'dungeon_rush', 'adventure_open']);
+
+const PURE_AQUATIC_GILLS_IDS = new Set([
+  'mosasaurus', 'plesiosaurus', 'kronosaurus', 'megalodon',
+  'dunkleosteus', 'elasmosaurus', 'liopleurodon', 'ichthyosaurus',
+  'abissal_espectral'
+]);
+const AMPHIBIOUS_HYBRID_IDS = new Set([
+  'spinosaurus', 'baryonyx', 'sarcosuchus', 'suchomimus',
+  'deinosuchus', 'cryo_spino_aurora'
+]);
+
+export function getDinoAquaticPhysiology(specOrId, opts = {}) {
+  if (typeof DinoCatalogMod.getDinoAquaticPhysiology === 'function') {
+    const ext = DinoCatalogMod.getDinoAquaticPhysiology(specOrId, opts);
+    if (typeof ext === 'string') return ext;
+    if (ext && typeof ext === 'object') return ext.physiology || ext.type || ext.kind || 'terrestrial';
+  }
+  const spec = typeof specOrId === 'string' ? getDinoSpec(specOrId) : (specOrId || getDinoSpec('trex'));
+  const id = spec?.id || (typeof specOrId === 'string' ? specOrId : 'trex');
+  const { hybrid = null, mutationId = null } = opts || {};
+  if (hybrid?.enabled) {
+    const eff = getEffectiveDinoHabitat(spec, { hybrid, mutationId });
+    const modes = Array.isArray(eff?.availableModes) ? eff.availableModes : [];
+    if (modes.includes('aquatic')) {
+      return (modes.includes('land') || modes.includes('flying')) ? 'amphibious_hybrid' : 'aquatic_gills';
+    }
+    return 'terrestrial';
+  }
+  if (AMPHIBIOUS_HYBRID_IDS.has(id) || spec?.habitat === 'amphibious') {
+    return 'amphibious_hybrid';
+  }
+  if (PURE_AQUATIC_GILLS_IDS.has(id) || spec?.habitat === 'aquatic' || spec?.dinoClass === 'aquatic') {
+    if (mutationId === 'extra_limbs') return 'amphibious_hybrid';
+    return 'aquatic_gills';
+  }
+  return 'terrestrial';
+}
 
 export class Game {
   constructor(canvas, uiRoot) {
@@ -171,6 +209,22 @@ export class Game {
     this.clipRecorder = new ClipRecorder(canvas);
 
     this.ui = new UIManager(uiRoot, this);
+    if (this.ui?.hud?.callbacks) {
+      this.ui.hud.callbacks.onToggleGlossary = (isOpen) => {
+        if (isOpen && this.state === 'playing') {
+          this._pausedByGlossary = true;
+          this.state = 'paused';
+          this.music.setPlaying(false);
+        } else if (!isOpen && this._pausedByGlossary) {
+          this._pausedByGlossary = false;
+          if (!this.photoMode && !this.pendingRestart && this.ui?.hud?.pauseOverlay?.classList.contains('hidden')) {
+            this.state = 'playing';
+            this.lastTime = performance.now();
+            this.music.setPlaying(true);
+          }
+        }
+      };
+    }
     this.tvHud = new TvHud(uiRoot, {
       onFocusPlayer: (id) => {
         const nextId = this.tvHud.focusedId === id ? null : id;
@@ -864,9 +918,13 @@ export class Game {
 
     if (landedHit) {
       this.hitStopTimer = Math.max(this.hitStopTimer || 0, hitStopSec);
-      if (this.tutorialState?.active && this.tutorialState.step === 3) {
-        this._advanceTutorialStep();
-      }
+    }
+    if (this.tutorialState?.active && (this.tutorialState.step === 5 || (!this.tutorialState.isFirstRunMini && this.tutorialState.step === 3))) {
+      this._advanceTutorialStep();
+    }
+    if (p.id === 'scary_raptor' && this.events?.predators?.state === 'chase') {
+      this.addScore(Math.round(75 * 1.5 * (this.combo || 1)), p);
+      this.ui.hud.showFloatText('🦖 MORDIDA FÓSSIL NO PREDADOR! (+50% DANO)', '#facc15');
     }
     if (p.index === 0) {
       this._triggerFirstUseSpotlight('spotlight_attack', {
@@ -920,6 +978,15 @@ export class Game {
     this.teamsState = modeId === 'teams_2v2'
       ? { teamScores: [0, 0], currentTeam: 0 }
       : null;
+  }
+
+  startQuickMode(modeId, opts = {}) {
+    if (!modeId) return false;
+    this.sfx?.click?.();
+    this.setMode(modeId, opts.seed || '');
+    this.ui?._clearModal?.();
+    this.startRun(false, opts);
+    return true;
   }
 
   setBossFightConfig(cfg = {}) {
@@ -985,6 +1052,9 @@ export class Game {
 
   _computeBossAttackDamage(p, baseDmg, isWeakPoint = false) {
     let dmg = Math.max(1, Number(baseDmg) || 20);
+    if (p?.id === 'scary_raptor') {
+      dmg *= 1.5; // Mordida Fóssil: +50% dano [Q] em chefes e predadores
+    }
     const affix = this.raidState?.active ? this.raidState.activeAffix : null;
     if (affix && !isWeakPoint && typeof affix.damageMult === 'number') {
       dmg *= affix.damageMult;
@@ -1142,6 +1212,7 @@ export class Game {
       const hybridCfg = hybridsAllowed ? (slotCustom?.hybrid || (i === 0 ? Save.data.hybrid : null)) : null;
       const habInfo = getEffectiveDinoHabitat(spec, { hybrid: hybridCfg, mutationId: eqMutationId });
       const swimCaps = getDinoSwimCapabilities(spec, { hybrid: hybridCfg, mutationId: eqMutationId });
+      const aquaticPhysiology = getDinoAquaticPhysiology(spec, { hybrid: hybridCfg, mutationId: eqMutationId });
       const initialHabitat = habInfo.primary === 'amphibious' ? 'land' : (habInfo.primary || 'land');
       const modelCfg = {
         ...localCustom,
@@ -1270,15 +1341,18 @@ export class Game {
         isAmphibious: swimCaps.isAmphibious,
         swimModeLabel: swimCaps.swimModeLabel,
         swimModeDescription: swimCaps.swimModeDescription,
-        diveDepth: 0,
-        diveTarget: 0,
+        diveDepth: initialHabitat === 'aquatic' && aquaticPhysiology === 'aquatic_gills' ? 1 : 0,
+        diveTarget: initialHabitat === 'aquatic' && aquaticPhysiology === 'aquatic_gills' ? 1 : 0,
         inWater: false,
         inSubmerged: false,
         oxygen: 100,
         _oxygenDmgTimer: 0,
         _oxygenWarnCd: 0,
         equippedAccessory: localCustom?.accessory || 'none',
-        isAquaticNative: habInfo.primary === 'aquatic' || habInfo.primary === 'amphibious',
+        aquaticPhysiology,
+        isAquaticGills: aquaticPhysiology === 'aquatic_gills',
+        isAmphibiousHybrid: aquaticPhysiology === 'amphibious_hybrid',
+        isAquaticNative: habInfo.primary === 'aquatic' || habInfo.primary === 'amphibious' || aquaticPhysiology !== 'terrestrial',
         skinVariant: eqSkinVariant,
         mutationId: eqMutationId,
         mutationTier: eqMutationTier,
@@ -1628,9 +1702,11 @@ export class Game {
     this.startRun(true, { tutorial: true, biomeId: 'desert' });
     this.tutorialState = {
       active: true,
+      isFirstRunMini: false,
       step: 0,
       total: 6,
       progress: 0,
+      stepTimer: 4.0,
       spawnCd: 0.45,
       elemCount: 0,
       doneTimer: 0
@@ -1642,8 +1718,17 @@ export class Game {
   skipTutorial() {
     this.tutorialState = null;
     this.spawner.tutorialMode = false;
+    this.firstRunGentleTimer = 0;
+    Save.data.firstRunTutorialDone = true;
+    Save.data.tutorialDone = true;
+    Save.save();
     this.ui.hud.setTutorialHud(null);
-    this.openMainMenu();
+    if (this.state === 'playing' || this.state === 'paused') {
+      this.isTestTrack = false;
+      this.ui.hud.showFloatText('⏭ Tutorial pulado! Boa corrida!', '#38bdf8');
+    } else {
+      this.openMainMenu();
+    }
   }
 
   _syncTutorialHud() {
@@ -1653,24 +1738,49 @@ export class Game {
       return;
     }
     const defs = [
-      { title: '1/6 • Trocar de Faixa', desc: 'Use [A] / [D] ou [←] / [→] para desviar lateralmente (0/2 trocas).' },
-      { title: '2/6 • Pular Obstáculos', desc: 'Aperte [W] / [↑] para pular sobre os cactos à frente (0/2 pulos).' },
-      { title: '3/6 • Abaixar / Deslizar', desc: 'Segure [S] / [↓] para passar por baixo do Pterodáctilo alto!' },
-      { title: '4/6 • Ataque Básico [Q]', desc: 'Chegue perto do obstáculo verde e aperte [Q] para quebrá-lo!' },
-      { title: '5/6 • Habilidade Especial [Espaço]', desc: 'Aperte [Espaço] para ativar o poder exclusivo do seu dino!' },
-      { title: '6/6 • Alquimia Elemental', desc: 'Colete os Ovos Elementais (Fogo + Gelo = Explosão de Vapor)!' }
+      {
+        title: 'Guia Visual • Auras, Buff, Debuff & Estamina',
+        desc: '🔴 AURA VERMELHA = PERIGO! (desvie ou ataque) • 🟢 AURA VERDE/DOURADA = AJUDA! (colete) • Buff (poder bom temporário), Debuff (efeito ruim temporário), Estamina (energia para impulso/pulo duplo/ataque).',
+        html: `
+          <div style="display:flex; flex-direction:column; gap:4px; text-align:left;">
+            <div><strong style="color:#fca5a5;">🔴 AURA VERMELHA = PERIGO!</strong> (Obstáculos e Debuffs — desvie ou ataque!)</div>
+            <div><strong style="color:#6ee7b7;">🟢 AURA VERDE/DOURADA = AJUDA!</strong> (Frutas, Ovos e Buffs — colete!)</div>
+            <div style="font-size:0.79rem; color:#bae6fd; margin-top:2px;">
+              <b>Buff:</b> poder bom temporário • <b>Debuff:</b> efeito ruim temporário • <b>Estamina:</b> energia para impulso/pulo duplo/ataque
+            </div>
+          </div>
+        `
+      },
+      {
+        title: 'Passo 1/5 • Desviar de Faixa (A/D ou ←/→)',
+        desc: 'Use [A] / [D] ou [←] / [→] (ou arraste para os lados) para trocar de faixa na pista!'
+      },
+      {
+        title: 'Passo 2/5 • Pular Obstáculo com 🔴 Aura Vermelha (W/↑)',
+        desc: 'Perigos têm 🔴 Aura Vermelha no chão! Aperte [W] ou [↑] para pular sobre o obstáculo!'
+      },
+      {
+        title: 'Passo 3/5 • Abaixar / Mergulhar (S/↓)',
+        desc: 'Aperte [S] ou [↓] para deslizar sob aves altas ou mergulhar fundo na água!'
+      },
+      {
+        title: 'Passo 4/5 • Abrir Roda Tática / Impulso (X)',
+        desc: 'Aperte [X] (ou toque em 🧭 Roda): a Roda Tática dá Foco/Impulso (+Carga) e recupera Oxigênio (+45 O₂)!'
+      },
+      {
+        title: 'Passo 5/5 • Usar Mochila (E) & Ataque (Q)',
+        desc: 'Você ganhou 1 🛡️ item grátis na Mochila! Aperte [E] para usar a Mochila ou [Q] para atacar obstáculos/chefes!'
+      }
     ];
     const d = defs[ts.step] || defs[5];
-    let desc = d.desc;
-    if (ts.step === 0) desc = `Use [A] / [D] ou [←] / [→] para trocar de faixa (${ts.progress}/2 trocas).`;
-    if (ts.step === 1) desc = `Pule os cactos com [W] / [↑] (segure para pulo alto) (${ts.progress}/2 pulos).`;
     this.ui.hud.setTutorialHud({
       active: true,
       step: ts.step + 1,
       total: ts.total,
-      progressText: `${ts.step + 1}/${ts.total}`,
+      progressText: ts.step === 0 ? 'Intro' : `${ts.step}/5`,
       title: `🎓 ${d.title}`,
-      desc
+      desc: d.desc,
+      html: d.html || null
     });
   }
 
@@ -1679,25 +1789,39 @@ export class Game {
     if (!ts || !ts.active) return;
     ts.step++;
     ts.progress = 0;
+    ts.stepTimer = 0;
     ts.spawnCd = 0.55;
     this.sfx.powerup();
+    if (ts.step === 5) {
+      const p0 = this.players[0];
+      if (p0 && p0.backpack && p0.backpack.slots.length === 0) {
+        p0.backpack.add('shield');
+        this.ui.hud.showFloatText('🎒 +1 ESCUDO GRÁTIS NA MOCHILA! Aperte [E]!', '#facc15');
+      }
+    }
     if (ts.step >= ts.total) {
+      const wasFirstRunMini = Boolean(ts.isFirstRunMini);
       ts.active = false;
-      ts.doneTimer = 1.4;
+      ts.doneTimer = wasFirstRunMini ? 0 : 1.4;
       this.spawner.tutorialMode = false;
+      Save.data.firstRunTutorialDone = true;
+      Save.data.tutorialDone = true;
       const firstTime = !Save.data.tutorialRewardClaimed;
       if (firstTime) {
         Save.data.tutorialRewardClaimed = true;
         Save.addEggs(20);
-        Save.save();
       }
+      Save.save();
       this.sfx.victory();
       this.ui.hud.setTutorialHud(null);
       this.ui.hud.showBanner(
-        firstTime ? '🎓 TUTORIAL COMPLETO! +20 Ovos de Recompensa!' : '🎓 TUTORIAL COMPLETO! Você dominou todas as mecânicas!',
+        firstTime ? '🎓 TUTORIAL COMPLETO! +20 Ovos de Recompensa! Boa corrida!' : '🎓 TUTORIAL COMPLETO! Você dominou todas as mecânicas!',
         '#58d63a',
-        4.0
+        3.8
       );
+      if (wasFirstRunMini) {
+        this.tutorialState = null;
+      }
       return;
     }
     this.ui.hud.showFloatText('✅ ETAPA CONCLUÍDA!', '#58d63a');
@@ -1721,39 +1845,35 @@ export class Game {
     const p0 = this.players[0];
     if (!p0) return;
 
-    ts.spawnCd -= dt;
-    if (ts.spawnCd <= 0) {
-      const hasHazardAhead = this.spawner.getActiveObstacles().some((o) => !o.hit && o.group.position.z < 1);
-      if (ts.step === 1 && !hasHazardAhead) {
-        this.spawner.spawnTutorialObject('cactus_small', p0.lane, { z: -48 });
-        ts.spawnCd = 1.6;
-      } else if (ts.step === 2 && !hasHazardAhead) {
-        this.spawner.spawnTutorialObject('bird', p0.lane, { highBird: true, z: -50 });
-        ts.spawnCd = 1.8;
-      } else if (ts.step === 3 && !hasHazardAhead) {
-        this.spawner.spawnTutorialObject('cactus_spine', p0.lane, { z: -46 });
-        ts.spawnCd = 1.6;
-      } else if (ts.step === 4) {
-        p0.abilityCooldown = 0;
-        p0.abilityCharge = 100;
-        ts.spawnCd = 1.0;
-      } else if (ts.step === 5 && !hasHazardAhead) {
-        const nextElem = ts.elemCount === 0 ? 'fire' : 'ice';
-        this.spawner.spawnTutorialObject('elemental_egg', p0.lane, { element: nextElem, z: -42 });
-        ts.spawnCd = 1.8;
-      } else {
-        ts.spawnCd = 0.5;
+    if (ts.step === 0) {
+      ts.stepTimer = (ts.stepTimer ?? 4.0) - dt;
+      if (ts.stepTimer <= 0) {
+        this._advanceTutorialStep();
+        return;
+      }
+    } else if (ts.step === 4) {
+      ts.stepTimer = (ts.stepTimer || 0) + dt;
+      if (this.radialWheelOpen) {
+        this._advanceTutorialStep();
+        return;
       }
     }
 
-    if (ts.step === 2) {
-      const birdClose = this.spawner.getActiveObstacles().some(
-        (o) => o.kind === 'bird' && !o.hit && o.group.position.z > -16 && o.group.position.z < 3
-      );
-      if (birdClose && (p0.ducking || p0.sliding)) {
-        ts.progress += dt;
-        if (ts.progress >= 0.25) {
-          this._advanceTutorialStep();
+    if (!ts.isFirstRunMini) {
+      ts.spawnCd -= dt;
+      if (ts.spawnCd <= 0) {
+        const hasHazardAhead = this.spawner.getActiveObstacles().some((o) => !o.hit && o.group.position.z < 1);
+        if (ts.step === 2 && !hasHazardAhead) {
+          this.spawner.spawnTutorialObject('cactus_small', p0.lane, { z: -48 });
+          ts.spawnCd = 1.6;
+        } else if (ts.step === 3 && !hasHazardAhead) {
+          this.spawner.spawnTutorialObject('bird', p0.lane, { highBird: true, z: -50 });
+          ts.spawnCd = 1.8;
+        } else if (ts.step === 5 && !hasHazardAhead) {
+          this.spawner.spawnTutorialObject('cactus_spine', p0.lane, { z: -46 });
+          ts.spawnCd = 1.6;
+        } else {
+          ts.spawnCd = 0.6;
         }
       }
     }
@@ -1934,8 +2054,9 @@ export class Game {
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat;
       const isFly = mode === 'flying' && !isSubmergedStart;
-      pl.diveDepth = isSubmergedStart ? 1 : 0;
-      pl.diveTarget = isSubmergedStart ? 1 : 0;
+      const naturalDive = Boolean(isSubmergedStart || (pl.aquaticPhysiology === 'aquatic_gills' && mode === 'aquatic'));
+      pl.diveDepth = naturalDive ? 1 : 0;
+      pl.diveTarget = naturalDive ? 1 : 0;
       pl.inWater = !isFly && Boolean(isSubmergedStart || mode === 'aquatic');
       pl.inSubmerged = isSubmergedStart;
       pl.grounded = !isFly;
@@ -2187,19 +2308,54 @@ export class Game {
       );
     }
 
-    // Tutorial curto na 1ª partida (e dica de arrastar o dedo no celular)
+    // First-Run Interactive Mini-Tutorial (non-intrusive, 25s gentle density + prominent Skip button)
     const isCoarse = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+    const shouldAutoMiniTutorial = Boolean(
+      this.modeId === 'solo' &&
+      !isTestTrack &&
+      !opts.tutorial &&
+      !opts.skipAutoTutorial &&
+      !this.multiplayerSession?.active &&
+      !this.activeCampaignNode &&
+      !this.activeCustomTrack &&
+      !this.headlessBot &&
+      !opts.headless &&
+      !Save.data.firstRunTutorialDone
+    );
+    if (shouldAutoMiniTutorial) {
+      this.firstRunGentleTimer = 25.0;
+      this.tutorialState = {
+        active: true,
+        isFirstRunMini: true,
+        step: 0,
+        total: 6,
+        progress: 0,
+        stepTimer: 4.0,
+        spawnCd: 0.6,
+        elemCount: 0,
+        doneTimer: 0
+      };
+      if (this.players[0]) {
+        this.players[0]._unlockAll = true;
+      }
+      this._syncTutorialHud();
+    } else {
+      this.firstRunGentleTimer = 0;
+    }
+
     if (!Save.data.tutorialDone) {
       Save.data.tutorialDone = true;
       Save.save();
-      this._pendingStartBanners.push({
-        text: isCoarse
-          ? '👆 Arraste o dedo na tela: ⬅ ➡ faixas • ⬆ pular • ⬇ deslizar!'
-          : 'Dica: Use W/↑ para pular, S/↓ para abaixar/deslizar e A/D para trocar de faixa!',
-        color: '#58d63a',
-        dur: 4.5
-      });
-    } else if (isCoarse && !this._mobileSwipeTipShown && !this.isTestTrack) {
+      if (!shouldAutoMiniTutorial) {
+        this._pendingStartBanners.push({
+          text: isCoarse
+            ? '👆 Arraste o dedo na tela: ⬅ ➡ faixas • ⬆ pular • ⬇ deslizar!'
+            : 'Dica: Use W/↑ para pular, S/↓ para abaixar/deslizar e A/D para trocar de faixa!',
+          color: '#58d63a',
+          dur: 4.5
+        });
+      }
+    } else if (isCoarse && !this._mobileSwipeTipShown && !this.isTestTrack && !shouldAutoMiniTutorial) {
       this._mobileSwipeTipShown = true;
       this._pendingStartBanners.push({
         text: '👆 Arraste em qualquer lugar: ⬅ ➡ mover • ⬆ pular • ⬇ deslizar',
@@ -2328,6 +2484,9 @@ export class Game {
     const p = this.players[idx];
     if (!p || p.dead) return;
     p.backpack.useNext(p, this._eventContext());
+    if (this.tutorialState?.active && this.tutorialState.step === 5 && p.index === 0) {
+      this._advanceTutorialStep();
+    }
   }
 
   _getMerchantCost() {
@@ -2433,10 +2592,11 @@ export class Game {
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat;
       const isFly = mode === 'flying' && !isSubmergedBiome;
+      const naturalDive = Boolean(isSubmergedBiome || (pl.aquaticPhysiology === 'aquatic_gills' && mode === 'aquatic'));
       pl.inWater = !isFly && Boolean(isSubmergedBiome || mode === 'aquatic');
       pl.inSubmerged = isSubmergedBiome;
-      pl.diveTarget = isSubmergedBiome ? 1 : 0;
-      pl.diveDepth = isSubmergedBiome ? 1 : 0;
+      pl.diveTarget = naturalDive ? 1 : 0;
+      pl.diveDepth = naturalDive ? 1 : 0;
       pl.grounded = !isFly;
       if (mode === 'aquatic') {
         const lanes = isSubmergedBiome ? LANE_X : RIVER_LANE_X;
@@ -2490,12 +2650,13 @@ export class Game {
     if (nextMode === cur) return false;
 
     const isSub = Boolean(this.currentBiome?.submerged);
+    const naturalDive = Boolean(isSub || (p.aquaticPhysiology === 'aquatic_gills' && nextMode === 'aquatic'));
     const oldX = p.x;
     const oldY = (p.baseY || 0) + p.y;
     p.habitatMode = nextMode;
     p.habitat = nextMode;
-    p.diveDepth = isSub ? 1 : 0;
-    p.diveTarget = isSub ? 1 : 0;
+    p.diveDepth = naturalDive ? 1 : 0;
+    p.diveTarget = naturalDive ? 1 : 0;
     p.inShopLane = null;
     p.sliding = false;
     p.ducking = false;
@@ -2545,6 +2706,9 @@ export class Game {
     }
     this.radialWheelOpen = next;
     if (next) {
+      if (this.tutorialState?.active && this.tutorialState.step === 4) {
+        this._advanceTutorialStep();
+      }
       const p0 = this.players[0];
       this.ui.hud.showRadialWheel({
         player: p0,
@@ -2654,10 +2818,11 @@ export class Game {
     for (const pl of this.players) {
       const mode = pl.habitatMode || pl.habitat || 'land';
       const isFly = mode === 'flying' && !isSub;
+      const naturalDive = Boolean(isSub || (pl.aquaticPhysiology === 'aquatic_gills' && mode === 'aquatic'));
       pl.inSubmerged = isSub;
       pl.inWater = !isFly && Boolean(isSub || mode === 'aquatic');
-      pl.diveTarget = isSub ? 1 : 0;
-      pl.diveDepth = isSub ? 1 : 0;
+      pl.diveTarget = naturalDive ? 1 : 0;
+      pl.diveDepth = naturalDive ? 1 : 0;
       pl.grounded = !isFly;
       pl.baseY = isFly ? (SKY_CORRIDOR_Y - 1.15) : 0;
       if (mode === 'aquatic') {
@@ -2857,6 +3022,7 @@ export class Game {
       isTestTrack: Boolean(this.isTestTrack),
       isTutorial: Boolean(this.tutorialState?.active),
       clearNearbyObstacles: (x, z, radius, stunOnly) => this._clearNearbyObstacles(x, z, radius, stunOnly),
+      convertNearbyObstaclesToAllies: (pl) => this.convertNearbyObstaclesToAllies(pl),
       healPartner: (source) => {
         for (const p of this.players) {
           if (p !== source && !p.dead) this._healPlayer(p, 1, '💚 PARCEIRO CUROU!');
@@ -2878,6 +3044,51 @@ export class Game {
       spawnEggRain: (n) => this.spawnEggRain(n),
       spawnFruitRain: (n) => this.spawnFruitRain(n)
     };
+  }
+
+  convertNearbyObstaclesToAllies(player = this.players[0]) {
+    const p = player || this.players[0];
+    if (!p) return 0;
+    const trackOffset = p.trackOffsetX || 0;
+    const localX = p.x - trackOffset;
+    const pz = p.z || 0;
+    let converted = 0;
+    const nonHazards = new Set([
+      'egg', 'powerup', 'ramp', 'campfire', 'shortcut', 'fruit',
+      'elemental_egg', 'treasure', 'grapple_point', 'gravity_zone',
+      'minecart_zone', 'river_log', 'bifurcation', 'oasis_zone',
+      'fragile_bridge', 'rescue_cross', 'oxygen_bubble', 'current_ring', 'speed_pad', 'trampoline'
+    ]);
+    for (const obs of this.spawner.getActiveObstacles()) {
+      if (obs.hit || obs.nonHazard || nonHazards.has(obs.kind)) continue;
+      const dx = obs.group.position.x - localX;
+      const dz = obs.group.position.z - pz;
+      const dist = Math.hypot(dx, dz);
+      if ((dz <= 2.5 && dz >= -28) || dist <= 28) {
+        obs.hit = true;
+        obs.pool?.release(obs);
+        const ox = trackOffset + obs.group.position.x;
+        const oz = obs.group.position.z;
+        this.particles?.emitExplosion?.(ox, 0.9, oz, '#1fb6c8', 12, true);
+        this.particles?.emitExplosion?.(ox, 1.1, oz, '#facc15', 10, true);
+        this._spawnImpactDebris(ox, oz, '#facc15');
+        converted++;
+      }
+    }
+    const bonusEggs = 8 + Math.min(8, converted * 2);
+    const bonusScore = (250 + converted * 60) * (this.combo || 1);
+    this.runEggs = (this.runEggs || 0) + bonusEggs;
+    Save.addEggs(bonusEggs);
+    this.addScore(bonusScore, p);
+    p.turboTimer = Math.max(p.turboTimer || 0, 2.4);
+    p.invulnTimer = Math.max(p.invulnTimer || 0, 2.2);
+    p.extraJumps = Math.max(p.extraJumps || 0, 1);
+    if (converted > 0) {
+      this.spawnEggRain(Math.min(6, converted + 2));
+    }
+    this.sfx?.evolution?.();
+    this.ui?.hud?.triggerEdgeFlash?.('mítica');
+    return converted;
   }
 
   _clearNearbyObstacles(px, pz, radius = 25, pushAway = false) {
@@ -3632,10 +3843,10 @@ export class Game {
         p._lastLaneSwitchAt = this.runTime;
         this.sfx.dash();
         this.particles.emitDust(p.x, (p.baseY || 0) + 0.2, p.z, 3, '#ffd447', 1.4);
-        if (this.tutorialState?.active && this.tutorialState.step === 0 && p.index === 0) {
-          this.tutorialState.progress++;
-          this._syncTutorialHud();
-          if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+        if (this.tutorialState?.active && p.index === 0) {
+          if (this.tutorialState.step === 0 || this.tutorialState.step === 1) {
+            this._advanceTutorialStep();
+          }
         }
       }
     }
@@ -3655,10 +3866,10 @@ export class Game {
         p._lastLaneSwitchAt = this.runTime;
         this.sfx.dash();
         this.particles.emitDust(p.x, (p.baseY || 0) + 0.2, p.z, 3, '#ffd447', 1.4);
-        if (this.tutorialState?.active && this.tutorialState.step === 0 && p.index === 0) {
-          this.tutorialState.progress++;
-          this._syncTutorialHud();
-          if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+        if (this.tutorialState?.active && p.index === 0) {
+          if (this.tutorialState.step === 0 || this.tutorialState.step === 1) {
+            this._advanceTutorialStep();
+          }
         }
       }
     }
@@ -3700,10 +3911,8 @@ export class Game {
           this.runJumps++;
           this.sfx.jump(true);
           this.particles.emitDust(p.x, (p.baseY || 0) + p.y, p.z + 0.25, 5, '#bae6fd', 2.0);
-          if (this.tutorialState?.active && this.tutorialState.step === 1 && p.index === 0) {
-            this.tutorialState.progress++;
-            this._syncTutorialHud();
-            if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+          if (this.tutorialState?.active && this.tutorialState.step === 2 && p.index === 0) {
+            this._advanceTutorialStep();
           }
         } else if (!p._lowStamToastCooldown && p.index === 0) {
           p._lowStamToastCooldown = 0.85;
@@ -3714,6 +3923,9 @@ export class Game {
         p.vy = duckJust ? Math.min(p.vy, -8.8) : Math.max(-11.2, p.vy - 28.0 * dt);
         p.glideHoldTimer = Math.min(0.65, (p.glideHoldTimer ?? 0.4) + dt * 1.1);
         if (duckJust) this.sfx.slide?.();
+        if (this.tutorialState?.active && this.tutorialState.step === 3 && p.index === 0) {
+          this._advanceTutorialStep();
+        }
       } else if (jumpHeld) {
         const hasWingStam = this.isTestTrack || (p.stamina ?? 100) > 4;
         const hasHoldTime = (p.glideHoldTimer ?? 0.65) > 0;
@@ -3782,10 +3994,8 @@ export class Game {
             this.addScore(35 * p._moveCombo, p);
             this.ui.hud.showFloatText(`🏃 ESQUIVA ÁGIL! +${35 * p._moveCombo}`, '#5eead4');
           }
-          if (this.tutorialState?.active && this.tutorialState.step === 1 && p.index === 0) {
-            this.tutorialState.progress++;
-            this._syncTutorialHud();
-            if (this.tutorialState.progress >= 2) this._advanceTutorialStep();
+          if (this.tutorialState?.active && this.tutorialState.step === 2 && p.index === 0) {
+            this._advanceTutorialStep();
           }
         } else if ((p.airJumpsUsed || 0) < maxAirJumps) {
           if (p.extraJumps > 0) {
@@ -3827,6 +4037,9 @@ export class Game {
       }
 
       // Abaixar / Deslizar / Mergulho Alternante na Água (S / ↓ / Arraste para Baixo alterna Superfície ↔ Submerso)
+      if ((duckJust || duckHeld) && this.tutorialState?.active && this.tutorialState.step === 3 && p.index === 0) {
+        this._advanceTutorialStep();
+      }
       if (p.inSubmerged) {
         p.diveTarget = 1;
         p.diveDepth = 1.0;
@@ -3899,40 +4112,101 @@ export class Game {
       }
     }
 
-    // Controle real de Oxigênio (O2 / Brânquias) para mergulho / bioma submerso (B6)
+    // Controle realista de Oxigênio e Brânquias por fisiologia (aquatic_gills, amphibious_hybrid, terrestrial) (B6)
     const o2Cfg = ContentLoader.getBalance().oxygen || {};
-    const o2DrainBase = o2Cfg.drainPerSec ?? 7.5;
+    const o2DrainBase = o2Cfg.drainPerSec ?? 5.5;
     const o2RechargeBase = o2Cfg.rechargePerSec ?? 38;
     const o2LowThreshold = o2Cfg.lowThreshold ?? 30;
     const o2GraceSec = o2Cfg.graceSec ?? 2.0;
 
     if (p._oxygenWarnCd > 0) p._oxygenWarnCd = Math.max(0, p._oxygenWarnCd - dt);
+    const physiology = p.aquaticPhysiology || getDinoAquaticPhysiology(p.spec || p.id);
     const isSubmergedDepth = Boolean(p.inSubmerged || (inWater && (p.diveDepth || 0) > 0.32));
-    if (isSubmergedDepth && !this.isTestTrack && this.modeId !== 'zen') {
-      if (p.index === 0) {
-        this._hintOnce('submerge_o2', '🫧 Submerso! Suba à superfície (W/↑ ou B) para respirar!', '#22d3ee');
-      }
-      const hasDiveGear = p.equippedAccessory === 'diving_mask' || p.equippedAccessory === 'snorkel' || p.equippedAccessory === 'steam_goggles';
-      const habitatMult = p.isAquaticNative ? 0.72 : 1.0;
-      const drainRate = o2DrainBase * habitatMult * (hasDiveGear ? 0.45 : 1.0);
-      p.oxygen = Math.max(0, (p.oxygen ?? 100) - drainRate * dt);
-      if (p.oxygen <= o2LowThreshold && p.oxygen > 0 && p.index === 0 && (p._oxygenWarnCd || 0) <= 0) {
-        p._oxygenWarnCd = 2.6;
-        this.ui.hud.showFloatText('⚠️ OXIGÊNIO BAIXO! Suba (W/↑ ou B) ou pegue Bolha 🫧!', '#ef4444');
-      }
-      if (p.oxygen <= 0) {
-        p._oxygenDmgTimer = (p._oxygenDmgTimer || 0) + dt;
-        if (p._oxygenDmgTimer >= o2GraceSec) {
+    const hasDiveGear = p.equippedAccessory === 'diving_mask' || p.equippedAccessory === 'snorkel' || p.equippedAccessory === 'steam_goggles';
+    p._gillsUnderwaterBoost = false;
+
+    if (physiology === 'aquatic_gills') {
+      if (isSubmergedDepth || p.inSubmerged) {
+        // Habitat natural submerso: ZERO drenagem de O2, 100% sempre + 15% velocidade e regeneração de estamina!
+        p.oxygen = 100;
+        p._oxygenDmgTimer = 0;
+        p._gillsUnderwaterBoost = true;
+      } else if (inWater && !this.isTestTrack && this.modeId !== 'zen') {
+        // Na superfície em bioma/canal aquático: drenagem suave de umidade das brânquias (2.6/s), mergulhar (S/↓) recarrega rápido (90/s)
+        if ((p.diveTarget || 0) >= 0.5) {
+          p.oxygen = Math.min(100, (p.oxygen ?? 100) + 90 * dt);
           p._oxygenDmgTimer = 0;
-          p.oxygen = 22;
-          if (!p.inSubmerged) p.diveTarget = 0;
-          this._damagePlayer(p, 'oxygen');
+        } else {
+          const moistureDrain = 2.6 * (hasDiveGear ? 0.5 : 1.0);
+          p.oxygen = Math.max(0, (p.oxygen ?? 100) - moistureDrain * dt);
+          if (p.oxygen <= o2LowThreshold && p.oxygen > 0 && p.index === 0 && (p._oxygenWarnCd || 0) <= 0) {
+            p._oxygenWarnCd = 2.8;
+            this.ui.hud.showFloatText('💧 Umidade das Brânquias baixa! Mergulhe com [S/↓]!', '#38bdf8');
+          }
+          if (p.oxygen <= 0) {
+            p._oxygenDmgTimer = (p._oxygenDmgTimer || 0) + dt;
+            if (p._oxygenDmgTimer >= o2GraceSec * 1.4) {
+              p._oxygenDmgTimer = 0;
+              p.diveTarget = 1;
+              p.oxygen = 65;
+              if (p.index === 0) {
+                this.ui.hud.showFloatText('🤿 Mergulho automático para hidratar as Brânquias!', '#22d3ee');
+              }
+            }
+          }
         }
+      } else {
+        p.oxygen = Math.min(100, (p.oxygen ?? 100) + 90 * dt);
+        p._oxygenDmgTimer = 0;
+      }
+    } else if (physiology === 'amphibious_hybrid') {
+      if (isSubmergedDepth && !this.isTestTrack && this.modeId !== 'zen') {
+        // Reserva anfíbia estendida: drenagem muito lenta (2.0/s = 50s submerso!)
+        const ampDrain = 2.0 * (hasDiveGear ? 0.5 : 1.0) * (1 - (p.spec?.passive?.oxygenSave || 0));
+        p.oxygen = Math.max(0, (p.oxygen ?? 100) - ampDrain * dt);
+        if (p.oxygen <= o2LowThreshold && p.oxygen > 0 && p.index === 0 && (p._oxygenWarnCd || 0) <= 0) {
+          p._oxygenWarnCd = 2.6;
+          this.ui.hud.showFloatText('🫧 Fôlego Anfíbio baixo! Suba [W/↑], pegue Bolha 🫧 ou use [X] Foco (+O₂)!', '#fbbf24');
+        }
+        if (p.oxygen <= 0) {
+          p._oxygenDmgTimer = (p._oxygenDmgTimer || 0) + dt;
+          if (p._oxygenDmgTimer >= o2GraceSec) {
+            p._oxygenDmgTimer = 0;
+            p.oxygen = 28;
+            if (!p.inSubmerged) p.diveTarget = 0;
+            this._damagePlayer(p, 'oxygen');
+          }
+        }
+      } else {
+        // Recarga super rápida na superfície/terra (65/s)
+        p.oxygen = Math.min(100, (p.oxygen ?? 100) + 65 * dt);
+        p._oxygenDmgTimer = 0;
       }
     } else {
-      const refillRate = p.isAquaticNative ? o2RechargeBase * 1.15 : o2RechargeBase;
-      p.oxygen = Math.min(100, (p.oxygen ?? 100) + refillRate * dt);
-      p._oxygenDmgTimer = 0;
+      // Terrestre: drenagem justa de 5.5/s (reduzida com equipamento de mergulho), dicas de Bolhas e [X] Foco Tático (+O2)
+      if (isSubmergedDepth && !this.isTestTrack && this.modeId !== 'zen') {
+        if (p.index === 0) {
+          this._hintOnce('submerge_o2', '🫧 Submerso! Suba (W/↑), pegue Bolhas 🫧 ou use [X] Foco Tático (+45 O₂)!', '#22d3ee');
+        }
+        const terrDrain = Math.min(5.5, o2DrainBase) * (hasDiveGear ? 0.45 : 1.0);
+        p.oxygen = Math.max(0, (p.oxygen ?? 100) - terrDrain * dt);
+        if (p.oxygen <= o2LowThreshold && p.oxygen > 0 && p.index === 0 && (p._oxygenWarnCd || 0) <= 0) {
+          p._oxygenWarnCd = 2.6;
+          this.ui.hud.showFloatText('⚠️ OXIGÊNIO BAIXO! Suba (W/↑), pegue Bolha 🫧 ou use [X] Foco Tático (+O₂)!', '#ef4444');
+        }
+        if (p.oxygen <= 0) {
+          p._oxygenDmgTimer = (p._oxygenDmgTimer || 0) + dt;
+          if (p._oxygenDmgTimer >= o2GraceSec) {
+            p._oxygenDmgTimer = 0;
+            p.oxygen = 24;
+            if (!p.inSubmerged) p.diveTarget = 0;
+            this._damagePlayer(p, 'oxygen');
+          }
+        }
+      } else {
+        p.oxygen = Math.min(100, (p.oxygen ?? 100) + Math.max(42, o2RechargeBase) * dt);
+        p._oxygenDmgTimer = 0;
+      }
     }
 
     if (p.sliding) {
@@ -4114,7 +4388,8 @@ export class Game {
     const canRegenFlying = isFlyingFlight && !jumpHeld && p.y <= 0.6;
     const canRegenStam = (p._staminaRegenDelay || 0) <= 0 && (p.grounded || curHabitat === 'aquatic' || canRegenFlying);
     const baseStamRegen = isFlyingFlight && (duckHeld || p.y < -0.25) ? 16.5 : (isFlyingFlight ? 11.5 : 8.5);
-    const stamRegen = inOasis ? 28 : (canRegenStam ? baseStamRegen * (p.mutationMods?.stamRegenMult || 1) : 0);
+    const gillsStamMult = p._gillsUnderwaterBoost ? 1.15 : 1.0;
+    const stamRegen = inOasis ? 28 : (canRegenStam ? baseStamRegen * (p.mutationMods?.stamRegenMult || 1) * gillsStamMult : 0);
     p.stamina = Math.min(100, (p.stamina ?? 100) + stamRegen * dt);
     if (p.resonanceWindow > 0) p.resonanceWindow = Math.max(0, p.resonanceWindow - dt);
     if (p.ramTimer > 0) p.ramTimer = Math.max(0, p.ramTimer - dt);
@@ -4525,7 +4800,11 @@ export class Game {
     this.spawner.setDangerTier?.(dangerTierInfo);
     this.events.setDangerTier?.(dangerTierInfo);
 
-    const dangerDensityMult = 1 + (dangerTierInfo.densityBonus || 0);
+    if ((this.firstRunGentleTimer || 0) > 0) {
+      this.firstRunGentleTimer = Math.max(0, this.firstRunGentleTimer - dt);
+    }
+    const gentleDensityMult = (this.firstRunGentleTimer || 0) > 0 ? 0.55 : 1.0;
+    const dangerDensityMult = (1 + (dangerTierInfo.densityBonus || 0)) * gentleDensityMult;
     let adaptiveMult = 1.0;
     if (this.difficultyMgr.adaptive && p0 && this.modeId !== 'competition') {
       if (p0.hp <= 1 && p0.maxHp > 1) {
@@ -4557,6 +4836,12 @@ export class Game {
       * freeRoamMult;
     if (p0?.inWater && p0?.mutationMods?.waterSpeedMult) {
       speedMult *= p0.mutationMods.waterSpeedMult;
+    }
+    if (p0?._gillsUnderwaterBoost) {
+      speedMult *= 1.15;
+    }
+    if (p0?.id === 'scary_raptor' && (this.combo || 1) >= 5) {
+      speedMult *= 1.2;
     }
     const hasBoost = Boolean(p0?.turboTimer > 0 || p0?.rocketTimer > 0 || p0?.minecartTimer > 0);
     if (hasBoost) speedMult *= 1.24;
@@ -5323,12 +5608,17 @@ export class Game {
           this.maxCombo = Math.max(this.maxCombo, this.combo);
           this.comboDecayTimer = 4.5;
           p.resonanceWindow = 0.55;
-          p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + 18);
-          p.fury = Math.min(100, p.fury + (p.spec.dinoClass === 'carnivore' ? 18 : 13) * (p.furyChargeMult || 1));
-          this.addScore(25 * this.combo);
+          const isScary = p.id === 'scary_raptor';
+          const nearMissMult = isScary ? 1.35 : 1.0;
+          p.abilityCharge = Math.min(100, (p.abilityCharge ?? 100) + Math.round(18 * nearMissMult));
+          p.fury = Math.min(100, p.fury + (p.spec.dinoClass === 'carnivore' ? 18 : 13) * (p.furyChargeMult || 1) * (isScary ? 1.2 : 1));
+          this.addScore(Math.round(25 * this.combo * nearMissMult), p);
           this.sfx.nearMiss();
           this.narrator.say('nearMiss');
-          this.ui.hud.showFloatText(`QUASE! x${this.combo}`, '#ffd447');
+          this.ui.hud.showFloatText(
+            isScary ? `👁️ OLHO DINÂMICO! x${this.combo} (+35%)` : `QUASE! x${this.combo}`,
+            isScary ? '#22d3ee' : '#ffd447'
+          );
         }
 
         if (!PhysicsCollision.checkObstacleHit(pBox, obs)) continue;
@@ -6147,6 +6437,13 @@ export class Game {
     if (this.spotlightActive) {
       if (this.input.wasKeyJustPressed('Space') || this.input.wasKeyJustPressed('Enter') || this.input.wasKeyJustPressed('Escape')) {
         this._dismissSpotlight();
+      }
+      return;
+    }
+
+    if (this.ui?.hud?.glossaryOverlay && !this.ui.hud.glossaryOverlay.classList.contains('hidden')) {
+      if (this.input.wasKeyJustPressed('Escape') || this.input.wasKeyJustPressed('Enter') || this.input.wasKeyJustPressed('Space')) {
+        this.ui.hud.toggleGlossary(false);
       }
       return;
     }

@@ -11,21 +11,23 @@ export const LIMITED_DINO_CATALOG = [
     eventTag: 'Edição Limitada: Corrida de Aço',
     isLimited: true,
     gachaExcluded: true,
+    featured: true,
+    freeClaim: true,
     unlockCost: 0,
     unlockCondition: {
-      type: 'event',
-      label: 'Evento Corrida de Aço / Masmorra Andar 2',
-      target: 2
+      type: 'free_special',
+      label: 'Resgate Gratuito — Edição Especial Corrida de Aço',
+      target: 0
     },
     dinoClass: 'carnivore',
-    stats: { speed: 10, jump: 9, hp: 4, defense: 6, attack: 9 },
+    stats: { speed: 10, jump: 9, hp: 5, defense: 7, attack: 10 },
     ability: {
-      name: 'Infecção Fóssil',
-      desc: 'Transforma obstáculos à frente em fósseis frágeis que concedem ovos extras e impulso de velocidade.',
-      cooldown: 8.0,
-      duration: 2.6
+      name: 'Infecção Jurássica (Scary Monsters)',
+      desc: 'Libera onda viral turquesa-dourada e garras fósseis que convertem obstáculos à frente em aliados explosivos, dão ovos extras e salto predatório!',
+      cooldown: 7.5,
+      duration: 3.0
     },
-    passive: 'Faro Fóssil: +20% velocidade em combos acima de 5 e chance de converter inimigos menores em aliados.',
+    passive: 'Olho Dinâmico + Mordida Fóssil: +35% bônus em rasantes (Visão de Movimento), +50% dano [Q] em chefes e +20% velocidade em combos >= 5.',
     colors: {
       primary: '#1fb6c8',
       secondary: '#8ef3f5',

@@ -22,7 +22,8 @@ const DEFAULT_SAVE = {
   selectedDino: 'trex',
   unlockedDinos: [
     'trex', 'raptor', 'triceratops', 'stegosaurus',
-    'ankylosaurus', 'spinosaurus', 'brachiosaurus', 'dilophosaurus'
+    'ankylosaurus', 'spinosaurus', 'brachiosaurus', 'dilophosaurus',
+    'scary_raptor'
   ],
   dinoLevels: {},
   customization: {
@@ -63,6 +64,8 @@ const DEFAULT_SAVE = {
   rivalry: { p1Wins: 0, p2Wins: 0 },
   ghostRuns: {},
   tutorialDone: false,
+  firstRunTutorialDone: false,
+  glossarySeen: false,
   tutorialRewardClaimed: false,
   minigamesDaily: { date: '', eggsEarned: 0 },
   prestige: { level: 0, bonusMult: 1.0 },
@@ -316,6 +319,15 @@ export function migrateSaveData(rawObj, sourceVersion = 1) {
   migratePresetAccessories(migrated.customization);
   if (migrated.equippedMutation === '' || migrated.equippedMutation === 'none') {
     migrated.equippedMutation = null;
+  }
+  if (Array.isArray(migrated.unlockedDinos) && !migrated.unlockedDinos.includes('scary_raptor')) {
+    migrated.unlockedDinos.push('scary_raptor');
+  }
+  if (migrated.firstRunTutorialDone === undefined) {
+    migrated.firstRunTutorialDone = false;
+  }
+  if (migrated.glossarySeen === undefined) {
+    migrated.glossarySeen = false;
   }
   if (sourceVersion < SAVE_SCHEMA_VERSION) {
     migrated.schemaVersion = SAVE_SCHEMA_VERSION;
