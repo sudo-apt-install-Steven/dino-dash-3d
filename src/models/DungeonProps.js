@@ -404,3 +404,211 @@ export function buildDungeonEnemyModel(archetypeId, themeId) {
     dispose() { if (root.parent) root.parent.remove(root); },
   };
 }
+
+// ---------- dungeon weapons (10 unique tabletop RPG weapons) ----------
+export const DUNGEON_WEAPONS = [
+  { id: 'obsidian_claw', name: 'Garra de Obsidiana', icon: '🗡️', bonus: 1, perk: '+1 em ataques corpo-a-corpo', cost: 25, desc: 'Lâmina vulcânica afiada, leve e letal nas sombras.' },
+  { id: 'amber_fang', name: 'Presa de Âmbar', icon: '🦷', bonus: 1, perk: '+1 nos dados · +10% ovos extras', cost: 30, desc: 'Dente fossilizado que vibra perto de tesouros antigos.' },
+  { id: 'solar_fang', name: 'Presa Solar', icon: '☀️', bonus: 2, perk: '+2 nos dados · Queima inimigos sombrios', cost: 45, desc: 'Forjada com luz cretácea concentrada em lâmina dourada.' },
+  { id: 'frost_halberd', name: 'Alabarda Glacial', icon: '❄️', bonus: 2, perk: '+2 nos dados · Reduz contra-ataques', cost: 50, desc: 'Lâmina de gelo eterno escavada na Caverna Gélida.' },
+  { id: 'venom_tailblade', name: 'Lâmina Caudal Venenosa', icon: '🐍', bonus: 2, perk: '+2 nos dados · Golpe corrosivo', cost: 55, desc: 'Espinho ácido destilado na Gruta Bioluminescente.' },
+  { id: 'scary_fossil_blade', name: 'Lâmina Fóssil de Scary', icon: '🦴', bonus: 3, perk: '+3 nos dados · Crítico devastador', cost: 75, desc: 'Espada esculpida em osso estelar jurássico lendário.' },
+  { id: 'seismic_hammer', name: 'Martelo Sísmico', icon: '🔨', bonus: 3, perk: '+3 nos dados · Quebra defesa de chefes', cost: 80, desc: 'Cada impacto estremece o chão de pedra da masmorra.' },
+  { id: 'cyber_plasma_spear', name: 'Lança de Plasma Neo', icon: '⚡', bonus: 3, perk: '+3 nos dados · Perfura escudos rúnicos', cost: 85, desc: 'Relíquia energética perdida do Cofre Cibernético.' },
+  { id: 'runic_staff', name: 'Cajado Rúnico', icon: '🪄', bonus: 4, perk: '+4 nos dados · Amplifica magias e curas', cost: 110, desc: 'Artefato arcano capaz de dobrar as leis da masmorra.' },
+  { id: 'void_rex_greatsword', name: 'Montante do Vazio Rex', icon: '🌌', bonus: 4, perk: '+4 nos dados · Golpe devorador de titãs', cost: 125, desc: 'Forjada na Fenda do Vazio para abater chefes supremos.' }
+];
+
+// ---------- 5 rich dungeon NPCs + articulated voxel 3D builder ----------
+export const DUNGEON_NPCS = {
+  fossil_smith: {
+    id: 'fossil_smith',
+    name: 'Bronto-Forja',
+    title: 'Ferreiro Fóssil',
+    icon: '⚒️',
+    color: '#f97316',
+    role: 'smith',
+    greeting: 'As brasas da minha bigorna nunca apagam! Traga ovos e forjarei aço fóssil digno de um predador.',
+    personality: 'Rude mas generoso, obcecado por ligas de obsidiana e osso estelar.'
+  },
+  jurassic_oracle: {
+    id: 'jurassic_oracle',
+    name: 'Ankylo-Sábio',
+    title: 'Oráculo Jurássico',
+    icon: '🔮',
+    color: '#38bdf8',
+    role: 'oracle',
+    greeting: 'Os ossos antigos sussurram seu caminho. Deseja o Mapa da Masmorra, uma bênção ou o segredo do Chefe?',
+    personality: 'Místico, sereno e enigmático; conhece cada corredor oculto do andar.'
+  },
+  wandering_merchant: {
+    id: 'wandering_merchant',
+    name: 'Oviraptor-Trocador',
+    title: 'Mercador Errante',
+    icon: '🎒',
+    color: '#a855f7',
+    role: 'merchant',
+    greeting: 'Psst! Poções de âmbar, armas raras, bombas de fumaça e até mapas secretos — tudo por um punhado de ovos!',
+    personality: 'Astuto, tagarela e sempre pronto para um negócio relâmpago.'
+  },
+  wounded_hunter: {
+    id: 'wounded_hunter',
+    name: 'Raptor-Batedor',
+    title: 'Caçador Ferido',
+    icon: '🩹',
+    color: '#10b981',
+    role: 'quest',
+    greeting: 'Argh... uma emboscada me pegou no corredor. Se me ajudar a estancar o ferimento, divido minha arma e meu apoio!',
+    personality: 'Corajoso, leal e eternamente grato a quem o socorre.'
+  },
+  rune_guardian: {
+    id: 'rune_guardian',
+    name: 'Guardião de Runas',
+    title: 'Esfinge Ancestral',
+    icon: '🗿',
+    color: '#eab308',
+    role: 'riddle',
+    greeting: 'Apenas mentes afiadas atravessam meu selo. Decifre meu enigma de mesa ou teste sua sorte nos dados por um tesouro mítico!',
+    personality: 'Solene, antigo e justo; recompensa a astúcia com relíquias lendárias.'
+  }
+};
+
+const NPC_MODELS = {
+  fossil_smith: {
+    hit: 0.95,
+    ring: 0xf97316,
+    c: [0x6b4c3b, 0x3b2a22, 0xff6a1a, 0x9ca3af],
+    parts: (B) => [
+      { n: 'body', p: [0, 11, 0], fn: (c) => { c.box(-6, 0, -4, 12, 11, 8, B[0]); c.box(-5, 1, 4, 10, 9, 1, B[1]); c.box(-2, 4, 5, 4, 3, 1, B[2], { e: 0.9 }); } },
+      { n: 'head', p: [0, 23, 2], fn: (c) => { c.box(-3, 0, -3, 6, 5, 7, B[0]); c.box(-4, 5, -3, 8, 2, 7, B[1]); c.box(-2, 2, 4, 1, 1, 1, B[2], { e: 1 }); c.box(1, 2, 4, 1, 1, 1, B[2], { e: 1 }); } },
+      { n: 'armL', p: [-8, 20, 0], fn: (c) => { c.box(-2, -9, -2, 4, 9, 4, B[0]); c.box(-2, -11, -2, 4, 3, 4, B[1]); } },
+      { n: 'armR', p: [8, 20, 0], fn: (c) => { c.box(-2, -9, -2, 4, 9, 4, B[0]); c.box(-1, -10, 2, 2, 14, 2, 0x5a3a1c); c.box(-3, 2, 0, 6, 4, 5, B[3], { m: 0.7 }); c.box(-2, 3, 5, 4, 2, 1, B[2], { e: 1 }); } },
+      { n: 'legL', p: [-3, 11, 0], fn: (c) => { c.box(-2, -11, -2, 4, 11, 4, B[1]); } },
+      { n: 'legR', p: [3, 11, 0], fn: (c) => { c.box(-2, -11, -2, 4, 11, 4, B[1]); } },
+      { n: 'anvil', p: [10, 0, 5], fn: (c) => { c.box(-3, 0, -2, 6, 3, 4, 0x2a2a2e, { m: 0.7 }); c.box(-4, 3, -2, 8, 3, 4, 0x3f3f46, { m: 0.8 }); c.box(-2, 6, -1, 4, 1, 2, B[2], { e: 0.9 }); } }
+    ]
+  },
+  jurassic_oracle: {
+    hit: 0.9,
+    ring: 0x38bdf8,
+    c: [0x1e3a5f, 0x0f172a, 0x38bdf8, 0xfbbf24],
+    parts: (B) => [
+      { n: 'body', p: [0, 8, 0], fn: (c) => { c.box(-5, 0, -4, 10, 12, 8, B[0]); c.box(-6, 0, -5, 12, 3, 10, B[1]); c.box(-4, 3, 4, 8, 2, 1, B[3], { m: 0.6 }); c.box(-1, 6, 4, 2, 4, 1, B[2], { e: 0.9 }); } },
+      { n: 'head', p: [0, 21, 0], fn: (c) => { c.box(-4, 0, -4, 8, 6, 8, B[1]); c.box(-3, 1, -2, 6, 4, 5, 0x4b6a7c); c.box(-2, 3, 4, 1, 1, 1, B[2], { e: 1 }); c.box(1, 3, 4, 1, 1, 1, B[2], { e: 1 }); c.box(-2, 6, -2, 4, 2, 4, B[3], { m: 0.6 }); } },
+      { n: 'staff', p: [8, 14, 2], fn: (c) => { c.box(-1, -14, -1, 2, 24, 2, 0x5a3a1c); c.box(-2, 10, -2, 4, 4, 4, B[2], { e: 1, a: 0.9 }); } },
+      { n: 'orb', p: [-7, 17, 4], fn: (c) => { c.box(-2, -2, -2, 4, 4, 4, B[2], { e: 1, a: 0.85 }); c.box(-1, -1, -1, 2, 2, 2, 0xffffff, { e: 1 }); } }
+    ]
+  },
+  wandering_merchant: {
+    hit: 0.85,
+    ring: 0xa855f7,
+    c: [0x6d28d9, 0x4c1d95, 0xfbbf24, 0x34d399],
+    parts: (B) => [
+      { n: 'body', p: [0, 10, 0], fn: (c) => { c.box(-4, 0, -3, 8, 10, 6, B[0]); c.box(-4, 2, 3, 8, 2, 1, B[2], { m: 0.6 }); } },
+      { n: 'pack', p: [0, 13, -6], fn: (c) => { c.box(-5, -3, -4, 10, 11, 6, 0x7c4a24); c.box(-4, 8, -3, 3, 3, 3, B[3], { e: 0.8 }); c.box(1, 8, -3, 3, 3, 3, 0xfef3c7); c.box(-2, 2, -5, 4, 4, 1, B[2], { m: 0.7 }); } },
+      { n: 'head', p: [0, 21, 2], fn: (c) => { c.box(-3, 0, -2, 6, 4, 6, B[1]); c.box(-1, 4, -1, 2, 3, 5, B[2], { e: 0.5 }); c.box(-2, 2, 4, 1, 1, 1, B[2], { e: 1 }); c.box(1, 2, 4, 1, 1, 1, B[2], { e: 1 }); } },
+      { n: 'lantern', p: [7, 15, 4], fn: (c) => { c.box(-1, 2, -1, 2, 3, 2, 0x27272a); c.box(-2, -2, -2, 4, 4, 4, B[2], { e: 1 }); } },
+      { n: 'legL', p: [-2, 10, 0], fn: (c) => { c.box(-1, -10, -1, 2, 10, 2, B[1]); } },
+      { n: 'legR', p: [2, 10, 0], fn: (c) => { c.box(-1, -10, -1, 2, 10, 2, B[1]); } }
+    ]
+  },
+  wounded_hunter: {
+    hit: 0.8,
+    ring: 0x10b981,
+    c: [0x15803d, 0xf4f4f5, 0xef4444, 0x38bdf8],
+    parts: (B) => [
+      { n: 'body', p: [0, 9, 0], fn: (c) => { c.box(-4, 0, -4, 8, 9, 8, B[0]); c.box(-4, 3, -4, 8, 3, 8, B[1]); c.box(-1, 4, 4, 2, 2, 1, B[2], { e: 0.5 }); } },
+      { n: 'head', p: [0, 19, 3], fn: (c) => { c.box(-3, 0, -2, 6, 4, 6, B[0]); c.box(-3, 3, -2, 6, 1, 6, B[1]); c.box(-2, 2, 4, 1, 1, 1, B[3], { e: 1 }); c.box(1, 2, 4, 1, 1, 1, B[3], { e: 1 }); } },
+      { n: 'armR', p: [6, 16, 1], fn: (c) => { c.box(-1, -7, -1, 2, 7, 2, B[0]); c.box(-1, -6, 1, 2, 10, 1, 0xd4d4d8, { m: 0.8 }); } },
+      { n: 'tail', p: [0, 11, -5], fn: (c) => { c.box(-1, 0, -8, 2, 2, 8, B[0]); } },
+      { n: 'legL', p: [-2, 9, 0], fn: (c) => { c.box(-1, -9, -1, 2, 9, 2, B[0]); } },
+      { n: 'legR', p: [2, 9, 0], fn: (c) => { c.box(-1, -9, -1, 2, 9, 2, B[0]); } }
+    ]
+  },
+  rune_guardian: {
+    hit: 1.0,
+    ring: 0xeab308,
+    c: [0x57534e, 0xd97706, 0xfef08a, 0x292524],
+    parts: (B) => [
+      { n: 'body', p: [0, 12, 0], fn: (c) => { c.box(-5, 0, -4, 10, 12, 8, B[0]); c.box(-3, 2, 4, 6, 8, 1, B[1], { m: 0.6 }); c.box(-2, 4, 5, 4, 1, 1, B[2], { e: 1 }); c.box(-1, 6, 5, 2, 3, 1, B[2], { e: 1 }); } },
+      { n: 'head', p: [0, 25, 0], fn: (c) => { c.box(-4, 0, -4, 8, 6, 8, B[3]); c.box(-5, 6, -4, 10, 2, 8, B[1], { m: 0.7 }); c.box(-2, 2, 4, 4, 2, 1, B[2], { e: 1 }); } },
+      { n: 'runeL', p: [-9, 18, 0], fn: (c) => { c.box(-2, -3, -1, 4, 6, 2, B[0]); c.box(-1, -1, 1, 2, 2, 1, B[2], { e: 1 }); } },
+      { n: 'runeR', p: [9, 18, 0], fn: (c) => { c.box(-2, -3, -1, 4, 6, 2, B[0]); c.box(-1, -1, 1, 2, 2, 1, B[2], { e: 1 }); } }
+    ]
+  }
+};
+
+export function buildDungeonNpcModel(npcId) {
+  const key = NPC_MODELS[npcId] ? npcId : 'jurassic_oracle';
+  const spec = NPC_MODELS[key];
+  const root = new THREE.Group();
+  root.name = `npc_${key}`;
+  const inner = new THREE.Group();
+  root.add(inner);
+
+  // Subtle glowing tabletop aura ring under the NPC
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: spec.ring,
+    transparent: true,
+    opacity: 0.65,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1.15, 28), ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.04;
+  root.add(ring);
+
+  const parts = {};
+  const base = {};
+  for (const sp of spec.parts(spec.c)) {
+    const g = buildBatchedGroup(`dp:npc:${key}:${sp.n}`, (c) => sp.fn(c));
+    const pivot = new THREE.Group();
+    pivot.position.set(sp.p[0] * V, sp.p[1] * V, sp.p[2] * V);
+    pivot.add(g);
+    inner.add(pivot);
+    parts[sp.n] = pivot;
+    base[sp.n] = pivot.position.clone();
+  }
+
+  function animate(t) {
+    const s = Math.sin(t * 2.4);
+    const s2 = Math.sin(t * 4.2);
+    ringMat.opacity = 0.45 + 0.25 * Math.abs(Math.sin(t * 2));
+    if (key === 'rune_guardian') {
+      inner.position.y = 0.22 + s * 0.08;
+      if (parts.runeL) { parts.runeL.position.y = base.runeL.y + s2 * 0.08; parts.runeL.rotation.y = t * 1.1; }
+      if (parts.runeR) { parts.runeR.position.y = base.runeR.y - s2 * 0.08; parts.runeR.rotation.y = -t * 1.1; }
+      if (parts.head) parts.head.rotation.y = Math.sin(t * 1.2) * 0.2;
+    } else if (key === 'jurassic_oracle') {
+      inner.position.y = Math.abs(s) * 0.04;
+      if (parts.orb) { parts.orb.position.y = base.orb.y + s2 * 0.1; parts.orb.rotation.y = t * 1.8; }
+      if (parts.head) parts.head.rotation.y = Math.sin(t * 1.1) * 0.22;
+    } else if (key === 'fossil_smith') {
+      inner.position.y = Math.abs(s) * 0.02;
+      if (parts.armR) parts.armR.rotation.x = -0.25 + Math.sin(t * 3.2) * 0.35;
+      if (parts.head) parts.head.rotation.y = Math.sin(t * 0.9) * 0.18;
+    } else if (key === 'wandering_merchant') {
+      inner.position.y = Math.abs(s2) * 0.03;
+      if (parts.lantern) parts.lantern.rotation.z = Math.sin(t * 3.5) * 0.18;
+      if (parts.head) parts.head.rotation.y = Math.sin(t * 1.8) * 0.3;
+    } else {
+      inner.position.y = Math.abs(s) * 0.02;
+      if (parts.head) parts.head.rotation.y = Math.sin(t * 1.3) * 0.24;
+      if (parts.tail) parts.tail.rotation.y = Math.sin(t * 2.5) * 0.25;
+    }
+  }
+
+  return {
+    root,
+    npcId: key,
+    npc: DUNGEON_NPCS[key],
+    hitBoxRadius: spec.hit,
+    animate,
+    dispose() {
+      ring.geometry.dispose();
+      ringMat.dispose();
+      if (root.parent) root.parent.remove(root);
+    }
+  };
+}

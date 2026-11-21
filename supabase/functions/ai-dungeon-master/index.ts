@@ -20,7 +20,60 @@ interface DungeonContext {
   hp?: unknown;
   maxHp?: unknown;
   enemy?: unknown;
+  weaponBonus?: unknown;
+  weaponName?: unknown;
+  roomType?: unknown;
+  npcName?: unknown;
   lang?: unknown;
+}
+
+export type RollOutcomeTier =
+  | 'critical'
+  | 'great_success'
+  | 'narrow_success'
+  | 'minor_fail'
+  | 'fail'
+  | 'critical_fail';
+
+export interface RollOutcome {
+  tier: RollOutcomeTier;
+  rank: number;
+  success: boolean;
+  isCrit: boolean;
+  isFumble: boolean;
+  effectMult: number;
+  nextRollBonus: number;
+  counterDmgMult: number;
+  rawRoll: number;
+  sides: number;
+  total: number;
+  dc: number;
+  margin: number;
+}
+
+export function classifyRollOutcome(rawRoll: number, sides: number, total: number, dc: number): RollOutcome {
+  const raw = Number(rawRoll) || 1;
+  const s = Math.max(2, Number(sides) || 20);
+  const tot = Number.isFinite(Number(total)) ? Number(total) : raw;
+  const target = Number.isFinite(Number(dc)) ? Number(dc) : 10;
+  const margin = tot - target;
+
+  if ((raw === s && s >= 6) || tot >= target + 8) {
+    return { tier: 'critical', rank: 6, success: true, isCrit: true, isFumble: false, effectMult: 2.0, nextRollBonus: 1, counterDmgMult: 0, rawRoll: raw, sides: s, total: tot, dc: target, margin };
+  }
+  if ((raw === 1 && s >= 4) || tot <= target - 9) {
+    return { tier: 'critical_fail', rank: 1, success: false, isCrit: false, isFumble: true, effectMult: 0, nextRollBonus: 0, counterDmgMult: 1.75, rawRoll: raw, sides: s, total: tot, dc: target, margin };
+  }
+  if (tot >= target + 4) {
+    return { tier: 'great_success', rank: 5, success: true, isCrit: false, isFumble: false, effectMult: 1.4, nextRollBonus: 2, counterDmgMult: 0, rawRoll: raw, sides: s, total: tot, dc: target, margin };
+  }
+  if (tot >= target) {
+    return { tier: 'narrow_success', rank: 4, success: true, isCrit: false, isFumble: false, effectMult: 1.0, nextRollBonus: 0, counterDmgMult: 0, rawRoll: raw, sides: s, total: tot, dc: target, margin };
+  }
+  if (tot >= target - 4) {
+    return { tier: 'minor_fail', rank: 3, success: false, isCrit: false, isFumble: false, effectMult: 0.4, nextRollBonus: 0, counterDmgMult: 0.5, rawRoll: raw, sides: s, total: tot, dc: target, margin };
+  }
+  return { tier: 'fail', rank: 2, success: false, isCrit: false, isFumble: false, effectMult: 0, nextRollBonus: 0, counterDmgMult: 1.0, rawRoll: raw, sides: s, total: tot, dc: target, margin };
 }
 
 interface DungeonDecision {
@@ -295,21 +348,26 @@ export function evaluateLocalDungeonAction(ctx?: DungeonContext): DungeonDecisio
   const die: DiceType = hit ? hit.die : 'd20';
   const baseDc = hit ? hit.dc : 11;
   const stat = hit ? hit.stat : 0;
+  const weaponBonus = clampInt(c.weaponBonus, 0, 4, 0);
   const dc = baseDc + Math.min(6, Math.floor((floor - 1) / 2));
   const hasEnemy = c.enemy !== null && c.enemy !== undefined && c.enemy !== false;
   const offensive = ['combat', 'stealth', 'acrobatic', 'diplomacy', 'magic'].includes(intent) || intent === 'generic';
+  const wName = cleanLine(c.weaponName || '', 40);
+  const winLine = wName && offensive && weaponBonus > 0 && lang === 'pt'
+    ? `${N.win[intent]} (${wName} +${weaponBonus})`
+    : N.win[intent];
 
   return clampDecisionToContract({
     possible: true,
     diceType: die,
     diceCount: intent === 'magic' && floor >= 5 ? 2 : 1,
     dc,
-    statBonus: stat + (floor >= 6 ? 1 : 0),
-    enemyDamage: offensive ? (hasEnemy || c.enemy === undefined ? 2 + Math.floor(floor / 2) : 0) : 0,
+    statBonus: stat + weaponBonus + (floor >= 6 ? 1 : 0),
+    enemyDamage: offensive ? (hasEnemy || c.enemy === undefined ? 2 + Math.floor(floor / 2) + Math.floor(weaponBonus / 2) : 0) : 0,
     playerHeal: intent === 'heal' ? 2 : 0,
     eggReward: intent === 'inspect' ? 5 + floor * 3 : intent === 'heal' ? 0 : 3 + floor * 2,
     playerDamage: intent === 'heal' || intent === 'inspect' ? 0 : 1 + Math.floor(floor / 3),
-    narrative: N.win[intent],
+    narrative: winLine,
     failNarrative: N.lose[intent],
     suggestions: base.suggestions,
     intent,
@@ -347,6 +405,10 @@ function buildPrompts(ctx: DungeonContext, text: string): PromptPair {
   const enemyObj = ctx.enemy as Record<string, unknown> | null | undefined;
   const user = JSON.stringify({
     floor,
+    roomType: ctx.roomType ? cleanLine(ctx.roomType, 20) : undefined,
+    npcName: ctx.npcName ? cleanLine(ctx.npcName, 40) : undefined,
+    weaponName: ctx.weaponName ? cleanLine(ctx.weaponName, 40) : undefined,
+    weaponBonus: clampInt(ctx.weaponBonus, 0, 4, 0),
     hp: clampInt(ctx.hp, 0, 999, 10),
     maxHp: clampInt(ctx.maxHp, 1, 999, 10),
     enemy: ctx.enemy ? cleanLine(typeof ctx.enemy === 'string' ? ctx.enemy : enemyObj?.name || 'enemy', 40) : null,
@@ -563,6 +625,10 @@ Deno.serve(async (req: Request) => {
     hp: body.hp,
     maxHp: body.maxHp,
     enemy: body.enemy ?? null,
+    weaponBonus: body.weaponBonus,
+    weaponName: body.weaponName,
+    roomType: body.roomType,
+    npcName: body.npcName,
     lang: body.lang
   };
   const text = sanitizeActionText(ctx.actionText);
