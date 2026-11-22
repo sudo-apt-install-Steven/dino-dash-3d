@@ -20,6 +20,7 @@ import {
   renderHelpBadge,
   enhanceGameControls
 } from './Menus.js';
+import { uiIcon } from './UiIcons.js';
 import {
   escapeHtml,
   sanitizeNickname,
@@ -181,12 +182,12 @@ export class MultiplayerLobby {
         <div style="display:flex; flex-direction:column; gap:5px; background:rgba(0,0,0,0.34); padding:8px 10px; border-radius:10px; border:1px solid rgba(255,212,71,0.2);">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
             <div style="font-size:0.78rem;">
-              <div><strong>${r.hasPassword ? '🔒 ' : ''}${escapeHtml(r.roomName || codeSafe)}</strong> <span style="color:#ffd447;">[${codeSafe}]</span></div>
-              <div style="font-size:0.7rem; color:#d8c2a6;">${escapeHtml(r.hostName)} • ${escapeHtml(r.mode || 'race')} • ${Number(r.playerCount) || 1}/${Number(r.maxPlayers) || 8} • ${r.status === 'playing' ? '🔥 Em jogo' : '🟢 Aberta'}</div>
+              <div><strong>${r.hasPassword ? `${uiIcon('lock', { size: 12 })} ` : ''}${escapeHtml(r.roomName || codeSafe)}</strong> <span style="color:#ffd447;">[${codeSafe}]</span></div>
+              <div style="font-size:0.7rem; color:#d8c2a6;">${escapeHtml(r.hostName)} • ${escapeHtml(r.mode || 'race')} • ${Number(r.playerCount) || 1}/${Number(r.maxPlayers) || 8} • ${r.status === 'playing' ? 'Em jogo' : 'Aberta'}</div>
             </div>
             <div style="display:flex; gap:5px;">
-              <button type="button" class="chunky-btn secondary" data-preview-rules="${codeSafe}" style="padding:5px 8px; font-size:0.72rem;" title="Ver regras antes de entrar">📜 Regras</button>
-              <button type="button" class="chunky-btn secondary" data-join-code="${codeSafe}" style="padding:5px 10px; font-size:0.76rem;">Conectar</button>
+              <button type="button" class="chunky-btn secondary" data-preview-rules="${codeSafe}" style="min-height:36px; padding:5px 8px; font-size:0.72rem; display:inline-flex; align-items:center; gap:4px;" title="Ver regras antes de entrar">${uiIcon('scroll', { size: 12 })} Regras</button>
+              <button type="button" class="chunky-btn secondary" data-join-code="${codeSafe}" style="min-height:36px; padding:5px 10px; font-size:0.76rem;">Conectar</button>
             </div>
           </div>
           <div style="font-size:0.68rem; color:#bae6fd; background:rgba(15,23,42,0.55); padding:4px 7px; border-radius:7px;">${escapeHtml(formatRoomRulesChips(r))}</div>
@@ -385,15 +386,15 @@ export class MultiplayerLobby {
           <div class="chunky-panel modal-card" style="max-width:1000px;">
             <div class="modal-header">
               <div>
-                <h2>🌐 Sala Multiplayer LAN / Online (2–8 Jogadores)</h2>
+                <h2 style="display:inline-flex; align-items:center; gap:7px;">${uiIcon('multiplayer', { size: 20 })} Sala Multiplayer LAN / Online (2–8 Jogadores)</h2>
                 <div style="font-size:0.8rem; color:#ffd447;">
                   ${onMobile ? 'Jogue no celular ou conecte à sala do grupo!' : 'PC/TV como Telão Principal • Escaneie o QR Code lateral no celular'}
                 </div>
               </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                ${connected && net.isHost ? `<button class="chunky-btn secondary" id="mp-open-gear" title="Configurações da Sala">⚙️ Config</button>` : ''}
-                ${onMobile ? `<button class="chunky-btn secondary" id="mp-open-ctrl" style="border-color:#38bdf8; color:#bae6fd;">🎮 Modo Controle</button>` : ''}
-                <button class="chunky-btn secondary" id="mp-close">Voltar</button>
+                ${connected && net.isHost ? `<button class="chunky-btn secondary" id="mp-open-gear" title="Configurações da Sala" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('settings', { size: 15 })} Config</button>` : ''}
+                ${onMobile ? `<button class="chunky-btn secondary" id="mp-open-ctrl" style="min-height:42px; border-color:#38bdf8; color:#bae6fd; display:inline-flex; align-items:center; gap:5px;">${uiIcon('gamepad', { size: 15 })} Modo Controle</button>` : ''}
+                <button class="chunky-btn secondary" id="mp-close" style="min-height:42px;">Voltar</button>
               </div>
             </div>
 
@@ -401,25 +402,25 @@ export class MultiplayerLobby {
 
             ${!connected ? `
               <div class="tabs-row" style="align-items:center;">
-                <button class="tab-btn ${transport === 'lan' ? 'active' : ''}" data-tr="lan">📡 LAN Local</button>
-                <button class="tab-btn ${transport === 'supabase' ? 'active' : ''}" data-tr="supabase">☁️ Online Global</button>
-                <button class="chunky-btn secondary" id="mp-test-conn" style="padding:6px 12px; font-size:0.8rem;">🔌 Testar Conexão</button>
-                <button class="chunky-btn orange" id="mp-friends-quick" style="padding:6px 12px; font-size:0.8rem; margin-left:auto;">🤝 Sala de Amigos (1 Toque)</button>
+                <button class="tab-btn ${transport === 'lan' ? 'active' : ''}" data-tr="lan" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('wifi', { size: 15 })} LAN Local</button>
+                <button class="tab-btn ${transport === 'supabase' ? 'active' : ''}" data-tr="supabase" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('cloud', { size: 15 })} Online Global</button>
+                <button class="chunky-btn secondary" id="mp-test-conn" style="min-height:42px; padding:6px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">${uiIcon('bolt', { size: 14 })} Testar Conexão</button>
+                <button class="chunky-btn orange" id="mp-friends-quick" style="min-height:42px; padding:6px 12px; font-size:0.8rem; margin-left:auto; display:inline-flex; align-items:center; gap:5px;">${uiIcon('multiplayer', { size: 15 })} Sala de Amigos (1 Toque)</button>
               </div>
 
               ${transport === 'lan' ? `
                 <div class="item-card" style="border-color:#38bdf8; background:rgba(15,23,42,0.72); display:flex; flex-direction:column; gap:8px;">
                   <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
-                    <button class="tab-btn ${lanSubmode === 'local_channel' ? 'active' : ''}" data-lan-sub="local_channel" style="font-size:0.78rem; padding:6px 10px;">
-                      🖥️ Local Instantâneo (Sem servidor — abas/mesmo PC)
+                    <button class="tab-btn ${lanSubmode === 'local_channel' ? 'active' : ''}" data-lan-sub="local_channel" style="min-height:40px; font-size:0.78rem; padding:6px 10px; display:inline-flex; align-items:center; gap:5px;">
+                      ${uiIcon('monitor', { size: 14 })} Local Instantâneo (Sem servidor — abas/mesmo PC)
                     </button>
-                    <button class="tab-btn ${lanSubmode === 'ws' ? 'active' : ''}" data-lan-sub="ws" style="font-size:0.78rem; padding:6px 10px;">
-                      📡 LAN Wi-Fi (npm run host)
+                    <button class="tab-btn ${lanSubmode === 'ws' ? 'active' : ''}" data-lan-sub="ws" style="min-height:40px; font-size:0.78rem; padding:6px 10px; display:inline-flex; align-items:center; gap:5px;">
+                      ${uiIcon('wifi', { size: 14 })} LAN Wi-Fi (npm run host)
                     </button>
                   </div>
                   ${lanSubmode === 'local_channel' ? `
                     <div style="font-size:0.78rem; color:#bae6fd; line-height:1.35;">
-                      ✅ Funciona na hora (inclusive em HTTPS), sem servidor externo! Crie uma sala aqui e abra outra aba/janela neste mesmo navegador para entrar pelo código ou pela lista pública.
+                      ${uiIcon('check', { size: 13, color: '#4ade80' })} Funciona na hora (inclusive em HTTPS), sem servidor externo! Crie uma sala aqui e abra outra aba/janela neste mesmo navegador para entrar pelo código ou pela lista pública.
                     </div>
                   ` : `
                     <div style="display:flex; flex-wrap:wrap; gap:6px; align-items:flex-end;">
@@ -427,23 +428,23 @@ export class MultiplayerLobby {
                         Endereço do Host LAN (opcional — padrão: host atual porta 5174):
                         <input class="text-input" id="mp-lan-host" value="${escapeHtml(lanHostInput)}" placeholder="192.168.1.10:5174 ou ws://localhost:5174" maxlength="80" style="width:100%; margin-top:3px;" />
                       </label>
-                      <button class="chunky-btn secondary" id="mp-lan-discover" style="padding:7px 12px; font-size:0.78rem;">🔌 Testar &amp; Descobrir</button>
+                      <button class="chunky-btn secondary" id="mp-lan-discover" style="min-height:40px; padding:7px 12px; font-size:0.78rem; display:inline-flex; align-items:center; gap:5px;">${uiIcon('wifi', { size: 14 })} Testar &amp; Descobrir</button>
                     </div>
-                    ${lanHostError ? `<div style="font-size:0.76rem; color:#fca5a5;">⚠️ ${escapeHtml(lanHostError)}</div>` : ''}
+                    ${lanHostError ? `<div style="font-size:0.76rem; color:#fca5a5;">${uiIcon('warning', { size: 13, color: '#fca5a5' })} ${escapeHtml(lanHostError)}</div>` : ''}
                     ${net.lastLanInfo?.ips?.length ? `
                       <div style="font-size:0.74rem; color:#86efac;">
-                        🟢 IPs LAN detectados: <strong>${net.lastLanInfo.ips.map((ip) => `${escapeHtml(ip)}:${net.lastLanInfo.port || 5174}`).join(' • ')}</strong>
+                        ${uiIcon('check', { size: 13, color: '#86efac' })} IPs LAN detectados: <strong>${net.lastLanInfo.ips.map((ip) => `${escapeHtml(ip)}:${net.lastLanInfo.port || 5174}`).join(' • ')}</strong>
                       </div>
                     ` : ''}
                   `}
                   ${isHttpsPage && lanSubmode === 'ws' && (showMixedContentNotice || connTest?.mixedContent) ? `
                     <div class="item-card" style="border-color:#f59e0b; background:rgba(120,53,15,0.45); font-size:0.78rem; color:#fef3c7; display:flex; flex-direction:column; gap:6px;">
                       <div>
-                        <strong>🔒 Restrição HTTPS (Mixed Content):</strong> Navegadores bloqueiam conexões <code>ws://</code> abertas a partir de páginas <code>https://</code> (como Vercel). Para jogar agora sem erro:
+                        <strong>${uiIcon('lock', { size: 13, color: '#fde047' })} Restrição HTTPS (Mixed Content):</strong> Navegadores bloqueiam conexões <code>ws://</code> abertas a partir de páginas <code>https://</code> (como Vercel). Para jogar agora sem erro:
                       </div>
                       <div style="display:flex; flex-wrap:wrap; gap:6px;">
-                        <button class="chunky-btn" id="mp-switch-local-instant" style="padding:6px 10px; font-size:0.76rem;">🖥️ Usar Local Instantâneo (Sem Servidor)</button>
-                        <button class="chunky-btn secondary" id="mp-switch-online-global" style="padding:6px 10px; font-size:0.76rem; border-color:#38bdf8; color:#bae6fd;">☁️ Trocar para Online Global (mesmo Wi-Fi)</button>
+                        <button class="chunky-btn" id="mp-switch-local-instant" style="min-height:40px; padding:6px 10px; font-size:0.76rem; display:inline-flex; align-items:center; gap:5px;">${uiIcon('monitor', { size: 14 })} Usar Local Instantâneo (Sem Servidor)</button>
+                        <button class="chunky-btn secondary" id="mp-switch-online-global" style="min-height:40px; padding:6px 10px; font-size:0.76rem; border-color:#38bdf8; color:#bae6fd; display:inline-flex; align-items:center; gap:5px;">${uiIcon('cloud', { size: 14 })} Trocar para Online Global (mesmo Wi-Fi)</button>
                       </div>
                     </div>
                   ` : ''}
@@ -458,7 +459,7 @@ export class MultiplayerLobby {
 
               <div class="cards-grid mp-create-grid">
                 <div class="item-card">
-                  <strong style="color:#58d63a;">📺 Criar Sala</strong>
+                  <strong style="color:#58d63a; display:inline-flex; align-items:center; gap:5px;">${uiIcon('monitor', { size: 15, color: '#58d63a' })} Criar Sala</strong>
                   <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
                     <label style="font-size:0.8rem;">Seu Apelido:
                       <input class="text-input" id="mp-nick" value="${escapeHtml(nickname)}" maxlength="18" style="width:100%;" />
@@ -470,8 +471,8 @@ export class MultiplayerLobby {
                   <div style="display:grid; grid-template-columns:1fr 1fr 88px; gap:6px;">
                     <label style="font-size:0.78rem;">Visibilidade:
                       <select class="select-input" id="mp-pub-sel" style="width:100%;">
-                        <option value="public" ${isPublic ? 'selected' : ''}>🌍 Pública</option>
-                        <option value="private" ${!isPublic ? 'selected' : ''}>🔒 Privada</option>
+                        <option value="public" ${isPublic ? 'selected' : ''}>Pública</option>
+                        <option value="private" ${!isPublic ? 'selected' : ''}>Privada</option>
                       </select>
                       <input type="checkbox" id="mp-pub" class="hidden" ${isPublic ? 'checked' : ''} />
                     </label>
@@ -486,9 +487,9 @@ export class MultiplayerLobby {
                   </div>
 
                   <div class="mp-opt-group">
-                    <div class="mp-opt-group-title">🏁 Modo, Pista &amp; Câmera</div>
+                    <div class="mp-opt-group-title">${uiIcon('sprint', { size: 14 })} Modo, Pista &amp; Câmera</div>
                     <div class="field-row game-field-row" data-opt-tip-host="Define como os dinossauros dividem a pista: Paralelas (cada um na sua pista sem atrapalhar), Ghost (semitransparentes na mesma pista) ou Clássico.">
-                      <span class="game-field-label">🛤️ Modo de Pista ${renderHelpBadge('Paralelas: cada jogador tem sua própria pista clonada (recomendado). Ghost: mesma pista sem colisão. Clássico: todos juntos.')}</span>
+                      <span class="game-field-label">${uiIcon('openworld', { size: 13 })} Modo de Pista ${renderHelpBadge('Paralelas: cada jogador tem sua própria pista clonada (recomendado). Ghost: mesma pista sem colisão. Clássico: todos juntos.')}</span>
                       ${renderGameStepper('mp-track-mode', [
                         { value: 'parallel', label: 'Paralelas (Rec.)' },
                         { value: 'ghost', label: 'Modo Ghost' },
@@ -496,7 +497,7 @@ export class MultiplayerLobby {
                       ], trackMode)}
                     </div>
                     <div class="field-row game-field-row" data-opt-tip-host="Controla o enquadramento da câmera no multiplayer.">
-                      <span class="game-field-label">🎥 Câmera MP ${renderHelpBadge('Única Compartilhada, Tela Dividida ou Câmera Por Jogador nas pistas paralelas.')}</span>
+                      <span class="game-field-label">${uiIcon('camera', { size: 13 })} Câmera MP ${renderHelpBadge('Única Compartilhada, Tela Dividida ou Câmera Por Jogador nas pistas paralelas.')}</span>
                       ${renderGameStepper('mp-cam-mode', [
                         { value: 'shared', label: 'Única Compartilhada' },
                         { value: 'split_h', label: 'Dividida Horiz.' },
@@ -519,22 +520,22 @@ export class MultiplayerLobby {
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
                       <label style="font-size:0.76rem;">Habitat (Mapa):
                         <select class="select-input" id="mp-biome" style="width:100%;">
-                          <option value="random_portal" ${hostBiomeId === 'random_portal' ? 'selected' : ''}>🌀 Sorteio / Portais</option>
-                          ${BIOMES.map((b) => `<option value="${b.id}" ${hostBiomeId === b.id ? 'selected' : ''}>${getBiomePreviewMeta(b).icon} ${b.name}</option>`).join('')}
+                          <option value="random_portal" ${hostBiomeId === 'random_portal' ? 'selected' : ''}>Sorteio / Portais</option>
+                          ${BIOMES.map((b) => `<option value="${b.id}" ${hostBiomeId === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}
                         </select>
                       </label>
                       <label style="font-size:0.76rem;">Regra de Pausa:
                         <select class="select-input" id="mp-pause-policy" style="width:100%;">
-                          <option value="host_only" ${pausePolicy === 'host_only' ? 'selected' : ''}>👑 Só o Dono</option>
-                          <option value="all_limited" ${pausePolicy === 'all_limited' ? 'selected' : ''}>👥 Todos (c/ limite)</option>
+                          <option value="host_only" ${pausePolicy === 'host_only' ? 'selected' : ''}>Só o Dono</option>
+                          <option value="all_limited" ${pausePolicy === 'all_limited' ? 'selected' : ''}>Todos (c/ limite)</option>
                         </select>
                       </label>
                     </div>
                   </div>
 
                   <div class="mp-opt-group">
-                    <div class="mp-opt-group-title">💖 Regras de Reviver (Tecla V / Touch)</div>
-                    ${renderGameSwitch('mp-allow-revive', '💖 Permitir Reviver Aliado', allowRevive, 'Permite que jogadores vivos levantem aliados caídos usando V ou botão touch.')}
+                    <div class="mp-opt-group-title">${uiIcon('revive', { size: 14, color: '#fda4af' })} Regras de Reviver (Tecla V / Touch)</div>
+                    ${renderGameSwitch('mp-allow-revive', `${uiIcon('revive', { size: 13, color: '#fda4af' })} Permitir Reviver Aliado`, allowRevive, 'Permite que jogadores vivos levantem aliados caídos usando V ou botão touch.')}
                     <div class="field-row game-field-row" data-opt-tip-host="Custo pago por quem revive um aliado caído.">
                       <span class="game-field-label">Custo do Revive ${renderHelpBadge('Custo para levantar um aliado: 1 Vida ou Escudo (padrão), Ovos ou Grátis.')}</span>
                       ${renderGameStepper('mp-revive-cost', [
@@ -570,63 +571,63 @@ export class MultiplayerLobby {
                   </div>
 
                   <div class="mp-opt-group">
-                    <div class="mp-opt-group-title">📺 Experiência da Sala &amp; Acessibilidade</div>
-                    ${renderGameSwitch('mp-tv', '📺 Modo TV de Sala (HUD maior)', tvScale, 'Aumenta textos e placares para jogar na TV da sala.')}
-                    ${renderGameSwitch('mp-mirrored', '🪞 Modo Espelhado', mirroredMode, 'Inverte a pista horizontalmente para todos na sala.')}
+                    <div class="mp-opt-group-title">${uiIcon('monitor', { size: 14 })} Experiência da Sala &amp; Acessibilidade</div>
+                    ${renderGameSwitch('mp-tv', `${uiIcon('monitor', { size: 13 })} Modo TV de Sala (HUD maior)`, tvScale, 'Aumenta textos e placares para jogar na TV da sala.')}
+                    ${renderGameSwitch('mp-mirrored', `${uiIcon('swap', { size: 13 })} Modo Espelhado`, mirroredMode, 'Inverte a pista horizontalmente para todos na sala.')}
                     <div class="field-row game-field-row" data-opt-tip-host="Controla as apresentações dos predadores na sala.">
-                      <span class="game-field-label">🎬 Intros de Predadores ${renderHelpBadge('Sempre, somente na primeira vez ou desativadas para corridas rápidas.')}</span>
+                      <span class="game-field-label">${uiIcon('clip', { size: 13 })} Intros de Predadores ${renderHelpBadge('Sempre, somente na primeira vez ou desativadas para corridas rápidas.')}</span>
                       ${renderGameStepper('mp-intro-mode', [
                         { value: 'always', label: 'Sempre' },
                         { value: 'first_time', label: '1ª Vez' },
                         { value: 'off', label: 'Nunca' }
                       ], introMode)}
                     </div>
-                    ${renderGameSwitch('mp-obstacle-hints', '🪧 Dicas Visuais sobre Obstáculos', obstacleHints, 'Mostra indicadores de pulo/abaixar acima dos obstáculos.')}
-                    ${renderGameSwitch('mp-teacher', '🎓 Modo Professor / Aula (Livre)', teacherMode, 'Simplifica a corrida para uso em salas de aula e eventos.')}
+                    ${renderGameSwitch('mp-obstacle-hints', `${uiIcon('info', { size: 13 })} Dicas Visuais sobre Obstáculos`, obstacleHints, 'Mostra indicadores de pulo/abaixar acima dos obstáculos.')}
+                    ${renderGameSwitch('mp-teacher', `${uiIcon('book', { size: 13 })} Modo Professor / Aula (Livre)`, teacherMode, 'Simplifica a corrida para uso em salas de aula e eventos.')}
                   </div>
 
                   <div class="mp-opt-group">
-                    <div class="mp-opt-group-title">⚙️ Regras Extras da Corrida</div>
+                    <div class="mp-opt-group-title">${uiIcon('settings', { size: 14 })} Regras Extras da Corrida</div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">
-                      ${renderGameSwitch('mp-multi-hab', '🌍 Vários habitats', multiHabitats, 'Alterna biomas por portais durante a corrida.')}
-                      ${renderGameSwitch('mp-allow-vote', '🗳️ Votação ativa', allowVoting, 'Permite que convidados votem no modo, bioma e dificuldade.')}
-                      ${renderGameSwitch('mp-allow-hybrids', '🧬 Permitir híbridos', allowHybrids, 'Libera dinossauros híbridos na sala.')}
-                      ${renderGameSwitch('mp-unique-dinos', '🦖 Dinos únicos', uniqueDinos, 'Impede dois jogadores de escolherem o mesmo dino.')}
-                      ${renderGameSwitch('mp-allow-ctrl', '📱 Controles celular', allowControllers, 'Permite usar celulares como controle via QR Code.')}
-                      ${renderGameSwitch('mp-allow-spec', '👁️ Espectadores', allowSpectators, 'Permite entrar apenas para assistir à partida.')}
-                      ${renderGameSwitch('mp-allow-events', '☄️ Eventos', allowEvents, 'Ativa eventos dinâmicos na pista (meteoros, eclipse, etc.).')}
-                      ${renderGameSwitch('mp-allow-bosses', '👑 Bosses', allowBosses, 'Ativa lutas contra chefes ao longo da corrida.')}
-                      ${renderGameSwitch('mp-allow-pups', '⚡ Power-ups', allowPowerups, 'Ativa itens e power-ups coletáveis na pista.')}
-                      ${renderGameSwitch('mp-allow-handicap', '⚖️ Handicap', allowHandicap, 'Ajusta bônus para equilibrar jogadores iniciantes e veteranos.')}
+                      ${renderGameSwitch('mp-multi-hab', `${uiIcon('openworld', { size: 13 })} Vários habitats`, multiHabitats, 'Alterna biomas por portais durante a corrida.')}
+                      ${renderGameSwitch('mp-allow-vote', `${uiIcon('check', { size: 13 })} Votação ativa`, allowVoting, 'Permite que convidados votem no modo, bioma e dificuldade.')}
+                      ${renderGameSwitch('mp-allow-hybrids', `${uiIcon('dna', { size: 13 })} Permitir híbridos`, allowHybrids, 'Libera dinossauros híbridos na sala.')}
+                      ${renderGameSwitch('mp-unique-dinos', `${uiIcon('dino', { size: 13 })} Dinos únicos`, uniqueDinos, 'Impede dois jogadores de escolherem o mesmo dino.')}
+                      ${renderGameSwitch('mp-allow-ctrl', `${uiIcon('gamepad', { size: 13 })} Controles celular`, allowControllers, 'Permite usar celulares como controle via QR Code.')}
+                      ${renderGameSwitch('mp-allow-spec', `${uiIcon('camera', { size: 13 })} Espectadores`, allowSpectators, 'Permite entrar apenas para assistir à partida.')}
+                      ${renderGameSwitch('mp-allow-events', `${uiIcon('bolt', { size: 13 })} Eventos`, allowEvents, 'Ativa eventos dinâmicos na pista (meteoros, eclipse, etc.).')}
+                      ${renderGameSwitch('mp-allow-bosses', `${uiIcon('crown', { size: 13 })} Bosses`, allowBosses, 'Ativa lutas contra chefes ao longo da corrida.')}
+                      ${renderGameSwitch('mp-allow-pups', `${uiIcon('sparkle', { size: 13 })} Power-ups`, allowPowerups, 'Ativa itens e power-ups coletáveis na pista.')}
+                      ${renderGameSwitch('mp-allow-handicap', `${uiIcon('shield', { size: 13 })} Handicap`, allowHandicap, 'Ajusta bônus para equilibrar jogadores iniciantes e veteranos.')}
                     </div>
                   </div>
 
-                  <button class="chunky-btn" id="mp-create" style="margin-top:6px;">✨ CRIAR SALA E GERAR QR CODE</button>
+                  <button class="chunky-btn" id="mp-create" style="margin-top:6px; min-height:46px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">${uiIcon('qrcode', { size: 16 })} CRIAR SALA E GERAR QR CODE</button>
                 </div>
 
                 <div class="item-card">
-                  <strong style="color:#ffd447;">🔑 Entrar em Sala por Código</strong>
+                  <strong style="color:#ffd447; display:inline-flex; align-items:center; gap:5px;">${uiIcon('key', { size: 15, color: '#ffd447' })} Entrar em Sala por Código</strong>
                   <label style="font-size:0.82rem;">Seu Apelido:
                     <input class="text-input" id="mp-join-nick" value="${escapeHtml(nickname)}" maxlength="18" style="width:100%;" />
                   </label>
                   <div style="display:flex; gap:6px; flex-wrap:wrap;">
                     <input class="text-input" id="mp-code" value="${escapeHtml(joinCode)}" maxlength="4" placeholder="ABCD" style="flex:1; min-width:95px; text-transform:uppercase; font-size:1.1rem; letter-spacing:3px; text-align:center;" />
                     <input class="text-input" id="mp-join-pass" value="${escapeHtml(joinPassword)}" maxlength="12" placeholder="Senha (se tiver)" style="width:120px; font-size:0.82rem;" />
-                    <button class="chunky-btn orange" id="mp-join">Entrar</button>
+                    <button class="chunky-btn orange" id="mp-join" style="min-height:44px;">Entrar</button>
                   </div>
                   ${selectedPreviewRoom ? `
                     <div class="item-card" style="border-color:#38bdf8; background:rgba(15,23,42,0.75); padding:8px 10px; font-size:0.76rem;">
                       <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <strong style="color:#7dd3fc;">📜 Regras da Sala ${escapeHtml(selectedPreviewRoom.roomName || selectedPreviewRoom.code)}</strong>
+                        <strong style="color:#7dd3fc;">${uiIcon('scroll', { size: 13, color: '#7dd3fc' })} Regras da Sala ${escapeHtml(selectedPreviewRoom.roomName || selectedPreviewRoom.code)}</strong>
                         <button type="button" class="inline-change-btn" id="mp-close-rules-preview">Fechar</button>
                       </div>
                       <div style="color:#e2e8f0;">${escapeHtml(formatRoomRulesChips(selectedPreviewRoom))}</div>
-                      <button type="button" class="chunky-btn" data-join-code="${escapeHtml(sanitizeRoomCode(selectedPreviewRoom.code))}" style="padding:6px 10px; font-size:0.78rem;">🚀 Entrar nesta Sala</button>
+                      <button type="button" class="chunky-btn" data-join-code="${escapeHtml(sanitizeRoomCode(selectedPreviewRoom.code))}" style="min-height:40px; padding:6px 10px; font-size:0.78rem; display:inline-flex; align-items:center; justify-content:center; gap:5px;">${uiIcon('play', { size: 13 })} Entrar nesta Sala</button>
                     </div>
                   ` : ''}
                   <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                    <strong style="font-size:0.84rem;">🌍 Salas Públicas Abertas (auto-atualiza):</strong>
-                    <button class="chunky-btn secondary" id="mp-refresh" style="padding:4px 10px; font-size:0.74rem;">🔄 Atualizar</button>
+                    <strong style="font-size:0.84rem; display:inline-flex; align-items:center; gap:5px;">${uiIcon('multiplayer', { size: 14 })} Salas Públicas Abertas (auto-atualiza):</strong>
+                    <button class="chunky-btn secondary" id="mp-refresh" style="min-height:36px; padding:4px 10px; font-size:0.74rem; display:inline-flex; align-items:center; gap:4px;">${uiIcon('rotate', { size: 13 })} Atualizar</button>
                   </div>
                   <div id="mp-public-rooms-list" style="display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto;">${renderPublicRoomsHtml()}</div>
                 </div>
@@ -634,13 +635,13 @@ export class MultiplayerLobby {
             ` : `
               <div class="cards-grid mp-connected-grid">
                 <div class="item-card mp-qr-card" style="align-items:center; text-align:center;">
-                  <div style="font-size:0.78rem; font-weight:800; color:#58d63a;">📲 ESCANEIE PARA JOGAR</div>
+                  <div style="font-size:0.78rem; font-weight:800; color:#58d63a; display:inline-flex; align-items:center; gap:5px;">${uiIcon('qrcode', { size: 14, color: '#58d63a' })} ESCANEIE PARA JOGAR</div>
                   <div style="font-size:1.75rem; font-weight:900; letter-spacing:5px; color:#ffd447;">${escapeHtml(room.code)}</div>
-                  <div style="font-size:0.76rem; color:#fde68a; font-weight:700;">${escapeHtml(room.roomName || `Sala ${room.code}`)} ${room.hasPassword ? '🔒' : ''}</div>
+                  <div style="font-size:0.76rem; color:#fde68a; font-weight:700;">${escapeHtml(room.roomName || `Sala ${room.code}`)} ${room.hasPassword ? uiIcon('lock', { size: 12 }) : ''}</div>
                   <canvas id="mp-qr-canvas" width="156" height="156" style="border-radius:10px; background:#fff6e5;"></canvas>
                   <div style="display:flex; gap:6px; width:100%;">
-                    <button class="chunky-btn secondary" id="mp-copy-url" style="font-size:0.72rem; padding:6px 8px; flex:1;">🔗 Copiar Link</button>
-                    <button class="chunky-btn orange" id="mp-share-url" style="font-size:0.72rem; padding:6px 8px; flex:1;">📤 Convidar</button>
+                    <button class="chunky-btn secondary" id="mp-copy-url" style="min-height:40px; font-size:0.72rem; padding:6px 8px; flex:1; display:inline-flex; align-items:center; justify-content:center; gap:4px;">${uiIcon('scroll', { size: 13 })} Copiar Link</button>
+                    <button class="chunky-btn orange" id="mp-share-url" style="min-height:40px; font-size:0.72rem; padding:6px 8px; flex:1; display:inline-flex; align-items:center; justify-content:center; gap:4px;">${uiIcon('multiplayer', { size: 13 })} Convidar</button>
                   </div>
                   <div style="font-size:0.66rem; color:#d8c2a6; word-break:break-all;">${escapeHtml(shareUrl)}</div>
 
@@ -648,8 +649,8 @@ export class MultiplayerLobby {
                   <div style="width:100%; margin-top:4px;">
                     <div id="mp-lobby-dino-preview" style="width:100%; height:130px; border-radius:12px; border:2px solid #8a562d; background:radial-gradient(circle, #5b2e16, #1d0e06);"></div>
                     <div style="display:flex; gap:5px; margin-top:6px;">
-                      <button class="chunky-btn secondary" id="mp-swap-dino-btn" style="flex:1; padding:5px 6px; font-size:0.72rem;">🦖 Trocar Dino</button>
-                      <button class="chunky-btn secondary" id="mp-custom-dino-btn" style="flex:1; padding:5px 6px; font-size:0.72rem;">🎨 Personalizar</button>
+                      <button class="chunky-btn secondary" id="mp-swap-dino-btn" style="flex:1; min-height:40px; padding:5px 6px; font-size:0.72rem; display:inline-flex; align-items:center; justify-content:center; gap:4px;">${uiIcon('dino', { size: 13 })} Trocar Dino</button>
+                      <button class="chunky-btn secondary" id="mp-custom-dino-btn" style="flex:1; min-height:40px; padding:5px 6px; font-size:0.72rem; display:inline-flex; align-items:center; justify-content:center; gap:4px;">${uiIcon('palette', { size: 13 })} Personalizar</button>
                     </div>
                   </div>
                 </div>
@@ -664,58 +665,58 @@ export class MultiplayerLobby {
                     const allPlayersReady = playerPeers.length > 0 && notReadyPlayers.length === 0;
                     const readyCount = playerPeers.filter((p) => p.ready).length;
                     const trLabel = net.transportType === 'supabase'
-                      ? '☁️ Online'
-                      : (net.transportType === 'lan_local' ? '🖥️ Local Instantâneo' : '📡 LAN Wi-Fi');
+                      ? `${uiIcon('cloud', { size: 13 })} Online`
+                      : (net.transportType === 'lan_local' ? `${uiIcon('monitor', { size: 13 })} Local Instantâneo` : `${uiIcon('wifi', { size: 13 })} LAN Wi-Fi`);
                     const resolvedCfg = net.resolveRoomConfig(room);
                     const roomMpMode = resolvedCfg.mpMode;
-                    const modeLabel = MP_MODES.find((m) => m.id === roomMpMode)?.label || '🏁 Corrida';
+                    const modeLabel = MP_MODES.find((m) => m.id === roomMpMode)?.label || 'Corrida';
                     const diffLabel = DIFFICULTY_PRESETS[resolvedCfg.difficulty]?.name || 'Normal';
                     const biomeObj = resolvedCfg.biomeId === 'random_portal'
-                      ? { id: 'random_portal', name: '🌀 Sorteio (Portais)' }
+                      ? { id: 'random_portal', name: 'Sorteio (Portais)' }
                       : BIOMES.find((b) => b.id === resolvedCfg.biomeId);
                     const biomeLabel = biomeObj?.name || 'Deserto Dourado';
                     const selfVote = room.votes?.[net.peerId] || {};
                     const highPingPeers = room.peers.filter((p) => (p.pingMs || 0) > 130);
                     const describeRoleBadge = (p) => {
-                      if (p.role === 'controller') return `<span class="mp-role-pill ctrl">🎮 Controle</span>`;
-                      if (p.role === 'spectator') return `<span class="mp-role-pill">👁️ Espectador</span>`;
-                      if (p.role === 'mobile_player') return `<span class="mp-role-pill mob3d">📱 Jogador Celular</span>`;
-                      return `<span class="mp-role-pill screen">🖥️ Jogador PC/TV</span>`;
+                      if (p.role === 'controller') return `<span class="mp-role-pill ctrl">${uiIcon('gamepad', { size: 12 })} Controle</span>`;
+                      if (p.role === 'spectator') return `<span class="mp-role-pill">${uiIcon('camera', { size: 12 })} Espectador</span>`;
+                      if (p.role === 'mobile_player') return `<span class="mp-role-pill mob3d">${uiIcon('gamepad', { size: 12 })} Jogador Celular</span>`;
+                      return `<span class="mp-role-pill screen">${uiIcon('monitor', { size: 12 })} Jogador PC/TV</span>`;
                     };
 
                     return `
                   ${countdownSec > 0 ? `
                     <div class="item-card" style="text-align:center; border-color:#58d63a; background:rgba(20,83,45,0.65);">
-                      <strong style="font-size:1.6rem; color:#fde047;">🚀 LARGADA EM ${countdownSec}...</strong>
+                      <strong style="font-size:1.6rem; color:#fde047;">${uiIcon('play', { size: 22, color: '#fde047' })} LARGADA EM ${countdownSec}...</strong>
                     </div>
                   ` : ''}
 
                   <div class="item-card">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-                      <strong>🦖 Jogadores (${playerPeers.length}/${room.maxPlayers || 8} · ${readyCount}/${playerPeers.length} prontos) • ${trLabel}</strong>
+                      <strong style="display:inline-flex; align-items:center; gap:5px;">${uiIcon('dino', { size: 15 })} Jogadores (${playerPeers.length}/${room.maxPlayers || 8} · ${readyCount}/${playerPeers.length} prontos) • ${trLabel}</strong>
                       ${net.isHost ? `
                         <div style="display:flex; gap:6px; align-items:center;">
                           <span style="font-size:0.76rem;">Bots IA: ${botCount}</span>
-                          <button class="chunky-btn secondary" id="mp-add-bot" style="padding:4px 8px; font-size:0.74rem;">+ Bot</button>
+                          <button class="chunky-btn secondary" id="mp-add-bot" style="min-height:36px; padding:4px 10px; font-size:0.74rem;">+ Bot</button>
                         </div>
                       ` : ''}
                     </div>
                     <div style="margin-top:4px; padding:6px 10px; border-radius:8px; background:rgba(15,23,42,0.5); border:1px solid #f59e0b; font-size:0.76rem; color:#fde047; display:flex; flex-direction:column; gap:4px;">
                       <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
-                        <span><strong>${modeLabel}</strong> • ${diffLabel} • ${biomeLabel} • ${room.config?.multiHabitats !== false ? '🌍 Multi-Habitat' : '📍 Habitat Único'}</span>
-                        <span>${room.config?.uniqueDinos ? '🔒 Dinos Únicos' : '♻️ Repetidos OK'} • ${room.config?.allowHybrids !== false ? '🧬 Híbridos ON' : '🚫 Sem Híbridos'}</span>
+                        <span><strong>${modeLabel}</strong> • ${diffLabel} • ${biomeLabel} • ${room.config?.multiHabitats !== false ? 'Multi-Habitat' : 'Habitat Único'}</span>
+                        <span>${room.config?.uniqueDinos ? `${uiIcon('lock', { size: 12 })} Dinos Únicos` : `${uiIcon('rotate', { size: 12 })} Repetidos OK`} • ${room.config?.allowHybrids !== false ? `${uiIcon('dna', { size: 12 })} Híbridos ON` : 'Sem Híbridos'}</span>
                       </div>
-                      <div style="font-size:0.72rem; color:#bae6fd;">📜 ${escapeHtml(formatRoomRulesChips(room))}</div>
+                      <div style="font-size:0.72rem; color:#bae6fd;">${uiIcon('scroll', { size: 12 })} ${escapeHtml(formatRoomRulesChips(room))}</div>
                     </div>
                     ${highPingPeers.length > 0 ? `
                       <div style="margin-top:4px; padding:4px 8px; border-radius:8px; background:rgba(127,29,29,0.55); border:1px solid #f87171; font-size:0.74rem; color:#fecaca;">
-                        ⚠️ Ping alto detectado em: ${highPingPeers.map((h) => `${escapeHtml(h.name)} (${h.pingMs}ms)`).join(', ')}
+                        ${uiIcon('warning', { size: 13, color: '#fecaca' })} Ping alto detectado em: ${highPingPeers.map((h) => `${escapeHtml(h.name)} (${h.pingMs}ms)`).join(', ')}
                       </div>
                     ` : ''}
 
                     ${resolvedCfg.allowVoting ? `
                       <div style="margin-top:6px; padding:7px; border-radius:10px; background:rgba(15,23,42,0.55); border:1px solid rgba(56,189,248,0.35); display:flex; flex-direction:column; gap:5px;">
-                        <strong style="font-size:0.76rem; color:#7dd3fc;">🗳️ Seu Voto (Maioria decide)</strong>
+                        <strong style="font-size:0.76rem; color:#7dd3fc;">${uiIcon('check', { size: 13, color: '#7dd3fc' })} Seu Voto (Maioria decide)</strong>
                         <div class="mp-rules-grid">
                           <select class="select-input" id="mp-vote-mode" style="font-size:0.74rem;">
                             ${MP_MODES.map((m) => `<option value="${m.id}" ${(selfVote.mpMode || roomMpMode) === m.id ? 'selected' : ''}>${m.label}</option>`).join('')}
@@ -724,7 +725,7 @@ export class MultiplayerLobby {
                             ${Object.values(DIFFICULTY_PRESETS).map((d) => `<option value="${d.id}" ${(selfVote.difficulty || resolvedCfg.difficulty) === d.id ? 'selected' : ''}>${d.name}</option>`).join('')}
                           </select>
                           <select class="select-input" id="mp-vote-biome" style="font-size:0.74rem;">
-                            <option value="random_portal" ${(selfVote.biomeId || resolvedCfg.biomeId) === 'random_portal' ? 'selected' : ''}>🌀 Sorteio</option>
+                            <option value="random_portal" ${(selfVote.biomeId || resolvedCfg.biomeId) === 'random_portal' ? 'selected' : ''}>Sorteio</option>
                             ${BIOMES.map((b) => `<option value="${b.id}" ${(selfVote.biomeId || resolvedCfg.biomeId) === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}
                           </select>
                         </div>
@@ -739,20 +740,20 @@ export class MultiplayerLobby {
                         return `
                         <div style="padding:7px 9px; border-radius:10px; background:rgba(0,0,0,0.4); border:1.5px solid ${sanitizeHexColor(p.color, '#ffd447')}; font-size:0.8rem; display:flex; flex-direction:column; gap:3px;">
                           <div style="display:flex; justify-content:space-between; align-items:center; gap:4px;">
-                            <span style="font-weight:800;">${p.peerId === hostPeer?.peerId ? '👑 ' : ''}${escapeHtml(p.name)}${p.peerId === net.peerId ? ' (Você)' : ''}</span>
-                            <span style="font-size:0.68rem; color:${pb.color};">${pb.icon} ${pb.label}</span>
+                            <span style="font-weight:800;">${p.peerId === hostPeer?.peerId ? `${uiIcon('crown', { size: 12, color: '#ffd447' })} ` : ''}${escapeHtml(p.name)}${p.peerId === net.peerId ? ' (Você)' : ''}</span>
+                            <span style="font-size:0.68rem; color:${pb.color};">● ${pb.label}</span>
                           </div>
                           <div>${describeRoleBadge(p)}</div>
-                          ${boundTarget ? `<div style="font-size:0.68rem; color:#7dd3fc;">🔗 Controlando: <strong>${escapeHtml(boundTarget.name)}</strong></div>` : ''}
-                          <div style="font-size:0.72rem; color:#d8c2a6;">🦖 ${escapeHtml(getDinoSpec(p.dinoId).name)} • ${p.ready ? '✅ Pronto' : '⏳ Aguardando'}</div>
+                          ${boundTarget ? `<div style="font-size:0.68rem; color:#7dd3fc;">${uiIcon('gamepad', { size: 12 })} Controlando: <strong>${escapeHtml(boundTarget.name)}</strong></div>` : ''}
+                          <div style="font-size:0.72rem; color:#d8c2a6;">${uiIcon('dino', { size: 12 })} ${escapeHtml(getDinoSpec(p.dinoId).name)} • ${p.ready ? `${uiIcon('check', { size: 12, color: '#4ade80' })} Pronto` : 'Aguardando'}</div>
                           <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
-                            ${canRevoke ? `<button class="inline-change-btn" data-revoke-ctrl="${escapeHtml(p.peerId)}" style="border-color:#f87171; color:#fecaca;">🚫 Remover</button>` : ''}
+                            ${canRevoke ? `<button class="inline-change-btn" data-revoke-ctrl="${escapeHtml(p.peerId)}" style="border-color:#f87171; color:#fecaca;">${uiIcon('close', { size: 11 })} Remover</button>` : ''}
                             ${net.isHost && p.peerId !== net.peerId ? `
-                              ${p.role !== 'controller' ? `<button class="inline-change-btn" data-pass-host="${escapeHtml(p.peerId)}" style="border-color:#ffd447; color:#fde047;">👑 Dono</button>` : ''}
-                              <button class="inline-change-btn" data-kick="${escapeHtml(p.peerId)}" style="border-color:#fb923c; color:#fed7aa;">👢</button>
-                              <button class="inline-change-btn" data-ban="${escapeHtml(p.peerId)}" style="border-color:#ef4444; color:#fca5a5;">🚫 Ban</button>
+                              ${p.role !== 'controller' ? `<button class="inline-change-btn" data-pass-host="${escapeHtml(p.peerId)}" style="border-color:#ffd447; color:#fde047;">${uiIcon('crown', { size: 11 })} Dono</button>` : ''}
+                              <button class="inline-change-btn" data-kick="${escapeHtml(p.peerId)}" style="border-color:#fb923c; color:#fed7aa;" title="Expulsar">Kick</button>
+                              <button class="inline-change-btn" data-ban="${escapeHtml(p.peerId)}" style="border-color:#ef4444; color:#fca5a5;">${uiIcon('close', { size: 11 })} Ban</button>
                             ` : ''}
-                            ${!net.isHost && p.peerId !== net.peerId ? `<button class="inline-change-btn" data-report-peer="${escapeHtml(p.peerId)}" style="border-color:#94a3b8; color:#cbd5e1;">🚨</button>` : ''}
+                            ${!net.isHost && p.peerId !== net.peerId ? `<button class="inline-change-btn" data-report-peer="${escapeHtml(p.peerId)}" style="border-color:#94a3b8; color:#cbd5e1;" title="Denunciar">${uiIcon('flag', { size: 11 })}</button>` : ''}
                           </div>
                         </div>
                       `;
@@ -762,29 +763,29 @@ export class MultiplayerLobby {
 
                   <!-- Chat Seguro (Proteção a Menores: apenas Emotes & Frases Prontas) -->
                   <div class="item-card" style="gap:6px;">
-                    <strong>💬 Emotes &amp; Frases Rápidas (Seguro)</strong>
+                    <strong style="display:inline-flex; align-items:center; gap:5px;">${uiIcon('shield', { size: 14, color: '#86efac' })} Emotes &amp; Frases Rápidas (Seguro)</strong>
                     <div style="max-height:70px; overflow-y:auto; font-size:0.78rem; background:rgba(0,0,0,0.25); padding:5px 7px; border-radius:8px;">
                       ${net.chatLog.length === 0 ? `<span style="color:#a89078;">Toque numa frase pronta ou emote para interagir!</span>` :
                         net.chatLog.map((c) => `<div><strong style="color:#ffd447;">${escapeHtml(c.name)}:</strong> ${escapeHtml(c.text)}</div>`).join('')}
                     </div>
                     <div style="display:flex; gap:5px; flex-wrap:wrap;">
-                      ${SAFE_PHRASES.map((ph) => `<button class="tab-btn" data-mp-phrase="${escapeHtml(ph)}" style="padding:4px 8px; font-size:0.72rem;">${escapeHtml(ph)}</button>`).join('')}
-                      ${['🦖', '🔥', '👑', '🥚', '⚡', '🎉'].map((em) => `<button class="tab-btn" data-mp-em="${em}" style="padding:4px 8px; font-size:0.76rem;">${em}</button>`).join('')}
+                      ${SAFE_PHRASES.map((ph) => `<button class="tab-btn" data-mp-phrase="${escapeHtml(ph)}" style="min-height:36px; padding:4px 9px; font-size:0.72rem;">${escapeHtml(ph)}</button>`).join('')}
+                      ${['🦖', '🔥', '👑', '🥚', '⚡', '🎉'].map((em) => `<button class="tab-btn" data-mp-em="${em}" style="min-height:36px; padding:4px 9px; font-size:0.76rem;">${em}</button>`).join('')}
                     </div>
                   </div>
 
                   <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                    <button class="chunky-btn ${selfReady ? 'orange' : ''}" id="mp-ready-self" style="flex:1; font-size:0.94rem;">
-                      ${selfReady ? '✅ PRONTO (Clique p/ cancelar)' : '👍 MARCAR PRONTO'}
+                    <button class="chunky-btn ${selfReady ? 'orange' : ''}" id="mp-ready-self" style="flex:1; min-height:46px; font-size:0.94rem; display:inline-flex; align-items:center; justify-content:center; gap:6px;">
+                      ${selfReady ? `${uiIcon('check', { size: 16 })} PRONTO (Clique p/ cancelar)` : `${uiIcon('check', { size: 16 })} MARCAR PRONTO`}
                     </button>
                     ${net.isHost ? `
-                      <button class="chunky-btn" id="mp-start" ${!allPlayersReady ? 'disabled' : ''} style="flex:1.2; font-size:1rem;">
+                      <button class="chunky-btn" id="mp-start" ${!allPlayersReady ? 'disabled' : ''} style="flex:1.2; min-height:46px; font-size:1rem; display:inline-flex; align-items:center; justify-content:center; gap:6px;">
                         ${allPlayersReady
-                          ? `🚀 INICIAR CORRIDA (${playerPeers.length + botCount} DINOS)`
-                          : `⏳ Faltam prontos: ${notReadyPlayers.map((n) => escapeHtml(n.name)).join(', ')}`}
+                          ? `${uiIcon('play', { size: 16 })} INICIAR CORRIDA (${playerPeers.length + botCount} DINOS)`
+                          : `Faltam prontos: ${notReadyPlayers.map((n) => escapeHtml(n.name)).join(', ')}`}
                       </button>
-                    ` : (room.status === 'playing' && room.activeMatch ? `<button class="chunky-btn" id="mp-join-live" style="flex:1;">🎮 ENTRAR NA CORRIDA!</button>` : '')}
-                    <button class="chunky-btn secondary" id="mp-leave">Sair</button>
+                    ` : (room.status === 'playing' && room.activeMatch ? `<button class="chunky-btn" id="mp-join-live" style="flex:1; min-height:46px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">${uiIcon('play', { size: 16 })} ENTRAR NA CORRIDA!</button>` : '')}
+                    <button class="chunky-btn secondary" id="mp-leave" style="min-height:46px;">Sair</button>
                   </div>
                     `;
                   })()}
@@ -798,18 +799,18 @@ export class MultiplayerLobby {
           <div class="overlay-center" id="mp-dino-picker-modal" style="z-index:80;">
             <div class="chunky-panel modal-card" style="max-width:660px;">
               <div class="modal-header">
-                <h2>🦖 Escolher Dinossauro no Lobby</h2>
-                <button class="chunky-btn secondary" id="mp-close-dpick">Fechar</button>
+                <h2 style="display:inline-flex; align-items:center; gap:7px;">${uiIcon('dino', { size: 20 })} Escolher Dinossauro no Lobby</h2>
+                <button class="chunky-btn secondary" id="mp-close-dpick" style="min-height:42px;">Fechar</button>
               </div>
-              ${room.config?.uniqueDinos ? `<div class="hud-pill" style="color:#fde047;">🔒 Sala exige dinos únicos — dinos já escolhidos ficam bloqueados.</div>` : ''}
+              ${room.config?.uniqueDinos ? `<div class="hud-pill" style="color:#fde047;">${uiIcon('lock', { size: 13 })} Sala exige dinos únicos — dinos já escolhidos ficam bloqueados.</div>` : ''}
               <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); gap:6px; max-height:55vh; overflow-y:auto;">
                 ${DINO_CATALOG.filter((d) => Save.data.unlockedDinos.includes(d.id)).map((d) => {
                   const taken = room.config?.uniqueDinos && room.peers.some((p) => p.peerId !== net.peerId && p.role !== 'controller' && p.dinoId === d.id);
                   const isMine = (Save.data.selectedDino || 'trex') === d.id;
                   return `
-                    <button class="tab-btn ${isMine ? 'active' : ''}" data-pick-lobby-dino="${d.id}" ${taken ? 'disabled' : ''} style="text-align:left; padding:8px;">
+                    <button class="tab-btn ${isMine ? 'active' : ''}" data-pick-lobby-dino="${d.id}" ${taken ? 'disabled' : ''} style="text-align:left; min-height:46px; padding:8px;">
                       <div style="font-weight:900;">${escapeHtml(d.name)}</div>
-                      <small style="opacity:0.8;">${taken ? '🔒 Em uso' : (isMine ? '★ Atual' : d.habitat || 'land')}</small>
+                      <small style="opacity:0.8;">${taken ? `${uiIcon('lock', { size: 11 })} Em uso` : (isMine ? `${uiIcon('star', { size: 11 })} Atual` : d.habitat || 'land')}</small>
                     </button>
                   `;
                 }).join('')}
@@ -822,10 +823,10 @@ export class MultiplayerLobby {
           <div class="overlay-center" id="mp-gear-modal" style="z-index:80;">
             <div class="chunky-panel modal-card" style="max-width:560px;">
               <div class="modal-header">
-                <h2>⚙️ Configurações da Sala</h2>
-                <button class="chunky-btn secondary" id="mp-close-gear">Fechar</button>
+                <h2 style="display:inline-flex; align-items:center; gap:7px;">${uiIcon('settings', { size: 20 })} Configurações da Sala</h2>
+                <button class="chunky-btn secondary" id="mp-close-gear" style="min-height:42px;">Fechar</button>
               </div>
-              ${room.status === 'playing' ? `<div class="hud-pill" style="color:#f87171;">🔒 Partida em andamento — algumas opções estão travadas.</div>` : ''}
+              ${room.status === 'playing' ? `<div class="hud-pill" style="color:#f87171;">${uiIcon('lock', { size: 13 })} Partida em andamento — algumas opções estão travadas.</div>` : ''}
               <div style="display:grid; gap:8px;">
                 <label class="field-row"><span>Modo de Jogo</span>
                   <select class="select-input" id="gear-mode" ${room.status === 'playing' ? 'disabled' : ''}>
@@ -839,18 +840,18 @@ export class MultiplayerLobby {
                 </label>
                 <label class="field-row"><span>Habitat Inicial</span>
                   <select class="select-input" id="gear-biome" ${room.status === 'playing' ? 'disabled' : ''}>
-                    <option value="random_portal" ${(room.config?.biomeId || 'random_portal') === 'random_portal' ? 'selected' : ''}>🌀 Sorteio (Portais)</option>
+                    <option value="random_portal" ${(room.config?.biomeId || 'random_portal') === 'random_portal' ? 'selected' : ''}>Sorteio (Portais)</option>
                     ${BIOMES.map((b) => `<option value="${b.id}" ${room.config?.biomeId === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}
                   </select>
                 </label>
                 <label class="field-row"><span>Regra de Pausa</span>
                   <select class="select-input" id="gear-pause">
-                    <option value="host_only" ${(room.config?.pausePolicy || 'host_only') === 'host_only' ? 'selected' : ''}>👑 Só o Dono</option>
-                    <option value="all_limited" ${room.config?.pausePolicy === 'all_limited' ? 'selected' : ''}>👥 Todos (c/ limite)</option>
+                    <option value="host_only" ${(room.config?.pausePolicy || 'host_only') === 'host_only' ? 'selected' : ''}>Só o Dono</option>
+                    <option value="all_limited" ${room.config?.pausePolicy === 'all_limited' ? 'selected' : ''}>Todos (c/ limite)</option>
                   </select>
                 </label>
                 <div class="field-row game-field-row">
-                  <span class="game-field-label">🛤️ Modo de Pista ${renderHelpBadge('Paralelas: pistas clonadas lado a lado. Ghost: mesma pista sem colisão. Clássico: todos juntos.')}</span>
+                  <span class="game-field-label">${uiIcon('openworld', { size: 13 })} Modo de Pista ${renderHelpBadge('Paralelas: pistas clonadas lado a lado. Ghost: mesma pista sem colisão. Clássico: todos juntos.')}</span>
                   ${renderGameStepper('gear-track-mode', [
                     { value: 'parallel', label: 'Paralelas (Rec.)' },
                     { value: 'ghost', label: 'Modo Ghost' },
@@ -858,7 +859,7 @@ export class MultiplayerLobby {
                   ], room.config?.trackMode || 'parallel', { disabled: room.status === 'playing' })}
                 </div>
                 <div class="field-row game-field-row">
-                  <span class="game-field-label">🎥 Câmera MP ${renderHelpBadge('Única Compartilhada, Tela Dividida ou Por Jogador.')}</span>
+                  <span class="game-field-label">${uiIcon('camera', { size: 13 })} Câmera MP ${renderHelpBadge('Única Compartilhada, Tela Dividida ou Por Jogador.')}</span>
                   ${renderGameStepper('gear-cam-mode', [
                     { value: 'shared', label: 'Única Compartilhada' },
                     { value: 'split_h', label: 'Dividida Horiz.' },
@@ -866,7 +867,7 @@ export class MultiplayerLobby {
                     { value: 'per_player', label: 'Por Jogador' }
                   ], room.config?.mpCameraMode || 'shared')}
                 </div>
-                ${renderGameSwitch('gear-revive', '💖 Permitir Reviver Aliado', room.config?.allowRevive !== false, 'Permite reviver aliados caídos com V ou touch.')}
+                ${renderGameSwitch('gear-revive', `${uiIcon('revive', { size: 13, color: '#fda4af' })} Permitir Reviver Aliado`, room.config?.allowRevive !== false, 'Permite reviver aliados caídos com V ou touch.')}
                 <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:6px; font-size:0.74rem;">
                   <label>Custo Revive
                     <select class="select-input" id="gear-revive-cost" style="width:100%;">
@@ -896,34 +897,34 @@ export class MultiplayerLobby {
                     </div>
                   </label>
                 </div>
-                ${renderGameSwitch('gear-tv', '📺 Modo TV de Sala', !!(room.tvScale || room.config?.tvScale), 'Aumenta textos e placares para TV.')}
-                ${renderGameSwitch('gear-mirrored', '🪞 Modo Espelhado', !!room.config?.mirroredMode, 'Inverte a pista horizontalmente.')}
-                ${renderGameSwitch('gear-hints', '🪧 Dicas Visuais sobre Obstáculos', room.config?.obstacleHints !== false, 'Exibe setas/dicas acima dos obstáculos.')}
-                ${renderGameSwitch('gear-teacher', '🎓 Modo Professor / Aula', !!(room.teacherMode || room.config?.teacherMode), 'Modo educativo simplificado.')}
+                ${renderGameSwitch('gear-tv', `${uiIcon('monitor', { size: 13 })} Modo TV de Sala`, !!(room.tvScale || room.config?.tvScale), 'Aumenta textos e placares para TV.')}
+                ${renderGameSwitch('gear-mirrored', `${uiIcon('swap', { size: 13 })} Modo Espelhado`, !!room.config?.mirroredMode, 'Inverte a pista horizontalmente.')}
+                ${renderGameSwitch('gear-hints', `${uiIcon('info', { size: 13 })} Dicas Visuais sobre Obstáculos`, room.config?.obstacleHints !== false, 'Exibe setas/dicas acima dos obstáculos.')}
+                ${renderGameSwitch('gear-teacher', `${uiIcon('book', { size: 13 })} Modo Professor / Aula`, !!(room.teacherMode || room.config?.teacherMode), 'Modo educativo simplificado.')}
                 <div class="field-row game-field-row">
-                  <span class="game-field-label">🎬 Intros de Predadores</span>
+                  <span class="game-field-label">${uiIcon('clip', { size: 13 })} Intros de Predadores</span>
                   ${renderGameStepper('gear-intro', [
                     { value: 'always', label: 'Sempre' },
                     { value: 'first_time', label: '1ª Vez' },
                     { value: 'off', label: 'Nunca' }
                   ], room.config?.introMode || 'first_time')}
                 </div>
-                <label class="field-row"><span>🌍 Vários Habitats (portais)</span><input type="checkbox" id="gear-multihab" ${room.config?.multiHabitats !== false ? 'checked' : ''} /></label>
-                <label class="field-row"><span>🗳️ Jogadores podem votar</span><input type="checkbox" id="gear-vote" ${room.config?.allowVoting !== false ? 'checked' : ''} /></label>
-                <label class="field-row"><span>🧬 Permitir Híbridos</span><input type="checkbox" id="gear-hybrids" ${room.config?.allowHybrids !== false ? 'checked' : ''} /></label>
-                <label class="field-row"><span>🔒 Exigir Dinos Únicos</span><input type="checkbox" id="gear-unique" ${room.config?.uniqueDinos ? 'checked' : ''} /></label>
-                <label class="field-row"><span>📱 Permitir Controles Celular</span><input type="checkbox" id="gear-ctrl" ${room.config?.allowControllers !== false ? 'checked' : ''} /></label>
-                <label class="field-row"><span>👥 +1 Controle por Jogador</span><input type="checkbox" id="gear-multictrl" ${room.config?.allowMultiControllersPerPlayer ? 'checked' : ''} /></label>
-                <label class="field-row"><span>☄️ Eventos / 👑 Bosses / ⚡ Power-ups</span>
+                <label class="field-row"><span>${uiIcon('openworld', { size: 13 })} Vários Habitats (portais)</span><input type="checkbox" id="gear-multihab" ${room.config?.multiHabitats !== false ? 'checked' : ''} /></label>
+                <label class="field-row"><span>${uiIcon('check', { size: 13 })} Jogadores podem votar</span><input type="checkbox" id="gear-vote" ${room.config?.allowVoting !== false ? 'checked' : ''} /></label>
+                <label class="field-row"><span>${uiIcon('dna', { size: 13 })} Permitir Híbridos</span><input type="checkbox" id="gear-hybrids" ${room.config?.allowHybrids !== false ? 'checked' : ''} /></label>
+                <label class="field-row"><span>${uiIcon('lock', { size: 13 })} Exigir Dinos Únicos</span><input type="checkbox" id="gear-unique" ${room.config?.uniqueDinos ? 'checked' : ''} /></label>
+                <label class="field-row"><span>${uiIcon('gamepad', { size: 13 })} Permitir Controles Celular</span><input type="checkbox" id="gear-ctrl" ${room.config?.allowControllers !== false ? 'checked' : ''} /></label>
+                <label class="field-row"><span>${uiIcon('multiplayer', { size: 13 })} +1 Controle por Jogador</span><input type="checkbox" id="gear-multictrl" ${room.config?.allowMultiControllersPerPlayer ? 'checked' : ''} /></label>
+                <label class="field-row"><span>${uiIcon('bolt', { size: 13 })} Eventos / ${uiIcon('crown', { size: 13 })} Bosses / ${uiIcon('sparkle', { size: 13 })} Power-ups</span>
                   <div style="display:flex; gap:10px;">
                     <label><input type="checkbox" id="gear-ev" ${room.config?.allowEvents !== false ? 'checked' : ''} /> Ev</label>
                     <label><input type="checkbox" id="gear-boss" ${room.config?.allowBosses !== false ? 'checked' : ''} /> Boss</label>
                     <label><input type="checkbox" id="gear-pup" ${room.config?.allowPowerups !== false ? 'checked' : ''} /> PUp</label>
                   </div>
                 </label>
-                <label class="field-row"><span>⚖️ Handicap Opcional</span><input type="checkbox" id="gear-handicap" ${room.config?.allowHandicap ? 'checked' : ''} /></label>
+                <label class="field-row"><span>${uiIcon('shield', { size: 13 })} Handicap Opcional</span><input type="checkbox" id="gear-handicap" ${room.config?.allowHandicap ? 'checked' : ''} /></label>
               </div>
-              <button class="chunky-btn" id="gear-save" style="margin-top:8px;">✅ Aplicar Regras</button>
+              <button class="chunky-btn" id="gear-save" style="margin-top:8px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">${uiIcon('check', { size: 15 })} Aplicar Regras</button>
             </div>
           </div>
         ` : ''}

@@ -14,6 +14,7 @@ import { AuthProfile } from '../systems/AuthProfile.js';
 import { isMobileDevice } from '../systems/DeviceDetector.js';
 import { normalizeLocale } from '../i18n/translations.js';
 import { escapeHtml } from '../security/Sanitize.js';
+import { uiIcon } from './UiIcons.js';
 
 const OPTIONAL_CONTENT_GLOB = typeof import.meta.glob === 'function'
   ? import.meta.glob('../content/{catalog_expanded,threat_variants}.js')
@@ -41,43 +42,43 @@ async function loadOptionalBestiaryCatalogs() {
 }
 
 const MODE_CATEGORY_META = [
-  { id: 'all', icon: '🎮', label: { 'pt-BR': 'Todos', en: 'All', es: 'Todos' } },
-  { id: 'classic', icon: '🦖', label: { 'pt-BR': 'Clássicos', en: 'Classic', es: 'Clásicos' } },
-  { id: 'competitive', icon: '⚔️', label: { 'pt-BR': 'Competitivos', en: 'Competitive', es: 'Competitivos' } },
-  { id: 'cooperative', icon: '🤝', label: { 'pt-BR': 'Cooperativos', en: 'Cooperative', es: 'Cooperativos' } },
-  { id: 'challenge', icon: '👑', label: { 'pt-BR': 'Desafios / Boss', en: 'Challenges / Boss', es: 'Desafíos / Jefe' } },
-  { id: 'exploration_rpg', icon: '🏰', label: { 'pt-BR': 'Aventura & RPG', en: 'Adventure & RPG', es: 'Aventura y RPG' } },
-  { id: 'free', icon: '🌿', label: { 'pt-BR': 'Livre', en: 'Free', es: 'Libre' } }
+  { id: 'all', icon: 'gamepad', label: { 'pt-BR': 'Todos', en: 'All', es: 'Todos' } },
+  { id: 'classic', icon: 'dino', label: { 'pt-BR': 'Clássicos', en: 'Classic', es: 'Clásicos' } },
+  { id: 'competitive', icon: 'arena', label: { 'pt-BR': 'Competitivos', en: 'Competitive', es: 'Competitivos' } },
+  { id: 'cooperative', icon: 'multiplayer', label: { 'pt-BR': 'Cooperativos', en: 'Cooperative', es: 'Cooperativos' } },
+  { id: 'challenge', icon: 'crown', label: { 'pt-BR': 'Desafios / Boss', en: 'Challenges / Boss', es: 'Desafíos / Jefe' } },
+  { id: 'exploration_rpg', icon: 'dungeon', label: { 'pt-BR': 'Aventura & RPG', en: 'Adventure & RPG', es: 'Aventura y RPG' } },
+  { id: 'free', icon: 'compass', label: { 'pt-BR': 'Livre', en: 'Free', es: 'Libre' } }
 ];
 
 const MODE_DISPLAY_FALLBACKS = {
-  solo: { cat: 'classic', icon: '🦖', diff: 'Normal', tone: 'normal' },
-  story: { cat: 'classic', icon: '📖', diff: 'Normal', tone: 'normal' },
-  time_trial: { cat: 'classic', icon: '⏱️', diff: 'Médio', tone: 'medium' },
-  pvp: { cat: 'competitive', icon: '⚔️', diff: 'Competitivo', tone: 'hard' },
-  teams_2v2: { cat: 'competitive', icon: '🛡️', diff: 'Competitivo', tone: 'hard' },
-  tournament: { cat: 'competitive', icon: '🏆', diff: 'Torneio', tone: 'hard' },
-  sabotage: { cat: 'competitive', icon: '💣', diff: 'Difícil', tone: 'hard' },
-  capture_egg: { cat: 'competitive', icon: '🥚', diff: 'Médio', tone: 'medium' },
-  rival_ai: { cat: 'competitive', icon: '🤖', diff: 'Difícil', tone: 'hard' },
-  race: { cat: 'competitive', icon: '🏁', diff: 'Velocidade', tone: 'medium' },
-  competition: { cat: 'competitive', icon: '🥇', diff: 'Ranqueado', tone: 'hard' },
-  arena_x1: { cat: 'competitive', icon: '⚔️', diff: 'Combate 3D', tone: 'hard' },
-  coop: { cat: 'cooperative', icon: '🤝', diff: 'Coop', tone: 'normal' },
-  shared_controls: { cat: 'cooperative', icon: '🎮', diff: 'Party', tone: 'medium' },
-  relay: { cat: 'cooperative', icon: '🏃', diff: 'Coop', tone: 'normal' },
-  raid: { cat: 'cooperative', icon: '🐉', diff: 'Extremo', tone: 'extreme' },
-  boss_fight: { cat: 'challenge', icon: '👑', diff: 'Boss Rush', tone: 'extreme' },
-  boss_arena: { cat: 'challenge', icon: '👑', diff: 'Colossal 3D', tone: 'extreme' },
-  hardcore: { cat: 'challenge', icon: '💀', diff: 'Extremo', tone: 'extreme' },
-  chaos: { cat: 'challenge', icon: '🌀', diff: 'Caótico', tone: 'hard' },
-  wave_survival: { cat: 'challenge', icon: '🌊', diff: 'Difícil', tone: 'hard' },
-  daily_challenge: { cat: 'challenge', icon: '📅', diff: 'Desafio', tone: 'medium' },
-  dungeon_rpg: { cat: 'exploration_rpg', icon: '🏰', diff: 'RPG + Dados', tone: 'hard' },
-  dungeon_rush: { cat: 'exploration_rpg', icon: '🗝️', diff: 'Roguelike', tone: 'extreme' },
-  adventure_open: { cat: 'exploration_rpg', icon: '🗺️', diff: 'Mundo Aberto', tone: 'normal' },
-  zen: { cat: 'free', icon: '🧘', diff: 'Livre', tone: 'free' },
-  free_roam: { cat: 'free', icon: '🗺️', diff: 'Livre', tone: 'free' }
+  solo: { cat: 'classic', icon: 'dino', diff: 'Normal', tone: 'normal' },
+  story: { cat: 'classic', icon: 'book', diff: 'Normal', tone: 'normal' },
+  time_trial: { cat: 'classic', icon: 'bolt', diff: 'Médio', tone: 'medium' },
+  pvp: { cat: 'competitive', icon: 'arena', diff: 'Competitivo', tone: 'hard' },
+  teams_2v2: { cat: 'competitive', icon: 'shield', diff: 'Competitivo', tone: 'hard' },
+  tournament: { cat: 'competitive', icon: 'trophy', diff: 'Torneio', tone: 'hard' },
+  sabotage: { cat: 'competitive', icon: 'flame', diff: 'Difícil', tone: 'hard' },
+  capture_egg: { cat: 'competitive', icon: 'egg', diff: 'Médio', tone: 'medium' },
+  rival_ai: { cat: 'competitive', icon: 'mecha', diff: 'Difícil', tone: 'hard' },
+  race: { cat: 'competitive', icon: 'sprint', diff: 'Velocidade', tone: 'medium' },
+  competition: { cat: 'competitive', icon: 'medal', diff: 'Ranqueado', tone: 'hard' },
+  arena_x1: { cat: 'competitive', icon: 'arena', diff: 'Combate 3D', tone: 'hard' },
+  coop: { cat: 'cooperative', icon: 'multiplayer', diff: 'Coop', tone: 'normal' },
+  shared_controls: { cat: 'cooperative', icon: 'gamepad', diff: 'Party', tone: 'medium' },
+  relay: { cat: 'cooperative', icon: 'swap', diff: 'Coop', tone: 'normal' },
+  raid: { cat: 'cooperative', icon: 'claw', diff: 'Extremo', tone: 'extreme' },
+  boss_fight: { cat: 'challenge', icon: 'crown', diff: 'Boss Rush', tone: 'extreme' },
+  boss_arena: { cat: 'challenge', icon: 'crown', diff: 'Colossal 3D', tone: 'extreme' },
+  hardcore: { cat: 'challenge', icon: 'warning', diff: 'Extremo', tone: 'extreme' },
+  chaos: { cat: 'challenge', icon: 'sparkle', diff: 'Caótico', tone: 'hard' },
+  wave_survival: { cat: 'challenge', icon: 'gills', diff: 'Difícil', tone: 'hard' },
+  daily_challenge: { cat: 'challenge', icon: 'star', diff: 'Desafio', tone: 'medium' },
+  dungeon_rpg: { cat: 'exploration_rpg', icon: 'dungeon', diff: 'RPG + Dados', tone: 'hard' },
+  dungeon_rush: { cat: 'exploration_rpg', icon: 'key', diff: 'Roguelike', tone: 'extreme' },
+  adventure_open: { cat: 'exploration_rpg', icon: 'openworld', diff: 'Mundo Aberto', tone: 'normal' },
+  zen: { cat: 'free', icon: 'sparkle', diff: 'Livre', tone: 'free' },
+  free_roam: { cat: 'free', icon: 'compass', diff: 'Livre', tone: 'free' }
 };
 
 function classifyModeCategory(mode) {
@@ -96,7 +97,7 @@ function classifyModeCategory(mode) {
 }
 
 function getModeDisplayMeta(mode) {
-  const fb = MODE_DISPLAY_FALLBACKS[mode?.id] || { cat: 'classic', icon: '🎮', diff: 'Normal', tone: 'normal' };
+  const fb = MODE_DISPLAY_FALLBACKS[mode?.id] || { cat: 'classic', icon: 'gamepad', diff: 'Normal', tone: 'normal' };
   const diffLabel = mode?.difficulty || fb.diff;
   const dl = String(diffLabel).toLowerCase();
   const tone = fb.tone || (dl.includes('extr') || dl.includes('boss') ? 'extreme' : (dl.includes('dif') || dl.includes('hard') ? 'hard' : (dl.includes('liv') || dl.includes('free') ? 'free' : 'normal')));
@@ -105,7 +106,7 @@ function getModeDisplayMeta(mode) {
     : (mode?.players > 1 ? `${mode.players}P` : '1P');
   return {
     category: classifyModeCategory(mode),
-    icon: mode?.icon || fb.icon,
+    icon: fb.icon || 'gamepad',
     difficulty: diffLabel,
     tone,
     players
@@ -125,7 +126,7 @@ export function attachModalHelp(container, helpText) {
 
   const pop = document.createElement('div');
   pop.className = 'modal-help-popover hidden';
-  pop.innerHTML = `<strong>❓ Como funciona:</strong> ${helpText}`;
+  pop.innerHTML = `<strong>${uiIcon('info', { size: 15, color: '#38bdf8' })} Como funciona:</strong> ${helpText}`;
 
   const rightSlot = header.querySelector('div:last-child');
   if (rightSlot && rightSlot !== header && rightSlot.querySelector('button')) {
@@ -168,9 +169,9 @@ export function renderGameStepper(id, options, selectedValue, { disabled = false
   const current = options.find((o) => String(o.value) === String(selectedValue)) || options[0] || { label: '—' };
   return `
     <div class="game-stepper ${disabled ? 'is-disabled' : ''}" data-stepper-for="${id}" ${tip ? `data-opt-tip-host="${escapeHtml(tip)}"` : ''}>
-      <button type="button" class="game-stepper-btn" data-step="-1" aria-label="Anterior" ${disabled ? 'disabled' : ''}>◀</button>
+      <button type="button" class="game-stepper-btn" data-step="-1" aria-label="Anterior" ${disabled ? 'disabled' : ''}>${uiIcon('arrowLeft', { size: 14 })}</button>
       <span class="game-stepper-val" data-stepper-label>${escapeHtml(current.label)}</span>
-      <button type="button" class="game-stepper-btn" data-step="1" aria-label="Próximo" ${disabled ? 'disabled' : ''}>▶</button>
+      <button type="button" class="game-stepper-btn" data-step="1" aria-label="Próximo" ${disabled ? 'disabled' : ''}>${uiIcon('arrowRight', { size: 14 })}</button>
       <select class="game-stepper-native" id="${id}" ${disabled ? 'disabled' : ''}>${optsHtml}</select>
     </div>
   `;
@@ -312,99 +313,124 @@ export class Menus {
     const isLogged = !!cachedUser;
     container.innerHTML = `
       <div class="main-menu-wrap">
-        <div class="chunky-panel main-menu-panel" style="width:min(436px, 93vw); padding:20px; gap:11px;">
-          <div>
+        <div class="chunky-panel main-menu-panel" style="width:min(448px, 94vw); padding:16px 18px; gap:9px;">
+          <div class="menu-header-block">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
-              <div class="dino-logo" id="main-dino-logo" style="font-size:2.05rem; cursor:pointer; user-select:none;" title="Dino Dash 3D">DINO <span class="dash-accent">DASH 3D</span></div>
+              <div class="dino-logo" id="main-dino-logo" style="font-size:1.92rem; cursor:pointer; user-select:none; line-height:1.05;" title="Dino Dash 3D">DINO <span class="dash-accent">DASH 3D</span></div>
               <button type="button" class="menu-account-pill ${isLogged ? 'is-logged' : ''}" id="menu-account-pill" title="${isLogged ? 'Gerenciar conta conectada na nuvem' : 'Entrar ou criar conta sem e-mail (Nick + Senha)'}">
-                ${isLogged ? `☁️ @${escapeHtml(localNick)}` : '🔑 Entrar / Criar Conta'}
+                ${isLogged ? `${uiIcon('cloud', { size: 14 })} @${escapeHtml(localNick)}` : `${uiIcon('key', { size: 14 })} Entrar / Criar Conta`}
               </button>
               <div class="mob-only" style="display:flex; gap:5px; align-items:center;">
-                <button type="button" class="inline-change-btn" id="menu-rotate-btn" style="padding:4px 8px; border-color:#38bdf8; color:#7dd3fc;">🔄 ${state.isLandscape ? 'Paisagem' : 'Deitar'}</button>
-                ${isMobileDevice() ? `<button type="button" class="inline-change-btn" id="menu-ctrl-btn" style="padding:4px 8px; border-color:#58d63a; color:#86efac;">🎮 Controle</button>` : ''}
+                <button type="button" class="inline-change-btn" id="menu-rotate-btn" style="padding:4px 8px; border-color:#38bdf8; color:#7dd3fc; display:inline-flex; align-items:center; gap:4px;">${uiIcon('rotate', { size: 13 })} ${state.isLandscape ? 'Paisagem' : 'Deitar'}</button>
+                ${isMobileDevice() ? `<button type="button" class="inline-change-btn" id="menu-ctrl-btn" style="padding:4px 8px; border-color:#58d63a; color:#86efac; display:inline-flex; align-items:center; gap:4px;">${uiIcon('gamepad', { size: 13 })} Controle</button>` : ''}
               </div>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-              <span class="hud-pill">🏆 HI: <strong>${Save.getHighScore()}</strong></span>
-              <span class="hud-pill">🥚 Ovos: <strong>${Save.data.eggs}</strong></span>
-              <button type="button" class="hud-pill" id="menu-crystals-info-btn" title="Clique para ver para que servem os Diamantes 💎" style="color:#38bdf8; cursor:pointer; border:1px solid rgba(56,189,248,0.45);">💎 <strong>${Save.data.crystals || 0}</strong> ℹ️</button>
-              <span class="hud-pill">🎖️ ${title}</span>
-              ${prestigeLv > 0 ? `<span class="hud-pill" style="color:#ffd447;">✨ P${prestigeLv}</span>` : ''}
+            <div class="menu-economy-strip" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:7px; align-items:center;">
+              <span class="hud-pill" style="display:inline-flex; align-items:center; gap:4px;">${uiIcon('trophy', { size: 14, color: '#ffd447' })} HI: <strong>${Save.getHighScore()}</strong></span>
+              <span class="hud-pill" style="display:inline-flex; align-items:center; gap:4px;">${uiIcon('egg', { size: 14, color: '#fde68a' })} Ovos: <strong>${Save.data.eggs}</strong></span>
+              <button type="button" class="hud-pill" id="menu-crystals-info-btn" title="Clique para ver para que servem os Diamantes" style="color:#38bdf8; cursor:pointer; border:1px solid rgba(56,189,248,0.45); display:inline-flex; align-items:center; gap:4px;">${uiIcon('diamond', { size: 14, color: '#38bdf8' })} <strong>${Save.data.crystals || 0}</strong> ${uiIcon('info', { size: 13 })}</button>
+              <span class="hud-pill" style="display:inline-flex; align-items:center; gap:4px;">${uiIcon('medal', { size: 14, color: '#c4b5fd' })} ${escapeHtml(title)}</span>
+              ${prestigeLv > 0 ? `<span class="hud-pill" style="color:#ffd447; display:inline-flex; align-items:center; gap:3px;">${uiIcon('sparkle', { size: 13, color: '#ffd447' })} P${prestigeLv}</span>` : ''}
             </div>
-            <div id="menu-crystals-popover" class="item-card" style="display:none; margin-top:8px; padding:8px 10px; border-color:#38bdf8; font-size:0.76rem; color:#bae6fd; line-height:1.4;">
-              <strong style="color:#38bdf8;">💎 O que os Diamantes fazem?</strong><br>
-              • <strong>Catalisador Gacha (3 💎):</strong> Garante Épica+ e dobra chance Shiny/Mítica.<br>
-              • <strong>Forja de Mutações (2–4 💎):</strong> Desbloqueia ou evolui DNA direto.<br>
-              • <strong>Renascer na Corrida (2 💎):</strong> Volta à vida 1× no Fácil/Normal.<br>
-              • <strong>Loja Rotativa (2 💎):</strong> Atualiza ofertas com -20% na hora.<br>
-              <small style="color:#94a3b8;">Ganhe 💎 em Baús do Tesouro na corrida, Chefes ou Ovo Misterioso completo.</small>
+            <div id="menu-crystals-popover" class="item-card" style="display:none; margin-top:7px; padding:8px 10px; border-color:#38bdf8; font-size:0.75rem; color:#bae6fd; line-height:1.4;">
+              <strong style="color:#38bdf8; display:inline-flex; align-items:center; gap:4px;">${uiIcon('diamond', { size: 14, color: '#38bdf8' })} O que os Diamantes fazem?</strong><br>
+              • <strong>Catalisador Gacha (3):</strong> Garante Épica+ e dobra chance Shiny/Mítica.<br>
+              • <strong>Forja de Mutações (2–4):</strong> Desbloqueia ou evolui DNA direto.<br>
+              • <strong>Renascer na Corrida (2):</strong> Volta à vida 1× no Fácil/Normal.<br>
+              • <strong>Loja Rotativa (2):</strong> Atualiza ofertas com -20% na hora.<br>
+              <small style="color:#94a3b8;">Ganhe Diamantes em Baús do Tesouro na corrida, Chefes ou Ovo Misterioso completo.</small>
             </div>
           </div>
 
-          <div class="item-card" style="padding:10px 12px; font-size:0.84rem; gap:6px;">
-            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; align-items:center;">
-              <span>Modo: <strong style="color:#58d63a;">${state.modeName}</strong> <button type="button" class="inline-change-btn" data-nav="modes">mudar</button></span>
-              <span>Dif.: <strong style="color:#ff9a24;">${state.diffName}</strong>${Save.data.perfectMode ? ' <strong style="color:#38bdf8;">• 💎 1 Vida</strong>' : ''} <button type="button" class="inline-change-btn" data-nav="difficulty">mudar</button></span>
-            </div>
-            <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; align-items:center;">
-              <span>Dino: <strong style="color:#ffd447;">${state.dinoName}</strong> <span style="color:#fda4af;">(${state.effectiveLives ?? 3}❤️)</span> <button type="button" class="inline-change-btn" data-nav="dinos">mudar</button></span>
-              <span>Mapa: <strong>${state.biomeLabel}</strong> <button type="button" class="inline-change-btn" data-nav="maps">mudar</button></span>
-            </div>
+          <div class="menu-loadout-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <button type="button" class="loadout-chip" data-nav="modes" title="Trocar modo de jogo">
+              <span class="loadout-chip-ico" style="color:#58d63a;">${uiIcon('gamepad', { size: 15 })}</span>
+              <span class="loadout-chip-body">
+                <span class="loadout-chip-label">Modo</span>
+                <strong class="loadout-chip-val" style="color:#58d63a;">${escapeHtml(state.modeName)}</strong>
+              </span>
+              <span class="loadout-chip-chevron">${uiIcon('arrowRight', { size: 13 })}</span>
+            </button>
+            <button type="button" class="loadout-chip" data-nav="difficulty" title="Trocar dificuldade">
+              <span class="loadout-chip-ico" style="color:#ff9a24;">${uiIcon('bolt', { size: 15 })}</span>
+              <span class="loadout-chip-body">
+                <span class="loadout-chip-label">Dificuldade</span>
+                <strong class="loadout-chip-val" style="color:#ff9a24;">${escapeHtml(state.diffName)}${Save.data.perfectMode ? ' • 1 Vida' : ''}</strong>
+              </span>
+              <span class="loadout-chip-chevron">${uiIcon('arrowRight', { size: 13 })}</span>
+            </button>
+            <button type="button" class="loadout-chip" data-nav="dinos" title="Trocar dinossauro">
+              <span class="loadout-chip-ico" style="color:#ffd447;">${uiIcon('dino', { size: 15 })}</span>
+              <span class="loadout-chip-body">
+                <span class="loadout-chip-label">Dino</span>
+                <strong class="loadout-chip-val" style="color:#ffd447;">${escapeHtml(state.dinoName)} <span style="color:#fda4af; font-weight:700;">(${state.effectiveLives ?? 3}${uiIcon('heart', { size: 11, color: '#fda4af' })})</span></strong>
+              </span>
+              <span class="loadout-chip-chevron">${uiIcon('arrowRight', { size: 13 })}</span>
+            </button>
+            <button type="button" class="loadout-chip" data-nav="maps" title="Trocar mapa / bioma">
+              <span class="loadout-chip-ico" style="color:#38bdf8;">${uiIcon('openworld', { size: 15 })}</span>
+              <span class="loadout-chip-body">
+                <span class="loadout-chip-label">Mapa</span>
+                <strong class="loadout-chip-val">${escapeHtml(state.biomeLabel)}</strong>
+              </span>
+              <span class="loadout-chip-chevron">${uiIcon('arrowRight', { size: 13 })}</span>
+            </button>
           </div>
 
           ${(state.benchmarkTier === 'Baixo' && !state.lowSpec) ? `
-            <button type="button" class="lowspec-suggest-pill" id="menu-lowspec-suggest">
-              ⚠️ PC lento detectado (~${state.benchmarkFps} FPS) • Clique para ativar "Meu PC é Fraco"
+            <button type="button" class="lowspec-suggest-pill" id="menu-lowspec-suggest" style="display:inline-flex; align-items:center; justify-content:center; gap:6px;">
+              ${uiIcon('warning', { size: 14, color: '#fbbf24' })} PC lento detectado (~${state.benchmarkFps} FPS) • Ativar "Meu PC é Fraco"
             </button>
           ` : ''}
 
-          <button class="chunky-btn" id="menu-play" style="font-size:1.28rem; padding:15px;">▶ Jogar Agora</button>
+          <button class="chunky-btn menu-play-hero" id="menu-play" style="font-size:1.18rem; padding:13px 16px; display:flex; align-items:center; justify-content:center; gap:8px;">
+            ${uiIcon('play', { size: 18 })} <span>JOGAR AGORA</span>
+          </button>
 
           <div class="menu-quick3d-box">
             <div class="menu-quick3d-header">
-              <span>✨ Novos Modos 3D</span>
+              <span style="display:inline-flex; align-items:center; gap:5px;">${uiIcon('sparkle', { size: 14, color: '#ffd447' })} Novos Modos 3D</span>
               <span class="menu-quick3d-tag">NOVO</span>
             </div>
             <div class="menu-quick3d-grid">
-              <button type="button" class="menu-quick3d-btn" data-quick-mode="dungeon_rpg" title="Explore masmorras 3D com dados RPG e Mestre IA">🏰 Masmorra RPG</button>
-              <button type="button" class="menu-quick3d-btn" data-quick-mode="adventure_open" title="Mundo aberto 3D com biomas, segredos e exploração livre">🗺️ Mundo Aberto</button>
-              <button type="button" class="menu-quick3d-btn" data-quick-mode="arena_x1" title="Combate 3D direto 1v1 em arena jurássica">⚔️ Arena X1</button>
+              <button type="button" class="menu-quick3d-btn" data-quick-mode="dungeon_rpg" title="Explore masmorras 3D com dados RPG e Mestre IA">${uiIcon('dungeon', { size: 16 })} <span>Masmorra RPG</span></button>
+              <button type="button" class="menu-quick3d-btn" data-quick-mode="adventure_open" title="Mundo aberto 3D com biomas, segredos e exploração livre">${uiIcon('openworld', { size: 16 })} <span>Mundo Aberto</span></button>
+              <button type="button" class="menu-quick3d-btn" data-quick-mode="arena_x1" title="Combate 3D direto 1v1 em arena jurássica">${uiIcon('arena', { size: 16 })} <span>Arena X1</span></button>
             </div>
           </div>
 
-          <button class="chunky-btn orange" data-nav="multiplayer" style="font-size:1.02rem; padding:11px;">🌐 Multiplayer</button>
-
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <button class="chunky-btn secondary" data-nav="dinos" style="padding:11px 10px;">🦖 Dinossauros</button>
-            <button class="chunky-btn secondary" data-nav="custom" style="padding:11px 10px;">🎨 Personalização</button>
-          </div>
-
-          <div style="display:grid; grid-template-columns:1.15fr 0.85fr; gap:8px;">
-            <button class="chunky-btn secondary" data-nav="gacha" style="padding:10px; border-color:#f59e0b; color:#fde68a; display:flex; align-items:center; justify-content:center; gap:6px;">
-              <span>🎲 Gacha 3D</span>
-              ${(state.fossilCrates || 0) > 0 ? `<span class="badge-start-here" style="background:#f59e0b;color:#111827;">${state.fossilCrates}📦</span>` : ''}
+          <div class="menu-primary-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:7px;">
+            <button class="chunky-btn orange" data-nav="multiplayer" style="padding:10px 8px; font-size:0.92rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+              ${uiIcon('multiplayer', { size: 16 })} <span>Multiplayer</span>
             </button>
-            <button class="chunky-btn secondary" data-nav="extras" style="padding:10px; display:flex; align-items:center; justify-content:center; gap:6px;">
-              <span>📦 Extras</span>
-              ${!state.tutorialDone ? '<span class="badge-start-here">Novo!</span>' : ''}
+            <button class="chunky-btn secondary" data-nav="dinos" style="padding:10px 8px; font-size:0.92rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+              ${uiIcon('dino', { size: 16 })} <span>Dinossauros</span>
+            </button>
+            <button class="chunky-btn secondary" data-nav="custom" style="padding:10px 8px; font-size:0.92rem; display:flex; align-items:center; justify-content:center; gap:6px;">
+              ${uiIcon('palette', { size: 16 })} <span>Personalização</span>
+            </button>
+            <button class="chunky-btn secondary" data-nav="gacha" style="padding:10px 8px; font-size:0.92rem; border-color:#f59e0b; color:#fde68a; display:flex; align-items:center; justify-content:center; gap:6px;">
+              ${uiIcon('gacha', { size: 16 })} <span>Gacha 3D</span>
+              ${(state.fossilCrates || 0) > 0 ? `<span class="badge-start-here" style="background:#f59e0b;color:#111827; display:inline-flex; align-items:center; gap:2px;">${state.fossilCrates}${uiIcon('extras', { size: 11 })}</span>` : ''}
             </button>
           </div>
 
-          <div class="menu-account-row" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px;">
-            <button class="chunky-btn secondary menu-mini-btn" data-nav="profile" style="padding:8px 6px; font-size:0.78rem;" title="Perfil do Jogador, Dino 3D e Estatísticas">👤 Perfil</button>
-            <button class="chunky-btn secondary menu-mini-btn" data-nav="achievements" style="padding:8px 6px; font-size:0.78rem;" title="Galeria de Conquistas e Troféus">🏆 Conquistas</button>
-            <button class="chunky-btn secondary menu-mini-btn" data-nav="save_data" style="padding:8px 6px; font-size:0.78rem;" title="Exportar, Importar e Backup do Save">💾 Save</button>
+          <div class="menu-account-row menu-utility-dock" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;">
+            <button class="chunky-btn secondary menu-mini-btn" data-nav="profile" style="padding:8px 5px; font-size:0.75rem; display:flex; align-items:center; justify-content:center; gap:4px;" title="Perfil do Jogador, Dino 3D e Estatísticas">${uiIcon('account', { size: 14 })} <span>Perfil</span></button>
+            <button class="chunky-btn secondary menu-mini-btn" data-nav="achievements" style="padding:8px 5px; font-size:0.75rem; display:flex; align-items:center; justify-content:center; gap:4px;" title="Galeria de Conquistas e Troféus">${uiIcon('trophy', { size: 14 })} <span>Conquistas</span></button>
+            <button class="chunky-btn secondary menu-mini-btn" data-nav="save_data" style="padding:8px 5px; font-size:0.75rem; display:flex; align-items:center; justify-content:center; gap:4px;" title="Exportar, Importar e Backup do Save">${uiIcon('save', { size: 14 })} <span>Save</span></button>
+            <button class="chunky-btn secondary menu-mini-btn" data-nav="extras" style="padding:8px 5px; font-size:0.75rem; display:flex; align-items:center; justify-content:center; gap:4px;" title="Tutorial, Guias, Minigames e Configurações">${uiIcon('extras', { size: 14 })} <span>Extras</span>${!state.tutorialDone ? '<span class="badge-start-here" style="margin-left:2px;">!</span>' : ''}</button>
           </div>
 
-          <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; font-size:0.74rem; color:#d6d3d1;">
-            <button type="button" class="inline-change-btn" data-nav="bestiary" title="Bestiário de Predadores, Chefes, Debuffs e Eventos">📚 Bestiário</button>
-            <button type="button" class="inline-change-btn" data-nav="custom" title="Desbloqueie e equipe cápsulas de DNA em Personalização">🧬 Mutações DNA</button>
-            <button type="button" class="inline-change-btn" data-nav="gacha" title="Desbloqueie Variantes Mecânicas, Shiny e Secretas">🤖 Mecânico &amp; Shiny</button>
-            <button type="button" class="inline-change-btn" data-nav="guide" title="Lojinha especial na 4ª Pista a cada 30.000 pts">🛍️ Lojinha 30k</button>
+          <div class="menu-inline-links" style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center; font-size:0.72rem; color:#d6d3d1;">
+            <button type="button" class="inline-change-btn" data-nav="bestiary" title="Bestiário de Predadores, Chefes, Debuffs e Eventos" style="display:inline-flex; align-items:center; gap:4px;">${uiIcon('bestiary', { size: 12 })} Bestiário</button>
+            <button type="button" class="inline-change-btn" data-nav="custom" title="Desbloqueie e equipe cápsulas de DNA em Personalização" style="display:inline-flex; align-items:center; gap:4px;">${uiIcon('dna', { size: 12 })} Mutações</button>
+            <button type="button" class="inline-change-btn" data-nav="gacha" title="Desbloqueie Variantes Mecânicas, Shiny e Secretas" style="display:inline-flex; align-items:center; gap:4px;">${uiIcon('mecha', { size: 12 })} Mecânico &amp; Shiny</button>
+            <button type="button" class="inline-change-btn" data-nav="guide" title="Lojinha especial na 4ª Pista a cada 30.000 pts" style="display:inline-flex; align-items:center; gap:4px;">${uiIcon('shop', { size: 12 })} Lojinha 30k</button>
           </div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:center; font-size:0.7rem; color:#a8a29e; border-top:1px solid rgba(255,255,255,0.08); padding-top:8px;">
-            <button type="button" class="inline-change-btn" data-nav="legal" style="color:#a7f3d0;">🟢 Livre • 📜 Termos &amp; Privacidade (LGPD)</button>
-            <button type="button" class="inline-change-btn" data-nav="report" style="color:#fca5a5;">🚨 Denunciar</button>
+          <div class="menu-legal-footer" style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:center; font-size:0.69rem; color:#a8a29e; border-top:1px solid rgba(255,255,255,0.08); padding-top:6px;">
+            <button type="button" class="inline-change-btn" data-nav="legal" style="color:#a7f3d0; display:inline-flex; align-items:center; gap:4px;">${uiIcon('shield', { size: 12, color: '#4ade80' })} Livre • Termos &amp; Privacidade (LGPD)</button>
+            <button type="button" class="inline-change-btn" data-nav="report" style="color:#fca5a5; display:inline-flex; align-items:center; gap:4px;">${uiIcon('flag', { size: 12, color: '#fca5a5' })} Denunciar</button>
           </div>
         </div>
       </div>
@@ -445,11 +471,11 @@ export class Menus {
         if (user) {
           const nick = Save.data.profile?.nickname || Save.data.network?.nickname || user.user_metadata?.nickname || 'Dino';
           acctPill.classList.add('is-logged');
-          acctPill.textContent = `☁️ @${nick}`;
+          acctPill.innerHTML = `${uiIcon('cloud', { size: 14 })} @${escapeHtml(nick)}`;
           acctPill.title = 'Gerenciar conta conectada na nuvem';
         } else {
           acctPill.classList.remove('is-logged');
-          acctPill.textContent = '🔑 Entrar / Criar Conta';
+          acctPill.innerHTML = `${uiIcon('key', { size: 14 })} Entrar / Criar Conta`;
           acctPill.title = 'Entrar ou criar conta sem e-mail (Nick + Senha)';
         }
       }).catch(() => {});
@@ -482,93 +508,93 @@ export class Menus {
       <div class="overlay-center">
         <div class="chunky-panel modal-card" style="max-width: 780px;">
           <div class="modal-header">
-            <h2>📦 Extras & Opções</h2>
+            <h2>${uiIcon('extras', { size: 20 })} Extras &amp; Opções</h2>
             <button class="chunky-btn secondary" id="extras-close">Voltar</button>
           </div>
 
           <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));">
             <button class="item-card" data-ex-nav="tutorial" style="text-align:left; cursor:pointer; border-color:${state.tutorialDone ? 'var(--panel-border)' : '#38bdf8'};">
               <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                <strong style="color:#7dd3fc;">🎓 Tutorial Interativo</strong>
+                <strong style="color:#7dd3fc;">${uiIcon('sparkle', { size: 15, color: '#7dd3fc' })} Tutorial Interativo</strong>
                 ${!state.tutorialDone ? '<span class="badge-start-here">Comece por aqui!</span>' : ''}
               </div>
               <small style="color:#d8c2a6;">Aprenda pulo, ataque [Q], habilidade e reações em 1 minuto.</small>
             </button>
 
             <button class="item-card" data-ex-nav="guide" style="text-align:left; cursor:pointer;">
-              <strong style="color:#ffd447;">📖 Guia, Obstáculos & Status</strong>
+              <strong style="color:#ffd447;">${uiIcon('book', { size: 15, color: '#ffd447' })} Guia, Obstáculos &amp; Status</strong>
               <small style="color:#d8c2a6;">Enciclopédia completa de perigos, combos e fraquezas.</small>
             </button>
 
             <button class="item-card" data-ex-nav="bestiary" data-nav="bestiary" style="text-align:left; cursor:pointer; border-color:#f97316;">
-              <strong style="color:#fb923c;">📚 Bestiário & Catálogo</strong>
+              <strong style="color:#fb923c;">${uiIcon('bestiary', { size: 15, color: '#fb923c' })} Bestiário &amp; Catálogo</strong>
               <small style="color:#d8c2a6;">Predadores, chefes, debuffs e eventos com dicas de contra-jogada.</small>
             </button>
 
             <button class="item-card" data-ex-nav="missions" style="text-align:left; cursor:pointer;">
-              <strong style="color:#58d63a;">📜 Missões & Passe</strong>
+              <strong style="color:#58d63a;">${uiIcon('scroll', { size: 15, color: '#58d63a' })} Missões &amp; Passe</strong>
               <small style="color:#d8c2a6;">Objetivos diários, conquistas e títulos desbloqueáveis.</small>
             </button>
 
             <button class="item-card" data-ex-nav="album" style="text-align:left; cursor:pointer;">
-              <strong>📖 Álbum & Casa de Troféus</strong>
+              <strong>${uiIcon('trophy', { size: 15, color: '#ffd447' })} Álbum &amp; Casa de Troféus</strong>
               <small style="color:#d8c2a6;">Espécies descobertas e troféus de chefes derrotados.</small>
             </button>
 
             <button class="item-card" data-ex-nav="records" style="text-align:left; cursor:pointer;">
-              <strong>🏅 Recordes & Estatísticas</strong>
+              <strong>${uiIcon('medal', { size: 15, color: '#fbbf24' })} Recordes &amp; Estatísticas</strong>
               <small style="color:#d8c2a6;">Melhores pontuações por modo e placar de rivalidade.</small>
             </button>
 
             <button class="item-card" data-ex-nav="metagame" style="text-align:left; cursor:pointer;">
-              <strong>🧬 Expansão & Híbridos</strong>
+              <strong>${uiIcon('dna', { size: 15, color: '#5eead4' })} Expansão &amp; Híbridos</strong>
               <small style="color:#d8c2a6;">Campanha, Prestígio, Talentos, Híbridos e Ranking Global.</small>
             </button>
 
             <button class="item-card" data-ex-nav="minigames" style="text-align:left; cursor:pointer;">
-              <strong>🕹️ Vila & Minigames</strong>
+              <strong>${uiIcon('gamepad', { size: 15, color: '#a78bfa' })} Vila &amp; Minigames</strong>
               <small style="color:#d8c2a6;">Ritmo Jurássico, Pesca no Rio e Chocadeira de Filhotes.</small>
             </button>
 
             ${isMobileDevice() ? `
             <button class="item-card" data-ex-nav="controller" style="text-align:left; cursor:pointer;">
-              <strong>📱 Controle no Celular</strong>
+              <strong>${uiIcon('gamepad', { size: 15, color: '#38bdf8' })} Controle no Celular</strong>
               <small style="color:#d8c2a6;">Transforme o celular em controle de corrida sem fio.</small>
             </button>
             ` : ''}
 
             <button class="item-card" data-ex-nav="settings" style="text-align:left; cursor:pointer;">
-              <strong>⚙️ Configurações</strong>
+              <strong>${uiIcon('settings', { size: 15, color: '#cbd5e1' })} Configurações</strong>
               <small style="color:#d8c2a6;">Gráficos, brilho, áudio, teclas e acessibilidade.</small>
             </button>
 
             <button class="item-card ${state.lowSpec ? 'selected' : ''}" id="extras-lowspec" style="text-align:left; cursor:pointer;">
-              <strong style="color:#38bdf8;">${state.lowSpec ? '💻 Meu PC é Fraco: ATIVO' : '💻 Modo "Meu PC é Fraco"'}</strong>
+              <strong style="color:#38bdf8;">${uiIcon('monitor', { size: 15, color: '#38bdf8' })} ${state.lowSpec ? 'Meu PC é Fraco: ATIVO' : 'Modo "Meu PC é Fraco"'}</strong>
               <small style="color:#d8c2a6;">Reduz resolução e efeitos pesados para manter o jogo fluido.</small>
             </button>
 
             <div class="item-card" style="grid-column: 1 / -1; text-align:left; border-color:#fb923c;">
-              <strong style="color:#fb923c;">🐾 Fixar Predador Caçador (14 Originais)</strong>
+              <strong style="color:#fb923c;">${uiIcon('claw', { size: 15, color: '#fb923c' })} Fixar Predador Caçador (14 Originais)</strong>
               <small style="color:#d8c2a6;">Escolha qual predador surgirá nas perseguições (ou deixe automático por bioma).</small>
               <select class="select-input" id="extras-predator" style="margin-top:6px;">
-                <option value="">🎲 Automático (Por Bioma)</option>
+                <option value="">Automático (Por Bioma)</option>
                 ${PREDATOR_CATALOG.map((pr) => `<option value="${pr.id}" ${state.pinnedPredator === pr.id ? 'selected' : ''}>${pr.name} — ${pr.title} (${pr.biome})</option>`).join('')}
               </select>
             </div>
 
             <button class="item-card" data-ex-nav="credits" style="text-align:left; cursor:pointer;">
-              <strong>📜 Créditos</strong>
+              <strong>${uiIcon('scroll', { size: 15, color: '#fde68a' })} Créditos</strong>
               <small style="color:#d8c2a6;">Sobre o projeto Dino Dash 3D e tecnologias utilizadas.</small>
             </button>
 
             <button class="item-card" data-ex-nav="legal" style="text-align:left; cursor:pointer; border-color:#22c55e;">
-              <strong style="color:#86efac;">🛡️ LGPD, Termos &amp; Denúncia</strong>
+              <strong style="color:#86efac;">${uiIcon('shield', { size: 15, color: '#86efac' })} LGPD, Termos &amp; Denúncia</strong>
               <small style="color:#d8c2a6;">Privacidade, ECA Digital, exportar ou excluir dados.</small>
             </button>
 
             ${import.meta.env.DEV && state.devMode ? `
               <button class="item-card" data-ex-nav="debug" style="text-align:left; cursor:pointer; border-color:#38bdf8;">
-                <strong style="color:#38bdf8;">🛠️ Depurar (Debug / QA)</strong>
+                <strong style="color:#38bdf8;">${uiIcon('settings', { size: 15, color: '#38bdf8' })} Depurar (Debug / QA)</strong>
                 <small style="color:#d8c2a6;">Auditoria visual, simuladores, chefes e FPS ao vivo.</small>
               </button>
             ` : ''}
@@ -593,7 +619,7 @@ export class Menus {
       <div class="overlay-center">
         <div class="chunky-panel modal-card" style="max-width: 640px;">
           <div class="modal-header">
-            <h2>📜 Créditos — Dino Dash 3D</h2>
+            <h2>${uiIcon('scroll', { size: 20 })} Créditos — Dino Dash 3D</h2>
             <button class="chunky-btn secondary" id="cred-close">Voltar</button>
           </div>
           <div class="item-card" style="border-color:#ff9a24; background:linear-gradient(145deg, rgba(43,23,11,0.92), rgba(20,11,6,0.94));">
@@ -609,7 +635,7 @@ export class Menus {
                 class="chunky-btn orange"
                 style="padding:8px 14px; font-size:0.82rem; text-decoration:none; display:inline-flex; align-items:center; gap:6px;"
               >
-                🐙 GitHub (@sudo-apt-install-Steven)
+                ${uiIcon('multiplayer', { size: 15 })} GitHub (@sudo-apt-install-Steven)
               </a>
             </div>
             <p style="font-size:0.86rem; color:#ffe8b5; line-height:1.45;">
@@ -623,7 +649,7 @@ export class Menus {
           </div>
 
           <div class="item-card">
-            <strong style="color:#58d63a;">🛠️ Ferramentas &amp; Tecnologias Utilizadas (Atribuição Open Source)</strong>
+            <strong style="color:#58d63a;">${uiIcon('settings', { size: 15, color: '#58d63a' })} Ferramentas &amp; Tecnologias Utilizadas (Atribuição Open Source)</strong>
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;">
               <span class="hud-pill" style="font-size:0.76rem; color:#fde047;">Three.js (WebGL 3D)</span>
               <span class="hud-pill" style="font-size:0.76rem; color:#93c5fd;">JavaScript (ES Modules)</span>
@@ -640,7 +666,7 @@ export class Menus {
           </div>
 
           <div class="item-card">
-            <strong style="color:#ffd447;">🎮 Controles Principais</strong>
+            <strong style="color:#ffd447;">${uiIcon('gamepad', { size: 15, color: '#ffd447' })} Controles Principais</strong>
             <p style="font-size:0.81rem; color:#d8c2a6; line-height:1.45;">
               <strong>W/↑</strong> Pular • <strong>S/↓</strong> Abaixar / Mergulhar na água • <strong>A/D</strong> Trocar de Faixa • <strong>X</strong> Transmutação Adaptativa (Híbridos) • <strong>Q</strong> Ataque Direto • <strong>Espaço</strong> Habilidade • <strong>E</strong> Item • <strong>F</strong> Fúria • <strong>Shift</strong> Bullet-Time • <strong>C</strong> Câmera • <strong>R</strong> Reiniciar.<br/>
               <strong>Celular:</strong> Arraste o dedo para esquerda/direita/cima/baixo + botões táticos na tela.
@@ -681,7 +707,7 @@ export class Menus {
         <div class="overlay-center">
           <div class="chunky-panel modal-card">
             <div class="modal-header">
-              <h2>🎮 ${L.title} (${GAME_MODES.length})</h2>
+              <h2>${uiIcon('gamepad', { size: 20 })} ${L.title} (${GAME_MODES.length})</h2>
               <button class="chunky-btn secondary" id="modes-close">${L.back}</button>
             </div>
             <div class="tabs-row" role="tablist" aria-label="${L.title}">
@@ -689,7 +715,7 @@ export class Menus {
                 const cnt = countByCat(cat.id);
                 return `
                   <button class="tab-btn ${tab === cat.id ? 'active' : ''}" role="tab" aria-selected="${tab === cat.id}" data-mtab="${cat.id}">
-                    ${cat.icon} ${cat.label[loc] || cat.label['pt-BR']} (${cnt})
+                    ${uiIcon(cat.icon, { size: 14 })} ${cat.label[loc] || cat.label['pt-BR']} (${cnt})
                   </button>
                 `;
               }).join('')}
@@ -705,16 +731,16 @@ export class Menus {
                 return `
                   <div class="item-card mode-card ${isSel ? 'selected' : ''}">
                     <div class="mode-card-head">
-                      <span class="mode-icon" aria-hidden="true">${escapeHtml(meta.icon)}</span>
+                      <span class="mode-icon" aria-hidden="true">${uiIcon(meta.icon, { size: 18 })}</span>
                       <strong class="mode-card-title">${escapeHtml(m.name)}</strong>
                     </div>
                     <div class="mode-card-badges">
                       <span class="mode-diff-badge tone-${meta.tone}">${escapeHtml(meta.difficulty)}</span>
-                      <span class="mode-players-badge">👥 ${escapeHtml(meta.players)}</span>
+                      <span class="mode-players-badge">${uiIcon('account', { size: 12 })} ${escapeHtml(meta.players)}</span>
                     </div>
                     <p class="mode-card-desc">${escapeHtml(m.desc || '')}</p>
                     <button class="chunky-btn ${isSel ? '' : 'secondary'}" data-pick-mode="${escapeHtml(m.id)}">
-                      ${isSel ? `✔ ${L.selected}` : L.pick}
+                      ${isSel ? `${uiIcon('check', { size: 14 })} ${L.selected}` : L.pick}
                     </button>
                   </div>
                 `;
@@ -722,7 +748,7 @@ export class Menus {
             </div>
             ${currentModeId === 'story' ? `
               <div class="item-card">
-                <strong>📖 Capítulos da História:</strong>
+                <strong>${uiIcon('book', { size: 15 })} Capítulos da História:</strong>
                 ${STORY_CHAPTERS.map((ch) => `<div style="font-size:0.82rem; color:#ffe8b5;">• ${escapeHtml(ch.title)} — ${escapeHtml(ch.dialogue)}</div>`).join('')}
               </div>
             ` : ''}
@@ -782,7 +808,7 @@ export class Menus {
         const list = [];
         for (const e of (mod.DUNGEON_ENCOUNTERS || [])) {
           list.push({
-            icon: '⚔️',
+            icon: 'arena',
             name: e.name,
             subtitle: `Encontro Masmorra • Andar ${e.floorMin}+ • ${e.diceHint}`,
             desc: `HP ${e.hp} • ATK ${e.atk} • Traço: ${e.trait || 'elite'} • Elemento: ${e.element || 'físico'}.`,
@@ -792,7 +818,7 @@ export class Menus {
         }
         for (const t of (mod.DUNGEON_TRAPS || [])) {
           list.push({
-            icon: '🪤',
+            icon: 'warning',
             name: t.name,
             subtitle: `Armadilha • Andar ${t.floorMin}+ • ${t.diceHint}`,
             desc: `Dano ${t.damage} • Elemento: ${t.element || 'físico'}${t.debuffId ? ` • Debuff: ${t.debuffId}` : ''}.`,
@@ -802,7 +828,7 @@ export class Menus {
         }
         for (const r of (mod.DUNGEON_RELICS || [])) {
           list.push({
-            icon: '🏺',
+            icon: 'sparkle',
             name: r.name,
             subtitle: `Relíquia • ${r.rarity} • Andar ${r.floorMin}+`,
             desc: `Bônus: +${r.bonus?.value ?? 0} ${r.bonus?.stat || ''} • Trade-off: -${r.penalty?.value ?? 0} ${r.penalty?.stat || ''}.`,
@@ -812,7 +838,7 @@ export class Menus {
         }
         for (const m of (mod.X1_COMBAT_MOVES || [])) {
           list.push({
-            icon: '🥊',
+            icon: 'claw',
             name: m.name,
             subtitle: `Golpe X1 • ${m.element} • CD ${m.cooldown}s`,
             desc: `Multiplicador ${m.damageMult}x • Estamina ${m.staminaCost} • Alcance ${m.range}.`,
@@ -833,7 +859,7 @@ export class Menus {
     const buildEntries = () => {
       if (tab === 'predators') {
         const base = (PREDATOR_CATALOG || []).map((p) => ({
-          icon: p.habitat === 'aquatic' ? '🦈' : (p.habitat === 'flying' ? '🦅' : '🦖'),
+          icon: p.habitat === 'aquatic' ? 'gills' : (p.habitat === 'flying' ? 'sprint' : 'dino'),
           name: p.name,
           subtitle: `${p.title || p.archetype || 'Predador'} • ${p.biome || 'global'}`,
           desc: p.lore || 'Predador alfa de perseguição ativa na pista.',
@@ -841,7 +867,7 @@ export class Menus {
           accent: p.accent || '#fb923c'
         }));
         const vars = (extra.predatorVariants || []).map((v) => ({
-          icon: v.icon || '🐾',
+          icon: 'claw',
           name: v.name || v.id,
           subtitle: `${v.category || 'Encontro'} • Variante`,
           desc: v.desc || v.description || 'Encontro avançado de predador.',
@@ -854,7 +880,7 @@ export class Menus {
       if (tab === 'bosses') {
         const bossList = Array.isArray(BOSS_DEFS) ? BOSS_DEFS : Object.values(BOSS_DEFS || {});
         const base = bossList.map((b) => ({
-          icon: '👑',
+          icon: 'crown',
           name: b.name,
           subtitle: `${b.title || 'Chefe'} • Bioma: ${b.biomeId || 'geral'} • HP ${b.hp || 5}`,
           desc: b.attackProfile?.length ? `Ataques: ${b.attackProfile.join(', ')}. Fases: ${(b.phases || []).length || 3}.` : 'Chefe de arena com múltiplas fases.',
@@ -862,7 +888,7 @@ export class Menus {
           accent: b.color || '#ef4444'
         }));
         const affixes = (extra.bossAffixes || []).map((a) => ({
-          icon: a.icon || '💀',
+          icon: 'flame',
           name: a.name || a.id,
           subtitle: `Afixo de Chefe • ${a.category || 'Elite'}`,
           desc: a.desc || a.description || 'Modificador tático aplicado a chefes em níveis altos.',
@@ -874,7 +900,7 @@ export class Menus {
 
       if (tab === 'debuffs') {
         const base = Object.values(STATUS_DEFS || {}).map((s) => ({
-          icon: s.icon || '⚠️',
+          icon: 'warning',
           name: s.name || s.id,
           subtitle: s.isDebuff ? 'Debuff de Perigo' : 'Status / Elemento',
           desc: s.desc || 'Altera atributos ou controle do dinossauro temporariamente.',
@@ -882,7 +908,7 @@ export class Menus {
           accent: s.color || '#facc15'
         }));
         const vars = (extra.debuffVariants || []).map((d) => ({
-          icon: d.icon || '☠️',
+          icon: 'warning',
           name: d.name || d.id,
           subtitle: `Debuff • ${d.category || 'Ameaça'}`,
           desc: d.desc || d.description || 'Efeito negativo aplicado por perigos ou predadores.',
@@ -902,7 +928,7 @@ export class Menus {
 
       // events + hazards
       const baseEvents = (EVENT_CATALOG || []).map((e) => ({
-        icon: e.icon || '☄️',
+        icon: 'bolt',
         name: e.name || e.id,
         subtitle: `Evento • ${e.category || 'Mundo'}`,
         desc: e.desc || e.description || 'Evento dinâmico que altera a pista temporariamente.',
@@ -910,7 +936,7 @@ export class Menus {
         accent: e.color || '#38bdf8'
       }));
       const extraEv = (extra.eventVariants || []).map((e) => ({
-        icon: e.icon || '🌪️',
+        icon: 'flame',
         name: e.name || e.id,
         subtitle: `Evento Avançado • ${e.category || 'Clima'}`,
         desc: e.desc || e.description || 'Variação de evento de alta intensidade.',
@@ -918,7 +944,7 @@ export class Menus {
         accent: '#38bdf8'
       }));
       const extraHaz = (extra.hazardVariants || []).map((h) => ({
-        icon: h.icon || '🚧',
+        icon: 'warning',
         name: h.name || h.id,
         subtitle: `Perigo • ${h.category || 'Obstáculo'}`,
         desc: h.desc || h.description || 'Obstáculo especializado de pista.',
@@ -943,15 +969,15 @@ export class Menus {
         <div class="overlay-center">
           <div class="chunky-panel modal-card" id="bestiary-modal-card">
             <div class="modal-header">
-              <h2>📚 ${L.title}</h2>
+              <h2>${uiIcon('bestiary', { size: 20 })} ${L.title}</h2>
               <button class="chunky-btn secondary" id="bestiary-close">${L.back}</button>
             </div>
             <div class="tabs-row" role="tablist" aria-label="${L.title}">
-              <button class="tab-btn ${tab === 'predators' ? 'active' : ''}" data-btab="predators">🦖 Predadores</button>
-              <button class="tab-btn ${tab === 'bosses' ? 'active' : ''}" data-btab="bosses">👑 Chefes</button>
-              <button class="tab-btn ${tab === 'debuffs' ? 'active' : ''}" data-btab="debuffs">☠️ Debuffs</button>
-              <button class="tab-btn ${tab === 'events' ? 'active' : ''}" data-btab="events">☄️ Eventos</button>
-              <button class="tab-btn ${tab === 'ultra' ? 'active' : ''}" data-btab="ultra">🏰 Masmorras & Relíquias</button>
+              <button class="tab-btn ${tab === 'predators' ? 'active' : ''}" data-btab="predators">${uiIcon('dino', { size: 14 })} Predadores</button>
+              <button class="tab-btn ${tab === 'bosses' ? 'active' : ''}" data-btab="bosses">${uiIcon('crown', { size: 14 })} Chefes</button>
+              <button class="tab-btn ${tab === 'debuffs' ? 'active' : ''}" data-btab="debuffs">${uiIcon('warning', { size: 14 })} Debuffs</button>
+              <button class="tab-btn ${tab === 'events' ? 'active' : ''}" data-btab="events">${uiIcon('bolt', { size: 14 })} Eventos</button>
+              <button class="tab-btn ${tab === 'ultra' ? 'active' : ''}" data-btab="ultra">${uiIcon('dungeon', { size: 14 })} Masmorras &amp; Relíquias</button>
             </div>
             <div class="catalog-toolbar">
               <input type="search" class="text-input catalog-search" id="bestiary-search" value="${escapeHtml(query)}" placeholder="${escapeHtml(L.searchPh)}" aria-label="${escapeHtml(L.searchPh)}" />
@@ -961,7 +987,7 @@ export class Menus {
               ${shown.length ? shown.map((it) => `
                 <article class="item-card bestiary-card" style="border-color:${escapeHtml(it.accent)};">
                   <div class="bestiary-card-head">
-                    <span class="bestiary-ico" aria-hidden="true">${escapeHtml(it.icon)}</span>
+                    <span class="bestiary-ico" aria-hidden="true">${uiIcon(it.icon, { size: 18, color: it.accent })}</span>
                     <div>
                       <strong style="color:#ffd447;">${escapeHtml(it.name)}</strong>
                       <div class="bestiary-sub">${escapeHtml(it.subtitle)}</div>
@@ -969,7 +995,7 @@ export class Menus {
                   </div>
                   <p class="bestiary-desc">${escapeHtml(it.desc)}</p>
                   <div class="bestiary-counter-box">
-                    <strong>🛡️ ${L.counterLbl}:</strong> ${escapeHtml(it.counter)}
+                    <strong>${uiIcon('shield', { size: 13 })} ${L.counterLbl}:</strong> ${escapeHtml(it.counter)}
                   </div>
                 </article>
               `).join('') : `<div class="item-card" style="grid-column:1/-1; text-align:center; color:#d8c2a6;">${L.empty}</div>`}
@@ -1038,7 +1064,7 @@ export class Menus {
         <div class="overlay-center">
           <div class="chunky-panel modal-card">
             <div class="modal-header">
-              <h2>🗺️ Mapas & Biomas (${BIOMES.length})</h2>
+              <h2>${uiIcon('openworld', { size: 20 })} Mapas &amp; Biomas (${BIOMES.length})</h2>
               <button class="chunky-btn secondary" id="maps-close">Voltar</button>
             </div>
             <div class="field-row">
@@ -1048,8 +1074,8 @@ export class Menus {
             <div class="item-card ${selectedBiome === 'random_portal' ? 'selected' : ''}" style="border-color:#a855f7; background:linear-gradient(135deg, rgba(30,27,75,0.75), rgba(88,28,135,0.45));">
               <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                 <div>
-                  <strong style="color:#e9d5ff;">🌀 Modo Aleatório (Portais Dinâmicos)</strong>
-                  <p style="font-size:0.8rem; color:#ddd6fe; margin:2px 0 0;">Sorteia o bioma inicial e abre portais aleatórios a cada ~1.050 pts (Terra, Água, Céu, Futuro & Terra Oca)!</p>
+                  <strong style="color:#e9d5ff;">${uiIcon('sparkle', { size: 15, color: '#e9d5ff' })} Modo Aleatório (Portais Dinâmicos)</strong>
+                  <p style="font-size:0.8rem; color:#ddd6fe; margin:2px 0 0;">Sorteia o bioma inicial e abre portais aleatórios a cada ~1.050 pts (Terra, Água, Céu, Futuro &amp; Terra Oca)!</p>
                 </div>
                 <button class="chunky-btn ${selectedBiome === 'random_portal' ? '' : 'secondary'}" data-pick-biome="random_portal">
                   ${selectedBiome === 'random_portal' ? 'Ativo' : 'Ativar Portais'}
@@ -1059,7 +1085,7 @@ export class Menus {
             <div class="tabs-row">
               <button class="tab-btn ${tab === 'essential' ? 'active' : ''}" data-btab="essential">Essenciais (${essCount})</button>
               <button class="tab-btn ${tab === 'advanced' ? 'active' : ''}" data-btab="advanced">Avançados (${advCount})</button>
-              <button class="tab-btn ${tab === 'ultra' ? 'active' : ''}" data-btab="ultra">✨ Ultra (${ultraCount})</button>
+              <button class="tab-btn ${tab === 'ultra' ? 'active' : ''}" data-btab="ultra">${uiIcon('sparkle', { size: 13 })} Ultra (${ultraCount})</button>
             </div>
             <div class="cards-grid">
               ${list.map((b) => {
@@ -1067,12 +1093,12 @@ export class Menus {
                 return `
                   <div class="item-card ${b.id === selectedBiome ? 'selected' : ''}">
                     <div style="height:36px; border-radius:8px; position:relative; overflow:hidden; border:1px solid ${b.theme?.edgeGlow || 'rgba(255,255,255,0.2)'}; background:linear-gradient(180deg, ${b.theme.sky} 0%, ${b.theme.track} 62%, ${b.theme.river} 100%); display:flex; align-items:center; justify-content:space-between; padding:0 8px;">
-                      <span style="font-size:0.72rem; font-weight:800; background:rgba(9,9,11,0.72); color:#fafaf9; padding:2px 7px; border-radius:999px;">${meta.icon} ${meta.tag}</span>
+                      <span style="font-size:0.72rem; font-weight:800; background:rgba(9,9,11,0.72); color:#fafaf9; padding:2px 7px; border-radius:999px; display:inline-flex; align-items:center; gap:4px;">${uiIcon('compass', { size: 12 })} ${meta.tag}</span>
                       <span style="width:12px; height:12px; border-radius:50%; background:${b.theme?.edgeGlow || '#ffd447'}; box-shadow:0 0 8px ${b.theme?.edgeGlow || '#ffd447'};"></span>
                     </div>
                     <strong>${b.name}</strong>
                     <p style="font-size:0.8rem; color:#d8c2a6; flex:1;">${b.ruleDesc}</p>
-                    <small style="color:#ffd447;">👑 Chefe: ${BOSS_DEFS[b.bossId]?.name || b.bossId}</small>
+                    <small style="color:#ffd447;">${uiIcon('crown', { size: 13, color: '#ffd447' })} Chefe: ${BOSS_DEFS[b.bossId]?.name || b.bossId}</small>
                     <button class="chunky-btn ${b.id === selectedBiome ? '' : 'secondary'}" data-pick-biome="${b.id}">
                       ${b.id === selectedBiome ? 'Ativo' : 'Selecionar'}
                     </button>
@@ -1111,8 +1137,8 @@ export class Menus {
         <div class="overlay-center">
           <div class="chunky-panel modal-card">
             <div class="modal-header">
-              <h2>⚡ Dificuldade</h2>
-              <button class="chunky-btn secondary" id="diff-close">Salvar & Voltar</button>
+              <h2>${uiIcon('bolt', { size: 20, color: '#ff9a24' })} Dificuldade</h2>
+              <button class="chunky-btn secondary" id="diff-close">Salvar &amp; Voltar</button>
             </div>
             <div class="tabs-row">
               ${Object.values(DIFFICULTY_PRESETS).map((p) => `
@@ -1127,7 +1153,7 @@ export class Menus {
               <input type="checkbox" id="diff-adapt" ${diffMgr.adaptive ? 'checked' : ''} />
             </div>
             <div class="field-row">
-              <span>💎 Modo Perfeito (1 Hit = Fim • Score ×2.2 • Ovos ×1.5)</span>
+              <span>${uiIcon('diamond', { size: 14, color: '#38bdf8' })} Modo Perfeito (1 Hit = Fim • Score ×2.2 • Ovos ×1.5)</span>
               <input type="checkbox" id="diff-perfect" ${Save.data.perfectMode ? 'checked' : ''} />
             </div>
             ${diffMgr.activeId === 'custom' ? `
@@ -1151,7 +1177,7 @@ export class Menus {
               const selDino = DINO_CATALOG.find((d) => d.id === Save.data.selectedDino) || DINO_CATALOG[0];
               const vit = Math.floor((Save.data.talents?.vitality || 0) / 2);
               const eff = Save.data.perfectMode ? 1 : Math.max(1, Math.min(7, cfg.lives + vit + ((selDino?.stats?.hp ?? 3) - 3)));
-              return `<p style="font-size:0.9rem; color:#d8c2a6;">Preset selecionado: <strong>${cfg.name}</strong> • Vidas (${selDino?.name || 'Dino'}): ${Save.data.perfectMode ? '<strong style="color:#38bdf8;">1 (💎 Modo Perfeito ativo!)</strong>' : `<strong>${eff}❤️</strong> (base ${cfg.lives})`} • Multiplicador: ${cfg.scoreMult}x</p>`;
+              return `<p style="font-size:0.9rem; color:#d8c2a6;">Preset selecionado: <strong>${cfg.name}</strong> • Vidas (${selDino?.name || 'Dino'}): ${Save.data.perfectMode ? `<strong style="color:#38bdf8;">1 (${uiIcon('diamond', { size: 13, color: '#38bdf8' })} Modo Perfeito ativo!)</strong>` : `<strong>${eff} ${uiIcon('heart', { size: 13, color: '#fda4af' })}</strong> (base ${cfg.lives})`} • Multiplicador: ${cfg.scoreMult}x</p>`;
             })()}
           </div>
         </div>
@@ -1191,12 +1217,12 @@ export class Menus {
       <div class="overlay-center">
         <div class="chunky-panel modal-card">
           <div class="modal-header">
-            <h2>📜 Missões, Conquistas & Passe</h2>
+            <h2>${uiIcon('scroll', { size: 20 })} Missões, Conquistas &amp; Passe</h2>
             <button class="chunky-btn secondary" id="mp-close">Voltar</button>
           </div>
           <div class="item-card">
             <div style="display:flex; justify-content:space-between;">
-              <strong>🎟️ Passe de Temporada Local — Nível ${pass.level}/50</strong>
+              <strong>${uiIcon('star', { size: 15, color: '#ffd447' })} Passe de Temporada Local — Nível ${pass.level}/50</strong>
               <span style="color:#ffd447;">XP ${pass.xp}/160</span>
             </div>
             <div class="meter-bar" style="height:12px;"><div class="meter-fill" style="width:${Math.min(100, (pass.xp / 160) * 100)}%; background:#58d63a;"></div></div>
@@ -1207,11 +1233,11 @@ export class Menus {
               <div class="item-card ${m.claimed ? 'selected' : ''}">
                 <strong>${m.text}</strong>
                 <div>Progresso: ${Math.min(m.progress, m.goal)} / ${m.goal}</div>
-                <span style="color:#ffd447;">${m.claimed ? '✅ Recompensa recebida!' : `Prêmio: +${m.reward} 🥚`}</span>
+                <span style="color:#ffd447;">${m.claimed ? `${uiIcon('check', { size: 13, color: '#4ade80' })} Recompensa recebida!` : `Prêmio: +${m.reward} ${uiIcon('egg', { size: 13 })}`}</span>
               </div>
             `).join('')}
           </div>
-          <h3>Conquistas & Títulos</h3>
+          <h3>Conquistas &amp; Títulos</h3>
           <div class="field-row">
             <span>Título Ativo:</span>
             <select id="active-title">
@@ -1223,7 +1249,7 @@ export class Menus {
               const unlocked = Save.data.achievements.includes(a.id);
               return `
                 <div class="item-card ${unlocked ? 'selected' : ''}">
-                  <strong>${unlocked ? '🏆' : '🔒'} ${a.name}</strong>
+                  <strong>${unlocked ? uiIcon('trophy', { size: 14, color: '#ffd447' }) : uiIcon('lock', { size: 14 })} ${a.name}</strong>
                   <small style="color:#d8c2a6;">${a.desc}</small>
                 </div>
               `;
@@ -1246,27 +1272,27 @@ export class Menus {
       <div class="overlay-center">
         <div class="chunky-panel modal-card">
           <div class="modal-header">
-            <h2>📖 Álbum de Dinos & Casa de Troféus</h2>
+            <h2>${uiIcon('book', { size: 20 })} Álbum de Dinos &amp; Casa de Troféus</h2>
             <button class="chunky-btn secondary" id="ah-close">Voltar</button>
           </div>
            <div class="item-card">
-             <strong>🏠 Casa do Dino — Troféus de Chefes (${trophies.length}/${Object.keys(BOSS_DEFS).length})</strong>
+             <strong>${uiIcon('trophy', { size: 15, color: '#ffd447' })} Casa do Dino — Troféus de Chefes (${trophies.length}/${Object.keys(BOSS_DEFS).length})</strong>
              <div class="tabs-row">
                ${Object.values(BOSS_DEFS).map((b) => `
                  <span class="hud-pill" style="opacity:${trophies.includes(b.id) ? 1 : 0.4};">
-                   ${trophies.includes(b.id) ? '🏆' : '⬛'} ${b.name}
+                   ${trophies.includes(b.id) ? uiIcon('trophy', { size: 13, color: '#ffd447' }) : uiIcon('lock', { size: 13 })} ${b.name}
                  </span>
                `).join('')}
              </div>
            </div>
            <div class="item-card" style="margin-top:8px;">
-             <strong>🦴 Fósseis & Lore dos Biomas (${Object.keys(Save.data.discoveredFossils || {}).length}/${BIOMES.length})</strong>
+             <strong>${uiIcon('sparkle', { size: 15, color: '#fde68a' })} Fósseis &amp; Lore dos Biomas (${Object.keys(Save.data.discoveredFossils || {}).length}/${BIOMES.length})</strong>
              <div class="cards-grid" style="margin-top:6px;">
                ${BIOMES.map((b) => {
                  const found = !!Save.data.discoveredFossils?.[b.fossil?.id];
                  return `
                    <div class="item-card ${found ? 'selected' : ''}" style="opacity:${found ? 1 : 0.72}; padding:8px;">
-                     <strong style="color:#ffd447;">${found ? (b.fossil?.icon || '🦴') : '🔒'} ${b.fossil?.name || b.name}</strong>
+                     <strong style="color:#ffd447;">${found ? uiIcon('star', { size: 13, color: '#ffd447' }) : uiIcon('lock', { size: 13 })} ${b.fossil?.name || b.name}</strong>
                      <small style="color:#9ce6e0;">${b.name} ${found ? '• Descoberto' : '• Visite o bioma'}</small>
                      <p style="font-size:0.74rem; color:#d8c2a6; margin-top:4px;">${b.lore || b.theme?.name || ''}</p>
                    </div>
@@ -1297,7 +1323,7 @@ export class Menus {
       <div class="overlay-center">
         <div class="chunky-panel modal-card" style="max-width: 620px;">
           <div class="modal-header">
-            <h2>🏅 Recordes & Rivalidade</h2>
+            <h2>${uiIcon('medal', { size: 20, color: '#ffd447' })} Recordes &amp; Rivalidade</h2>
             <button class="chunky-btn secondary" id="rec-close">Voltar</button>
           </div>
           <div class="stat-grid">
@@ -1323,7 +1349,7 @@ export class Menus {
       <div class="overlay-center">
         <div class="chunky-panel modal-card" style="max-width: 640px;">
           <div class="modal-header">
-            <h2>🏛️ Cidade Pré-Histórica (Hub)</h2>
+            <h2>${uiIcon('dungeon', { size: 20 })} Cidade Pré-Histórica (Hub)</h2>
             <button class="chunky-btn secondary" id="hub-close">Voltar</button>
           </div>
           <p style="color:#ffe8b5; font-size:0.9rem;">
@@ -1331,17 +1357,17 @@ export class Menus {
           </p>
           <div class="cards-grid">
             <div class="item-card">
-              <strong>🦕 Mestre Rex (Treinador)</strong>
+              <strong>${uiIcon('dino', { size: 15 })} Mestre Rex (Treinador)</strong>
               <p style="font-size:0.82rem; color:#d8c2a6;">"Evolua suas habilidades até o nível 10 para encarar os chefes!"</p>
               <button class="chunky-btn" id="hub-dinos">Treinar Dinos</button>
             </div>
             <div class="item-card">
-              <strong>🛍️ Mercador Parasaurolophus</strong>
+              <strong>${uiIcon('shop', { size: 15 })} Mercador Parasaurolophus</strong>
               <p style="font-size:0.82rem; color:#d8c2a6;">"Trouxe ovos frescos? Tenho acessórios raros e ovos misteriosos!"</p>
               <button class="chunky-btn orange" id="hub-shop">Ir para Loja</button>
             </div>
             <div class="item-card">
-              <strong>🎣 Pescador Spino</strong>
+              <strong>${uiIcon('gamepad', { size: 15 })} Pescador Spino</strong>
               <p style="font-size:0.82rem; color:#d8c2a6;">"Quer testar reflexos no rio ou chocar um novo filhote?"</p>
               <button class="chunky-btn" id="hub-mini">Minigames</button>
             </div>
