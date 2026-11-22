@@ -17,6 +17,7 @@ import {
 } from '../systems/AuthProfile.js';
 import { escapeHtml } from '../security/Sanitize.js';
 import { attachModalHelp } from './Menus.js';
+import { uiIcon } from './UiIcons.js';
 
 class ProfileAvatar3D {
   constructor(containerEl, avatarCfg) {
@@ -182,8 +183,8 @@ export class ProfileModal {
         <div class="overlay-center">
           <div class="chunky-panel modal-card" style="max-width: 840px;">
             <div class="modal-header">
-              <h2>👤 Perfil do Jogador</h2>
-              <button class="chunky-btn secondary" id="prof-close">Voltar</button>
+              <h2 style="display:inline-flex; align-items:center; gap:7px;">${uiIcon('account', { size: 20 })} Perfil do Jogador</h2>
+              <button class="chunky-btn secondary" id="prof-close" style="min-height:42px;">Voltar</button>
             </div>
 
             ${statusMsg ? `
@@ -198,13 +199,13 @@ export class ProfileModal {
               <div style="flex:1; min-width:210px; display:flex; flex-direction:column; gap:6px;">
                 <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                   <strong style="font-size:1.35rem; color:#fff9eb;">${escapeHtml(prof.nickname)}</strong>
-                  <span class="hud-pill" style="font-size:0.75rem; color:#ffd447;">🎖️ ${escapeHtml(prof.activeTitle)}</span>
-                  <span class="hud-pill" style="font-size:0.74rem; color:${currentUser ? '#6ee7b7' : '#fcd34d'};">
-                    ${currentUser ? '☁️ Conta Conectada' : '💾 Modo Convidado (Local)'}
+                  <span class="hud-pill" style="font-size:0.75rem; color:#ffd447; display:inline-flex; align-items:center; gap:4px;">${uiIcon('medal', { size: 13, color: '#ffd447' })} ${escapeHtml(prof.activeTitle)}</span>
+                  <span class="hud-pill" style="font-size:0.74rem; color:${currentUser ? '#6ee7b7' : '#fcd34d'}; display:inline-flex; align-items:center; gap:4px;">
+                    ${currentUser ? `${uiIcon('cloud', { size: 13, color: '#6ee7b7' })} Conta Conectada` : `${uiIcon('save', { size: 13, color: '#fcd34d' })} Modo Convidado (Local)`}
                   </span>
                 </div>
                 <div style="font-size:0.82rem; color:#fef3c7;">
-                  Nível <strong>${prof.level}</strong> • XP ${prof.xp}/200 • Perfil ${prof.isPublic ? '🌐 Público' : '🔒 Privado'}
+                  Nível <strong>${prof.level}</strong> • XP ${prof.xp}/200 • Perfil ${prof.isPublic ? `${uiIcon('multiplayer', { size: 13 })} Público` : `${uiIcon('lock', { size: 13 })} Privado`}
                 </div>
                 <p style="font-size:0.82rem; color:#fde68a; margin:0; font-style:${prof.bio ? 'normal' : 'italic'};">
                   ${prof.bio ? escapeHtml(prof.bio) : 'Sem biografia ainda. Personalize na aba Perfil!'}
@@ -216,23 +217,23 @@ export class ProfileModal {
                       const a = Achievements.getById(aid);
                       if (!a) return '';
                       const t = TROPHY_TIERS[a.trophy] || TROPHY_TIERS.bronze;
-                      return `<span class="hud-pill" style="font-size:0.74rem; border-color:${t.color}; color:${t.color};">${a.icon} ${escapeHtml(a.name)}</span>`;
+                      return `<span class="hud-pill" style="font-size:0.74rem; border-color:${t.color}; color:${t.color}; display:inline-flex; align-items:center; gap:4px;">${uiIcon('trophy', { size: 12, color: t.color })} ${escapeHtml(a.name)}</span>`;
                     }).join('')}
                 </div>
               </div>
             </div>
 
             <div class="tabs-row" id="prof-tabs">
-              <button class="tab-btn ${activeTab === 'profile' ? 'active' : ''}" data-ptab="profile">🦖 Perfil &amp; Foto 3D</button>
-              <button class="tab-btn ${activeTab === 'account' ? 'active' : ''}" data-ptab="account">${currentUser ? '☁️ Conta &amp; Nuvem' : '🔑 Entrar / Criar Conta'}</button>
-              <button class="tab-btn ${activeTab === 'showcase' ? 'active' : ''}" data-ptab="showcase">🏆 Vitrine &amp; Estatísticas</button>
+              <button class="tab-btn ${activeTab === 'profile' ? 'active' : ''}" data-ptab="profile" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('dino', { size: 14 })} Perfil &amp; Foto 3D</button>
+              <button class="tab-btn ${activeTab === 'account' ? 'active' : ''}" data-ptab="account" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${currentUser ? `${uiIcon('cloud', { size: 14 })} Conta &amp; Nuvem` : `${uiIcon('key', { size: 14 })} Entrar / Criar Conta`}</button>
+              <button class="tab-btn ${activeTab === 'showcase' ? 'active' : ''}" data-ptab="showcase" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('trophy', { size: 14 })} Vitrine &amp; Estatísticas</button>
             </div>
 
             <div style="max-height:46vh; overflow-y:auto; padding-right:4px; display:flex; flex-direction:column; gap:10px;">
               ${activeTab === 'profile' ? `
                 <div class="cards-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
                   <div class="item-card" style="gap:8px;">
-                    <strong style="color:#ffd447;">📸 Customizar Foto 3D</strong>
+                    <strong style="color:#ffd447; display:inline-flex; align-items:center; gap:5px;">${uiIcon('camera', { size: 15, color: '#ffd447' })} Customizar Foto 3D</strong>
                     <div class="field-row">
                       <span>Dinossauro</span>
                       <select id="prof-av-dino" class="select-input">
@@ -259,7 +260,7 @@ export class ProfileModal {
                   </div>
 
                   <div class="item-card" style="gap:8px;">
-                    <strong style="color:#6ee7b7;">✏️ Identidade &amp; Aparência</strong>
+                    <strong style="color:#6ee7b7; display:inline-flex; align-items:center; gap:5px;">${uiIcon('palette', { size: 15, color: '#6ee7b7' })} Identidade &amp; Aparência</strong>
                     <label style="display:flex; flex-direction:column; gap:3px; font-size:0.8rem;">
                       <span>Apelido (3–16 caracteres, 1 troca a cada 7 dias)</span>
                       <input type="text" id="prof-nick" class="text-input" maxlength="16" value="${escapeHtml(prof.nickname)}" />
@@ -286,10 +287,10 @@ export class ProfileModal {
                       </div>
                     </div>
                     <div class="field-row">
-                      <span>🌐 Perfil Público (visível para outros jogadores)</span>
+                      <span style="display:inline-flex; align-items:center; gap:5px;">${uiIcon('multiplayer', { size: 14 })} Perfil Público (visível para outros jogadores)</span>
                       <input type="checkbox" id="prof-public" ${prof.isPublic ? 'checked' : ''} />
                     </div>
-                    <button type="button" class="chunky-btn" id="prof-save-btn">💾 Salvar Perfil</button>
+                    <button type="button" class="chunky-btn" id="prof-save-btn" style="min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">${uiIcon('save', { size: 15 })} Salvar Perfil</button>
                   </div>
                 </div>
               ` : ''}
@@ -298,28 +299,28 @@ export class ProfileModal {
                 ${currentUser ? `
                   <div class="item-card" style="gap:10px; border-color:#22c55e; background:linear-gradient(145deg, rgba(6,78,59,0.28), rgba(20,11,6,0.88));">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                      <strong style="color:#6ee7b7; font-size:1.02rem;">☁️ Conta Conectada: @${escapeHtml(prof.nickname)}</strong>
-                      <span class="hud-pill" style="font-size:0.74rem; color:#86efac; border-color:rgba(34,197,94,0.45);">🛡️ Protegida (Nick + Senha)</span>
+                      <strong style="color:#6ee7b7; font-size:1.02rem; display:inline-flex; align-items:center; gap:6px;">${uiIcon('cloud', { size: 16, color: '#6ee7b7' })} Conta Conectada: @${escapeHtml(prof.nickname)}</strong>
+                      <span class="hud-pill" style="font-size:0.74rem; color:#86efac; border-color:rgba(34,197,94,0.45); display:inline-flex; align-items:center; gap:4px;">${uiIcon('shield', { size: 13, color: '#86efac' })} Protegida (Nick + Senha)</span>
                     </div>
                     <div style="font-size:0.82rem; color:#f5ead7;">
                       ID: <code>${escapeHtml(currentUser.id.slice(0, 12))}...</code> • Acesso: <strong>${currentUser.email && !currentUser.email.endsWith('@player.dinodash.internal') ? escapeHtml(currentUser.email) : 'Apelido + Senha (Sem E-mail)'}</strong>
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                      <button type="button" class="chunky-btn" id="prof-sync-now">🔄 Migrar / Sincronizar Progresso Local</button>
-                      <button type="button" class="chunky-btn secondary" id="prof-link-google">🔗 Vincular Google</button>
-                      <button type="button" class="chunky-btn secondary" id="prof-link-discord">🔗 Vincular Discord</button>
-                      <button type="button" class="chunky-btn secondary" id="prof-logout-local">🚪 Sair</button>
-                      <button type="button" class="chunky-btn orange" id="prof-logout-all">🚪 Sair (Todos Dispositivos)</button>
+                      <button type="button" class="chunky-btn" id="prof-sync-now" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('rotate', { size: 14 })} Migrar / Sincronizar Progresso Local</button>
+                      <button type="button" class="chunky-btn secondary" id="prof-link-google" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('key', { size: 14 })} Vincular Google</button>
+                      <button type="button" class="chunky-btn secondary" id="prof-link-discord" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('multiplayer', { size: 14 })} Vincular Discord</button>
+                      <button type="button" class="chunky-btn secondary" id="prof-logout-local" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('close', { size: 13 })} Sair</button>
+                      <button type="button" class="chunky-btn orange" id="prof-logout-all" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('close', { size: 13 })} Sair (Todos Dispositivos)</button>
                     </div>
                   </div>
                 ` : `
                   <div class="item-card" style="gap:10px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                       <div class="tabs-row" style="gap:6px;">
-                        <button type="button" class="tab-btn ${authSubTab === 'login' ? 'active' : ''}" data-asub="login">🔑 Entrar</button>
-                        <button type="button" class="tab-btn ${authSubTab === 'register' ? 'active' : ''}" data-asub="register">✨ Criar Conta (Sem E-mail)</button>
+                        <button type="button" class="tab-btn ${authSubTab === 'login' ? 'active' : ''}" data-asub="login" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('key', { size: 14 })} Entrar</button>
+                        <button type="button" class="tab-btn ${authSubTab === 'register' ? 'active' : ''}" data-asub="register" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('sparkle', { size: 14 })} Criar Conta (Sem E-mail)</button>
                       </div>
-                      <span class="hud-pill" style="font-size:0.72rem; color:#fde68a; border-color:rgba(251,191,36,0.45);">🛡️ Limite de segurança: 1 conta por PC/navegador</span>
+                      <span class="hud-pill" style="font-size:0.72rem; color:#fde68a; border-color:rgba(251,191,36,0.45); display:inline-flex; align-items:center; gap:4px;">${uiIcon('shield', { size: 13, color: '#fde68a' })} Limite de segurança: 1 conta por PC/navegador</span>
                     </div>
 
                     ${authSubTab === 'login' ? `
@@ -332,25 +333,25 @@ export class ProfileModal {
                           <span>Senha</span>
                           <input type="password" id="auth-login-pw" class="text-input" autocomplete="current-password" placeholder="Sua senha" required />
                         </label>
-                        <button type="submit" class="chunky-btn" id="auth-login-submit">🔑 Entrar na Conta</button>
+                        <button type="submit" class="chunky-btn" id="auth-login-submit" style="min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">${uiIcon('key', { size: 15 })} Entrar na Conta</button>
                       </form>
                     ` : ''}
 
                     ${authSubTab === 'register' ? `
                       ${AuthProfile.hasLocalCreatedAccount() ? `
                         <div class="item-card" style="border-color:#f59e0b; background:rgba(245,158,11,0.12); padding:10px 12px; gap:6px;">
-                          <strong style="color:#fde047; font-size:0.86rem;">🛡️ Limite de segurança: 1 conta por PC/navegador</strong>
+                          <strong style="color:#fde047; font-size:0.86rem; display:inline-flex; align-items:center; gap:5px;">${uiIcon('shield', { size: 14, color: '#fde047' })} Limite de segurança: 1 conta por PC/navegador</strong>
                           <span style="font-size:0.8rem; color:#fef3c7;">
                             Este navegador/PC já possui a conta <strong>@${escapeHtml(AuthProfile.getLocalCreatedAccountNick() || 'existente')}</strong> criada. Use a aba <strong>Entrar</strong> para acessar sua conta.
                           </span>
                           <div>
-                            <button type="button" class="chunky-btn secondary" id="auth-switch-to-login" style="padding:7px 12px; font-size:0.8rem;">🔑 Ir para Entrar</button>
+                            <button type="button" class="chunky-btn secondary" id="auth-switch-to-login" style="min-height:42px; padding:7px 12px; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">${uiIcon('key', { size: 14 })} Ir para Entrar</button>
                           </div>
                         </div>
                       ` : `
                         <form id="auth-reg-form" style="display:flex; flex-direction:column; gap:9px;">
                           <div style="font-size:0.78rem; color:#bae6fd; background:rgba(14,116,144,0.18); border:1px solid rgba(56,189,248,0.35); border-radius:10px; padding:8px 10px;">
-                            ⚡ <strong>Cadastro instantâneo sem e-mail:</strong> escolha apenas um Apelido único e uma Senha forte. Seu progresso de convidado será migrado automaticamente!
+                            ${uiIcon('bolt', { size: 14, color: '#38bdf8' })} <strong>Cadastro instantâneo sem e-mail:</strong> escolha apenas um Apelido único e uma Senha forte. Seu progresso de convidado será migrado automaticamente!
                           </div>
                           <label style="display:flex; flex-direction:column; gap:4px; font-size:0.78rem; color:#e5d3bc;">
                             <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
@@ -381,18 +382,18 @@ export class ProfileModal {
                             <input type="checkbox" id="auth-reg-minor" />
                             <span>Sou menor de 18 anos e possuo consentimento dos pais/responsáveis.</span>
                           </label>
-                          <div style="font-size:0.74rem; color:#fcd34d;">
-                            🛡️ Limite de segurança: 1 conta por PC/navegador. Guarde bem seu apelido e senha!
+                          <div style="font-size:0.74rem; color:#fcd34d; display:inline-flex; align-items:center; gap:5px;">
+                            ${uiIcon('shield', { size: 13, color: '#fcd34d' })} Limite de segurança: 1 conta por PC/navegador. Guarde bem seu apelido e senha!
                           </div>
-                          <button type="submit" class="chunky-btn" id="auth-reg-submit">✨ Criar Conta e Migrar Progresso</button>
+                          <button type="submit" class="chunky-btn" id="auth-reg-submit" style="min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">${uiIcon('sparkle', { size: 15 })} Criar Conta e Migrar Progresso</button>
                         </form>
                       `}
                     ` : ''}
 
                     <div style="border-top:1px solid rgba(255,255,255,0.1); padding-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                       <span style="font-size:0.78rem; color:#d8c2a6;">Login rápido opcional:</span>
-                      <button type="button" class="chunky-btn secondary" id="auth-oauth-google">G Google</button>
-                      <button type="button" class="chunky-btn secondary" id="auth-oauth-discord">💬 Discord</button>
+                      <button type="button" class="chunky-btn secondary" id="auth-oauth-google" style="min-height:40px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('cloud', { size: 14 })} Google</button>
+                      <button type="button" class="chunky-btn secondary" id="auth-oauth-discord" style="min-height:40px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('multiplayer', { size: 14 })} Discord</button>
                     </div>
                   </div>
                 `}
@@ -400,15 +401,15 @@ export class ProfileModal {
                 <div class="item-card" style="display:flex; flex-direction:row; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                   <span style="font-size:0.8rem; color:#d8c2a6;">Gerenciar backup JSON local ou exclusão LGPD:</span>
                   <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <button type="button" class="chunky-btn secondary" id="prof-open-save">💾 Dados &amp; Save</button>
-                    <button type="button" class="chunky-btn secondary" id="prof-open-legal" style="border-color:#22c55e; color:#86efac;">🛡️ LGPD &amp; Excluir</button>
+                    <button type="button" class="chunky-btn secondary" id="prof-open-save" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('save', { size: 14 })} Dados &amp; Save</button>
+                    <button type="button" class="chunky-btn secondary" id="prof-open-legal" style="min-height:42px; border-color:#22c55e; color:#86efac; display:inline-flex; align-items:center; gap:5px;">${uiIcon('shield', { size: 14, color: '#86efac' })} LGPD &amp; Excluir</button>
                   </div>
                 </div>
               ` : ''}
 
               ${activeTab === 'showcase' ? `
                 <div class="item-card" style="gap:8px;">
-                  <strong style="color:#ffd447;">📊 Estatísticas Gerais</strong>
+                  <strong style="color:#ffd447; display:inline-flex; align-items:center; gap:5px;">${uiIcon('medal', { size: 15, color: '#ffd447' })} Estatísticas Gerais</strong>
                   <div class="stat-grid">
                     <div class="stat-tile"><span class="label">Melhor Pontuação</span><span class="val">${stats.highScore}</span></div>
                     <div class="stat-tile"><span class="label">Distância Total</span><span class="val">${stats.totalDist} m</span></div>
@@ -421,15 +422,15 @@ export class ProfileModal {
 
                 <div class="item-card" style="gap:8px;">
                   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                    <strong style="color:#6ee7b7;">🏆 Vitrine de Troféus (escolha até 4)</strong>
-                    <button type="button" class="chunky-btn secondary" id="prof-open-ach" style="padding:6px 10px; font-size:0.78rem;">Ver Todas Conquistas</button>
+                    <strong style="color:#6ee7b7; display:inline-flex; align-items:center; gap:5px;">${uiIcon('trophy', { size: 15, color: '#6ee7b7' })} Vitrine de Troféus (escolha até 4)</strong>
+                    <button type="button" class="chunky-btn secondary" id="prof-open-ach" style="min-height:40px; padding:6px 12px; font-size:0.78rem;">Ver Todas Conquistas</button>
                   </div>
                   ${unlockedAchievements.length === 0
                     ? '<p style="font-size:0.8rem; color:#d8c2a6;">Desbloqueie conquistas jogando para exibi-las aqui!</p>'
                     : `<div style="display:flex; gap:6px; flex-wrap:wrap;">
                         ${unlockedAchievements.map((a) => {
                           const selected = prof.showcaseAchievements.includes(a.id);
-                          return `<button type="button" class="tab-btn ${selected ? 'active' : ''}" data-showcase="${a.id}">${a.icon} ${escapeHtml(a.name)}</button>`;
+                          return `<button type="button" class="tab-btn ${selected ? 'active' : ''}" data-showcase="${a.id}" style="min-height:38px; display:inline-flex; align-items:center; gap:4px;">${uiIcon('trophy', { size: 13 })} ${escapeHtml(a.name)}</button>`;
                         }).join('')}
                       </div>`
                   }

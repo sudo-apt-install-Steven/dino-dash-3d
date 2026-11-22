@@ -10,6 +10,7 @@ import { OrientationManager } from '../systems/OrientationManager.js';
 import { ProgressionManager } from '../systems/Progression.js';
 import { attachModalHelp } from './Menus.js';
 import { renderSkillSvg } from './SvgIcons.js';
+import { uiIcon } from './UiIcons.js';
 import { normalizeLocale } from '../i18n/translations.js';
 import { escapeHtml } from '../security/Sanitize.js';
 
@@ -238,13 +239,13 @@ export class SelectionScreen {
       <div class="overlay-center">
         <div class="chunky-panel modal-card dino-modal" id="sel-modal-card">
           <div class="modal-header">
-            <h2 id="sel-heading">🦖 Dinossauros (${unlockedCount}/${DINO_CATALOG.length})</h2>
+            <h2 id="sel-heading" style="display:inline-flex; align-items:center; gap:7px;">${uiIcon('dino', { size: 20 })} Dinossauros (${unlockedCount}/${DINO_CATALOG.length})</h2>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <button type="button" class="tab-btn sel-personal-toggle ${Save.data.settings?.personalNames ? 'active' : ''}" id="sel-personal-names-btn" title="Alterna nomes alternativos pessoais (ex: Raptor Fóssil Estelar ↔ Scary Monsters)" style="padding:6px 12px; font-size:0.78rem; border-color:#38bdf8; color:#e0f2fe; box-shadow:0 0 12px rgba(56,189,248,0.28);">
-                ✨ Modo Pessoal: ${Save.data.settings?.personalNames ? 'ON' : 'OFF'}
+              <button type="button" class="tab-btn sel-personal-toggle ${Save.data.settings?.personalNames ? 'active' : ''}" id="sel-personal-names-btn" title="Alterna nomes alternativos pessoais (ex: Raptor Fóssil Estelar ↔ Scary Monsters)" style="min-height:40px; padding:6px 12px; font-size:0.78rem; border-color:#38bdf8; color:#e0f2fe; box-shadow:0 0 12px rgba(56,189,248,0.28); display:inline-flex; align-items:center; gap:5px;">
+                ${uiIcon('sparkle', { size: 14, color: '#38bdf8' })} Modo Pessoal: ${Save.data.settings?.personalNames ? 'ON' : 'OFF'}
               </button>
-              <span class="hud-pill">🥚 Ovos: <strong id="sel-eggs-val">${Save.data.eggs}</strong></span>
-              <button class="chunky-btn secondary" id="sel-close">Voltar</button>
+              <span class="hud-pill" style="display:inline-flex; align-items:center; gap:4px;">${uiIcon('egg', { size: 14, color: '#fde68a' })} Ovos: <strong id="sel-eggs-val">${Save.data.eggs}</strong></span>
+              <button class="chunky-btn secondary" id="sel-close" style="min-height:42px;">Voltar</button>
             </div>
           </div>
 
@@ -252,21 +253,21 @@ export class SelectionScreen {
             <div class="sel-stage-col" id="sel-stage-col">
               <div class="preview-canvas-box" id="sel-preview-box"></div>
               <p id="sel-lock-hint" style="font-size:0.75rem; color:#d8c2a6; text-align:center; margin-top:4px;"></p>
-              <div class="sel-action-bar">
-                <button class="chunky-btn" id="sel-confirm" style="flex:1 1 135px; white-space:nowrap; font-size:0.86rem; padding:9px 12px;"></button>
-                <button class="chunky-btn secondary" id="sel-test" style="padding:9px 12px; font-size:0.86rem;">Testar</button>
-                <button class="chunky-btn secondary" id="sel-roar" style="padding:9px 12px; font-size:0.86rem;">🔊 Rugido</button>
+              <div class="sel-action-bar" style="gap:8px;">
+                <button class="chunky-btn" id="sel-confirm" style="flex:1 1 135px; min-height:44px; white-space:nowrap; font-size:0.86rem; padding:9px 12px; display:inline-flex; align-items:center; justify-content:center; gap:6px;"></button>
+                <button class="chunky-btn secondary" id="sel-test" style="min-height:44px; padding:9px 12px; font-size:0.86rem; display:inline-flex; align-items:center; justify-content:center; gap:5px;">${uiIcon('play', { size: 14 })} Testar</button>
+                <button class="chunky-btn secondary" id="sel-roar" style="min-height:44px; padding:9px 12px; font-size:0.86rem; display:inline-flex; align-items:center; justify-content:center; gap:5px;">${uiIcon('sound', { size: 15 })} Rugido</button>
               </div>
               <div class="sel-skins-wrap">
-                <div style="font-size:0.72rem; color:#ffd447; margin-bottom:3px;">🎨 Skins Fixas:</div>
+                <div style="font-size:0.72rem; color:#ffd447; margin-bottom:4px; display:inline-flex; align-items:center; gap:4px;">${uiIcon('palette', { size: 13, color: '#ffd447' })} Skins Fixas:</div>
                 <div class="tabs-row" id="sel-skins-row" style="gap:5px;"></div>
               </div>
             </div>
 
             <div class="sel-details-col" id="sel-details-col">
               <div class="hud-pill" id="sel-hybrid-banner" style="display:none; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; background:rgba(139,92,246,0.22); border-color:#a855f7; color:#f3e8ff; padding:6px 10px; font-size:0.8rem;">
-                <span>🧬 Modo Híbrido Ativo (sobrepõe dino na corrida)</span>
-                <button class="tab-btn" id="sel-disable-hybrid" style="padding:4px 9px; font-size:0.74rem; border-color:#c084fc;">Usar Dino Puro</button>
+                <span style="display:inline-flex; align-items:center; gap:5px;">${uiIcon('dna', { size: 14, color: '#c084fc' })} Modo Híbrido Ativo (sobrepõe dino na corrida)</span>
+                <button class="tab-btn" id="sel-disable-hybrid" style="padding:5px 10px; min-height:36px; font-size:0.74rem; border-color:#c084fc;">Usar Dino Puro</button>
               </div>
               <div class="hud-pill" id="sel-notice" style="color:#ffd447; text-align:center; padding:6px 12px; font-size:0.82rem; display:none;"></div>
               <div id="sel-details" style="display:flex; flex-direction:column; gap:9px;"></div>
@@ -276,27 +277,27 @@ export class SelectionScreen {
           <div class="sel-bottom-dock" id="sel-bottom-dock">
             <div class="sel-featured-scary" id="sel-featured-scary" role="button" tabindex="0" title="Clique para selecionar ou liberar Scary Monsters / Raptor Fóssil Estelar">
               <div class="sel-featured-scary-info">
-                <span class="sel-featured-badge">⭐ DESTAQUE</span>
+                <span class="sel-featured-badge" style="display:inline-flex; align-items:center; gap:4px;">${uiIcon('star', { size: 12, color: '#ffd447' })} DESTAQUE</span>
                 <strong class="sel-featured-title">Scary Monsters / Raptor Fóssil Estelar</strong>
                 <span class="sel-featured-sub">Habilidades Únicas • Vírus Jurássico, Garra Estelar &amp; Bote Dimensional!</span>
               </div>
-              <button type="button" class="chunky-btn sel-featured-btn" id="sel-featured-scary-btn">⚡ Liberar &amp; Equipar</button>
+              <button type="button" class="chunky-btn sel-featured-btn" id="sel-featured-scary-btn" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('bolt', { size: 14 })} Liberar &amp; Equipar</button>
             </div>
             <div class="catalog-toolbar sel-catalog-toolbar">
               <input type="search" class="text-input catalog-search" id="sel-search" placeholder="${loc === 'en' ? 'Search dinosaur or ability...' : (loc === 'es' ? 'Buscar dinosaurio o habilidad...' : 'Buscar dinossauro ou habilidade...')}" aria-label="Buscar dinossauro" />
               <select class="select-input catalog-select" id="sel-rarity-filter" aria-label="Filtrar por raridade ou desbloqueio">
                 <option value="all">${loc === 'en' ? 'All rarities' : (loc === 'es' ? 'Todas las rarezas' : 'Todas raridades')}</option>
-                <option value="__unlocked">${loc === 'en' ? 'Unlocked' : (loc === 'es' ? 'Desbloqueados' : '✔ Desbloqueados')}</option>
-                <option value="__locked">${loc === 'en' ? 'Locked' : (loc === 'es' ? 'Bloqueados' : '🔒 Bloqueados')}</option>
+                <option value="__unlocked">${loc === 'en' ? 'Unlocked' : (loc === 'es' ? 'Desbloqueados' : 'Desbloqueados')}</option>
+                <option value="__locked">${loc === 'en' ? 'Locked' : (loc === 'es' ? 'Bloqueados' : 'Bloqueados')}</option>
                 ${dynamicRarities.map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('')}
               </select>
               <span class="hud-pill" id="sel-match-count" style="font-size:0.74rem; padding:4px 8px;">${allNonSecret.length}/${DINO_CATALOG.length}</span>
             </div>
             <div class="tabs-row sel-filter-tabs" id="sel-filter-tabs">
-              <button class="tab-btn active" data-cfilter="all">Todos (${DINO_CATALOG.length})</button>
-              <button class="tab-btn" data-cfilter="limited" style="border-color:#f59e0b; color:#fde047;">⭐ Limitados / Eventos (${limitedCount})</button>
+              <button class="tab-btn active" data-cfilter="all" style="min-height:40px;">Todos (${DINO_CATALOG.length})</button>
+              <button class="tab-btn" data-cfilter="limited" style="min-height:40px; border-color:#f59e0b; color:#fde047; display:inline-flex; align-items:center; gap:4px;">${uiIcon('star', { size: 13, color: '#fde047' })} Limitados / Eventos (${limitedCount})</button>
               ${Object.entries(DINO_CLASSES).map(([k, info]) => `
-                <button class="tab-btn" data-cfilter="${k}">${info.name.pt}</button>
+                <button class="tab-btn" data-cfilter="${k}" style="min-height:40px;">${info.name.pt}</button>
               `).join('')}
             </div>
             <div class="dino-selector-row" id="sel-dino-list"></div>
@@ -343,16 +344,25 @@ export class SelectionScreen {
       return true;
     };
 
+    const buildDinoChipHtml = (d) => {
+      const owned = isDinoOwned(d);
+      const isSelected = d.id === Save.data.selectedDino;
+      const icons = isSelected
+        ? uiIcon('star', { size: 13, color: '#ffd447' })
+        : (!owned
+          ? (d.isLimited ? `${uiIcon('star', { size: 12, color: '#fde047' })}${uiIcon('lock', { size: 12 })}` : uiIcon('lock', { size: 12 }))
+          : (d.isLimited ? uiIcon('star', { size: 12, color: '#fde047' }) : ''));
+      return `${icons ? `${icons} ` : ''}${escapeHtml(displayNameOf(d))}`;
+    };
+
     const syncListSelection = () => {
       const listEl = container.querySelector('#sel-dino-list');
       if (!listEl) return;
       listEl.querySelectorAll('[data-dino-id]').forEach((btn) => {
         const id = btn.getAttribute('data-dino-id');
         const d = getDinoSpec(id);
-        const owned = isDinoOwned(d);
         btn.classList.toggle('active', id === currentId);
-        const prefix = id === Save.data.selectedDino ? '★ ' : (!owned ? (d.isLimited ? '⭐🔒 ' : '🔒 ') : (d.isLimited ? '⭐ ' : ''));
-        btn.textContent = `${prefix}${displayNameOf(d)}`;
+        btn.innerHTML = buildDinoChipHtml(d);
       });
     };
 
@@ -386,17 +396,15 @@ export class SelectionScreen {
 
       listEl.innerHTML = `
         ${filteredDinos.length ? filteredDinos.map((d) => {
-          const owned = isDinoOwned(d);
           const rar = getDinoRarity(d);
           const dName = displayNameOf(d);
-          const prefix = d.id === Save.data.selectedDino ? '★ ' : (!owned ? (d.isLimited ? '⭐🔒 ' : '🔒 ') : (d.isLimited ? '⭐ ' : ''));
           return `
-            <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${escapeHtml(d.id)}" title="${escapeHtml(dName)} (${escapeHtml(rar)})" style="min-height:40px; width:100%;">
-              ${prefix}${escapeHtml(dName)}
+            <button class="tab-btn ${d.id === currentId ? 'active' : ''}" data-dino-id="${escapeHtml(d.id)}" title="${escapeHtml(dName)} (${escapeHtml(rar)})" style="min-height:44px; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:5px;">
+              ${buildDinoChipHtml(d)}
             </button>
           `;
         }).join('') : `<div style="grid-column:1/-1; text-align:center; color:#d8c2a6; font-size:0.82rem; padding:10px;">Nenhum dinossauro encontrado.</div>`}
-        ${(!hasSecret && !q && rarityFilter === 'all' && classFilter !== 'limited') ? `<button class="tab-btn" id="sel-secret-locked" style="opacity:0.75; min-height:40px; width:100%;">🔒 ??? (Secreto)</button>` : ''}
+        ${(!hasSecret && !q && rarityFilter === 'all' && classFilter !== 'limited') ? `<button class="tab-btn" id="sel-secret-locked" style="opacity:0.75; min-height:44px; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:5px;">${uiIcon('lock', { size: 13 })} ??? (Secreto)</button>` : ''}
       `;
       listEl.scrollTop = savedListScroll;
 
@@ -429,13 +437,13 @@ export class SelectionScreen {
       const specDisplayName = displayNameOf(spec);
       const curUnlocked = DINO_CATALOG.filter((d) => Save.data.unlockedDinos.includes(d.id)).length;
 
-      container.querySelector('#sel-heading').textContent = `🦖 Dinossauros (${curUnlocked}/${DINO_CATALOG.length})`;
+      container.querySelector('#sel-heading').innerHTML = `${uiIcon('dino', { size: 20 })} Dinossauros (${curUnlocked}/${DINO_CATALOG.length})`;
       container.querySelector('#sel-eggs-val').textContent = Save.data.eggs;
       const pNamesBtn = container.querySelector('#sel-personal-names-btn');
       if (pNamesBtn) {
         const pnOn = !!Save.data.settings?.personalNames;
         pNamesBtn.classList.toggle('active', pnOn);
-        pNamesBtn.textContent = `✨ Modo Pessoal: ${pnOn ? 'ON' : 'OFF'}`;
+        pNamesBtn.innerHTML = `${uiIcon('sparkle', { size: 14, color: '#38bdf8' })} Modo Pessoal: ${pnOn ? 'ON' : 'OFF'}`;
       }
 
       const hybridBanner = container.querySelector('#sel-hybrid-banner');
@@ -452,10 +460,10 @@ export class SelectionScreen {
       }
 
       const lockReason = spec.isLimited
-        ? `⭐ ${spec.unlockCondition?.label || spec.eventTag || 'Exclusivo de Evento / Modo Especial'}`
-        : `🔒 Custo: ${spec.unlockCost} 🥚`;
-      container.querySelector('#sel-lock-hint').textContent =
-        `Arraste para girar o modelo 3D • ${isUnlocked ? (isEquipped && !Save.data.hybrid?.enabled ? '★ Equipado Agora' : '✔ Desbloqueado') : lockReason}`;
+        ? `${uiIcon('star', { size: 12, color: '#fde047' })} ${escapeHtml(spec.unlockCondition?.label || spec.eventTag || 'Exclusivo de Evento / Modo Especial')}`
+        : `${uiIcon('lock', { size: 12 })} Custo: ${spec.unlockCost} ${uiIcon('egg', { size: 12, color: '#fde68a' })}`;
+      container.querySelector('#sel-lock-hint').innerHTML =
+        `Arraste para girar o modelo 3D • ${isUnlocked ? (isEquipped && !Save.data.hybrid?.enabled ? `${uiIcon('star', { size: 12, color: '#ffd447' })} Equipado Agora` : `${uiIcon('check', { size: 12, color: '#4ade80' })} Desbloqueado`) : lockReason}`;
 
       const scarySpec = getDinoSpec('scary_raptor');
       const scaryOwned = scarySpec ? isDinoOwned(scarySpec) : false;
@@ -466,18 +474,18 @@ export class SelectionScreen {
         featuredCard.classList.toggle('is-active', currentId === 'scary_raptor');
       }
       if (featuredBtn) {
-        featuredBtn.textContent = scaryEquipped
-          ? '✔ Equipado'
-          : (scaryOwned ? '★ Equipar Agora' : '⚡ Liberar & Equipar');
+        featuredBtn.innerHTML = scaryEquipped
+          ? `${uiIcon('check', { size: 14 })} Equipado`
+          : (scaryOwned ? `${uiIcon('star', { size: 14 })} Equipar Agora` : `${uiIcon('bolt', { size: 14 })} Liberar &amp; Equipar`);
       }
 
       const confirmBtn = container.querySelector('#sel-confirm');
       confirmBtn.className = `chunky-btn ${isUnlocked ? '' : 'orange'}`;
-      confirmBtn.textContent = isUnlocked
-        ? (isEquipped && !Save.data.hybrid?.enabled ? '✔ Equipado • Voltar' : '★ Equipar Agora')
+      confirmBtn.innerHTML = isUnlocked
+        ? (isEquipped && !Save.data.hybrid?.enabled ? `${uiIcon('check', { size: 14 })} Equipado • Voltar` : `${uiIcon('star', { size: 14 })} Equipar Agora`)
         : (currentId === 'scary_raptor'
-          ? '⚡ Liberar Grátis (Destaque)'
-          : (spec.isLimited ? '⭐ Evento / Modo' : `🔓 Liberar (${spec.unlockCost} 🥚)`));
+          ? `${uiIcon('bolt', { size: 14 })} Liberar Grátis (Destaque)`
+          : (spec.isLimited ? `${uiIcon('star', { size: 14 })} Evento / Modo` : `${uiIcon('unlock', { size: 14 })} Liberar (${spec.unlockCost} ${uiIcon('egg', { size: 13 })})`));
 
       const activePreset = Save.data.customization.p1.presets[Save.data.customization.p1.activePreset];
       const skins = getDinoSkins(spec);
@@ -513,26 +521,26 @@ export class SelectionScreen {
       const hab = habInfo.primary || getDinoHabitat(spec);
       const habLabel = hab === 'aquatic'
         ? (habInfo.grantsLandWalk
-          ? '🌊 Aquático + 🐾 Terra (Mutação)'
-          : (swimCaps.canSubmerge ? '🌊 Aquático • Mergulho Profundo' : '🌊 Aquático • Superfície (Sem Afundar)'))
+          ? `${uiIcon('gills', { size: 13, color: '#38bdf8' })} Aquático + ${uiIcon('dino', { size: 13 })} Terra (Mutação)`
+          : (swimCaps.canSubmerge ? `${uiIcon('gills', { size: 13, color: '#38bdf8' })} Aquático • Mergulho Profundo` : `${uiIcon('gills', { size: 13, color: '#38bdf8' })} Aquático • Superfície (Sem Afundar)`))
         : hab === 'amphibious'
-          ? '🐊 Anfíbio • Terra ↔ Água (Superfície)'
+          ? `${uiIcon('gills', { size: 13, color: '#34d399' })} Anfíbio • Terra ↔ Água (Superfície)`
           : hab === 'flying'
-            ? '🪽 Aéreo (Voo/Céu)'
-            : '🌿 Terrestre (Corre/Nada)';
+            ? `${uiIcon('sprint', { size: 13, color: '#bae6fd' })} Aéreo (Voo/Céu)`
+            : `${uiIcon('dino', { size: 13, color: '#86efac' })} Terrestre (Corre/Nada)`;
       const swimTipLine = (hab === 'aquatic' || hab === 'amphibious')
-        ? `<div style="font-size:0.78rem; color:#67e8f9; background:rgba(14,116,144,0.22); border:1px solid rgba(34,211,238,0.35); border-radius:8px; padding:5px 8px;">💧 ${swimCaps.swimModeDescription}</div>`
+        ? `<div style="font-size:0.78rem; color:#67e8f9; background:rgba(14,116,144,0.22); border:1px solid rgba(34,211,238,0.35); border-radius:8px; padding:5px 8px;">${uiIcon('gills', { size: 13, color: '#67e8f9' })} ${swimCaps.swimModeDescription}</div>`
         : '';
       const eqVarId = getEquippedSkinVariant(currentId);
       const vDef = SKIN_VARIANTS.find((v) => v.id === eqVarId);
       const varPill = vDef && vDef.id !== 'normal'
-        ? `<span class="hud-pill" style="border-color:${vDef.color}; color:${vDef.color};">${vDef.badge} ${vDef.name}</span>`
+        ? `<span class="hud-pill" style="border-color:${vDef.color}; color:${vDef.color};">${uiIcon('sparkle', { size: 12, color: vDef.color })} ${vDef.name}</span>`
         : '';
 
       const detailsEl = container.querySelector('#sel-details');
       const limitedBadge = spec.isLimited ? `
         <div class="hud-pill" style="border-color:#f59e0b; color:#fde047; background:rgba(245,158,11,0.14); font-size:0.78rem;">
-          ⭐ ${escapeHtml(spec.eventTag || 'Edição Limitada')} • ${escapeHtml(spec.unlockCondition?.label || 'Desbloqueável em Evento / Modo')} (Fora do Gacha)
+          ${uiIcon('star', { size: 13, color: '#fde047' })} ${escapeHtml(spec.eventTag || 'Edição Limitada')} • ${escapeHtml(spec.unlockCondition?.label || 'Desbloqueável em Evento / Modo')} (Fora do Gacha)
         </div>
       ` : '';
       const passiveText = typeof spec.passive === 'string'
@@ -559,8 +567,8 @@ export class SelectionScreen {
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
             <span style="font-size:0.78rem; color:#ffd447;">Árvore de Habilidade Nv.${level} (+${(level - 1) * 8}% poder)</span>
-            <button class="tab-btn" id="sel-upgrade" ${(!isUnlocked || level >= 10) ? 'disabled' : ''}>
-              ${!isUnlocked ? 'Desbloqueie antes' : (level >= 10 ? 'MÁXIMO' : `Evoluir (${upgradeCost} 🥚)`)}
+            <button class="tab-btn" id="sel-upgrade" style="min-height:38px;" ${(!isUnlocked || level >= 10) ? 'disabled' : ''}>
+              ${!isUnlocked ? 'Desbloqueie antes' : (level >= 10 ? 'MÁXIMO' : `Evoluir (${upgradeCost} ${uiIcon('egg', { size: 12 })})`)}
             </button>
           </div>
         </div>
@@ -580,7 +588,7 @@ export class SelectionScreen {
         `).join('')}
 
         <p style="font-size:0.8rem; color:#d8c2a6; font-style:italic;">
-          💡 Curiosidade: ${spec.fact.pt}
+          ${uiIcon('info', { size: 13, color: '#fde68a' })} Curiosidade: ${spec.fact.pt}
         </p>
       `;
 

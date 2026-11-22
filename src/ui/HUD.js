@@ -8,6 +8,7 @@ import { OrientationManager } from '../systems/OrientationManager.js';
 import { normalizeLocale } from '../i18n/translations.js';
 import { escapeHtml } from '../security/Sanitize.js';
 import { renderSkillSvg, renderEggSvg, renderBossObsSvg } from './SvgIcons.js';
+import { uiIcon } from './UiIcons.js';
 
 export function formatScoreValue(val) {
   return String(Math.max(0, Math.floor(val))).padStart(5, '0');
@@ -70,35 +71,35 @@ export class HUD {
       <div class="hud-top">
         <div class="hud-pills">
           <div class="dino-logo" style="font-size: 1.25rem;">DINO <span class="dash-accent">DASH 3D</span></div>
-          <div class="hud-pill" id="hud-camera" style="cursor:pointer; pointer-events:auto;" data-tip="Troca a câmera de visão (Tecla C ou toque)."><span class="kb-only">Câmera: </span><span class="mob-only">📷 </span><strong>3ª Pessoa</strong></div>
+          <div class="hud-pill" id="hud-camera" style="cursor:pointer; pointer-events:auto;" data-tip="Troca a câmera de visão (Tecla C ou toque)."><span class="kb-only">Câmera: </span><span class="mob-only">${uiIcon('camera', { size: 14 })} </span><strong>3ª Pessoa</strong></div>
           <div class="hud-pill" id="hud-speed" data-tip="Velocidade atual da corrida.">Vel: <strong>1.0x</strong></div>
           <div class="hud-pill" id="hud-eggs" data-tip="Total de Ovos guardados para Loja e Dinossauros.">${renderEggSvg('dourado', 18)} <strong>0</strong></div>
-          <div class="hud-pill" id="hud-crystals" style="color:#7dd3fc; border-color:#38bdf8;" data-tip="Diamantes: servem para Catalisador Gacha (3 💎), Forja de Mutações, Reroll na Loja (2 💎) e Revive (2 💎).">💎 <strong>0</strong></div>
+          <div class="hud-pill" id="hud-crystals" style="color:#7dd3fc; border-color:#38bdf8;" data-tip="Diamantes: servem para Catalisador Gacha (3 💎), Forja de Mutações, Reroll na Loja (2 💎) e Revive (2 💎).">${uiIcon('diamond', { size: 14, color: '#38bdf8' })} <strong>0</strong></div>
           <div class="hud-pill hidden" id="hud-combo" style="color:#ffd447;" data-tip="Multiplicador por quase-colisões e pisões seguidos.">Combo: <strong>x1</strong></div>
-          <div class="hud-pill hidden" id="hud-mp-rank" style="color:#fde047; border-color:#ffd447;" data-tip="Sua posição atual contra outros jogadores.">🏆 #1</div>
+          <div class="hud-pill hidden" id="hud-mp-rank" style="color:#fde047; border-color:#ffd447;" data-tip="Sua posição atual contra outros jogadores.">${uiIcon('trophy', { size: 14, color: '#ffd447' })} #1</div>
           <div class="hud-pill hidden" id="hud-ctrl-status" style="color:#86efac; border-color:#22c55e; display:inline-flex; align-items:center; gap:6px;" data-tip="Indicador de Controle Celular conectado em tempo real.">
             <span class="hud-ctrl-led" id="hud-ctrl-led"></span>
-            <span id="hud-ctrl-text">📱 Controle</span>
+            <span id="hud-ctrl-text">${uiIcon('gamepad', { size: 14, color: '#86efac' })} Controle</span>
           </div>
-          <div class="hud-pill hidden" id="hud-element" style="color:#38bdf8;" data-tip="Elemento ativo: combine com outro ou acerte a fraqueza do Chefe!">✨ Nenhum</div>
-          <div class="hud-pill hidden" id="hud-wanted" style="color:#ff4757;" data-tip="Nível de Caçada: aumenta recompensa e atenção de predadores.">🚨 ★</div>
+          <div class="hud-pill hidden" id="hud-element" style="color:#38bdf8;" data-tip="Elemento ativo: combine com outro ou acerte a fraqueza do Chefe!">${uiIcon('sparkle', { size: 14, color: '#38bdf8' })} Nenhum</div>
+          <div class="hud-pill hidden" id="hud-wanted" style="color:#ff4757;" data-tip="Nível de Caçada: aumenta recompensa e atenção de predadores.">${uiIcon('warning', { size: 14, color: '#ff4757' })} ★</div>
           <div class="hud-pill hud-danger-pill hidden" id="hud-danger-tier" data-tip="Nível de Perigo dinâmico: aumenta velocidade, densidade e agressividade.">
-            <span id="hud-danger-label">⚠️ Perigo Nv.1</span>
+            <span id="hud-danger-label">${uiIcon('warning', { size: 14, color: '#f59e0b' })} Perigo Nv.1</span>
             <span class="hud-danger-track" aria-hidden="true"><span class="hud-danger-fill" id="hud-danger-fill" style="width:10%"></span></span>
           </div>
         </div>
 
         <div class="hud-top-right" style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
           <div class="hud-top-actions" style="display:flex; gap:8px; align-items:center;">
-            <button class="chunky-btn secondary mob-only" id="btn-mob-rotate" style="padding:5px 8px; font-size:0.75rem;" data-tip="Deitar / alternar tela em Paisagem no celular.">🔄</button>
-            <button class="chunky-btn secondary mob-only" id="btn-mob-cam" style="padding:5px 8px; font-size:0.75rem;" data-tip="Trocar ângulo de câmera (Tecla C).">📷</button>
-            <button class="chunky-btn secondary mob-only" id="btn-mob-edit-hud" style="padding:5px 8px; font-size:0.75rem;" data-tip="Editar tamanho, modo canhoto e posição dos botões touch.">🛠️</button>
-            <button class="chunky-btn secondary" id="btn-guide" style="padding:5px 10px; font-size:0.75rem;" data-tip="Abre o Guia Visual de obstáculos, status e chefes.">📖<span class="btn-label"> Guia</span></button>
-            <button class="chunky-btn secondary" id="btn-glossary" style="padding:5px 10px; font-size:0.75rem; border-color:#38bdf8; color:#bae6fd;" data-tip="Abre o Glossário Rápido (Aura Vermelha, Buff, Debuff, Estamina, Roda X e Brânquias).">📖<span class="btn-label"> Glossário</span></button>
-            <button class="chunky-btn secondary" id="btn-clip-rec" style="padding:5px 10px; font-size:0.75rem;" data-tip="Gravar clipe curto da corrida (.webm).">🎥<span class="btn-label"> Clipe</span></button>
-            ${import.meta.env.DEV ? `<button class="chunky-btn secondary ${Save.data.devMode ? '' : 'hidden'}" id="btn-debug" style="padding:5px 10px; font-size:0.75rem;" data-tip="Painel de Depuração e Testes (F9).">🛠️<span class="btn-label"> Debug</span></button>` : ''}
-            <button class="chunky-btn secondary" id="btn-photo-mode" style="padding:5px 10px; font-size:0.75rem;" data-tip="Modo Foto (pausa para capturar cena).">📷</button>
-            <button class="chunky-btn secondary" id="btn-pause" style="padding:5px 12px; font-size:0.75rem;" data-tip="Pausar corrida (Tecla P).">⏸<span class="btn-label"> P</span></button>
+            <button class="chunky-btn secondary mob-only" id="btn-mob-rotate" style="padding:5px 8px; font-size:0.75rem;" data-tip="Deitar / alternar tela em Paisagem no celular.">${uiIcon('rotate', { size: 14 })}</button>
+            <button class="chunky-btn secondary mob-only" id="btn-mob-cam" style="padding:5px 8px; font-size:0.75rem;" data-tip="Trocar ângulo de câmera (Tecla C).">${uiIcon('camera', { size: 14 })}</button>
+            <button class="chunky-btn secondary mob-only" id="btn-mob-edit-hud" style="padding:5px 8px; font-size:0.75rem;" data-tip="Editar tamanho, modo canhoto e posição dos botões touch.">${uiIcon('settings', { size: 14 })}</button>
+            <button class="chunky-btn secondary" id="btn-guide" style="padding:5px 10px; font-size:0.75rem;" data-tip="Abre o Guia Visual de obstáculos, status e chefes.">${uiIcon('book', { size: 14 })}<span class="btn-label"> Guia</span></button>
+            <button class="chunky-btn secondary" id="btn-glossary" style="padding:5px 10px; font-size:0.75rem; border-color:#38bdf8; color:#bae6fd;" data-tip="Abre o Glossário Rápido (Aura Vermelha, Buff, Debuff, Estamina, Roda X e Brânquias).">${uiIcon('glossary', { size: 14, color: '#bae6fd' })}<span class="btn-label"> Glossário</span></button>
+            <button class="chunky-btn secondary" id="btn-clip-rec" style="padding:5px 10px; font-size:0.75rem;" data-tip="Gravar clipe curto da corrida (.webm).">${uiIcon('clip', { size: 14 })}<span class="btn-label"> Clipe</span></button>
+            ${import.meta.env.DEV ? `<button class="chunky-btn secondary ${Save.data.devMode ? '' : 'hidden'}" id="btn-debug" style="padding:5px 10px; font-size:0.75rem;" data-tip="Painel de Depuração e Testes (F9).">${uiIcon('settings', { size: 14 })}<span class="btn-label"> Debug</span></button>` : ''}
+            <button class="chunky-btn secondary" id="btn-photo-mode" style="padding:5px 10px; font-size:0.75rem;" data-tip="Modo Foto (pausa para capturar cena).">${uiIcon('camera', { size: 14 })}</button>
+            <button class="chunky-btn secondary" id="btn-pause" style="padding:5px 12px; font-size:0.75rem;" data-tip="Pausar corrida (Tecla P).">${uiIcon('pause', { size: 14 })}<span class="btn-label"> P</span></button>
             <div class="hud-score-box" id="hud-score" data-tip="Recorde máximo (HI) e Pontuação atual."><span class="hi-label">HI 00000</span>  00000</div>
           </div>
           <div class="treasure-map" id="hud-treasure-map" data-tip="Progresso até o próximo Portal de mudança de Bioma!">
@@ -147,11 +148,11 @@ export class HUD {
       <div class="context-hint-toast hidden" id="hud-context-hint"></div>
       <div class="chunky-panel hidden" id="hud-tutorial-box" style="position:fixed; top:108px; left:50%; transform:translateX(-50%); z-index:26; padding:11px 16px; width:min(590px, 94vw); pointer-events:auto; border-color:#38bdf8; background:rgba(15, 23, 42, 0.94);">
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-          <strong id="tut-step-title" style="color:#ffd447; font-size:0.95rem;">🎓 Tutorial</strong>
+          <strong id="tut-step-title" style="color:#ffd447; font-size:0.95rem;">${uiIcon('book', { size: 16, color: '#ffd447' })} Tutorial</strong>
           <div style="display:flex; gap:8px; align-items:center;">
             <span id="tut-step-progress" class="hud-pill" style="font-size:0.75rem; padding:2px 8px;">1/6</span>
-            <button class="chunky-btn secondary" id="tut-glossary-btn" style="padding:4px 9px; font-size:0.72rem; border-color:#38bdf8; color:#bae6fd;">📖 Glossário</button>
-            <button class="chunky-btn orange" id="tut-skip" style="padding:4px 12px; font-size:0.78rem; font-weight:900;">⏭ Pular Tutorial</button>
+            <button class="chunky-btn secondary" id="tut-glossary-btn" style="padding:4px 9px; font-size:0.72rem; border-color:#38bdf8; color:#bae6fd;">${uiIcon('glossary', { size: 14, color: '#38bdf8' })} Glossário</button>
+            <button class="chunky-btn orange" id="tut-skip" style="padding:4px 12px; font-size:0.78rem; font-weight:900;">${uiIcon('play', { size: 14 })} Pular Tutorial</button>
           </div>
         </div>
         <div id="tut-step-desc" style="font-size:0.86rem; color:#fef3c7; line-height:1.4;">Siga as instruções na pista!</div>
@@ -167,14 +168,14 @@ export class HUD {
           <div class="hud-group" id="hud-group-vital">
             <span class="hud-group-title">Vida & Status</span>
             <div class="meter-pill" data-tip="Corações de vida e Escudos absorvem impactos.">
-              <div id="hud-hp-text">❤️ 3/3 • 🛡️ 0</div>
+              <div id="hud-hp-text">${uiIcon('heart', { size: 14, color: '#ef4444' })} 3/3 • ${uiIcon('shield', { size: 14, color: '#38bdf8' })} 0</div>
             </div>
             <div class="meter-pill hidden" id="hud-oxygen-pill" data-tip="Oxigênio / Brânquias: aquáticos com brânquias têm 100% O₂ no fundo do mar; anfíbios têm fôlego estendido; terrestres respiram na superfície, em Bolhas 🫧 ou com Roda [X]!">
-              <span><span id="lbl-oxygen-prefix">🫧 <span class="btn-label">O₂</span> </span><strong id="lbl-oxygen">100%</strong></span>
+              <span><span id="lbl-oxygen-prefix">${uiIcon('gills', { size: 14, color: '#38bdf8' })} <span class="btn-label">O₂</span> </span><strong id="lbl-oxygen">100%</strong></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-oxygen" style="width:100%; background:#38bdf8;"></div></div>
             </div>
             <div class="meter-pill hidden" id="hud-companion-pill" data-tip="Filhote Companheiro ativo: coleta ovos/bolhas e dispara bônus na corrida e via Roda [X].">
-              <span id="lbl-companion">🐾 Pet</span>
+              <span id="lbl-companion">${uiIcon('pet', { size: 14, color: '#facc15' })} Pet</span>
             </div>
             <div class="hud-status-row" id="hud-status-pills"></div>
           </div>
@@ -182,32 +183,32 @@ export class HUD {
           <div class="hud-group" id="hud-group-combat">
             <span class="hud-group-title">Combate</span>
             <div class="meter-pill" id="btn-fury-melee" style="cursor:pointer; pointer-events:auto;" data-tip="Fúria (F): ao encher 100%, clique ou aperte F para ficar gigante!">
-              <span>🔥 <span class="btn-label">Fúria</span> <span class="kb-only">(F)</span></span>
+              <span>${uiIcon('flame', { size: 14, color: '#f97316' })} <span class="btn-label">Fúria</span> <span class="kb-only">(F)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-fury" style="width:0%; background:linear-gradient(90deg,#ff5e1a,#ffd447);"></div></div>
             </div>
             <div class="meter-pill" data-tip="Habilidade especial do seu Dino (Espaço): carrega por tempo + ações (combos, pisões e Q).">
-              <span id="lbl-ability">⚡ <span class="btn-label">Habilidade</span> <span class="kb-only">(Espaço)</span></span>
+              <span id="lbl-ability">${uiIcon('bolt', { size: 14, color: '#22c55e' })} <span class="btn-label">Habilidade</span> <span class="kb-only">(Espaço)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-ability" style="width:100%; background:#58d63a;"></div></div>
             </div>
             <div class="meter-pill" id="btn-attack-melee" style="cursor:pointer; pointer-events:auto;" data-tip="Ataque rápido (Q): corta cactos, corais, espinhos e acerta chefes!">
-              <span>⚔️ <span class="btn-label">Ataque</span> <span class="kb-only">(Q)</span></span>
+              <span>${uiIcon('claw', { size: 14, color: '#f97316' })} <span class="btn-label">Ataque</span> <span class="kb-only">(Q)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-attack" style="width:100%; background:#f97316;"></div></div>
             </div>
             <div class="meter-pill" data-tip="Estamina Física (Shift=Foco / Pulo no ar=58 / Ataque Q=20): recarrega no chão.">
-              <span>🏃 <span class="btn-label">Estamina</span> <span class="kb-only">(Shift/2x⬆)</span></span>
+              <span>${uiIcon('sprint', { size: 14, color: '#34d399' })} <span class="btn-label">Estamina</span> <span class="kb-only">(Shift/2x⬆)</span></span>
               <div class="meter-bar"><div class="meter-fill" id="bar-bullet" style="width:100%; background:#34d399;"></div></div>
             </div>
             <div class="meter-pill" id="hud-backpack" style="cursor:pointer; pointer-events:auto;" data-tip="Mochila (E): clique ou aperte E para usar o próximo item guardado.">
-              🎒 <span class="kb-only">(E) </span><strong id="lbl-backpack">Vazia</strong>
+              ${uiIcon('backpack', { size: 14, color: '#fbbf24' })} <span class="kb-only">(E) </span><strong id="lbl-backpack">Vazia</strong>
             </div>
             <div class="meter-pill radial-pill-btn" id="btn-radial-wheel" data-tip="Roda Tática (X): pausa rapidamente a corrida para acionar Habitat, Mochila, Mascote ou Foco!">
-              🧭 <span class="btn-label">Roda</span> <strong id="lbl-radial-cd">(X)</strong>
+              ${uiIcon('wheel', { size: 14, color: '#38bdf8' })} <span class="btn-label">Roda</span> <strong id="lbl-radial-cd">(X)</strong>
             </div>
             <div class="meter-pill hidden transmute-pill" id="btn-transmute-mode" data-tip="Troca rápida de Habitat em Híbridos & Anfíbios!">
-              🔄 <span id="lbl-transmute-mode">Terra</span>
+              ${uiIcon('swap', { size: 14, color: '#38bdf8' })} <span id="lbl-transmute-mode">Terra</span>
             </div>
             <div class="meter-pill hidden" id="btn-mp-revive" style="cursor:pointer; pointer-events:auto; border-color:#34d399; background:rgba(6, 78, 59, 0.85);" data-tip="Reviver amigo caído no Multiplayer (V): salva o grupo na pista!">
-              💖 <strong id="lbl-mp-revive">Reviver (V)</strong>
+              ${uiIcon('revive', { size: 14, color: '#34d399' })} <strong id="lbl-mp-revive">Reviver (V)</strong>
             </div>
           </div>
         </div>
@@ -220,24 +221,24 @@ export class HUD {
       <!-- Controles touch para celular (Divisão ergonômica: esquerda movimento/abaixar/roda/item/respirar vs direita pular/hab/atq/fúria/troca/reviver; inversível no modo canhoto) -->
       <div class="touch-controls" id="touch-controls">
         <div class="touch-cluster touch-cluster-left" id="touch-cluster-left">
-          <button class="touch-btn touch-dpad-only" data-tact="left" aria-label="Faixa Esquerda"><span class="touch-btn-ico">◀</span><span class="touch-btn-lbl">Esq</span></button>
-          <button class="touch-btn touch-dpad-only" data-tact="right" aria-label="Faixa Direita"><span class="touch-btn-ico">▶</span><span class="touch-btn-lbl">Dir</span></button>
-          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar"><span class="touch-btn-ico" id="touch-duck-ico">▼</span><span class="touch-btn-lbl" id="touch-duck-lbl">Baixo</span></button>
-          <button class="touch-btn touch-btn-action touch-btn-radial" id="touch-radial-btn" aria-label="Roda Tática X"><span class="touch-btn-ico">🧭</span><span class="touch-btn-lbl">Roda</span></button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-item" id="touch-item-btn" data-tact="item" aria-label="Usar Item da Mochila"><span class="touch-btn-ico" id="touch-item-ico">🎒</span><span class="touch-btn-lbl">Item</span></button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-breathe" id="touch-breathe-btn" data-tact="breathe" aria-label="Respirar"><span class="touch-btn-ico">🫧</span><span class="touch-btn-lbl" id="touch-breathe-lbl">Respirar</span></button>
+          <button class="touch-btn touch-dpad-only" data-tact="left" aria-label="Faixa Esquerda"><span class="touch-btn-ico">${uiIcon('arrowLeft', { size: 22 })}</span><span class="touch-btn-lbl">Esq</span></button>
+          <button class="touch-btn touch-dpad-only" data-tact="right" aria-label="Faixa Direita"><span class="touch-btn-ico">${uiIcon('arrowRight', { size: 22 })}</span><span class="touch-btn-lbl">Dir</span></button>
+          <button class="touch-btn touch-dpad-only" data-tact="duck" aria-label="Abaixar ou Mergulhar"><span class="touch-btn-ico" id="touch-duck-ico">${uiIcon('arrowDown', { size: 22 })}</span><span class="touch-btn-lbl" id="touch-duck-lbl">Baixo</span></button>
+          <button class="touch-btn touch-btn-action touch-btn-radial" id="touch-radial-btn" aria-label="Roda Tática X"><span class="touch-btn-ico">${uiIcon('wheel', { size: 22, color: '#38bdf8' })}</span><span class="touch-btn-lbl">Roda</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-item" id="touch-item-btn" data-tact="item" aria-label="Usar Item da Mochila"><span class="touch-btn-ico" id="touch-item-ico">${uiIcon('backpack', { size: 22, color: '#fbbf24' })}</span><span class="touch-btn-lbl">Item</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-breathe" id="touch-breathe-btn" data-tact="breathe" aria-label="Respirar"><span class="touch-btn-ico">${uiIcon('gills', { size: 22, color: '#22d3ee' })}</span><span class="touch-btn-lbl" id="touch-breathe-lbl">Respirar</span></button>
         </div>
         <div class="touch-cluster touch-cluster-right" id="touch-cluster-right">
-          <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular"><span class="touch-btn-ico">▲</span><span class="touch-btn-lbl">Pulo</span></button>
-          <button class="touch-btn touch-btn-action touch-btn-ability" id="touch-ability-btn" data-tact="ability" aria-label="Habilidade Especial"><span class="touch-btn-ico">⚡</span><span class="touch-btn-lbl" id="touch-ability-lbl">Hab</span></button>
+          <button class="touch-btn touch-dpad-only" data-tact="jump" aria-label="Pular"><span class="touch-btn-ico">${uiIcon('arrowUp', { size: 22 })}</span><span class="touch-btn-lbl">Pulo</span></button>
+          <button class="touch-btn touch-btn-action touch-btn-ability" id="touch-ability-btn" data-tact="ability" aria-label="Habilidade Especial"><span class="touch-btn-ico">${uiIcon('bolt', { size: 22, color: '#22c55e' })}</span><span class="touch-btn-lbl" id="touch-ability-lbl">Hab</span></button>
           <button class="touch-btn touch-btn-action touch-btn-attack" id="touch-attack-btn" data-tact="attack" aria-label="Ataque Rápido">
-            <span class="touch-btn-ico">⚔️</span>
+            <span class="touch-btn-ico">${uiIcon('claw', { size: 22, color: '#f97316' })}</span>
             <span class="touch-btn-lbl" id="touch-attack-lbl">Atq</span>
             <span class="touch-cd-track" aria-hidden="true"><span class="touch-cd-fill" id="touch-attack-cd-fill" style="width:100%;"></span></span>
           </button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-fury" id="touch-fury-btn" data-tact="fury" aria-label="Modo Fúria"><span class="touch-btn-ico">🔥</span><span class="touch-btn-lbl">Fúria!</span></button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-transmute" id="touch-transmute-btn" data-tact="transmute" aria-label="Trocar Habitat"><span class="touch-btn-ico">🔄</span><span class="touch-btn-lbl" id="touch-transmute-lbl">Troca</span></button>
-          <button class="touch-btn touch-btn-action hidden touch-btn-revive" id="touch-revive-btn" data-tact="revive" aria-label="Reviver Aliado"><span class="touch-btn-ico">💖</span><span class="touch-btn-lbl" id="touch-revive-lbl">Reviver</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-fury" id="touch-fury-btn" data-tact="fury" aria-label="Modo Fúria"><span class="touch-btn-ico">${uiIcon('flame', { size: 22, color: '#f97316' })}</span><span class="touch-btn-lbl">Fúria!</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-transmute" id="touch-transmute-btn" data-tact="transmute" aria-label="Trocar Habitat"><span class="touch-btn-ico">${uiIcon('swap', { size: 22, color: '#38bdf8' })}</span><span class="touch-btn-lbl" id="touch-transmute-lbl">Troca</span></button>
+          <button class="touch-btn touch-btn-action hidden touch-btn-revive" id="touch-revive-btn" data-tact="revive" aria-label="Reviver Aliado"><span class="touch-btn-ico">${uiIcon('revive', { size: 22, color: '#34d399' })}</span><span class="touch-btn-lbl" id="touch-revive-lbl">Reviver</span></button>
         </div>
       </div>
 
@@ -245,27 +246,27 @@ export class HUD {
       <div class="radial-wheel-overlay hidden" id="hud-radial-wheel">
         <div class="radial-wheel-stage" id="radial-wheel-stage">
           <button class="radial-sector radial-north" data-rslot="habitat" id="rad-opt-habitat">
-            <span>🔄 Habitat</span>
+            <span>${uiIcon('swap', { size: 16 })} Habitat</span>
             <small id="rad-sub-habitat">Híbrido/Mergulho</small>
             <span class="radial-sector-key">[1 / ↑]</span>
           </button>
           <button class="radial-sector radial-east" data-rslot="backpack" id="rad-opt-backpack">
-            <span>🎒 Mochila</span>
+            <span>${uiIcon('backpack', { size: 16 })} Mochila</span>
             <small id="rad-sub-backpack">Vazia</small>
             <span class="radial-sector-key">[2 / →]</span>
           </button>
           <button class="radial-sector radial-south" data-rslot="companion" id="rad-opt-companion">
-            <span>🐾 Mascote</span>
+            <span>${uiIcon('pet', { size: 16 })} Mascote</span>
             <small id="rad-sub-companion">Sem Pet</small>
             <span class="radial-sector-key">[3 / ↓]</span>
           </button>
           <button class="radial-sector radial-west" data-rslot="focus" id="rad-opt-focus">
-            <span>⚡ Foco Tático</span>
+            <span>${uiIcon('bolt', { size: 16 })} Foco Tático</span>
             <small id="rad-sub-focus">+Carga / +O₂</small>
             <span class="radial-sector-key">[4 / ←]</span>
           </button>
           <button class="radial-center-btn" id="radial-cancel">
-            <span>⏸ RODA [X]</span>
+            <span>${uiIcon('pause', { size: 16 })} RODA [X]</span>
             <small style="color:#d8c2a6;">Esc = Voltar</small>
           </button>
         </div>
@@ -273,7 +274,7 @@ export class HUD {
 
       <!-- Barra Flutuante de Edição dos Botões Touch (Player no Celular) -->
       <div class="hud-layout-editor-bar chunky-panel hidden" id="hud-touch-editor-bar">
-        <strong style="color:#ffd447; font-size:0.8rem;">🛠️ Editar Botões Touch (Arraste esquerda/direita!)</strong>
+        <strong style="color:#ffd447; font-size:0.8rem;">${uiIcon('settings', { size: 14, color: '#ffd447' })} Editar Botões Touch (Arraste esquerda/direita!)</strong>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center;">
           <label style="font-size:0.74rem; display:flex; align-items:center; gap:5px;">
             Tamanho: <input type="range" id="hud-touch-scale" min="80" max="135" value="100" style="width:84px; accent-color:#f59e0b;" />
@@ -284,21 +285,21 @@ export class HUD {
           <label style="font-size:0.74rem; display:flex; align-items:center; gap:5px; cursor:pointer;" data-tip="Inverte os lados dos botões para jogadores canhotos.">
             <input type="checkbox" id="hud-touch-lefthanded" /> 🤚 Modo Canhoto
           </label>
-          <button class="chunky-btn secondary" id="hud-touch-reset" style="padding:5px 10px; font-size:0.74rem;">🔄 Padrão</button>
-          <button class="chunky-btn" id="hud-touch-done" style="padding:5px 12px; font-size:0.74rem;">✅ Salvar</button>
+          <button class="chunky-btn secondary" id="hud-touch-reset" style="padding:5px 10px; font-size:0.74rem;">${uiIcon('reset', { size: 14 })} Padrão</button>
+          <button class="chunky-btn" id="hud-touch-done" style="padding:5px 12px; font-size:0.74rem;">${uiIcon('check', { size: 14 })} Salvar</button>
         </div>
       </div>
 
       <!-- Pause Overlay -->
       <div class="overlay-center hidden" id="pause-overlay">
         <div class="chunky-panel gameover-card">
-          <h2>⏸ PAUSADO</h2>
-          <button class="chunky-btn" id="btn-resume">Continuar</button>
-          <button class="chunky-btn secondary" id="btn-pause-glossary" style="border-color:#38bdf8; color:#bae6fd;">📖 Glossário</button>
-          <button class="chunky-btn secondary mob-only" id="btn-pause-rotate">🔄 Deitar / Alternar Paisagem</button>
-          <button class="chunky-btn secondary" id="btn-pause-cam">📷 Trocar Câmera (C)</button>
-          <button class="chunky-btn orange" id="btn-pause-restart">Reiniciar (R)</button>
-          <button class="chunky-btn secondary" id="btn-pause-menu">Menu Principal</button>
+          <h2>${uiIcon('pause', { size: 24, color: '#ffd447' })} PAUSADO</h2>
+          <button class="chunky-btn" id="btn-resume">${uiIcon('play', { size: 16 })} Continuar</button>
+          <button class="chunky-btn secondary" id="btn-pause-glossary" style="border-color:#38bdf8; color:#bae6fd;">${uiIcon('glossary', { size: 16, color: '#38bdf8' })} Glossário</button>
+          <button class="chunky-btn secondary mob-only" id="btn-pause-rotate">${uiIcon('rotate', { size: 16 })} Deitar / Alternar Paisagem</button>
+          <button class="chunky-btn secondary" id="btn-pause-cam">${uiIcon('camera', { size: 16 })} Trocar Câmera (C)</button>
+          <button class="chunky-btn orange" id="btn-pause-restart">${uiIcon('reset', { size: 16 })} Reiniciar (R)</button>
+          <button class="chunky-btn secondary" id="btn-pause-menu">${uiIcon('close', { size: 16 })} Menu Principal</button>
         </div>
       </div>
 
@@ -306,41 +307,41 @@ export class HUD {
       <div class="overlay-center hidden" id="glossary-overlay" style="z-index:55;">
         <div class="chunky-panel gameover-card" style="width:min(700px, 95vw); max-height:88vh; overflow-y:auto; text-align:left; padding:16px 20px; border-color:#38bdf8;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
-            <h2 style="margin:0; color:#ffd447; font-size:1.25rem;">📖 Glossário Rápido do Dino Dash</h2>
-            <button class="chunky-btn" id="btn-glossary-close" style="padding:6px 14px; font-size:0.82rem;">✅ Entendi! Voltar</button>
+            <h2 style="margin:0; color:#ffd447; font-size:1.25rem;">${uiIcon('glossary', { size: 20, color: '#ffd447' })} Glossário Rápido do Dino Dash</h2>
+            <button class="chunky-btn" id="btn-glossary-close" style="padding:6px 14px; font-size:0.82rem;">${uiIcon('check', { size: 15 })} Entendi! Voltar</button>
           </div>
           <p style="margin:0 0 12px; font-size:0.84rem; color:#bae6fd;">Explicação direta e fácil do que significa cada cor, barra e botão na corrida:</p>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px;">
             <div class="item-card" style="padding:10px 12px; border-color:#ef4444; background:rgba(69, 10, 10, 0.72);">
-              <strong style="color:#fca5a5; font-size:0.9rem;">🔴 Aura Vermelha = PERIGO!</strong>
+              <strong style="color:#fca5a5; font-size:0.9rem;">${uiIcon('warning', { size: 15, color: '#ef4444' })} Aura Vermelha = PERIGO!</strong>
               <div style="font-size:0.8rem; color:#fef2f2; margin-top:4px; line-height:1.35;">Todo obstáculo, espinho ou armadilha com anel/borda vermelha tira vida! <b>Desvie (A/D)</b>, <b>Pule (W/↑)</b> ou <b>Ataque (Q)</b>.</div>
             </div>
             <div class="item-card" style="padding:10px 12px; border-color:#34d399; background:rgba(6, 78, 59, 0.68);">
-              <strong style="color:#6ee7b7; font-size:0.9rem;">🟢 Buff (Poder Bom Temporário)</strong>
+              <strong style="color:#6ee7b7; font-size:0.9rem;">${uiIcon('sparkle', { size: 15, color: '#34d399' })} Buff (Poder Bom Temporário)</strong>
               <div style="font-size:0.8rem; color:#ecfdf5; margin-top:4px; line-height:1.35;">Itens com <b>Aura Verde ou Dourada</b> ajudam você! Dão Escudo 🛡️, Turbo ⚡, Ímã de Ovos 🧲, Cura ❤️ ou Invencibilidade ✨.</div>
             </div>
             <div class="item-card" style="padding:10px 12px; border-color:#c084fc; background:rgba(59, 7, 100, 0.65);">
-              <strong style="color:#e9d5ff; font-size:0.9rem;">🟣 Debuff (Efeito Ruim Temporário)</strong>
+              <strong style="color:#e9d5ff; font-size:0.9rem;">${uiIcon('warning', { size: 15, color: '#c084fc' })} Debuff (Efeito Ruim Temporário)</strong>
               <div style="font-size:0.8rem; color:#f3e8ff; margin-top:4px; line-height:1.35;">Efeito que atrapalha por alguns segundos (como <b>Lama</b> que deixa lento ou <b>Veneno</b>). Limpe usando <b>Foco Tático [X]</b>, Oásis ou Antídoto [E]!</div>
             </div>
             <div class="item-card" style="padding:10px 12px; border-color:#10b981; background:rgba(20, 83, 45, 0.65);">
-              <strong style="color:#86efac; font-size:0.9rem;">🏃 Estamina (Energia Física)</strong>
+              <strong style="color:#86efac; font-size:0.9rem;">${uiIcon('sprint', { size: 15, color: '#86efac' })} Estamina (Energia Física)</strong>
               <div style="font-size:0.8rem; color:#f0fdf4; margin-top:4px; line-height:1.35;">Barra verde usada para <b>Pulo Duplo no ar</b>, <b>Deslizar (S)</b>, <b>Planar</b> e <b>Foco (Shift / X)</b>. Recarrega sozinha no chão ou comendo frutas 🍉!</div>
             </div>
             <div class="item-card" style="padding:10px 12px; border-color:#f97316; background:rgba(67, 20, 7, 0.72);">
-              <strong style="color:#fdba74; font-size:0.9rem;">🔥 Fúria (Tecla F)</strong>
+              <strong style="color:#fdba74; font-size:0.9rem;">${uiIcon('flame', { size: 15, color: '#fdba74' })} Fúria (Tecla F)</strong>
               <div style="font-size:0.8rem; color:#fff7ed; margin-top:4px; line-height:1.35;">Enche coletando ovos, frutas e fazendo rasantes. Ao chegar em <b>100%</b>, aperte <b>[F]</b> para ficar <b>GIGANTE e Invencível</b>!</div>
             </div>
             <div class="item-card" style="padding:10px 12px; border-color:#38bdf8; background:rgba(12, 74, 110, 0.72);">
-              <strong style="color:#7dd3fc; font-size:0.9rem;">🧭 Roda Tática (Tecla X)</strong>
+              <strong style="color:#7dd3fc; font-size:0.9rem;">${uiIcon('wheel', { size: 15, color: '#7dd3fc' })} Roda Tática (Tecla X)</strong>
               <div style="font-size:0.8rem; color:#f0f9ff; margin-top:4px; line-height:1.35;">Pausa a ação para você escolher: trocar <b>Habitat</b>, usar <b>Mochila</b>, comandar <b>Mascote</b> ou ativar <b>Foco Tático (+28% Hab e +45% Oxigênio O₂)</b>!</div>
             </div>
             <div class="item-card" style="padding:10px 12px; border-color:#facc15; background:rgba(66, 32, 6, 0.72);">
-              <strong style="color:#fde047; font-size:0.9rem;">🎒 Mochila (Tecla E)</strong>
+              <strong style="color:#fde047; font-size:0.9rem;">${uiIcon('backpack', { size: 15, color: '#fde047' })} Mochila (Tecla E)</strong>
               <div style="font-size:0.8rem; color:#fefce8; margin-top:4px; line-height:1.35;">Guarda até 3 itens coletados na pista (Escudo, Turbo, Antídoto). Aperte <b>[E]</b> a qualquer momento para usar o item guardado!</div>
             </div>
             <div class="item-card" style="padding:10px 12px; border-color:#22d3ee; background:rgba(8, 51, 68, 0.78);">
-              <strong style="color:#67e8f9; font-size:0.9rem;">🫧 Oxigênio / Brânquias</strong>
+              <strong style="color:#67e8f9; font-size:0.9rem;">${uiIcon('gills', { size: 15, color: '#67e8f9' })} Oxigênio / Brânquias</strong>
               <div style="font-size:0.8rem; color:#ecfeff; margin-top:4px; line-height:1.35;"><b>Aquáticos Puros (Brânquias):</b> O₂ infinito (100%) no fundo do mar e secam devagar na superfície (mergulhe com S/↓!). <b>Anfíbios:</b> 50s de fôlego submerso. <b>Terrestres:</b> suba com W/↑, pegue Bolhas 🫧 ou use Roda [X]!</div>
             </div>
           </div>
@@ -378,11 +379,11 @@ export class HUD {
       <!-- Confirmação de Reinício (R) -->
       <div class="overlay-center hidden" id="restart-confirm-overlay">
         <div class="chunky-panel gameover-card" style="max-width:410px; text-align:center;">
-          <h2>🔄 Reiniciar Corrida?</h2>
+          <h2>${uiIcon('reset', { size: 22, color: '#f59e0b' })} Reiniciar Corrida?</h2>
           <p style="font-size:0.9rem; color:#d8c2a6;">Você perderá o progresso desta corrida atual. Deseja realmente reiniciar?</p>
           <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:8px;">
-            <button class="chunky-btn orange" id="btn-confirm-restart">Sim, Reiniciar (Enter)</button>
-            <button class="chunky-btn secondary" id="btn-cancel-restart">Continuar Jogando (Esc)</button>
+            <button class="chunky-btn orange" id="btn-confirm-restart">${uiIcon('reset', { size: 16 })} Sim, Reiniciar (Enter)</button>
+            <button class="chunky-btn secondary" id="btn-cancel-restart">${uiIcon('close', { size: 16 })} Continuar Jogando (Esc)</button>
           </div>
         </div>
       </div>
@@ -390,7 +391,7 @@ export class HUD {
       <!-- Merchant Overlay -->
       <div class="overlay-center hidden" id="merchant-overlay">
         <div class="chunky-panel gameover-card">
-          <h2>🛒 Mercador de Ovos</h2>
+          <h2>${uiIcon('shop', { size: 22, color: '#ffd447' })} Mercador de Ovos</h2>
           <p style="font-size:0.9rem; color:#d8c2a6;">Troque ovos por reforços rápidos durante a corrida!</p>
           <button class="chunky-btn" id="merch-heal">Comprar +1 Vida / Escudo (20 🥚)</button>
           <button class="chunky-btn orange" id="merch-skip">Seguir Corrida</button>
@@ -400,10 +401,10 @@ export class HUD {
       <!-- Photo Mode Overlay -->
       <div class="overlay-center hidden" id="photo-overlay" style="background:transparent; align-items:flex-end; pointer-events:none;">
         <div class="chunky-panel" style="padding:12px 18px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; pointer-events:auto;">
-          <strong>📷 Modo Foto / Cinema</strong>
-          <button class="chunky-btn orange" id="photo-snap">📸 Salvar Foto PNG</button>
-          <button class="chunky-btn secondary" id="photo-cam">Trocar Ângulo (C)</button>
-          <button class="chunky-btn" id="photo-exit">Sair do Modo Foto</button>
+          <strong>${uiIcon('camera', { size: 18, color: '#ffd447' })} Modo Foto / Cinema</strong>
+          <button class="chunky-btn orange" id="photo-snap">${uiIcon('camera', { size: 16 })} Salvar Foto PNG</button>
+          <button class="chunky-btn secondary" id="photo-cam">${uiIcon('rotate', { size: 16 })} Trocar Ângulo (C)</button>
+          <button class="chunky-btn" id="photo-exit">${uiIcon('close', { size: 16 })} Sair do Modo Foto</button>
         </div>
       </div>
 
@@ -423,27 +424,27 @@ export class HUD {
           </div>
           <div id="go-crystal-box" class="item-card hidden" style="padding:10px 12px; border-color:#38bdf8; background:rgba(8, 47, 73, 0.58); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
             <div style="text-align:left;">
-              <strong style="color:#7dd3fc; font-size:0.9rem;">💎 Renascimento de Cristal</strong>
+              <strong style="color:#7dd3fc; font-size:0.9rem;">${uiIcon('diamond', { size: 16, color: '#38bdf8' })} Renascimento de Cristal</strong>
               <div style="font-size:0.78rem; color:#bae6fd;" id="go-crystal-desc">Volte já na pista com +2 ❤️ e escudo temporário (1x por corrida).</div>
             </div>
-            <button class="chunky-btn" id="btn-go-crystal-revive" style="padding:7px 14px; font-size:0.84rem; background:linear-gradient(180deg,#0284c7,#0369a1); border-color:#7dd3fc;">💖 Renascer (2 💎)</button>
+            <button class="chunky-btn" id="btn-go-crystal-revive" style="padding:7px 14px; font-size:0.84rem; background:linear-gradient(180deg,#0284c7,#0369a1); border-color:#7dd3fc;">${uiIcon('revive', { size: 16, color: '#bae6fd' })} Renascer (2 💎)</button>
           </div>
           <div id="go-gacha-box" class="item-card hidden" style="padding:10px 12px; border-color:#a855f7; background:rgba(46, 16, 101, 0.55); display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
             <div style="text-align:left;">
-              <strong style="color:#f5d0fe; font-size:0.9rem;">🦴 Lootbox Fóssil Conquistada!</strong>
+              <strong style="color:#f5d0fe; font-size:0.9rem;">${uiIcon('gacha', { size: 16, color: '#f5d0fe' })} Lootbox Fóssil Conquistada!</strong>
               <div style="font-size:0.78rem; color:#ddd6fe;" id="go-gacha-text">+1 Caixa Fóssil pelo desempenho</div>
             </div>
-            <button class="chunky-btn orange" id="btn-go-gacha" style="padding:7px 14px; font-size:0.84rem;">🎲 Abrir Agora</button>
+            <button class="chunky-btn orange" id="btn-go-gacha" style="padding:7px 14px; font-size:0.84rem;">${uiIcon('gacha', { size: 16 })} Abrir Agora</button>
           </div>
-          <div id="go-record-badge" class="hud-pill hidden" style="margin:0 auto; color:#ffd447;">🏆 NOVO RECORDE!</div>
+          <div id="go-record-badge" class="hud-pill hidden" style="margin:0 auto; color:#ffd447;">${uiIcon('trophy', { size: 16, color: '#ffd447' })} NOVO RECORDE!</div>
           <p id="go-fact" style="font-size:0.8rem; color:#d8c2a6; font-style:italic;"></p>
           <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
-            <button class="chunky-btn" id="btn-restart">🔄 Jogar de novo (R)</button>
-            <button class="chunky-btn orange" id="btn-go-dinos">🦖 Trocar dino</button>
-            <button class="chunky-btn secondary" id="btn-go-menu">🏠 Menu</button>
+            <button class="chunky-btn" id="btn-restart">${uiIcon('reset', { size: 16 })} Jogar de novo (R)</button>
+            <button class="chunky-btn orange" id="btn-go-dinos">${uiIcon('dino', { size: 16 })} Trocar dino</button>
+            <button class="chunky-btn secondary" id="btn-go-menu">${uiIcon('close', { size: 16 })} Menu</button>
           </div>
           <div style="margin-top:2px;">
-            <button id="btn-replay" class="inline-change-btn" style="padding:3px 10px; font-size:0.78rem;">🎬 Ver replay da corrida</button>
+            <button id="btn-replay" class="inline-change-btn" style="padding:3px 10px; font-size:0.78rem;">${uiIcon('clip', { size: 14 })} Ver replay da corrida</button>
           </div>
         </div>
       </div>
@@ -818,11 +819,11 @@ export class HUD {
       if (ctrls.length > 0) {
         const c = ctrls[0];
         const modeLbl = c.controlMode === 'own_dino' ? '2-8P' : '1P';
-        this.ctrlText.textContent = ctrls.length > 1
-          ? `🎮 ${ctrls.length} Controles (${c.pingMs || pingMs || 12}ms)`
-          : `🎮 ${c.name} (${modeLbl} • ${c.pingMs || pingMs || 12}ms)`;
+        this.ctrlText.innerHTML = ctrls.length > 1
+          ? `${uiIcon('gamepad', { size: 14 })} ${ctrls.length} Controles (${c.pingMs || pingMs || 12}ms)`
+          : `${uiIcon('gamepad', { size: 14 })} ${c.name} (${modeLbl} • ${c.pingMs || pingMs || 12}ms)`;
       } else {
-        this.ctrlText.textContent = `📱 ${mobPlayers.length} Player 3D`;
+        this.ctrlText.innerHTML = `${uiIcon('gamepad', { size: 14 })} ${mobPlayers.length} Player 3D`;
       }
     }
   }
@@ -839,7 +840,7 @@ export class HUD {
       const modeLbl = controlMode === 'own_dino' ? '2-8P' : '1P';
       const activeList = Object.entries(activeInputs || {}).filter(([, v]) => v).map(([k]) => k.toUpperCase());
       const actTag = activeList.length > 0 ? ` • ${activeList[0]}` : '';
-      this.ctrlText.textContent = `🎮 ${peerName} (${modeLbl} • ${pingMs}ms)${actTag}`;
+      this.ctrlText.innerHTML = `${uiIcon('gamepad', { size: 14 })} ${peerName} (${modeLbl} • ${pingMs}ms)${actTag}`;
     }
   }
 
@@ -945,7 +946,7 @@ export class HUD {
 
   setClipRecording(active) {
     if (!this.clipBtn) return;
-    this.clipBtn.textContent = active ? '⏹ Parar REC' : '🎥 Clipe';
+    this.clipBtn.innerHTML = active ? `${uiIcon('pause', { size: 14, color: '#ff4757' })} Parar REC` : `${uiIcon('clip', { size: 14 })} Clipe`;
     this.clipBtn.style.borderColor = active ? '#ff4757' : '';
   }
 
@@ -1085,7 +1086,7 @@ export class HUD {
     this.mpReviveBtn.style.opacity = canAfford ? '1' : '0.68';
     this.mpReviveBtn.style.borderColor = canAfford ? '#34d399' : '#f59e0b';
     if (this.mpReviveLbl) {
-      this.mpReviveLbl.textContent = `Reviver ${allyName} (${cost} 🥚)`;
+      this.mpReviveLbl.innerHTML = `${uiIcon('revive', { size: 14, color: '#34d399' })} Reviver ${allyName} (${cost} 🥚)`;
     }
   }
 
@@ -1094,9 +1095,11 @@ export class HUD {
     if (this.crystalsEl) this.crystalsEl.textContent = String(Save.data.crystals || 0);
     const maxHp = Math.max(1, player.maxHp || 1);
     const hp = Math.max(0, Math.min(maxHp, Math.round(player.hp ?? 0)));
-    const hearts = maxHp <= 6 ? `${'❤️'.repeat(hp)}${'🖤'.repeat(maxHp - hp)} ` : '❤️ ';
-    const perfBadge = Save.data.perfectMode && maxHp === 1 ? '💎 ' : '';
-    this.hpText.textContent = `${perfBadge}${hearts}${hp}/${maxHp} • 🛡️ ${player.shields || 0}`;
+    const heartIco = uiIcon('heart', { size: 14, color: '#ef4444' });
+    const shieldIco = uiIcon('shield', { size: 14, color: '#38bdf8' });
+    const hearts = maxHp <= 6 ? `${'❤️'.repeat(hp)}${'🖤'.repeat(maxHp - hp)} ` : `${heartIco} `;
+    const perfBadge = Save.data.perfectMode && maxHp === 1 ? `${uiIcon('diamond', { size: 14, color: '#38bdf8' })} ` : '';
+    this.hpText.innerHTML = `${perfBadge}${hearts}${hp}/${maxHp} • ${shieldIco} ${player.shields || 0}`;
     const pulseLowHp = !!Save.data.settings.lowHpPulse;
     const lowHpActive = pulseLowHp && player.hp <= 1 && !player.dead;
     this.dmgVignette.classList.toggle('hidden', !lowHpActive);
@@ -1123,7 +1126,7 @@ export class HUD {
       this._lastAbilityLock = abilityOpen;
       this.lblAbility.innerHTML = abilityOpen
         ? `${renderSkillSvg(player.id, 18)} <span class="btn-label">Habilidade</span> <span class="kb-only">(Espaço)</span>`
-        : `🔒 <span class="btn-label">600 pts</span>`;
+        : `${uiIcon('lock', { size: 14, color: '#94a3b8' })} <span class="btn-label">600 pts</span>`;
     }
     const cdPct = player.abilityMaxCooldown > 0
       ? Math.max(0, 100 * (1 - player.abilityCooldown / player.abilityMaxCooldown))
@@ -1213,7 +1216,7 @@ export class HUD {
         const cdStr = petStatus.commandCd > 0.1
           ? `${petStatus.commandCd.toFixed(0)}s`
           : (petStatus.shieldCd > 0.1 ? `🛡️${petStatus.shieldCd.toFixed(0)}s` : 'Pronto!');
-        this.companionLbl.textContent = `${petStatus.role.icon} ${petStatus.name} • ${cdStr}`;
+        this.companionLbl.innerHTML = `${uiIcon('pet', { size: 14, color: petStatus.role.color || '#facc15' })} ${petStatus.name} • ${cdStr}`;
         this.companionPill.style.borderColor = petStatus.role.color || '';
       }
     }
@@ -1285,17 +1288,17 @@ export class HUD {
     if (this.touchDuckIco && this.touchDuckLbl) {
       if (player.inWater && !player.inSubmerged) {
         if (divingTarget) {
-          this.touchDuckIco.textContent = '🌊';
+          this.touchDuckIco.innerHTML = uiIcon('arrowUp', { size: 22, color: '#38bdf8' });
           this.touchDuckLbl.textContent = 'Subir';
         } else {
-          this.touchDuckIco.textContent = '🤿';
+          this.touchDuckIco.innerHTML = uiIcon('gills', { size: 22, color: '#22d3ee' });
           this.touchDuckLbl.textContent = 'Merg.';
         }
       } else if (player.habitatMode === 'flying' && !player.inSubmerged) {
-        this.touchDuckIco.textContent = '▼';
+        this.touchDuckIco.innerHTML = uiIcon('arrowDown', { size: 22 });
         this.touchDuckLbl.textContent = 'Descer';
       } else {
-        this.touchDuckIco.textContent = '▼';
+        this.touchDuckIco.innerHTML = uiIcon('arrowDown', { size: 22 });
         this.touchDuckLbl.textContent = 'Baixo';
       }
     }

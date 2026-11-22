@@ -8,6 +8,7 @@ import '../styles/modes3d.css';
 import { DinoFactory } from '../dinos/DinoFactory.js';
 import { DinoAnimator } from '../dinos/DinoAnimator.js';
 import { Save } from '../systems/Save.js';
+import { buildSculptedInteractable } from '../models/SculptedWorldProps.js';
 
 export const TAU = Math.PI * 2;
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -879,9 +880,9 @@ export function makeDangerRing(radius = 3, color = '#ef4444') {
 }
 
 export function makeGlowOrb(color = '#f59e0b', radius = 0.35) {
-  const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.4, roughness: 0.3 });
-  const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(radius, 0), mat);
-  return mesh;
+  const lantern = buildSculptedInteractable('crystal', color);
+  lantern.scale.setScalar(Math.max(0.25, radius / 0.52));
+  return lantern;
 }
 
 /** Luzes padrão de um modo; devolve o grupo com as luzes. */

@@ -20,6 +20,8 @@ import {
   escapeHtml
 } from './WorldExplorer3D.js';
 import { buildArenaProps } from '../models/DungeonProps.js';
+import { buildSculptedArenaPillar } from '../models/SculptedWorldProps.js';
+import { uiIcon } from '../ui/UiIcons.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
 import { Save } from '../systems/Save.js';
 
@@ -165,21 +167,15 @@ export class ArenaX1Mode extends Mode3DBase {
           { x: -6.5, z: 5.5, r: 0.95 },
           { x: 6.5, z: 5.5, r: 0.95 }
         ];
-    const pMat = new THREE.MeshStandardMaterial({ color: this.arena.floor, roughness: 0.72, metalness: 0.15 });
-    const capMat = new THREE.MeshStandardMaterial({ color: this.arena.ring, emissive: this.arena.ring, emissiveIntensity: 0.35, roughness: 0.4 });
     for (const p of pillarPositions) {
-      const pg = new THREE.Group();
-      pg.position.set(p.x, 0, p.z);
       const r = p.r ?? 0.95;
-      const body = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.82, r, 3.2, 8), pMat.clone());
-      body.position.y = 1.6;
-      body.castShadow = !this.lowSpec;
-      body.receiveShadow = true;
-      const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.95, r * 0.9, 0.35, 8), capMat);
-      cap.position.y = 3.25;
-      pg.add(body, cap);
+      const pg = buildSculptedArenaPillar({ floor: this.arena.floor, ring: this.arena.ring, r });
+      pg.position.set(p.x, 0, p.z);
+      if (!this.lowSpec) {
+        pg.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      }
       g.add(pg);
-      this.pillars.push({ x: p.x, z: p.z, r, hp: 3, maxHp: 3, active: true, mesh: pg, body });
+      this.pillars.push({ x: p.x, z: p.z, r, hp: 3, maxHp: 3, active: true, mesh: pg, body: pg.userData.body || pg });
     }
   }
 
@@ -278,9 +274,9 @@ export class ArenaX1Mode extends Mode3DBase {
       </div>
 
       <div class="m3d-corner-actions">
-        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="arena">🏟 Arena</button>
-        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="mode">${this.submode === 'local2p' ? '🤖 VS IA' : '👥 2P Local'}</button>
-        <button type="button" class="m3d-btn m3d-btn-danger" data-act="exit">✕ Menu</button>
+        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="arena">${uiIcon('arena', { size: 15 })} Arena</button>
+        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="mode">${this.submode === 'local2p' ? `${uiIcon('mecha', { size: 15 })} VS IA` : `${uiIcon('multiplayer', { size: 15 })} 2P Local`}</button>
+        <button type="button" class="m3d-btn m3d-btn-danger" data-act="exit">${uiIcon('close', { size: 15 })} Menu</button>
       </div>
 
       <div class="m3d-controls-hint">
@@ -314,7 +310,9 @@ export class ArenaX1Mode extends Mode3DBase {
       this.submode = this.submode === 'local2p' ? 'vs_ai' : 'local2p';
       this.wins = [0, 0];
       this._spawnFighters();
-      this._hud.modeBtn.textContent = this.submode === 'local2p' ? '🤖 VS IA' : '👥 2P Local';
+      this._hud.modeBtn.innerHTML = this.submode === 'local2p'
+        ? `${uiIcon('mecha', { size: 15 })} VS IA`
+        : `${uiIcon('multiplayer', { size: 15 })} 2P Local`;
       this._hud.arena.textContent = `${this.arena.name} · ${this.submode === 'local2p' ? '2P LOCAL' : 'VS IA'}`;
       this._startRound(1);
     });
