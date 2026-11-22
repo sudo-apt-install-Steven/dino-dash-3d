@@ -1,7 +1,10 @@
 :root {
-  --bg-deep: #1a0f08;
-  --panel-bg: rgba(34, 21, 13, 0.88);
-  --panel-border: #5b3117;
+  --bg-deep: #0b0f18;
+  --panel-bg: rgba(11, 15, 24, 0.84);
+  --panel-border: rgba(180, 115, 60, 0.58);
+  --obsidian-glass: rgba(11, 15, 24, 0.84);
+  --obsidian-rim: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  --bronze-gold-border: rgba(180, 115, 60, 0.58);
   --accent-green: #58d63a;
   --accent-green-dark: #257a17;
   --accent-orange: #ff9a24;
@@ -150,13 +153,38 @@ body,
 
 .chunky-panel {
   pointer-events: auto;
-  background: var(--panel-bg);
-  border: 3px solid var(--panel-border);
+  background: var(--obsidian-glass, rgba(11, 15, 24, 0.84));
+  border: 2px solid var(--bronze-gold-border, rgba(180, 115, 60, 0.58));
   border-radius: 18px;
   box-shadow:
-    0 8px 0 rgba(41, 20, 9, 0.9),
-    0 18px 40px rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
+    0 8px 0 rgba(10, 6, 3, 0.85),
+    0 18px 40px rgba(0, 0, 0, 0.65),
+    var(--obsidian-rim);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* Dual-Tone Vector Craft Icons */
+.dd-ico {
+  display: inline-flex;
+  vertical-align: -0.18em;
+  flex-shrink: 0;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.chunky-btn:hover .dd-ico,
+button:hover .dd-ico,
+.hud-pill:hover .dd-ico,
+.touch-btn:hover .dd-ico,
+.item-card:hover .dd-ico,
+.loadout-chip:hover .dd-ico {
+  transform: scale(1.12) translateY(-1px);
+}
+
+.chunky-btn:active .dd-ico,
+button:active .dd-ico,
+.touch-btn:active .dd-ico {
+  transform: scale(0.94);
 }
 
 .hud-top {
@@ -330,6 +358,37 @@ html.force-landscape-rot #app {
   }
 }
 
+@keyframes panelPopIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.meter-fill {
+  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease;
+}
+
+@keyframes dangerPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(239, 68, 68, 0);
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.65);
+    border-color: #ef4444;
+  }
+}
+
+#hud-tutorial-box.danger-pulse,
+.hud-danger-pill.danger-critical {
+  animation: dangerPulse 1.8s ease-in-out infinite;
+}
+
 .overlay-center {
   animation: ddFadeInBackdrop 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -337,20 +396,21 @@ html.force-landscape-rot #app {
 .overlay-center > .chunky-panel,
 .main-menu-panel {
   will-change: transform, opacity;
-  animation: ddModalEnter 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: panelPopIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .overlay-center,
-  .overlay-center > .chunky-panel,
-  .main-menu-panel,
-  .chunky-btn,
-  .hud-pill {
-    animation: none !important;
-    transition: none !important;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
   .chunky-btn:hover,
-  .chunky-btn:active {
+  .chunky-btn:active,
+  .dd-ico {
     transform: none !important;
   }
 }

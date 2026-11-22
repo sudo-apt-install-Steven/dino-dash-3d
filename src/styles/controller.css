@@ -709,3 +709,16 @@ html.is-portrait-view .ctrl-utility-strip .bone-btn {
 .tv-rank-row.dead {
   opacity: 0.52;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .ctrl-screen,
+  .bone-btn,
+  .ctrl-input-led,
+  .tv-rank-row {
+    animation: none !important;
+    transition: none !important;
+  }
+  .bone-btn:active {
+    transform: none !important;
+  }
+}
