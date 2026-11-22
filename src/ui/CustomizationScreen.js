@@ -42,7 +42,18 @@ import { getDinoSpec } from '../dinos/DinoCatalog.js';
 import { DinoPreview3D } from './SelectionScreen.js';
 import { attachModalHelp } from './Menus.js';
 import { renderEggSvg } from './SvgIcons.js';
+import { uiIcon } from './UiIcons.js';
 import { normalizeLocale } from '../i18n/translations.js';
+
+const SLOT_ICON_MAP = {
+  head: 'slotHead',
+  face: 'slotFace',
+  neck: 'slotNeck',
+  back: 'slotBack',
+  shoulders: 'shield',
+  aura: 'slotAura',
+  tail: 'slotTail'
+};
 import { escapeHtml } from '../security/Sanitize.js';
 
 const OPTIONAL_COLLECTION_GLOB = typeof import.meta.glob === 'function'
@@ -169,24 +180,24 @@ export class CustomizationScreen {
       <div class="overlay-center">
         <div class="chunky-panel modal-card" id="cust-modal-card">
           <div class="modal-header">
-            <h2>🎨 Personalizar, Skins & Laboratório</h2>
+            <h2 style="display:inline-flex; align-items:center; gap:7px;">${uiIcon('palette', { size: 20 })} Personalizar, Skins &amp; Laboratório</h2>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <span class="hud-pill">🥚 <strong id="cust-eggs-val">${Save.data.eggs}</strong></span>
-              <button type="button" class="hud-pill" id="cust-cryst-info-btn" title="Clique para ver todas as utilidades dos Diamantes 💎" style="color:#38bdf8; cursor:pointer; border:1px solid rgba(56,189,248,0.5);">💎 <strong id="cust-cryst-val">${Save.data.crystals || 0}</strong> <small style="opacity:0.8;">ℹ️</small></button>
-              <span class="hud-pill" style="color:#fde047;">📦 <strong id="cust-crate-val">${GachaSystem.getCrateCount()}</strong></span>
-              <button class="chunky-btn orange" id="cust-open-gacha" style="padding:7px 12px; font-size:0.82rem;">🎲 Gacha 3D</button>
-              <button class="chunky-btn secondary" id="cust-close">Concluir</button>
+              <span class="hud-pill" style="display:inline-flex; align-items:center; gap:4px;">${uiIcon('egg', { size: 14, color: '#fde68a' })} <strong id="cust-eggs-val">${Save.data.eggs}</strong></span>
+              <button type="button" class="hud-pill" id="cust-cryst-info-btn" title="Clique para ver todas as utilidades dos Diamantes" style="color:#38bdf8; cursor:pointer; border:1px solid rgba(56,189,248,0.5); display:inline-flex; align-items:center; gap:4px;">${uiIcon('diamond', { size: 14, color: '#38bdf8' })} <strong id="cust-cryst-val">${Save.data.crystals || 0}</strong> ${uiIcon('info', { size: 13 })}</button>
+              <span class="hud-pill" style="color:#fde047; display:inline-flex; align-items:center; gap:4px;">${uiIcon('extras', { size: 14, color: '#fde047' })} <strong id="cust-crate-val">${GachaSystem.getCrateCount()}</strong></span>
+              <button class="chunky-btn orange" id="cust-open-gacha" style="min-height:40px; padding:7px 12px; font-size:0.82rem; display:inline-flex; align-items:center; gap:5px;">${uiIcon('gacha', { size: 15 })} Gacha 3D</button>
+              <button class="chunky-btn secondary" id="cust-close" style="min-height:40px;">Concluir</button>
             </div>
           </div>
 
           <div class="tabs-row" id="cust-tabs-row">
-            <button class="tab-btn active" data-pslot="p1">Jogador 1</button>
-            <button class="tab-btn" data-pslot="p2">Jogador 2</button>
-            <button class="tab-btn active" data-stab="colors">Cores & Padrões</button>
-            <button class="tab-btn" data-stab="accessories">🎒 Acessórios (Multi-Slot)</button>
-            <button class="tab-btn" data-stab="skins">✨ Skins & Mecânico</button>
-            <button class="tab-btn" data-stab="mutations">🧬 Mutações DNA</button>
-            <button class="tab-btn" data-stab="shop">Loja & Ovos</button>
+            <button class="tab-btn active" data-pslot="p1" style="min-height:40px;">Jogador 1</button>
+            <button class="tab-btn" data-pslot="p2" style="min-height:40px;">Jogador 2</button>
+            <button class="tab-btn active" data-stab="colors" style="min-height:40px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('palette', { size: 14 })} Cores &amp; Padrões</button>
+            <button class="tab-btn" data-stab="accessories" style="min-height:40px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('backpack', { size: 14 })} Acessórios (Multi-Slot)</button>
+            <button class="tab-btn" data-stab="skins" style="min-height:40px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('sparkle', { size: 14 })} Skins &amp; Mecânico</button>
+            <button class="tab-btn" data-stab="mutations" style="min-height:40px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('dna', { size: 14 })} Mutações DNA</button>
+            <button class="tab-btn" data-stab="shop" style="min-height:40px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('shop', { size: 14 })} Loja &amp; Ovos</button>
           </div>
 
           <div class="hud-pill" id="cust-status-pill" style="color:#ffd447; text-align:center; display:none;"></div>
@@ -196,18 +207,18 @@ export class CustomizationScreen {
               <div class="preview-canvas-box" id="cust-preview-box"></div>
               <div class="tabs-row" id="cust-preset-row" style="margin-top:10px; justify-content:center;">
                 ${[0, 1, 2].map((idx) => `
-                  <button class="tab-btn ${initial.cfg.activePreset === idx ? 'active' : ''}" data-preset="${idx}">
+                  <button class="tab-btn ${initial.cfg.activePreset === idx ? 'active' : ''}" data-preset="${idx}" style="min-height:40px;">
                     Preset ${idx + 1}
                   </button>
                 `).join('')}
               </div>
               <div style="display:flex; gap:8px; margin-top:10px;">
-                <button class="chunky-btn orange" id="cust-random" style="flex:1;">🎲 Aleatório</button>
-                <button class="chunky-btn secondary" id="cust-native" style="padding:12px 14px;">Cores Nativas</button>
+                <button class="chunky-btn orange" id="cust-random" style="flex:1; min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">${uiIcon('dice', { size: 15 })} Aleatório</button>
+                <button class="chunky-btn secondary" id="cust-native" style="min-height:44px; padding:10px 14px;">Cores Nativas</button>
               </div>
               <div style="display:flex; gap:8px; margin-top:8px;">
-                <button class="tab-btn" id="cust-reset-default" style="flex:1; border-color:#f59e0b; color:#fde047;">🦖 Dino 100% Padrão</button>
-                <button class="tab-btn" id="cust-restore-backup" style="flex:1; border-color:#38bdf8; color:#7dd3fc;" ${initial.cfg._lastCustomBackup ? '' : 'disabled'}>♻️ Restaurar Visual</button>
+                <button class="tab-btn" id="cust-reset-default" style="flex:1; min-height:44px; border-color:#f59e0b; color:#fde047; display:inline-flex; align-items:center; justify-content:center; gap:5px;">${uiIcon('reset', { size: 14, color: '#fde047' })} Dino 100% Padrão</button>
+                <button class="tab-btn" id="cust-restore-backup" style="flex:1; min-height:44px; border-color:#38bdf8; color:#7dd3fc; display:inline-flex; align-items:center; justify-content:center; gap:5px;" ${initial.cfg._lastCustomBackup ? '' : 'disabled'}>${uiIcon('restore', { size: 14, color: '#7dd3fc' })} Restaurar Visual</button>
               </div>
             </div>
 
@@ -292,24 +303,25 @@ export class CustomizationScreen {
         <div class="item-card" style="margin-bottom:10px; border-color:#f59e0b;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
             <div>
-              <strong style="color:#fde047;">🎒 Acessórios Multi-Slot (${equippedAccs.length}/${ACCESSORY_SLOTS.length} ativos)</strong>
+              <strong style="color:#fde047; display:inline-flex; align-items:center; gap:5px;">${uiIcon('backpack', { size: 15, color: '#fde047' })} Acessórios Multi-Slot (${equippedAccs.length}/${ACCESSORY_SLOTS.length} ativos)</strong>
               <p style="font-size:0.78rem; color:#d4d4d8; margin:3px 0 0;">
                 Combine até 6 acessórios simultâneos (1 por slot: Cabeça, Rosto, Pescoço, Costas, Ombros e Aura)!
               </p>
             </div>
-            <button class="tab-btn" id="cust-clear-accs" ${equippedAccs.length ? '' : 'disabled'} style="border-color:#ef4444; color:#fca5a5;">
-              🧹 Remover Todos Acessórios
+            <button class="tab-btn" id="cust-clear-accs" ${equippedAccs.length ? '' : 'disabled'} style="min-height:40px; border-color:#ef4444; color:#fca5a5; display:inline-flex; align-items:center; gap:5px;">
+              ${uiIcon('broom', { size: 14, color: '#fca5a5' })} Remover Todos Acessórios
             </button>
           </div>
           <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
             ${ACCESSORY_SLOTS.map((slotId) => {
-              const meta = ACCESSORY_SLOT_META[slotId] || { icon: '🎒', label: slotId };
+              const meta = ACCESSORY_SLOT_META[slotId] || { icon: '', label: slotId };
+              const slotIco = SLOT_ICON_MAP[slotId] || 'backpack';
               const eqId = accBySlot[slotId] || null;
               const eqItem = eqId ? merged.accessories.find((a) => a.id === eqId) : null;
               return `
                 <div class="hud-pill" style="display:inline-flex; align-items:center; gap:5px; font-size:0.75rem; ${eqId ? 'border-color:#58d63a; color:#bbf7d0;' : 'opacity:0.65;'}">
-                  <span>${meta.icon} ${escapeHtml(meta.label)}: <strong>${eqItem ? escapeHtml(eqItem.name) : 'Vazio'}</strong></span>
-                  ${eqId ? `<button type="button" class="tab-btn" data-unequip-acc="${escapeHtml(eqId)}" title="Remover" style="padding:1px 6px; font-size:0.72rem; border-color:#ef4444; color:#fca5a5;">×</button>` : ''}
+                  <span style="display:inline-flex; align-items:center; gap:4px;">${uiIcon(slotIco, { size: 13 })} ${escapeHtml(meta.label)}: <strong>${eqItem ? escapeHtml(eqItem.name) : 'Vazio'}</strong></span>
+                  ${eqId ? `<button type="button" class="tab-btn" data-unequip-acc="${escapeHtml(eqId)}" title="Remover" style="padding:2px 6px; font-size:0.72rem; border-color:#ef4444; color:#fca5a5;">${uiIcon('close', { size: 11 })}</button>` : ''}
                 </div>
               `;
             }).join('')}
@@ -321,22 +333,23 @@ export class CustomizationScreen {
             const isEq = equippedAccs.includes(a.id);
             const sl = getAccessorySlot(a.id);
             const slMeta = sl ? ACCESSORY_SLOT_META[sl] : null;
+            const slIco = SLOT_ICON_MAP[sl] || 'backpack';
             return `
               <div class="item-card ${isEq ? 'selected' : ''} rarity-${String(a.rarity || 'comum').toLowerCase()}">
-                <small style="color:#ffd447;">${slMeta ? `${slMeta.icon} ${escapeHtml(slMeta.label)}` : '🎒 Extra'} • ${escapeHtml(a.rarity || 'Comum')}</small>
+                <small style="color:#ffd447; display:inline-flex; align-items:center; gap:4px;">${uiIcon(slIco, { size: 12 })} ${slMeta ? escapeHtml(slMeta.label) : 'Extra'} • ${escapeHtml(a.rarity || 'Comum')}</small>
                 <strong>${escapeHtml(a.name)}</strong>
-                <button class="tab-btn ${isEq ? 'active' : ''}" data-toggle-acc="${escapeHtml(a.id)}">
-                  ${isEq ? '✔ Equipado (Remover)' : 'Equipar'}
+                <button class="tab-btn ${isEq ? 'active' : ''}" data-toggle-acc="${escapeHtml(a.id)}" style="min-height:40px; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                  ${isEq ? `${uiIcon('check', { size: 13 })} Equipado (Remover)` : 'Equipar'}
                 </button>
               </div>
             `;
-          }).join('') : `<div class="item-card" style="grid-column:1/-1; text-align:center; color:#d8c2a6;">Nenhum acessório desbloqueado corresponde ao filtro. Desbloqueie na aba Loja & Ovos!</div>`}
+          }).join('') : `<div class="item-card" style="grid-column:1/-1; text-align:center; color:#d8c2a6;">Nenhum acessório desbloqueado corresponde ao filtro. Desbloqueie na aba Loja &amp; Ovos!</div>`}
         </div>
       ` : subTab === 'skins' ? `
         <div class="item-card" style="margin-bottom:10px; border-color:#f59e0b;">
-          <strong style="color:#fde047;">✨ Variantes Especiais (${filteredSkins.length}/${merged.skins.length}) — ${dinoSpec.name}</strong>
+          <strong style="color:#fde047; display:inline-flex; align-items:center; gap:5px;">${uiIcon('sparkle', { size: 15, color: '#fde047' })} Variantes Especiais (${filteredSkins.length}/${merged.skins.length}) — ${dinoSpec.name}</strong>
           <p style="font-size:0.8rem; color:#d4d4d8; margin:4px 0 0;">
-            Desbloqueie Cores Únicas com ovos ou conquiste formas <strong>Shiny ✨</strong>, <strong>Mecânico 🤖</strong> e <strong>Secreta Cósmica 🌌</strong> no Gacha Fóssil 3D!
+            Desbloqueie Cores Únicas com ovos ou conquiste formas <strong>Shiny</strong>, <strong>Mecânico</strong> e <strong>Secreta Cósmica</strong> no Gacha Fóssil 3D!
           </p>
         </div>
         ${renderFilterToolbar(merged.skins)}
@@ -344,24 +357,25 @@ export class CustomizationScreen {
           ${filteredSkins.length ? filteredSkins.map((v) => {
             const owned = isSkinVariantUnlocked(dinoId, v.id);
             const equipped = activeVariantId === v.id;
+            const vIco = v.id === 'mechanical' ? 'mecha' : (v.id === 'cosmic' ? 'star' : 'sparkle');
             return `
               <div class="item-card ${equipped ? 'selected' : ''}" style="border-color:${v.primary || '#52525b'};">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-                  <strong style="color:#fafafa;">${v.badge || '✨'} ${escapeHtml(v.name)}</strong>
+                  <strong style="color:#fafafa; display:inline-flex; align-items:center; gap:4px;">${uiIcon(vIco, { size: 14, color: v.color || v.primary || '#fde047' })} ${escapeHtml(v.name)}</strong>
                   <small style="color:#fde047;">${escapeHtml(v.rarity || 'Raro')}</small>
                 </div>
                 <p style="font-size:0.76rem; color:#a1a1aa; margin:4px 0 8px;">${escapeHtml(v.desc || '')}</p>
                 ${owned ? `
-                  <button class="tab-btn ${equipped ? 'active' : ''}" data-equip-variant="${escapeHtml(v.id)}">
-                    ${equipped ? '✔ Equipada' : 'Equipar Variante'}
+                  <button class="tab-btn ${equipped ? 'active' : ''}" data-equip-variant="${escapeHtml(v.id)}" style="min-height:40px; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                    ${equipped ? `${uiIcon('check', { size: 13 })} Equipada` : 'Equipar Variante'}
                   </button>
                 ` : (v.gachaOnly ? `
-                  <button class="tab-btn" data-variant-gacha="${escapeHtml(v.id)}" style="border-color:#c084fc; color:#f5d0fe;">
-                    🎲 Exclusiva do Gacha 3D
+                  <button class="tab-btn" data-variant-gacha="${escapeHtml(v.id)}" style="min-height:40px; border-color:#c084fc; color:#f5d0fe; display:inline-flex; align-items:center; justify-content:center; gap:5px;">
+                    ${uiIcon('gacha', { size: 14 })} Exclusiva do Gacha 3D
                   </button>
                 ` : `
-                  <button class="tab-btn" data-buy-variant="${escapeHtml(v.id)}">
-                    Comprar (${v.price || 100} 🥚)
+                  <button class="tab-btn" data-buy-variant="${escapeHtml(v.id)}" style="min-height:40px; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                    Comprar (${v.price || 100} ${uiIcon('egg', { size: 12 })})
                   </button>
                 `)}
               </div>
@@ -372,14 +386,14 @@ export class CustomizationScreen {
         <div class="item-card" style="margin-bottom:10px; border-color:#5eead4;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
             <div>
-              <strong style="color:#5eead4;">🧬 Laboratório de Mutações Evolutivas (${filteredMuts.length}/${merged.mutations.length})</strong>
+              <strong style="color:#5eead4; display:inline-flex; align-items:center; gap:5px;">${uiIcon('dna', { size: 15, color: '#5eead4' })} Laboratório de Mutações Evolutivas (${filteredMuts.length}/${merged.mutations.length})</strong>
               <p style="font-size:0.8rem; color:#cbd5e1; margin:4px 0 0;">
                 Evolua até Nv.4 para amplificar poder (como <strong>+2/+4/+6/+8 Patas</strong>!). Toda mutação traz <strong>Prós reais</strong> e <strong>Contras realistas</strong> na física.
               </p>
             </div>
             ${activeMutationId ? `
-              <button class="tab-btn" id="cust-clear-mut" style="border-color:#ef4444; color:#fca5a5;">
-                🚫 Desativar Mutação
+              <button class="tab-btn" id="cust-clear-mut" style="min-height:40px; border-color:#ef4444; color:#fca5a5; display:inline-flex; align-items:center; gap:5px;">
+                ${uiIcon('close', { size: 13, color: '#fca5a5' })} Desativar Mutação
               </button>
             ` : '<span class="hud-pill" style="font-size:0.75rem; opacity:0.8;">Sem mutação ativa</span>'}
           </div>
@@ -400,13 +414,13 @@ export class CustomizationScreen {
             return `
               <div class="item-card ${equipped ? 'selected' : ''}">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
-                  <strong style="color:#fafafa;">${m.badge || '🧬'} ${escapeHtml(m.name)}</strong>
+                  <strong style="color:#fafafa; display:inline-flex; align-items:center; gap:4px;">${uiIcon('dna', { size: 14, color: '#5eead4' })} ${escapeHtml(m.name)}</strong>
                   <small style="color:#5eead4;">${escapeHtml(m.rarity || 'Épico')} ${owned ? `• ${escapeHtml(profile?.tierLabel || `Nv.${activeLv}`)}` : ''}</small>
                 </div>
                 <div class="mut-tradeoff-badges">
-                  <span class="mut-badge-pro" title="Bônus ativos">⬆ ${pros.length} Pró${pros.length === 1 ? '' : 's'}</span>
-                  <span class="mut-badge-con" title="Penalidades reais de trade-off">⬇ ${cons.length} Contra${cons.length === 1 ? '' : 's'}</span>
-                  ${cons.length > 0 ? '<span class="mut-badge-tag">⚖️ Trade-off</span>' : ''}
+                  <span class="mut-badge-pro" title="Bônus ativos">${uiIcon('arrowUp', { size: 11 })} ${pros.length} Pró${pros.length === 1 ? '' : 's'}</span>
+                  <span class="mut-badge-con" title="Penalidades reais de trade-off">${uiIcon('arrowDown', { size: 11 })} ${cons.length} Contra${cons.length === 1 ? '' : 's'}</span>
+                  ${cons.length > 0 ? '<span class="mut-badge-tag">Trade-off</span>' : ''}
                 </div>
                 <p style="font-size:0.74rem; color:#cbd5e1; margin:4px 0 4px;">${escapeHtml(m.desc || '')}</p>
                 <div class="mut-tradeoff-list">
@@ -416,7 +430,7 @@ export class CustomizationScreen {
                 ${owned && unlockedLv > 1 ? `
                   <div style="display:flex; gap:4px; flex-wrap:wrap; margin:6px 0;">
                     ${[1, 2, 3, 4].filter((lv) => lv <= unlockedLv).map((lv) => `
-                      <button class="tab-btn ${activeLv === lv ? 'active' : ''}" data-mut-tier="${escapeHtml(m.id)}:${lv}" style="padding:3px 7px; font-size:0.7rem;">
+                      <button class="tab-btn ${activeLv === lv ? 'active' : ''}" data-mut-tier="${escapeHtml(m.id)}:${lv}" style="padding:4px 8px; font-size:0.7rem;">
                         ${m.id === 'extra_limbs' ? `+${lv * 2} Patas` : `Nv.${lv}`}
                       </button>
                     `).join('')}
@@ -424,29 +438,29 @@ export class CustomizationScreen {
                 ` : ''}
                 ${owned ? `
                   <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-                    <button class="tab-btn ${equipped ? 'active' : ''}" data-equip-mut="${escapeHtml(m.id)}" style="flex:1;">
-                      ${equipped ? '✔ Ativa (Desativar)' : 'Ativar'}
+                    <button class="tab-btn ${equipped ? 'active' : ''}" data-equip-mut="${escapeHtml(m.id)}" style="flex:1; min-height:38px; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                      ${equipped ? `${uiIcon('check', { size: 13 })} Ativa (Desativar)` : 'Ativar'}
                     </button>
-                    <button class="tab-btn" data-upgrade-mut="${escapeHtml(m.id)}" ${isMax ? 'disabled' : ''} style="border-color:#f59e0b; color:#fde047;">
-                      ${isMax ? 'MAX Nv.4' : `⬆ Nv.${unlockedLv + 1} (${nextCost} 🥚)`}
+                    <button class="tab-btn" data-upgrade-mut="${escapeHtml(m.id)}" ${isMax ? 'disabled' : ''} style="min-height:38px; border-color:#f59e0b; color:#fde047; display:inline-flex; align-items:center; gap:3px;">
+                      ${isMax ? 'MAX Nv.4' : `${uiIcon('arrowUp', { size: 12 })} Nv.${unlockedLv + 1} (${nextCost} ${uiIcon('egg', { size: 11 })})`}
                     </button>
                     ${!isMax ? `
-                      <button class="tab-btn" data-cryst-mut="${escapeHtml(m.id)}" title="Evoluir instantaneamente usando Cristais 💎" style="border-color:#38bdf8; color:#7dd3fc;">
-                        💎 Nv.${unlockedLv + 1} (${crystalCost} 💎)
+                      <button class="tab-btn" data-cryst-mut="${escapeHtml(m.id)}" title="Evoluir instantaneamente usando Cristais" style="min-height:38px; border-color:#38bdf8; color:#7dd3fc; display:inline-flex; align-items:center; gap:3px;">
+                        ${uiIcon('diamond', { size: 12, color: '#38bdf8' })} Nv.${unlockedLv + 1} (${crystalCost})
                       </button>
                     ` : ''}
                   </div>
                 ` : (m.gachaOnly ? `
-                  <button class="tab-btn" data-mut-gacha="${escapeHtml(m.id)}" style="border-color:#c084fc; color:#f5d0fe; margin-top:6px;">
-                    🎲 Secreta no Gacha 3D
+                  <button class="tab-btn" data-mut-gacha="${escapeHtml(m.id)}" style="min-height:38px; border-color:#c084fc; color:#f5d0fe; margin-top:6px; display:inline-flex; align-items:center; justify-content:center; gap:5px;">
+                    ${uiIcon('gacha', { size: 14 })} Secreta no Gacha 3D
                   </button>
                 ` : `
                   <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-                    <button class="tab-btn" data-buy-mut="${escapeHtml(m.id)}" style="flex:1;">
-                      Sintetizar (${m.cost || 150} 🥚)
+                    <button class="tab-btn" data-buy-mut="${escapeHtml(m.id)}" style="flex:1; min-height:38px; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                      Sintetizar (${m.cost || 150} ${uiIcon('egg', { size: 12 })})
                     </button>
-                    <button class="tab-btn" data-cryst-mut="${escapeHtml(m.id)}" title="Desbloquear sem gastar Ovos usando Cristais 💎" style="border-color:#38bdf8; color:#7dd3fc;">
-                      💎 Forjar (${crystalCost} 💎)
+                    <button class="tab-btn" data-cryst-mut="${escapeHtml(m.id)}" title="Desbloquear sem gastar Ovos usando Cristais" style="min-height:38px; border-color:#38bdf8; color:#7dd3fc; display:inline-flex; align-items:center; gap:4px;">
+                      ${uiIcon('diamond', { size: 12, color: '#38bdf8' })} Forjar (${crystalCost})
                     </button>
                   </div>
                 `)}
@@ -502,12 +516,12 @@ export class CustomizationScreen {
         <div class="item-card" style="margin-bottom:10px; border-color:#38bdf8;">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
             <div>
-              <strong style="color:#38bdf8;">🔄 Loja Rotativa (-20% em destaques)</strong>
+              <strong style="color:#38bdf8; display:inline-flex; align-items:center; gap:5px;">${uiIcon('rotate', { size: 14, color: '#38bdf8' })} Loja Rotativa (-20% em destaques)</strong>
               <div style="font-size:0.76rem; color:#bae6fd;">Atualiza em ${rotatingShop.refreshIn}</div>
             </div>
             <div style="display:flex; gap:6px;">
-              <button class="tab-btn" id="rot-reroll-cryst" style="padding:4px 8px; font-size:0.75rem;">🔄 2 💎</button>
-              <button class="tab-btn" id="rot-reroll-egg" style="padding:4px 8px; font-size:0.75rem;">🔄 120 🥚</button>
+              <button class="tab-btn" id="rot-reroll-cryst" style="min-height:36px; padding:4px 9px; font-size:0.75rem; display:inline-flex; align-items:center; gap:4px;">${uiIcon('rotate', { size: 12 })} 2 ${uiIcon('diamond', { size: 12, color: '#38bdf8' })}</button>
+              <button class="tab-btn" id="rot-reroll-egg" style="min-height:36px; padding:4px 9px; font-size:0.75rem; display:inline-flex; align-items:center; gap:4px;">${uiIcon('rotate', { size: 12 })} 120 ${uiIcon('egg', { size: 12, color: '#fde68a' })}</button>
             </div>
           </div>
           <div class="cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));">
@@ -517,8 +531,8 @@ export class CustomizationScreen {
                 <div class="item-card">
                   <small style="color:#ffd447;">${o.rarity} • -${o.discountPct}%</small>
                   <strong>${o.name}</strong>
-                  <button class="tab-btn ${bought ? '' : 'active'}" data-buy-rot="${o.offerId}" ${bought ? 'disabled' : ''}>
-                    ${bought ? '✅ Comprado' : `Comprar (${o.price} 🥚)`}
+                  <button class="tab-btn ${bought ? '' : 'active'}" data-buy-rot="${o.offerId}" ${bought ? 'disabled' : ''} style="min-height:38px; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                    ${bought ? `${uiIcon('check', { size: 13 })} Comprado` : `Comprar (${o.price} ${uiIcon('egg', { size: 12 })})`}
                   </button>
                 </div>
               `;
@@ -533,12 +547,12 @@ export class CustomizationScreen {
                 <strong>Ovo Misterioso</strong>
                 <p style="font-size:0.8rem; color:#d8c2a6;">
                   ${eggStatus.collectionComplete
-                    ? `Coleção 100% completa! Abrir devolve ${eggStatus.dupRefund} 🥚 + ${eggStatus.dupXp} XP + 1 💎 (sem farm infinito).`
+                    ? `Coleção 100% completa! Abrir devolve ${eggStatus.dupRefund} Ovos + ${eggStatus.dupXp} XP + 1 Diamante (sem farm infinito).`
                     : `Sorteia 1 acessório ou rastro faltante (restam ${eggStatus.totalRemaining} na coleção)!`}
                 </p>
               </div>
             </div>
-            <button class="chunky-btn" id="buy-mystery">Abrir (${MYSTERY_EGG_COST} 🥚)</button>
+            <button class="chunky-btn" id="buy-mystery" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">Abrir (${MYSTERY_EGG_COST} ${uiIcon('egg', { size: 14 })})</button>
           </div>
         </div>
         ${renderFilterToolbar([...merged.accessories, ...merged.trails], true)}
@@ -550,8 +564,8 @@ export class CustomizationScreen {
               <div class="item-card ${isEq ? 'selected' : ''} rarity-${String(a.rarity || 'comum').toLowerCase()}">
                 <small style="color:#ffd447;">${escapeHtml(a.rarity || 'Comum')} • Acessório</small>
                 <strong>${escapeHtml(a.name)}</strong>
-                <button class="tab-btn ${owned ? 'active' : ''}" data-buy-acc="${escapeHtml(a.id)}">
-                  ${owned ? (isEq ? '✔ Equipado (Remover)' : 'Equipar') : `Comprar (${a.price} 🥚)`}
+                <button class="tab-btn ${owned ? 'active' : ''}" data-buy-acc="${escapeHtml(a.id)}" style="min-height:38px; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                  ${owned ? (isEq ? `${uiIcon('check', { size: 13 })} Equipado (Remover)` : 'Equipar') : `Comprar (${a.price} ${uiIcon('egg', { size: 12 })})`}
                 </button>
               </div>
             `;
@@ -562,8 +576,8 @@ export class CustomizationScreen {
               <div class="item-card rarity-${String(t.rarity || 'comum').toLowerCase()}">
                 <small style="color:#ffd447;">${escapeHtml(t.rarity || 'Comum')} • Rastro</small>
                 <strong>${escapeHtml(t.name)}</strong>
-                <button class="tab-btn ${owned ? 'active' : ''}" data-buy-trail="${escapeHtml(t.id)}">
-                  ${owned ? (preset.trail === t.id ? 'Equipado' : 'Equipar') : `Comprar (${t.price} 🥚)`}
+                <button class="tab-btn ${owned ? 'active' : ''}" data-buy-trail="${escapeHtml(t.id)}" style="min-height:38px; display:inline-flex; align-items:center; justify-content:center; gap:4px;">
+                  ${owned ? (preset.trail === t.id ? `${uiIcon('check', { size: 13 })} Equipado` : 'Equipar') : `Comprar (${t.price} ${uiIcon('egg', { size: 12 })})`}
                 </button>
               </div>
             `;
