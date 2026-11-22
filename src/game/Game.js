@@ -983,6 +983,9 @@ export class Game {
   startQuickMode(modeId, opts = {}) {
     if (!modeId) return false;
     this.sfx?.click?.();
+    if (!FREE_3D_MODES.has(this.modeId)) {
+      this._returnModeId = this.modeId || 'solo';
+    }
     this.setMode(modeId, opts.seed || '');
     this.ui?._clearModal?.();
     this.startRun(false, opts);
@@ -1398,8 +1401,17 @@ export class Game {
       }
       this.activeFreeMode = null;
     }
+    if (typeof document !== 'undefined') {
+      document.querySelectorAll('#mode3d-overlay, .m3d-root, .m3d-dice-layer').forEach((n) => n.remove());
+      document.body?.classList?.remove('mode-3d-active', 'rpg-active', 'arena-active');
+    }
     if (this.world?.worldGroup) this.world.worldGroup.visible = true;
     if (this.world?.scenery?.group) this.world.scenery.group.visible = true;
+    if (this.camera) {
+      this.camera.fov = Number(Save.data.settings?.fov) || 58;
+      this.camera.up.set(0, 1, 0);
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   async _startFree3DMode(modeId, opts = {}) {
@@ -1459,6 +1471,12 @@ export class Game {
 
   openMainMenu() {
     this._disposeFreeMode();
+    // Parte 1.2 & 1.3: Restaura modo base de 1 jogador ao voltar de modos 3D livres / Arena X1 (evita "Jogador 2" fantasma e UI quebrada)
+    if (FREE_3D_MODES.has(this.modeId) || this.modeId === 'arena_x1') {
+      const fallbackMode = (this._returnModeId && !FREE_3D_MODES.has(this._returnModeId)) ? this._returnModeId : 'solo';
+      this.modeId = fallbackMode;
+      this._returnModeId = null;
+    }
     this.state = 'menu';
     this.photoMode = false;
     this.spectatorMode = false;
@@ -1466,6 +1484,7 @@ export class Game {
     this.pendingRestart = false;
     this.radialWheelOpen = false;
     this.radialCooldown = 0;
+    this.input?.reset?.();
     this.ui.hud.hideRadialWheel?.();
     this._dismissSpotlight();
     this.tutorialState = null;
@@ -1474,7 +1493,6 @@ export class Game {
     this.cameraRig.setFocusPlayer(null);
     this.cameraRig.setPredatorFocus(null);
     this.events?.reset?.();
-    this.ui.hud.setPredatorIntroHud(null);
     this.ui.hud.setPredatorIntroHud?.(null);
     this.music.setPlaying(false);
     this.spawner.reset();
@@ -1484,6 +1502,7 @@ export class Game {
     this._clearDebris();
     this.rebuildPlayers();
     this.currentBiome = getBiomeById(this.startBiomeId);
+    this.world?.applyTheme?.(this.currentBiome.theme, false);
     this._syncMenuEnvironment();
     this.ui.hud.resetAllOverlays();
     this.ui.showMainMenu();

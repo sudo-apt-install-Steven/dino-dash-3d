@@ -14,6 +14,31 @@ export const SAVE_SCHEMA_VERSION = 5;
 export const MAX_SAVE_IMPORT_BYTES = 512 * 1024;
 const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
+const FUN_NICK_DINOS = ['Dino', 'Trex', 'Raptor', 'Spino', 'Trike', 'Stego', 'Carno', 'Ankylo', 'Mosa', 'Ptero', 'Bronto', 'Giga', 'Alo', 'Bary', 'Krono'];
+const FUN_NICK_ADJS = ['Veloz', 'Roxo', 'Solar', 'Alfa', 'Turbo', 'Feroz', 'Nobre', 'Brabo', 'Cosmo', 'Aureo', 'Astro', 'Ciano', 'Primal', 'Forte', 'Raio'];
+const TEST_NICK_PATTERN = /^(steven\s*teste|teste\d*|testuser\d*|convidado|guest|player|dino)$/i;
+
+export function generateRandomDinoNick() {
+  const randInt = (max) => {
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return buf[0] % max;
+    }
+    return Math.floor(Math.random() * max);
+  };
+  const dino = FUN_NICK_DINOS[randInt(FUN_NICK_DINOS.length)];
+  const adj = FUN_NICK_ADJS[randInt(FUN_NICK_ADJS.length)];
+  const num = 10 + randInt(989);
+  return `${dino}${adj}${num}`.slice(0, 16);
+}
+
+function resolveCleanDefaultNick(rawNick) {
+  const clean = rawNick ? sanitizeNickname(rawNick, '', 16) : '';
+  if (!clean || TEST_NICK_PATTERN.test(clean)) return generateRandomDinoNick();
+  return clean;
+}
+
 const DEFAULT_SAVE = {
   schemaVersion: SAVE_SCHEMA_VERSION,
   highScore: 0,
@@ -479,10 +504,16 @@ class SaveSystem {
     loaded.fossilCrates = clampInt(loaded.fossilCrates, 0, 10_000, 2);
 
     if (loaded.network) {
-      loaded.network.nickname = loaded.network.nickname ? sanitizeNickname(loaded.network.nickname, '', 16) : '';
+      loaded.network.nickname = resolveCleanDefaultNick(loaded.network.nickname);
     }
     if (loaded.profile) {
-      loaded.profile.nickname = loaded.profile.nickname ? sanitizeNickname(loaded.profile.nickname, '', 16) : (loaded.network?.nickname || '');
+      const candidate = loaded.profile.nickname ? sanitizeNickname(loaded.profile.nickname, '', 16) : '';
+      loaded.profile.nickname = (!candidate || TEST_NICK_PATTERN.test(candidate))
+        ? (loaded.network?.nickname || generateRandomDinoNick())
+        : candidate;
+      if (loaded.network && !loaded.network.nickname) {
+        loaded.network.nickname = loaded.profile.nickname;
+      }
       loaded.profile.bio = sanitizeBioText(loaded.profile.bio || '', 160);
       loaded.profile.isPublic = loaded.profile.isPublic !== false;
       loaded.profile.level = clampInt(loaded.profile.level, 1, 999, 1);

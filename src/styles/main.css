@@ -23,6 +23,31 @@
   padding: 0;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 212, 71, 0.42) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 212, 71, 0.32);
+  border-radius: 999px;
+  border: 1px solid rgba(11, 15, 24, 0.35);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 212, 71, 0.68);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 html,
