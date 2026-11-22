@@ -25,6 +25,11 @@ import {
   buildDungeonEnemyModel,
   buildDungeonNpcModel
 } from '../models/DungeonProps.js';
+import {
+  buildSculptedDungeonPortal,
+  buildSculptedInteractable
+} from '../models/SculptedWorldProps.js';
+import { uiIcon } from '../ui/UiIcons.js';
 import { DiceRoller3D, SUPPORTED_DICE } from './DiceRoller3D.js';
 import {
   AIDungeonClient,
@@ -555,10 +560,10 @@ export class DungeonRPGMode extends Mode3DBase {
       this._spawnRoomNpc(room.npcId);
     } else if (!room.cleared && room.type !== 'start') {
       const color = room.type === 'treasure' ? '#f59e0b' : room.type === 'shrine' ? '#22d3ee' : '#ef4444';
-      const orb = makeGlowOrb(color, 0.55);
-      orb.position.set(0, 1.1, -1.5);
-      rg.add(orb);
-      this.interactableMeshes.push({ mesh: orb, x: 0, z: -1.5, kind: room.type });
+      const prop = buildSculptedInteractable(room.type, color);
+      prop.position.set(0, 0.72, -1.5);
+      rg.add(prop);
+      this.interactableMeshes.push({ mesh: prop, x: 0, z: -1.5, kind: room.type });
     }
 
     // Se sala de chefe já estiver limpa, cria portal de próximo andar
@@ -618,18 +623,8 @@ export class DungeonRPGMode extends Mode3DBase {
 
   _spawnFloorPortal() {
     if (this.portalMesh) return;
-    const g = new THREE.Group();
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(1.35, 0.16, 12, 32),
-      new THREE.MeshStandardMaterial({ color: '#38bdf8', emissive: '#0284c7', emissiveIntensity: 1.5 })
-    );
-    ring.position.y = 1.6;
-    const core = new THREE.Mesh(
-      new THREE.CircleGeometry(1.15, 24),
-      new THREE.MeshBasicMaterial({ color: '#7dd3fc', transparent: true, opacity: 0.45, side: THREE.DoubleSide })
-    );
-    core.position.y = 1.6;
-    g.add(ring, core);
+    const g = buildSculptedDungeonPortal('#38bdf8');
+    g.scale.setScalar(0.78);
     g.position.set(0, 0, -2.5);
     this.roomGroup.add(g);
     this.portalMesh = g;
@@ -642,34 +637,34 @@ export class DungeonRPGMode extends Mode3DBase {
       <div class="m3d-dng-top">
         <div class="m3d-dng-stats">
           <div class="m3d-dng-badge" data-floor>ANDAR 1</div>
-          <div class="m3d-dng-stat">❤️ <b data-hp>18/18</b></div>
-          <div class="m3d-dng-stat">🥚 <b data-eggs>0</b></div>
-          <div class="m3d-dng-stat">🧪 <b data-potions>1</b></div>
-          <div class="m3d-dng-stat">🏺 <b data-relics>0</b></div>
+          <div class="m3d-dng-stat">${uiIcon('heart', { size: 14, color: '#f87171' })} <b data-hp>18/18</b></div>
+          <div class="m3d-dng-stat">${uiIcon('egg', { size: 14, color: '#fbbf24' })} <b data-eggs>0</b></div>
+          <div class="m3d-dng-stat">${uiIcon('sparkle', { size: 14, color: '#34d399' })} <b data-potions>1</b></div>
+          <div class="m3d-dng-stat">${uiIcon('trophy', { size: 14, color: '#a855f7' })} <b data-relics>0</b></div>
         </div>
         <div class="m3d-dng-room-pill" data-room-pill>Entrada</div>
         <div class="m3d-dng-actions">
-          <button type="button" class="m3d-btn m3d-btn-ghost" data-act="hero-sheet">🎒 Herói</button>
-          <button type="button" class="m3d-btn m3d-btn-ghost" data-act="dice-tray">🎲 Dados</button>
-          <button type="button" class="m3d-btn m3d-btn-primary" data-act="open-dm">📜 Mestre [E]</button>
-          <button type="button" class="m3d-btn m3d-btn-danger" data-act="exit">✕ Menu</button>
+          <button type="button" class="m3d-btn m3d-btn-ghost" data-act="hero-sheet">${uiIcon('backpack', { size: 15 })} Ficha</button>
+          <button type="button" class="m3d-btn m3d-btn-ghost" data-act="dice-tray">${uiIcon('dice', { size: 15 })} Dados</button>
+          <button type="button" class="m3d-btn m3d-btn-primary" data-act="open-dm">${uiIcon('scroll', { size: 15 })} Mestre [E]</button>
+          <button type="button" class="m3d-btn m3d-btn-danger" data-act="exit">${uiIcon('close', { size: 15 })} Menu</button>
         </div>
       </div>
 
       <div class="m3d-dng-hero-bar">
-        <span class="m3d-dng-weapon-pill" data-weapon-bar>🐾 Garras Naturais (+0 nos dados)</span>
+        <span class="m3d-dng-weapon-pill" data-weapon-bar>${uiIcon('claw', { size: 14 })} Garras Naturais (+0 nos dados)</span>
         <span class="m3d-dng-buff-pill" data-buff-pill style="display:none"></span>
       </div>
 
       <div class="m3d-mm-wrap">
-        <div class="m3d-mm-badge" data-mm-badge>🗺️ Névoa</div>
+        <div class="m3d-mm-badge" data-mm-badge>${uiIcon('openworld', { size: 13 })} Névoa</div>
         <div class="m3d-minimap" data-minimap aria-label="Minimapa da Masmorra"></div>
       </div>
 
       <div class="m3d-dng-cambar">
-        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="cam-cycle">[C] 🎥 Câmera: Isométrica</button>
-        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="zoom-out" title="Afastar câmera">🔍-</button>
-        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="zoom-in" title="Aproximar câmera">🔍+</button>
+        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="cam-cycle">[C] ${uiIcon('camera', { size: 15 })} Câmera: Isométrica</button>
+        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="zoom-out" title="Afastar câmera">${uiIcon('zoomOut', { size: 15 })}</button>
+        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="zoom-in" title="Aproximar câmera">${uiIcon('zoomIn', { size: 15 })}</button>
         <span class="m3d-dng-cam-hint">Arraste para girar a câmera · Scroll zoom</span>
       </div>
 
@@ -697,8 +692,8 @@ export class DungeonRPGMode extends Mode3DBase {
 
       <div class="m3d-dice-tray" data-dice-tray style="display:none">
         <div class="m3d-tray-head">
-          <span>🎲 Bandeja Manual de Dados</span>
-          <button type="button" class="m3d-btn m3d-btn-ghost" data-act="close-tray">✕</button>
+          <span>${uiIcon('dice', { size: 15, color: '#fbbf24' })} Bandeja Manual de Dados</span>
+          <button type="button" class="m3d-btn m3d-btn-ghost" data-act="close-tray">${uiIcon('close', { size: 14 })}</button>
         </div>
         <div class="m3d-tray-grid">
           ${SUPPORTED_DICE.map((d) => `<button type="button" class="m3d-btn m3d-btn-ghost m3d-die-btn" data-roll-die="${d}">${d.toUpperCase()}</button>`).join('')}
@@ -767,7 +762,7 @@ export class DungeonRPGMode extends Mode3DBase {
 
   _syncCameraHud() {
     if (!this._hud.camBtn || !this.rig) return;
-    this._hud.camBtn.textContent = `[C] 🎥 Câmera: ${this.rig.getPresetLabel()}`;
+    this._hud.camBtn.innerHTML = `[C] ${uiIcon('camera', { size: 15 })} Câmera: ${escapeHtml(this.rig.getPresetLabel())}`;
   }
 
   _toggleDiceTray(force) {
@@ -917,10 +912,13 @@ export class DungeonRPGMode extends Mode3DBase {
       if (this.npcActor) {
         try { this.npcActor.model.animate?.(this.elapsed); } catch { /* noop */ }
       }
-      if (this.portalMesh) this.portalMesh.rotation.y += simDt * 1.4;
+      if (this.portalMesh) {
+        if (this.portalMesh.userData?.ring) this.portalMesh.userData.ring.rotation.z += simDt * 1.6;
+        if (this.portalMesh.userData?.crownGem) this.portalMesh.userData.crownGem.rotation.y += simDt * 2.0;
+      }
       for (const it of this.interactableMeshes) {
-        it.mesh.rotation.y += simDt * 2;
-        it.mesh.position.y = 1.1 + Math.sin(this.elapsed * 3) * 0.16;
+        it.mesh.rotation.y += simDt * 1.6;
+        it.mesh.position.y = 0.72 + Math.sin(this.elapsed * 3) * 0.1;
       }
 
       // Movimento livre 360° quando os painéis estão fechados
@@ -1719,7 +1717,9 @@ export class DungeonRPGMode extends Mode3DBase {
     const rows = Math.max(...ys) - minY + 1;
 
     if (this._hud.mmBadge) {
-      this._hud.mmBadge.textContent = this.mapRevealed ? '🗺️ Mapa Revelado!' : '🗺️ Névoa';
+      this._hud.mmBadge.innerHTML = this.mapRevealed
+        ? `${uiIcon('openworld', { size: 13 })} Mapa Revelado!`
+        : `${uiIcon('openworld', { size: 13 })} Névoa`;
       this._hud.mmBadge.classList.toggle('is-revealed', this.mapRevealed);
     }
 

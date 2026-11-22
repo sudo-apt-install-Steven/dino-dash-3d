@@ -20,6 +20,8 @@ import {
 import { BOSS_DEFS } from '../events/BossManager.js';
 import { buildBossModel } from '../events/BossModels.js';
 import { buildArenaProps } from '../models/DungeonProps.js';
+import { buildSculptedCrystalSpire } from '../models/SculptedWorldProps.js';
+import { uiIcon } from '../ui/UiIcons.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
 import { Save } from '../systems/Save.js';
 
@@ -173,11 +175,8 @@ export class BossArenaMode extends Mode3DBase {
       const r = this.arenaRadius - 3.6;
       const x = Math.cos(ang) * r;
       const z = Math.sin(ang) * r;
-      const mesh = new THREE.Mesh(
-        new THREE.OctahedronGeometry(0.75, 0),
-        new THREE.MeshStandardMaterial({ color: '#22d3ee', emissive: '#06b6d4', emissiveIntensity: 0.9, roughness: 0.25, metalness: 0.3 })
-      );
-      mesh.position.set(x, 1.15, z);
+      const mesh = buildSculptedCrystalSpire('#22d3ee', 0.95);
+      mesh.position.set(x, 0.12, z);
       this.group.add(mesh);
       this.crystals.push({ x, z, r: 0.85, hp: 2, active: true, respawn: 0, mesh });
     }
@@ -212,11 +211,11 @@ export class BossArenaMode extends Mode3DBase {
         <select class="m3d-select" data-boss-select aria-label="Escolher Chefe">
           ${BOSS_KEYS.map((k) => `<option value="${escapeHtml(k)}"${k === this.bossId ? ' selected' : ''}>${escapeHtml(BOSS_DEFS[k].name)}</option>`).join('')}
         </select>
-        <button type="button" class="m3d-btn m3d-btn-danger" data-act="exit">✕ Menu</button>
+        <button type="button" class="m3d-btn m3d-btn-danger" data-act="exit">${uiIcon('close', { size: 15 })} Menu</button>
       </div>
 
       <div class="m3d-controls-hint">
-        <span><b>WASD</b> Mover 360°</span><span><b>Q / E</b> Atacar</span><span><b>Shift</b> Esquiva</span><span><b>F</b> Especial</span><span>💎 Quebre Cristais para Atordoar o Chefe!</span>
+        <span><b>WASD</b> Mover 360°</span><span><b>Q / E</b> Atacar</span><span><b>Shift</b> Esquiva</span><span><b>F</b> Especial</span><span>${uiIcon('diamond', { size: 14, color: '#22d3ee' })} Quebre Cristais para Atordoar o Chefe!</span>
       </div>
     `;
     this.overlay.appendChild(el);
@@ -504,7 +503,7 @@ export class BossArenaMode extends Mode3DBase {
     for (const c of this.crystals) {
       if (c.active) {
         c.mesh.rotation.y += dt * 1.8;
-        c.mesh.position.y = 1.15 + Math.sin(this.elapsed * 3 + c.x) * 0.16;
+        c.mesh.position.y = 0.35 + Math.sin(this.elapsed * 3 + c.x) * 0.14;
       } else {
         c.respawn -= dt;
         if (c.respawn <= 0) {

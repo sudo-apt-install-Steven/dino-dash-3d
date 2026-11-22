@@ -37,6 +37,16 @@ import {
   escapeHtml
 } from './WorldExplorer3D.js';
 import { buildDungeonEnemyModel } from '../models/DungeonProps.js';
+import {
+  buildSculptedBiomeTree,
+  buildSculptedRockFormation,
+  buildSculptedAncientAltar,
+  buildSculptedDungeonPortal,
+  buildSculptedInteractable,
+  buildSculptedFoodModel,
+  buildSculptedCrystalSpire
+} from '../models/SculptedWorldProps.js';
+import { uiIcon } from '../ui/UiIcons.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
 import { Save } from '../systems/Save.js';
 
@@ -318,13 +328,6 @@ export class AdventureOpenMode extends Mode3DBase {
     const geos = {
       tile: mark(new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE)),
       box: mark(new THREE.BoxGeometry(1, 1, 1)),
-      cyl: mark(new THREE.CylinderGeometry(0.75, 1, 1, 7)),
-      cyl8: mark(new THREE.CylinderGeometry(1, 1, 1, 8)),
-      cone: mark(new THREE.ConeGeometry(0.8, 1.4, 7)),
-      dodec: mark(new THREE.DodecahedronGeometry(1, 0)),
-      ico: mark(new THREE.IcosahedronGeometry(1, 0)),
-      octa: mark(new THREE.OctahedronGeometry(1, 0)),
-      torus: mark(new THREE.TorusGeometry(1, 0.14, 10, 24)),
       ring: mark(new THREE.RingGeometry(0.75, 1.0, 24)),
       disc: mark(new THREE.CircleGeometry(1, 24))
     };
@@ -402,48 +405,12 @@ export class AdventureOpenMode extends Mode3DBase {
   // ---------------------------------------------------------------------------
   _spawnBiomeAltar() {
     if (this.altar?.group) disposeObject3D(this.altar.group);
-    const { geos, getMat } = this._shared;
-    const g = new THREE.Group();
     const ax = 22;
     const az = -26;
+    const g = buildSculptedAncientAltar(this.biome.accent, this.biome.rock);
     g.position.set(ax, 0, az);
-
-    const step1 = new THREE.Mesh(geos.cyl8, getMat(this.biome.rock, { roughness: 0.85 }));
-    step1.scale.set(3.2, 0.45, 3.2);
-    step1.position.y = 0.22;
-
-    const step2 = new THREE.Mesh(geos.cyl8, getMat('#1f2937', { roughness: 0.7 }));
-    step2.scale.set(2.2, 0.5, 2.2);
-    step2.position.y = 0.65;
-
-    const runeRing = new THREE.Mesh(
-      geos.ring,
-      getMat(this.biome.accent, { basic: true, opacity: 0.8, doubleSide: true, depthWrite: false })
-    );
-    runeRing.rotation.x = -Math.PI / 2;
-    runeRing.scale.setScalar(3.6);
-    runeRing.position.y = 0.05;
-
-    // 4 obeliscos rúnicos ao redor do altar
-    for (let i = 0; i < 4; i++) {
-      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-      const pillar = new THREE.Mesh(geos.box, getMat(this.biome.rock, { roughness: 0.8 }));
-      pillar.scale.set(0.55, 2.3, 0.55);
-      pillar.position.set(Math.cos(a) * 2.3, 1.15, Math.sin(a) * 2.3);
-      const gem = new THREE.Mesh(
-        geos.octa,
-        getMat(this.biome.accent, { emissive: this.biome.accent, emissiveIntensity: 1.4, roughness: 0.25 })
-      );
-      gem.scale.setScalar(0.28);
-      gem.position.set(Math.cos(a) * 2.3, 2.55, Math.sin(a) * 2.3);
-      g.add(pillar, gem);
-    }
-
-    const crystal = makeGlowOrb(this.biome.accent, 0.85);
-    crystal.position.y = 2.5;
-    g.add(step1, step2, runeRing, crystal);
     this.group.add(g);
-    this.altar = { group: g, crystal, runeRing, x: ax, z: az };
+    this.altar = { group: g, crystal: g.userData.crystal, runeRing: g.userData.runeRing, x: ax, z: az };
   }
 
   _buildCampfireMesh() {
@@ -460,13 +427,14 @@ export class AdventureOpenMode extends Mode3DBase {
     safeRing.position.y = 0.04;
     g.add(safeRing);
 
-    // Pedras em círculo
+    // Pedras voxel em círculo
     const stoneMat = getMat('#52525b', { roughness: 0.9 });
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
-      const st = new THREE.Mesh(geos.dodec, stoneMat);
-      st.scale.set(0.32, 0.24, 0.32);
-      st.position.set(Math.cos(a) * 1.05, 0.14, Math.sin(a) * 1.05);
+      const st = new THREE.Mesh(geos.box, stoneMat);
+      st.scale.set(0.36, 0.24, 0.34);
+      st.position.set(Math.cos(a) * 1.05, 0.12, Math.sin(a) * 1.05);
+      st.rotation.y = a;
       g.add(st);
     }
 
@@ -480,20 +448,22 @@ export class AdventureOpenMode extends Mode3DBase {
       g.add(log);
     }
 
-    // Chamas voxel
+    // Chamas voxel esculpidas
     const flameOuter = new THREE.Mesh(
-      geos.octa,
+      geos.box,
       getMat('#f97316', { emissive: '#ea580c', emissiveIntensity: 1.6, roughness: 0.2 })
     );
-    flameOuter.scale.set(0.55, 0.95, 0.55);
-    flameOuter.position.y = 0.72;
+    flameOuter.scale.set(0.52, 0.92, 0.52);
+    flameOuter.position.y = 0.68;
+    flameOuter.rotation.y = Math.PI / 4;
 
     const flameCore = new THREE.Mesh(
-      geos.octa,
+      geos.box,
       getMat('#fde047', { emissive: '#facc15', emissiveIntensity: 2.0, roughness: 0.1 })
     );
-    flameCore.scale.set(0.32, 0.65, 0.32);
-    flameCore.position.y = 0.65;
+    flameCore.scale.set(0.3, 0.62, 0.3);
+    flameCore.position.y = 0.62;
+    flameCore.rotation.y = Math.PI / 8;
 
     g.add(flameOuter, flameCore);
     g.userData.flameOuter = flameOuter;
@@ -510,17 +480,20 @@ export class AdventureOpenMode extends Mode3DBase {
 
     // Caldeirão voxel do Cozinheiro ao lado da fogueira
     const { geos, getMat } = this._shared;
-    const pot = new THREE.Mesh(geos.cyl8, getMat('#27272a', { roughness: 0.4, metalness: 0.6 }));
-    pot.scale.set(0.65, 0.65, 0.65);
-    pot.position.set(-1.35, 0.4, -0.9);
+    const potMat = getMat('#27272a', { roughness: 0.4, metalness: 0.6 });
+    const pot = new THREE.Mesh(geos.box, potMat);
+    pot.scale.set(0.92, 0.65, 0.92);
+    pot.position.set(-1.35, 0.36, -0.9);
+    const potRim = new THREE.Mesh(geos.box, potMat);
+    potRim.scale.set(1.04, 0.12, 1.04);
+    potRim.position.set(-1.35, 0.72, -0.9);
     const soup = new THREE.Mesh(
-      geos.disc,
+      geos.box,
       getMat('#10b981', { emissive: '#059669', emissiveIntensity: 1.1, roughness: 0.2 })
     );
-    soup.rotation.x = -Math.PI / 2;
-    soup.scale.setScalar(0.58);
-    soup.position.set(-1.35, 0.74, -0.9);
-    mesh.add(pot, soup);
+    soup.scale.set(0.8, 0.08, 0.8);
+    soup.position.set(-1.35, 0.76, -0.9);
+    mesh.add(pot, potRim, soup);
 
     this.group.add(mesh);
     this.mainCampfire = { group: mesh, x: fx, z: fz, radius: 4.2 };
@@ -528,66 +501,20 @@ export class AdventureOpenMode extends Mode3DBase {
 
   _spawnDungeonPortal() {
     if (this.dungeonPortal?.group) disposeObject3D(this.dungeonPortal.group);
-    const { geos, getMat } = this._shared;
     const px = -24.5;
     const pz = 22.5;
-    const g = new THREE.Group();
+    const g = buildSculptedDungeonPortal('#38bdf8');
     g.position.set(px, 0, pz);
-
-    const stoneMat = getMat('#312e81', { roughness: 0.75 });
-    const runeMat = getMat('#38bdf8', { emissive: '#0284c7', emissiveIntensity: 1.6, roughness: 0.2 });
-
-    // Base de pedra em degraus
-    const base = new THREE.Mesh(geos.box, stoneMat);
-    base.scale.set(4.6, 0.45, 2.6);
-    base.position.y = 0.22;
-    g.add(base);
-
-    // Pilares esquerdo e direito + verga superior
-    const leftPillar = new THREE.Mesh(geos.box, stoneMat);
-    leftPillar.scale.set(0.75, 4.2, 0.75);
-    leftPillar.position.set(-1.65, 2.3, 0);
-
-    const rightPillar = new THREE.Mesh(geos.box, stoneMat);
-    rightPillar.scale.set(0.75, 4.2, 0.75);
-    rightPillar.position.set(1.65, 2.3, 0);
-
-    const topBeam = new THREE.Mesh(geos.box, stoneMat);
-    topBeam.scale.set(4.3, 0.8, 0.95);
-    topBeam.position.set(0, 4.5, 0);
-
-    // Cristais rúnicos nas colunas
-    for (const sx of [-1.65, 1.65]) {
-      for (const sy of [1.4, 2.6, 3.8]) {
-        const rune = new THREE.Mesh(geos.box, runeMat);
-        rune.scale.set(0.22, 0.36, 0.82);
-        rune.position.set(sx, sy, 0);
-        g.add(rune);
-      }
-    }
-
-    // Anel e vórtice dimensional
-    const ring = new THREE.Mesh(
-      geos.torus,
-      getMat('#a855f7', { emissive: '#7e22ce', emissiveIntensity: 1.8, roughness: 0.2 })
-    );
-    ring.scale.setScalar(1.45);
-    ring.position.set(0, 2.35, 0);
-
-    const vortex = new THREE.Mesh(
-      geos.disc,
-      getMat('#38bdf8', { basic: true, opacity: 0.55, doubleSide: true, depthWrite: false })
-    );
-    vortex.scale.setScalar(1.38);
-    vortex.position.set(0, 2.35, 0);
-
-    const crownGem = new THREE.Mesh(geos.octa, runeMat);
-    crownGem.scale.setScalar(0.5);
-    crownGem.position.set(0, 5.25, 0);
-
-    g.add(leftPillar, rightPillar, topBeam, ring, vortex, crownGem);
     this.group.add(g);
-    this.dungeonPortal = { group: g, ring, vortex, crownGem, x: px, z: pz, radius: 3.4 };
+    this.dungeonPortal = {
+      group: g,
+      ring: g.userData.ring,
+      vortex: g.userData.vortex,
+      crownGem: g.userData.crownGem,
+      x: px,
+      z: pz,
+      radius: 3.4
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -647,36 +574,35 @@ export class AdventureOpenMode extends Mode3DBase {
 
     bodyGroup.add(legL, legR, torso, head, snout, eyeL, eyeR);
 
-    // Detalhes exclusivos de cada NPC
+    // Detalhes exclusivos de cada NPC (100% voxel esculpido)
     if (spec.id === 'guia_savana') {
       // Chapéu de explorador + cajado com cristal flutuante + mochila
-      const brim = new THREE.Mesh(geos.cyl8, hatMat);
-      brim.scale.set(0.65, 0.08, 0.65);
+      const brim = new THREE.Mesh(geos.box, hatMat);
+      brim.scale.set(1.12, 0.08, 1.12);
       brim.position.set(0, 2.06, 0);
       const crown = new THREE.Mesh(geos.box, hatMat);
-      crown.scale.set(0.5, 0.28, 0.5);
-      crown.position.set(0, 2.22, 0);
+      crown.scale.set(0.56, 0.3, 0.56);
+      crown.position.set(0, 2.24, 0);
       const pack = new THREE.Mesh(geos.box, hatMat);
       pack.scale.set(0.58, 0.62, 0.32);
       pack.position.set(0, 1.02, 0.42);
-      const staff = new THREE.Mesh(geos.cyl, getMat('#78350f'));
-      staff.scale.set(0.08, 2.1, 0.08);
+      const staff = new THREE.Mesh(geos.box, getMat('#78350f'));
+      staff.scale.set(0.12, 2.1, 0.12);
       staff.position.set(0.6, 1.05, -0.2);
-      const staffGem = new THREE.Mesh(geos.octa, glowMat);
-      staffGem.scale.setScalar(0.24);
-      staffGem.position.set(0.6, 2.28, -0.2);
+      const staffGem = buildSculptedCrystalSpire(spec.accentColor, 0.22);
+      staffGem.position.set(0.6, 2.1, -0.2);
       bodyGroup.add(brim, crown, pack, staff, staffGem);
     } else if (spec.id === 'cozinheiro') {
       // Toque blanche (chapéu de chef alto) + avental branco + concha
       const apron = new THREE.Mesh(geos.box, hatMat);
       apron.scale.set(0.74, 0.78, 0.1);
       apron.position.set(0, 0.92, -0.31);
-      const chefBase = new THREE.Mesh(geos.cyl8, hatMat);
-      chefBase.scale.set(0.38, 0.55, 0.38);
-      chefBase.position.set(0, 2.28, 0);
-      const chefPuff = new THREE.Mesh(geos.dodec, hatMat);
-      chefPuff.scale.set(0.46, 0.32, 0.46);
-      chefPuff.position.set(0, 2.62, 0);
+      const chefBase = new THREE.Mesh(geos.box, hatMat);
+      chefBase.scale.set(0.58, 0.46, 0.58);
+      chefBase.position.set(0, 2.26, 0);
+      const chefPuff = new THREE.Mesh(geos.box, hatMat);
+      chefPuff.scale.set(0.74, 0.36, 0.74);
+      chefPuff.position.set(0, 2.6, 0);
       const ladle = new THREE.Mesh(geos.box, getMat('#d4d4d8', { metalness: 0.7, roughness: 0.3 }));
       ladle.scale.set(0.1, 1.1, 0.1);
       ladle.position.set(0.56, 1.15, -0.25);
@@ -686,39 +612,41 @@ export class AdventureOpenMode extends Mode3DBase {
       const helm = new THREE.Mesh(geos.box, hatMat);
       helm.scale.set(0.74, 0.3, 0.74);
       helm.position.set(0, 2.08, 0);
-      const hornL = new THREE.Mesh(geos.cone, getMat('#fef3c7'));
-      hornL.scale.set(0.18, 0.35, 0.18);
+      const hornL = new THREE.Mesh(geos.box, getMat('#fef3c7'));
+      hornL.scale.set(0.14, 0.4, 0.14);
       hornL.position.set(-0.38, 2.32, -0.1);
       hornL.rotation.z = 0.35;
-      const hornR = new THREE.Mesh(geos.cone, getMat('#fef3c7'));
-      hornR.scale.set(0.18, 0.35, 0.18);
+      const hornR = new THREE.Mesh(geos.box, getMat('#fef3c7'));
+      hornR.scale.set(0.14, 0.4, 0.14);
       hornR.position.set(0.38, 2.32, -0.1);
       hornR.rotation.z = -0.35;
-      const spearShaft = new THREE.Mesh(geos.cyl, darkMat);
-      spearShaft.scale.set(0.07, 2.3, 0.07);
+      const spearShaft = new THREE.Mesh(geos.box, darkMat);
+      spearShaft.scale.set(0.1, 2.3, 0.1);
       spearShaft.position.set(0.62, 1.15, -0.18);
-      const spearTip = new THREE.Mesh(geos.cone, glowMat);
-      spearTip.scale.set(0.22, 0.45, 0.22);
+      const spearTip = new THREE.Mesh(geos.box, glowMat);
+      spearTip.scale.set(0.22, 0.46, 0.12);
       spearTip.position.set(0.62, 2.48, -0.18);
       bodyGroup.add(helm, hornL, hornR, spearShaft, spearTip);
     } else if (spec.id === 'guardiao_portal') {
       // Capuz místico + coroa rúnica + cetro dimensional
-      const hood = new THREE.Mesh(geos.cone, hatMat);
-      hood.scale.set(0.62, 0.65, 0.62);
-      hood.position.set(0, 2.35, 0);
-      const scepter = new THREE.Mesh(geos.cyl, hatMat);
-      scepter.scale.set(0.08, 2.0, 0.08);
+      const hood = new THREE.Mesh(geos.box, hatMat);
+      hood.scale.set(0.78, 0.42, 0.78);
+      hood.position.set(0, 2.22, 0);
+      const hoodTip = new THREE.Mesh(geos.box, hatMat);
+      hoodTip.scale.set(0.46, 0.3, 0.46);
+      hoodTip.position.set(0, 2.52, 0.08);
+      const scepter = new THREE.Mesh(geos.box, hatMat);
+      scepter.scale.set(0.11, 2.0, 0.11);
       scepter.position.set(-0.6, 1.0, -0.2);
-      const orb = new THREE.Mesh(geos.ico, glowMat);
-      orb.scale.setScalar(0.26);
-      orb.position.set(-0.6, 2.2, -0.2);
-      bodyGroup.add(hood, scepter, orb);
+      const orb = buildSculptedInteractable('crystal', spec.accentColor);
+      orb.scale.setScalar(0.45);
+      orb.position.set(-0.6, 2.22, -0.2);
+      bodyGroup.add(hood, hoodTip, scepter, orb);
     }
 
     // Cristal indicador flutuante acima do NPC
-    const marker = new THREE.Mesh(geos.octa, glowMat);
-    marker.scale.set(0.24, 0.38, 0.24);
-    marker.position.y = 3.15;
+    const marker = buildSculptedCrystalSpire(spec.accentColor, 0.28);
+    marker.position.y = 3.05;
     root.add(marker);
 
     return { root, bodyGroup, marker, ring };
@@ -768,12 +696,8 @@ export class AdventureOpenMode extends Mode3DBase {
       model.root.position.set(spec.x, 0, spec.z);
 
       // Coroa/aura de Boss Regional
-      const bossCrown = new THREE.Mesh(
-        this._shared.geos.octa,
-        this._shared.getMat(spec.color, { emissive: spec.color, emissiveIntensity: 1.8, roughness: 0.2 })
-      );
-      bossCrown.scale.set(0.35, 0.55, 0.35);
-      bossCrown.position.y = 3.1;
+      const bossCrown = buildSculptedCrystalSpire(spec.color, 0.42);
+      bossCrown.position.y = 2.95;
       model.root.add(bossCrown);
 
       // Anel de perigo telegrafado (vermelho) no chão
@@ -820,63 +744,7 @@ export class AdventureOpenMode extends Mode3DBase {
   // Modelos Voxel Compartilhados de Frutas & Alimentos (baixas draw calls)
   // ---------------------------------------------------------------------------
   _buildFoodVoxelMesh(foodId) {
-    const { geos, getMat } = this._shared;
-    const g = new THREE.Group();
-
-    if (foodId === 'apple') {
-      // 🍎 Maçã Jurássica: corpo vermelho voxel, cabinho marrom e folha verde
-      const body = new THREE.Mesh(
-        geos.dodec,
-        getMat('#ef4444', { emissive: '#b91c1c', emissiveIntensity: 0.65, roughness: 0.3 })
-      );
-      body.scale.set(0.38, 0.36, 0.38);
-      const stem = new THREE.Mesh(geos.box, getMat('#78350f'));
-      stem.scale.set(0.08, 0.22, 0.08);
-      stem.position.set(0, 0.38, 0);
-      const leaf = new THREE.Mesh(
-        geos.box,
-        getMat('#22c55e', { emissive: '#16a34a', emissiveIntensity: 0.5 })
-      );
-      leaf.scale.set(0.22, 0.08, 0.14);
-      leaf.position.set(0.12, 0.42, 0);
-      leaf.rotation.z = 0.35;
-      g.add(body, stem, leaf);
-    } else if (foodId === 'golden_fruit') {
-      // 🍍 Fruta Dourada: abacaxi/fruta dourada reluzente com coroa esmeralda
-      const body = new THREE.Mesh(
-        geos.octa,
-        getMat('#f59e0b', { emissive: '#d97706', emissiveIntensity: 1.1, roughness: 0.2, metalness: 0.4 })
-      );
-      body.scale.set(0.38, 0.5, 0.38);
-      const crown1 = new THREE.Mesh(
-        geos.cone,
-        getMat('#10b981', { emissive: '#059669', emissiveIntensity: 0.7 })
-      );
-      crown1.scale.set(0.28, 0.32, 0.28);
-      crown1.position.set(0, 0.52, 0);
-      g.add(body, crown1);
-    } else if (foodId === 'fossil_meat') {
-      // 🍖 Carne Fóssil: assado suculento com osso branco nas pontas
-      const bone = new THREE.Mesh(geos.box, getMat('#f8fafc', { roughness: 0.4 }));
-      bone.scale.set(0.86, 0.16, 0.16);
-      const meat = new THREE.Mesh(
-        geos.box,
-        getMat('#ea580c', { emissive: '#9a3412', emissiveIntensity: 0.55, roughness: 0.45 })
-      );
-      meat.scale.set(0.54, 0.42, 0.42);
-      g.add(bone, meat);
-    } else {
-      // 🫐 Baga Cristalina: trio de bagas de cristal ciano/violeta
-      const berryMat = getMat('#38bdf8', { emissive: '#0284c7', emissiveIntensity: 1.35, roughness: 0.15 });
-      for (const [bx, by, bz] of [[-0.14, 0, 0.08], [0.14, 0.04, 0.08], [0, 0.16, -0.1]]) {
-        const b = new THREE.Mesh(geos.ico, berryMat);
-        b.scale.setScalar(0.22);
-        b.position.set(bx, by, bz);
-        g.add(b);
-      }
-    }
-
-    return g;
+    return buildSculptedFoodModel(foodId);
   }
 
   // ---------------------------------------------------------------------------
@@ -947,10 +815,8 @@ export class AdventureOpenMode extends Mode3DBase {
     const patrols = [];
     const campfires = [];
 
-    // Rochas / árvores estilizadas com geometrias compartilhadas
+    // Rochas / árvores esculpidas em Voxel-Craft com geometrias compartilhadas
     const propCount = this.lowSpec ? 4 : 7;
-    const rockMat = getMat(this.biome.rock, { roughness: 0.85 });
-    const leafMat = getMat(this.biome.accent, { roughness: 0.7 });
     for (let i = 0; i < propCount; i++) {
       const lx = 2.5 + rng() * (CHUNK_SIZE - 5);
       const lz = 2.5 + rng() * (CHUNK_SIZE - 5);
@@ -958,19 +824,16 @@ export class AdventureOpenMode extends Mode3DBase {
       const wz = oz + lz;
       if (this._isNearLandmark(wx, wz, 6.2)) continue;
       const isTree = rng() < 0.55;
-      const h = 1.6 + rng() * 2.4;
-      const r = isTree ? 0.55 : 0.9 + rng() * 0.65;
-      const trunk = new THREE.Mesh(geos.cyl, rockMat);
-      trunk.scale.set(r, h, r);
-      trunk.position.set(lx, h / 2, lz);
-      trunk.castShadow = !this.lowSpec;
-      g.add(trunk);
-      if (isTree) {
-        const crown = new THREE.Mesh(geos.dodec, leafMat);
-        crown.scale.setScalar(1.35);
-        crown.position.set(lx, h + 0.8, lz);
-        g.add(crown);
+      const propSeed = `${this.seed}:${this.biome.id}:${cx}:${cz}:${i}`;
+      const prop = isTree
+        ? buildSculptedBiomeTree(this.biome.id, propSeed)
+        : buildSculptedRockFormation(this.biome.id, propSeed);
+      const r = isTree ? 0.65 : 1.05;
+      prop.position.set(lx, 0, lz);
+      if (!this.lowSpec) {
+        prop.traverse((o) => { if (o.isMesh) o.castShadow = true; });
       }
+      g.add(prop);
       pillars.push({ x: wx, z: wz, r });
     }
 
@@ -991,11 +854,8 @@ export class AdventureOpenMode extends Mode3DBase {
       if (this.collectedIds.has(id)) return;
       const lx = 3 + rng() * (CHUNK_SIZE - 6);
       const lz = 3 + rng() * (CHUNK_SIZE - 6);
-      const mesh = new THREE.Mesh(
-        geos.ico,
-        getMat(color, { emissive: color, emissiveIntensity: 1.4, roughness: 0.25 })
-      );
-      mesh.scale.setScalar(radius);
+      const mesh = buildSculptedInteractable(kind === 'relic' ? 'relic' : 'crystal', color);
+      mesh.scale.setScalar(Math.max(0.5, radius / 0.45));
       mesh.position.set(lx, 0.88, lz);
       g.add(mesh);
       pickups.push({ id, kind, x: ox + lx, z: oz + lz, mesh, active: true });
@@ -1037,9 +897,9 @@ export class AdventureOpenMode extends Mode3DBase {
         const head = new THREE.Mesh(geos.box, getMat('#e11d48', { roughness: 0.5 }));
         head.scale.set(0.75, 0.65, 0.85);
         head.position.set(0, 1.15, -0.75);
-        const crest = new THREE.Mesh(geos.cone, getMat('#fbbf24', { emissive: '#d97706', emissiveIntensity: 0.6 }));
-        crest.scale.set(0.25, 0.45, 0.25);
-        crest.position.set(0, 1.6, -0.65);
+        const crest = new THREE.Mesh(geos.box, getMat('#fbbf24', { emissive: '#d97706', emissiveIntensity: 0.6 }));
+        crest.scale.set(0.2, 0.44, 0.34);
+        crest.position.set(0, 1.58, -0.65);
         pGroup.add(body, head, crest);
         pGroup.position.set(lx, 0, lz);
         g.add(pGroup);
@@ -1073,12 +933,13 @@ export class AdventureOpenMode extends Mode3DBase {
     g.position.set(ex, 0, ez);
 
     if (kind === 'meteor') {
-      // Feixe vertical de luz celeste + cratera + núcleo de meteoro dourado
+      // Feixe vertical de luz celeste + cratera + núcleo de meteoro esculpido
       const beam = new THREE.Mesh(
-        geos.cyl8,
-        getMat('#38bdf8', { basic: true, opacity: 0.28, doubleSide: true, depthWrite: false })
+        geos.box,
+        getMat('#38bdf8', { basic: true, opacity: 0.24, doubleSide: true, depthWrite: false })
       );
-      beam.scale.set(1.1, 28, 1.1);
+      beam.scale.set(1.2, 28, 1.2);
+      beam.rotation.y = Math.PI / 4;
       beam.position.y = 14;
 
       const ring = new THREE.Mesh(
@@ -1089,12 +950,8 @@ export class AdventureOpenMode extends Mode3DBase {
       ring.scale.setScalar(2.6);
       ring.position.y = 0.06;
 
-      const core = new THREE.Mesh(
-        geos.dodec,
-        getMat('#f59e0b', { emissive: '#ea580c', emissiveIntensity: 1.8, roughness: 0.2 })
-      );
-      core.scale.setScalar(1.05);
-      core.position.y = 1.0;
+      const core = buildSculptedCrystalSpire('#f59e0b', 1.15);
+      core.position.y = 0.1;
 
       g.add(beam, ring, core);
       this.group.add(g);
@@ -1127,9 +984,9 @@ export class AdventureOpenMode extends Mode3DBase {
       const bHead = new THREE.Mesh(geos.box, getMat('#6ee7b7', { roughness: 0.45 }));
       bHead.scale.set(0.48, 0.46, 0.52);
       bHead.position.set(0, 0.78, -0.35);
-      const bCrest = new THREE.Mesh(geos.octa, getMat('#fbbf24', { emissive: '#f59e0b', emissiveIntensity: 1.3 }));
-      bCrest.scale.setScalar(0.18);
-      bCrest.position.set(0, 1.16, -0.35);
+      const bCrest = new THREE.Mesh(geos.box, getMat('#fbbf24', { emissive: '#f59e0b', emissiveIntensity: 1.3 }));
+      bCrest.scale.set(0.16, 0.24, 0.26);
+      bCrest.position.set(0, 1.14, -0.35);
       baby.add(bBody, bHead, bCrest);
 
       g.add(ring, baby);
@@ -1434,15 +1291,15 @@ export class AdventureOpenMode extends Mode3DBase {
 
       <!-- Ações de Canto + Câmera -->
       <div class="m3d-corner-actions">
-        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="cam-preset" title="Alternar Câmera [C]">🎥 Câmera [C]</button>
-        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="biome" title="Trocar Bioma">🌍 Bioma</button>
-        <button type="button" class="m3d-btn m3d-btn-danger" data-act="exit">✕ Menu</button>
+        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="cam-preset" title="Alternar Câmera [C]">${uiIcon('camera', { size: 15 })} Câmera [C]</button>
+        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="biome" title="Trocar Bioma">${uiIcon('openworld', { size: 15 })} Bioma</button>
+        <button type="button" class="m3d-btn m3d-btn-danger" data-act="exit">${uiIcon('close', { size: 15 })} Menu</button>
       </div>
 
       <!-- Radar / Minimapa de Mundo Aberto + Controles de Zoom da Câmera -->
       <div class="m3d-ow-radar-wrap" data-radar-wrap>
         <div class="m3d-ow-radar-head">
-          <span>🧭 RADAR ABERTO</span>
+          <span>${uiIcon('compass', { size: 13 })} RADAR ABERTO</span>
           <span data-cam-label>Explorador</span>
         </div>
         <div class="m3d-ow-radar-disc" data-radar-disc>
@@ -1455,12 +1312,12 @@ export class AdventureOpenMode extends Mode3DBase {
           <div data-radar-blips></div>
         </div>
         <div class="m3d-ow-radar-legend">
-          <span>🧙NPC</span><span>👑Boss</span><span>🍎Fruta</span><span>✨Altar</span><span>🔥Fogo</span><span>🏰Masmorra</span>
+          <span>${uiIcon('npc', { size: 11 })}NPC</span><span>${uiIcon('crown', { size: 11, color: '#fbbf24' })}Boss</span><span>${uiIcon('fruit', { size: 11, color: '#f87171' })}Fruta</span><span>${uiIcon('sparkle', { size: 11, color: '#34d399' })}Altar</span><span>${uiIcon('flame', { size: 11, color: '#fb923c' })}Fogo</span><span>${uiIcon('dungeon', { size: 11, color: '#a855f7' })}Masmorra</span>
         </div>
         <div class="m3d-ow-cam-bar">
-          <button type="button" class="m3d-btn" data-act="cam-zoom-in" title="Aproximar Zoom">🔍+</button>
+          <button type="button" class="m3d-btn" data-act="cam-zoom-in" title="Aproximar Zoom">${uiIcon('zoomIn', { size: 14 })}</button>
           <button type="button" class="m3d-btn" data-act="cam-preset-sub" title="Mudar Ângulo [C]">[C] Visão</button>
-          <button type="button" class="m3d-btn" data-act="cam-zoom-out" title="Afastar Zoom">🔍-</button>
+          <button type="button" class="m3d-btn" data-act="cam-zoom-out" title="Afastar Zoom">${uiIcon('zoomOut', { size: 14 })}</button>
         </div>
       </div>
 
@@ -1473,10 +1330,10 @@ export class AdventureOpenMode extends Mode3DBase {
       <div class="m3d-ow-dialog" data-npc-dialog style="display:none;">
         <div class="m3d-ow-dialog-head">
           <div>
-            <div class="m3d-ow-dialog-title" data-dlg-title>🧙 Guia da Savana</div>
+            <div class="m3d-ow-dialog-title" data-dlg-title>${uiIcon('npc', { size: 16 })} Guia da Savana</div>
             <div class="m3d-ow-dialog-role" data-dlg-role>Mestre Explorador</div>
           </div>
-          <button type="button" class="m3d-btn m3d-btn-ghost" data-dlg-close>✕ Fechar</button>
+          <button type="button" class="m3d-btn m3d-btn-ghost" data-dlg-close>${uiIcon('close', { size: 14 })} Fechar</button>
         </div>
         <div class="m3d-ow-dialog-body" data-dlg-body></div>
         <div class="m3d-ow-dialog-opts" data-dlg-opts></div>

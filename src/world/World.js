@@ -2,6 +2,7 @@
 // iluminação de pôr do sol, sol grande, névoa atmosférica e parallax.
 import * as THREE from 'three';
 import { SceneryInstancer } from './SceneryInstancer.js';
+import { buildSculptedGateRing, buildSculptedCrystalSpire } from '../models/SculptedWorldProps.js';
 
 export const LANE_X = [-2.4, 0, 2.4];
 export const RIVER_LANE_X = [7.6, 10.0, 12.4];
@@ -329,19 +330,11 @@ export class World {
     // 2. Guias de corredor aéreo no céu para dinossauros voadores (y ≈ 3.2)
     this.skyCorridorGroup = new THREE.Group();
     this.skyCorridorGroup.visible = false;
-    const skyRailMat = new THREE.MeshBasicMaterial({
-      color: '#bae6fd',
-      transparent: true,
-      opacity: 0.32
-    });
     this.skyCorridorRings = [];
     for (let i = 0; i < 12; i++) {
       const band = new THREE.Group();
       for (const lx of LANE_X) {
-        const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(0.78, 0.06, 6, 16),
-          skyRailMat
-        );
+        const ring = buildSculptedGateRing('#bae6fd', 0.78);
         ring.position.set(lx, SKY_CORRIDOR_Y, 0);
         band.add(ring);
       }
@@ -389,7 +382,6 @@ export class World {
     this.hollowEarthGroup = new THREE.Group();
     this.hollowEarthGroup.visible = false;
     const archMat = new THREE.MeshStandardMaterial({ color: '#3b0764', roughness: 0.85, emissive: '#1e1b4b', emissiveIntensity: 0.35 });
-    const crystalMat = new THREE.MeshStandardMaterial({ color: '#2dd4bf', emissive: '#14b8a6', emissiveIntensity: 0.9, roughness: 0.25 });
     this.hollowArches = [];
     for (let i = 0; i < 8; i++) {
       const arch = new THREE.Group();
@@ -401,9 +393,9 @@ export class World {
       colR.position.set(8.2, 7.75, 0);
       arch.add(topBeam, colL, colR);
       for (let c = -2; c <= 2; c++) {
-        const crys = new THREE.Mesh(new THREE.OctahedronGeometry(0.65, 0), crystalMat);
-        crys.scale.set(0.7, 2.2, 0.7);
-        crys.position.set(c * 3.1, 14.2, 0);
+        const crys = buildSculptedCrystalSpire('#2dd4bf', 1.15);
+        crys.position.set(c * 3.1, 14.9, 0);
+        crys.rotation.x = Math.PI;
         crys.rotation.z = c * 0.14;
         arch.add(crys);
       }

@@ -31,6 +31,7 @@ import {
 } from '../models/VoxelLibrary.js';
 import { HAZARD_ARCHETYPES, rollHazard as rollCatalogHazard } from '../content/catalog_expanded.js';
 import { ContentLoader } from '../content/ContentLoader.js';
+import { buildSculptedGateRing } from '../models/SculptedWorldProps.js';
 
 export { rollCatalogHazard as rollHazard };
 import {
@@ -1014,7 +1015,7 @@ export class Spawner {
 
   _makeCurrentRing() {
     const g = new THREE.Group();
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.76, 0.12, 6, 18), this.currentRingMat);
+    const ring = buildSculptedGateRing('#22d3ee', 0.76);
     ring.position.y = 0.72;
     g.add(ring);
     const core = makeBox(g, 0.34, 0.34, 0.34, 0, 0.72, 0, this.bubbleMat);
