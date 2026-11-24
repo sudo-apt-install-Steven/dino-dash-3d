@@ -6,6 +6,22 @@
 
 export const POSTURE_TYPES = ['biped', 'quadruped', 'aquatic', 'flying', 'sprawling'];
 
+export const ANCHOR_SLOTS = [
+  'head',
+  'eyes',
+  'neck',
+  'back',
+  'backPack',
+  'backCape',
+  'backWings',
+  'backShell',
+  'shoulders',
+  'hip',
+  'tail',
+  'limbs',
+  'aura'
+];
+
 const SPRAWLING_SPECIES = new Set(['archelon', 'ankylosaurus', 'edmontonia']);
 const DORSAL_SAIL_SPECIES = new Set(['spinosaurus', 'amargasaurus']);
 const DORSAL_PLATE_SPECIES = new Set(['stegosaurus', 'kentrosaurus', 'concavenator', 'acrocanthosaurus']);

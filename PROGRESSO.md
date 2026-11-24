@@ -17,9 +17,9 @@
 | Parte | Escopo | Status | Data | Commit | Tag | Testes (Antes / Depois) | Pendências / Próximo Passo |
 |---|---|---|---|---|---|---|---|
 | **Parte 1** | Bugs Urgentes (1.1–1.8) | **CONCLUÍDA** | 2026-11-24 | `parte-1: concluída` | `parte-1-concluida` | 44/44 PASS (Unit, Pentest, E2E Playwright, FPS, Biomas, Anchor Points) | Concluída com sucesso! |
-| **Parte 2** | Dados 3D Completos (D2–D100, física, 20 dados, qui-quadrado) & Bugs do RPG (2.1, 2.7) | **CONCLUÍDA** | 2026-11-24 | `parte-2: concluída` | `parte-2-concluida` | 51/51 PASS (150k rolagens Qui-Quadrado p>0.001, Budget, Unit, Pentest) | Seguir para a **Parte 3** (Mestre IA Multi-Agente, Criação de Campanha & Gerador de Dino por Presets 2.2, 2.3, 2.5). |
-| **Parte 3** | Mestre IA Multi-Agente, Criação de Campanha & Gerador de Dino por Presets (2.2, 2.3, 2.5) | **EM ANDAMENTO** | 2026-11-24 | `wip` | — | Base Parte 2 PASS | Implementar Mestre IA Multi-Agente (narrador, npcs, regras, ilustrador), fluxo de criação de campanha e gerador por presets combináveis. |
-| **Parte 4** | Interface RPG Ilustrado, Mapa 2D Ilustrado, Modo 3D Cinemático, Regras Completas & Mesa Multiplayer (2.4, 2.6, 2.8) | NÃO INICIADA | — | — | — | — | Aguarda Parte 3 |
+| **Parte 2** | Dados 3D Completos (D2–D100, física, 20 dados, qui-quadrado) & Bugs do RPG (2.1, 2.7) | **CONCLUÍDA** | 2026-11-24 | `parte-2: concluída` | `parte-2-concluida` | 51/51 PASS (150k rolagens Qui-Quadrado p>0.001, Budget, Unit, Pentest) | Concluída com sucesso! |
+| **Parte 3** | Mestre IA Multi-Agente, Criação de Campanha & Gerador de Dino por Presets (2.2, 2.3, 2.5) | **CONCLUÍDA** | 2026-11-24 | `parte-3: concluída` | `parte-3-concluida` | 56/56 PASS (Mestre Multi-Agente, Personas, Regras Invioláveis, NPCs, Presets) | Seguir para a **Parte 4** (Interface RPG Ilustrado, Mapa 2D Ilustrado, Modo 3D Cinemático, Regras Completas & Mesa Multiplayer 2.4, 2.6, 2.8). |
+| **Parte 4** | Interface RPG Ilustrado, Mapa 2D Ilustrado, Modo 3D Cinemático, Regras Completas & Mesa Multiplayer (2.4, 2.6, 2.8) | **EM ANDAMENTO** | 2026-11-24 | `wip` | — | Base Parte 3 PASS | Implementar Interface ilustrada 2D em camadas, mapa 2D ilustrado com fog of war, alternância para cena 3D cinematográfica em chefes e regras completas. |
 | **Parte 5** | Mundo Aberto (redesenho total de modelos primitivos + ecossistema vivo + história) | NÃO INICIADA | — | — | — | — | Aguarda Parte 4 |
 | **Parte 6** | Arena X1 Estilo Jogo de Luta (rounds, golpes, combos, armas, modo treino, torre) | NÃO INICIADA | — | — | — | — | Aguarda Parte 5 |
 | **Parte 7** | Controles (Gamepad Xbox/PS/Switch + remapeamento + 1 teclado 2P + menus por gamepad) & Multiplayer | NÃO INICIADA | — | — | — | — | Aguarda Parte 6 |
@@ -29,10 +29,9 @@
 
 ---
 
-## Detalhamento — Parte 2 (CONCLUÍDA)
-- [x] **2.1 CD Inalcançável Eliminada (`src/net/AIDungeonClient.js`):** Testes de perícia padronizados em `d20`, com clamping matemático garantindo que nenhuma CD exceda a rolagem máxima permitida pelos dados somada aos modificadores do jogador.
-- [x] **2.1 Opções Estáveis Durante a Rolagem (`src/modes/DungeonRPGMode.js`):** Durante o lançamento dos dados, as opções de ação são esmaecidas e travadas com `pointer-events: none; opacity: 0.35`. Novas opções só surgem após o dado assentar.
-- [x] **2.7 15 Tipos de Dados 3D Procedurais (`src/modes/DiceRoller3D.js`):** Modelagem procedural e suporte completo para D2, D3, D4, D5, D7, D8, D10, D12, D14, D16, D20, D24, D30 e D100.
-- [x] **2.7 9 Materiais Autênticos (`src/modes/DiceRoller3D.js`):** Resina, Osso de Dino, Pedra Vulcânica, Âmbar, Jade, Madeira Petrificada, Ouro Jurássico, Cristal Meteoro e Neon.
-- [x] **2.7 Notação de Mesa Completa & Bolsa de Presets (`src/modes/DiceRoller3D.js`):** Avaliador `rollTabletopFormula` (suportando `NdX+M`, `NdXkhY`, `NdXklY`, `1d20adv`, `1d20dis`, `NdX!`) e presets rápidos para mesa.
-- [x] **2.7 Teste Qui-Quadrado em 10.000 rolagens (`tests/parte2_dados_qui_quadrado.test.mjs`):** 150.000 rolagens verificadas com gerador criptográfico uniforme `crypto.getRandomValues`, validando $p > 0.001$.
+## Detalhamento — Parte 3 (CONCLUÍDA)
+- [x] **2.2 Mestre IA Multi-Agente (`src/modes/MultiAgentDungeonMaster.js`):** Divisão em agentes especializados: Narrador (5 personas: Sábio, Humor, Sombrio Leve, Épico, Mistério), Verificador Estrito de Regras (ficha do jogador é a verdade e clamping de CD máxima garantida), e Diretor de Cenas. 3 níveis de dificuldade (Fácil, Justa, Brutal).
+- [x] **2.2 Proteção contra Prompt Injection & Cheats:** Detecção em tempo real e bloqueio de comandos maliciosos em `isGodModeExploit` e sanitização de tags HTML/scripts em `sanitizeActionText`.
+- [x] **2.3 Fluxo de Criação de Campanha (`src/modes/CampaignCreator.js`):** 5 temas ricos de mundo, sugestões de lore de personagem, e geração de 5 arquétipos de NPCs fundamentais (Aliado, Rival, Mercador, Sábio e Grande Vilão) com diálogos e ilustrações.
+- [x] **2.5 Gerador de Dinossauro por Presets Combináveis (`src/dinos/DinoPresetAssembler.js`):** Variações modulares anatômicas (5 tamanhos, 2 posturas, 6 cabeças, 6 chifres/cristas, 5 placas dorsais, 5 caudas, 4 garras/patas, 5 paletas de cores, 5 padrões e 5 pinturas de guerra) combinados aos `ANCHOR_SLOTS` de `DinoAnchors.js`.
+- [x] **Testes Automatizados (`tests/parte3_mestre_campanha_presets.test.mjs`):** 5/5 testes cobrindo todas as frentes da Parte 3 com 100% de aprovação.
