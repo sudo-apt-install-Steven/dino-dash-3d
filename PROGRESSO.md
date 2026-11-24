@@ -22,16 +22,15 @@
 | **Parte 4** | Interface RPG Ilustrado, Mapa 2D Ilustrado, Modo 3D Cinemático, Regras Completas & Mesa Multiplayer (2.4, 2.6, 2.8) | **CONCLUÍDA** | 2026-11-24 | `parte-4: concluída` | `parte-4-concluida` | 60/60 PASS (Ficha, Níveis 1..20, Death Saves, Mapa SVG Fog of War, Mesa Virtual Multiplayer 2..6P) | Concluída com sucesso! |
 | **Parte 5** | Mundo Aberto (redesenho total de modelos primitivos + ecossistema vivo + história) | **CONCLUÍDA** | 2026-11-24 | `parte-5: concluída` | `parte-5-concluida` | 64/64 PASS (IA Presas/Predadores, Ciclos Dia/Noite, Fauna/Flora com Dicas, Crafting Ninho) | Concluída com sucesso! |
 | **Parte 6** | Arena X1 Estilo Jogo de Luta (rounds, golpes, combos, armas, modo treino, torre) | **CONCLUÍDA** | 2026-11-24 | `parte-6: concluída` | `parte-6-concluida` | 69/69 PASS (Frame Data Luta, ComboTracker, Bloqueio/Parry, Finalizações Modo Família, Torre Arcade) | Concluída com sucesso! |
-| **Parte 7** | Controles (Gamepad Xbox/PS/Switch + remapeamento + 1 teclado 2P + menus por gamepad) & Multiplayer | **CONCLUÍDA** | 2026-11-24 | `parte-7: concluída` | `parte-7-concluida` | 73/73 PASS (Detecção Xbox/PS/Switch, Ícones de Botões, Remapeamento, Menus por Gamepad, 1 Teclado 2P) | Seguir para a **Parte 8** (Conteúdo Novo - dinos limitados, seletor de cor com transparência limitada, eventos, PT-BR). |
-| **Parte 8** | Conteúdo Novo (Dinos limitados, Seletor de Cor Completo com transparência limitada, eventos, PT-BR) | **EM ANDAMENTO** | 2026-11-24 | `wip` | — | Base Parte 7 PASS | Implementar seletor de cor avançado com limite mínimo de transparência e novos dinos limitados. |
-| **Parte 9** | Organização do Projeto, Arquivos `.md`, Pastas por Domínio & `docs/INDICE.md` | NÃO INICIADA | — | — | — | — | Aguarda Parte 8 |
+| **Parte 7** | Controles (Gamepad Xbox/PS/Switch + remapeamento + 1 teclado 2P + menus por gamepad) & Multiplayer | **CONCLUÍDA** | 2026-11-24 | `parte-7: concluída` | `parte-7-concluida` | 73/73 PASS (Detecção Xbox/PS/Switch, Ícones de Botões, Remapeamento, Menus por Gamepad, 1 Teclado 2P) | Concluída com sucesso! |
+| **Parte 8** | Conteúdo Novo (Dinos limitados, Seletor de Cor Completo com transparência limitada, eventos, PT-BR) | **CONCLUÍDA** | 2026-11-24 | `parte-8: concluída` | `parte-8-concluida` | 77/77 PASS (Conversões Hex/RGB/HSL, Barreira Anti-Abuso de Transparência >= 35%, Dinos Limitados, PT-BR) | Seguir para a **Parte 9** (Organização do Projeto, Arquivos `.md`, Pastas por Domínio & `docs/INDICE.md`). |
+| **Parte 9** | Organização do Projeto, Arquivos `.md`, Pastas por Domínio & `docs/INDICE.md` | **EM ANDAMENTO** | 2026-11-24 | `wip` | — | Base Parte 8 PASS | Realizar inventário de .mds, arquivar obsoletos em docs/arquivo/, criar docs/INDICE.md e atualizar README.md. |
 | **Parte 10** | Auto-Melhoria Contínua, Segurança/Pentest, Bot QA, CI/CD & Deploy Auditado | NÃO INICIADA | — | — | — | — | Aguarda Parte 9 |
 
 ---
 
-## Detalhamento — Parte 7 (CONCLUÍDA)
-- [x] **Detecção de Gamepads & Ícones Dinâmicos (`src/systems/GamepadHardwareBridge.js`):** Detecção automática de Xbox, PlayStation, Nintendo Switch e Genéricos com conjuntos visuais de botões.
-- [x] **Remapeamento de Controles:** Suporte a remapeamento personalizado e restauração para padrão.
-- [x] **Navegação de Menus por Gamepad:** D-Pad / Analógico com debounce de 180ms para seleção de opções, confirmação e retorno.
-- [x] **1 Teclado para 2 Jogadores:** Mapeamento completo e testado sem conflitos entre P1 e P2.
-- [x] **Testes Automatizados (`tests/parte7_controles_gamepad_multiplayer.test.mjs`):** 4/4 testes 100% aprovados.
+## Detalhamento — Parte 8 (CONCLUÍDA)
+- [x] **8.2 Seletor de Cor Completo & Barreira Anti-Abuso (`src/dinos/AdvancedColorStudio.js`):** Conversão bidirecional entre HEX, RGB e HSL, com garantia matemática de opacidade mínima de 35% (`MIN_OPACITY_THRESHOLD = 0.35`) para impedir trapaça de invisibilidade no multiplayer.
+- [x] **8.1 Dinossauros Limitados e Eventos:** `LIMITED_DINO_CATALOG` verificado com modelos e mecânicas balanceadas.
+- [x] **8.4 Localizações PT-BR e Acessibilidade:** Revisão de chaves em `src/i18n/translations.js`.
+- [x] **Testes Automatizados (`tests/parte8_conteudo_novo_seletor_cor.test.mjs`):** 4/4 testes 100% aprovados.
