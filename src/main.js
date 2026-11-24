@@ -1,3 +1,4 @@
+import './styles/design-tokens.css';
 import './styles/main.css';
 import './styles/menus.css';
 import './styles/controller.css';

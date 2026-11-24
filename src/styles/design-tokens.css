@@ -1,0 +1,281 @@
+/* ==========================================================================
+   DINO DASH 3D — ELITE DESIGN TOKENS & HARDWARE MOTION SYSTEM
+   Padrão Visual: Obsidian Depth (zinc-950) + Jurassic Amber + Emerald/Indigo
+   Zero layouts brutos, hierarquia editorial nítida e aceleração 100% GPU.
+   ========================================================================== */
+
+:root {
+  /* Superfícies com profundidade real (Linear / Stripe / Claude Artifacts craft) */
+  --dd-void: #09090b;
+  --dd-surface-1: rgba(18, 18, 22, 0.86);
+  --dd-surface-2: rgba(27, 27, 33, 0.78);
+  --dd-surface-3: rgba(39, 39, 46, 0.72);
+  --dd-surface-elevated: linear-gradient(180deg, rgba(39, 39, 46, 0.90) 0%, rgba(19, 19, 24, 0.96) 100%);
+  --dd-surface-parchment-dark: linear-gradient(165deg, rgba(34, 26, 18, 0.94) 0%, rgba(17, 14, 12, 0.97) 100%);
+
+  /* Bordas sutis e reflexo especular superior */
+  --dd-border-subtle: rgba(255, 255, 255, 0.085);
+  --dd-border-strong: rgba(255, 255, 255, 0.16);
+  --dd-border-amber: rgba(245, 158, 11, 0.38);
+  --dd-border-emerald: rgba(16, 185, 129, 0.38);
+  --dd-border-indigo: rgba(99, 102, 241, 0.40);
+  --dd-border-crimson: rgba(244, 63, 94, 0.42);
+  --dd-highlight-inset: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+
+  /* Tipografia Editorial Nítida */
+  --dd-font-sans: 'Inter', 'Geist', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --dd-font-display: 'Cinzel', 'Georgia', 'Segoe UI', serif;
+  --dd-font-mono: 'JetBrains Mono', 'Cascadia Code', ui-monospace, monospace;
+  --dd-font-dyslexic: 'OpenDyslexic', 'Comic Sans MS', 'Trebuchet MS', sans-serif;
+
+  --dd-text-primary: #fafafa;
+  --dd-text-secondary: #d4d4d8;
+  --dd-text-muted: #a1a1aa;
+
+  /* Acentos Semânticos com Transparências calibradas */
+  --dd-amber: #f59e0b;
+  --dd-amber-soft: rgba(245, 158, 11, 0.15);
+  --dd-emerald: #10b981;
+  --dd-emerald-soft: rgba(16, 185, 129, 0.15);
+  --dd-indigo: #6366f1;
+  --dd-indigo-soft: rgba(99, 102, 241, 0.16);
+  --dd-violet: #8b5cf6;
+  --dd-violet-soft: rgba(139, 92, 246, 0.16);
+  --dd-crimson: #f43f5e;
+  --dd-crimson-soft: rgba(244, 63, 94, 0.16);
+  --dd-cyan: #06b6d4;
+  --dd-cyan-soft: rgba(6, 182, 212, 0.15);
+
+  /* Curvas Físicas de Motion (Hardware-Accelerated) */
+  --dd-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dd-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dd-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dd-dur-fast: 120ms;
+  --dd-dur-med: 240ms;
+  --dd-dur-slow: 420ms;
+
+  /* Raios e Sombras Profundas */
+  --dd-radius-sm: 10px;
+  --dd-radius-md: 14px;
+  --dd-radius-lg: 20px;
+  --dd-radius-pill: 9999px;
+  --dd-shadow-elevated: 0 18px 44px -12px rgba(0, 0, 0, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --dd-shadow-amber-glow: 0 0 28px rgba(245, 158, 11, 0.28);
+  --dd-shadow-crit-glow: 0 0 42px rgba(250, 204, 21, 0.55);
+}
+
+/* Modos de Acessibilidade (Alto Contraste & Dislexia — Parte 2.7 / 2.4) */
+body.dd-high-contrast {
+  --dd-surface-1: #000000;
+  --dd-surface-2: #0a0a0c;
+  --dd-border-subtle: rgba(255, 255, 255, 0.48);
+  --dd-text-primary: #ffffff;
+  --dd-text-secondary: #fef08a;
+}
+
+body.dd-dyslexia-font,
+body.dd-dyslexia-font * {
+  font-family: var(--dd-font-dyslexic) !important;
+  letter-spacing: 0.035em;
+  line-height: 1.62;
+}
+
+/* Superfícies Reutilizáveis */
+.dd-glass-card {
+  background: var(--dd-surface-elevated);
+  border: 1px solid var(--dd-border-subtle);
+  border-radius: var(--dd-radius-md);
+  box-shadow: var(--dd-shadow-elevated), var(--dd-highlight-inset);
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  color: var(--dd-text-primary);
+}
+
+body.low-spec .dd-glass-card {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(20, 20, 25, 0.96);
+}
+
+/* Botões Táteis com Micro-Interação GPU */
+.dd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 9px 16px;
+  border-radius: var(--dd-radius-sm);
+  border: 1px solid var(--dd-border-strong);
+  background: linear-gradient(180deg, rgba(46, 46, 56, 0.92), rgba(26, 26, 33, 0.96));
+  color: var(--dd-text-primary);
+  font-family: var(--dd-font-sans);
+  font-size: 0.88rem;
+  font-weight: 650;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: var(--dd-highlight-inset), 0 4px 12px rgba(0, 0, 0, 0.35);
+  transition: transform var(--dd-dur-fast) var(--dd-ease-out),
+              opacity var(--dd-dur-fast) ease,
+              border-color var(--dd-dur-fast) ease,
+              background var(--dd-dur-fast) ease;
+  will-change: transform;
+}
+
+.dd-btn:hover:not(:disabled) {
+  transform: translateY(-1.5px);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.dd-btn:active:not(:disabled),
+.dd-btn.is-pressed {
+  transform: scale(0.965) translateY(0);
+}
+
+.dd-btn:focus-visible {
+  outline: 2px solid var(--dd-amber);
+  outline-offset: 2px;
+}
+
+.dd-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dd-btn-primary {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  border-color: rgba(253, 224, 71, 0.55);
+  color: #181004;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 18px rgba(245, 158, 11, 0.28);
+}
+
+.dd-btn-emerald {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.26), rgba(6, 95, 70, 0.48));
+  border-color: var(--dd-border-emerald);
+  color: #a7f3d0;
+}
+
+.dd-btn-indigo {
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.28), rgba(49, 46, 129, 0.52));
+  border-color: var(--dd-border-indigo);
+  color: #e0e7ff;
+}
+
+.dd-btn-crimson {
+  background: linear-gradient(180deg, rgba(244, 63, 94, 0.24), rgba(136, 19, 55, 0.48));
+  border-color: var(--dd-border-crimson);
+  color: #fecdd3;
+}
+
+/* Badges de CD / Modificador / Probabilidade (Parte 2.1 & 2.7) */
+.dd-prob-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: var(--dd-radius-pill);
+  font-family: var(--dd-font-mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+  border: 1px solid var(--dd-border-subtle);
+  background: rgba(9, 9, 11, 0.68);
+}
+.dd-prob-badge.high { border-color: var(--dd-border-emerald); color: #6ee7b7; background: var(--dd-emerald-soft); }
+.dd-prob-badge.mid  { border-color: var(--dd-border-amber);   color: #fcd34d; background: var(--dd-amber-soft); }
+.dd-prob-badge.low  { border-color: var(--dd-border-crimson); color: #fda4af; background: var(--dd-crimson-soft); }
+
+/* Keyframes 100% GPU (transform + opacity apenas) */
+@keyframes ddFadeSlideUp {
+  from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.985); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+
+@keyframes ddPopSpring {
+  0%   { opacity: 0; transform: scale(0.76); }
+  70%  { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ddCritShockwave {
+  0%   { opacity: 0.92; transform: scale(0.55); }
+  100% { opacity: 0; transform: scale(2.15); }
+}
+
+@keyframes ddFumbleShake {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  20%      { transform: translate3d(-7px, 2px, 0) rotate(-1.2deg); }
+  40%      { transform: translate3d(7px, -2px, 0) rotate(1.2deg); }
+  60%      { transform: translate3d(-5px, 1px, 0) rotate(-0.7deg); }
+  80%      { transform: translate3d(4px, -1px, 0) rotate(0.5deg); }
+}
+
+.dd-anim-enter {
+  animation: ddFadeSlideUp var(--dd-dur-med) var(--dd-ease-out) both;
+}
+
+.dd-anim-pop {
+  animation: ddPopSpring 320ms var(--dd-ease-spring) both;
+}
+
+.dd-anim-fumble {
+  animation: ddFumbleShake 380ms ease-out both;
+}
+
+/* Bottom Sheet Responsiva para Mobile & Tablet (tailwind-v4-motion) */
+.dd-bottom-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(4, 4, 7, 0.66);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: ddFadeSlideUp 180ms ease-out both;
+}
+
+.dd-bottom-sheet {
+  width: min(760px, 94vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px;
+}
+
+.dd-sheet-handle {
+  display: none;
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+  margin: 0 auto 12px;
+  touch-action: none;
+}
+
+@media (max-width: 768px) {
+  .dd-bottom-sheet-scrim {
+    align-items: flex-end;
+  }
+  .dd-bottom-sheet {
+    width: 100%;
+    max-height: 88vh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding: 12px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+  .dd-sheet-handle {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-anim-enter,
+  .dd-anim-pop,
+  .dd-anim-fumble,
+  .dd-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}
