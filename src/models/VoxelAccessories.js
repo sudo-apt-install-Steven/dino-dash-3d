@@ -2,6 +2,7 @@
 // Cada acessório vira <= 4 draw calls: standard(vc) / standard metálico(vc) / basic emissivo(vc) / translúcido(vc).
 // Convenção de eixos (igual ao DinoFactory): o dino olha para -Z, costas/cauda em +Z, Y para cima. 1 voxel = 0.1 unidade.
 import * as THREE from 'three';
+import { computeDinoAnchorPoints, resolveAccessoryAnchorKey } from '../dinos/DinoAnchors.js';
 
 export const U = 0.1;
 const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -823,17 +824,43 @@ function detectHeadFrill(headGroup) {
   return found ? { topY: maxTopY, frontZ: minFrontZ } : null;
 }
 
-/** Monta e anexa o acessório (único por ID). Retorna o Group (ou null se desconhecido). */
-export function attachSculptedAccessory(accId, headGroup, torso, torsoW = 0.78, torsoH = 0.72, torsoD = 1.08) {
+/** Monta e anexa o acessório (único por ID) usando o sistema de Pontos de Encaixe por espécie/postura (Parte 1.6). */
+export function attachSculptedAccessory(accId, headGroup, torso, torsoW = 0.78, torsoH = 0.72, torsoD = 1.08, anchorCtx = null) {
   if (!accId || accId === 'none') return null;
   const g = buildGroup(accId);
   if (!g) return null;
   const slot = g.userData.slot;
   const base = g.userData.accessoryId;
-  let parent = torso;
+  const frill = detectHeadFrill(headGroup);
+  const anchors = anchorCtx?.anchors || computeDinoAnchorPoints({
+    bodyId: anchorCtx?.bodyId || 'trex',
+    headId: anchorCtx?.headId || anchorCtx?.bodyId || 'trex',
+    isQuadruped: Boolean(anchorCtx?.isQuadruped),
+    isAquatic: Boolean(anchorCtx?.isAquatic),
+    isFlying: Boolean(anchorCtx?.isFlying),
+    torsoW,
+    torsoH,
+    torsoD,
+    neckLen: anchorCtx?.neckLen ?? 0.48,
+    headW: anchorCtx?.headW ?? 0.66,
+    headH: anchorCtx?.headH ?? 0.52,
+    headD: anchorCtx?.headD ?? 0.78,
+    hasFrill: Boolean(frill),
+    frillTopY: frill?.topY ?? 0.87,
+    frillFrontZ: frill?.frontZ ?? 0.06
+  });
+
+  const anchorKey = resolveAccessoryAnchorKey(slot, base);
+  const anchor = anchors[anchorKey] || anchors[slot] || anchors.back;
+  const parentMap = {
+    headGroup,
+    neckPivot: anchorCtx?.neckPivot || torso,
+    torso
+  };
+  let parent = parentMap[anchor.parentKey] || torso;
+
   if (slot === 'head') {
     parent = headGroup;
-    const frill = detectHeadFrill(headGroup);
     if (frill) {
       if (base === 'halo') {
         g.position.set(0, Math.max(0.62, frill.topY - 0.2), -0.24);
@@ -846,20 +873,22 @@ export function attachSculptedAccessory(accId, headGroup, torso, torsoW = 0.78, 
         g.position.set(0, 0.46, targetZ);
       }
     } else {
-      g.position.set(0, 0.42, -0.18);
+      g.position.set(...anchor.position);
+      g.rotation.set(...anchor.rotation);
+      g.scale.set(...anchor.scale);
+    }
+  } else {
+    g.position.set(...anchor.position);
+    g.rotation.set(...anchor.rotation);
+    g.scale.set(...anchor.scale);
+    // Fallback seguro caso neckPivot não tenha sido informado em chamada legada
+    if (anchorKey === 'neck' && !anchorCtx?.neckPivot) {
+      g.position.set(0, torsoH * 0.44, -torsoD * 0.44);
     }
   }
-  else if (slot === 'face') { parent = headGroup; g.position.set(0, 0.25, -0.59); }
-  else if (slot === 'neck') g.position.set(0, torsoH * 0.4, -torsoD * 0.38);
-  else if (slot === 'back') {
-    if (base === 'turtle_shell') {
-      g.position.set(0, torsoH * 0.6, -torsoD * 0.36);
-    } else {
-      g.position.set(0, torsoH * 0.74, torsoD * 0.1);
-    }
-  }
-  else if (slot === 'shoulders') { g.position.set(0, torsoH * 0.82, 0); g.scale.x = Math.max(0.6, torsoW / 0.78); }
-  else if (slot === 'aura') g.position.set(0, torsoH * 0.5, 0);
+
+  g.userData.anchorKey = anchorKey;
+  g.userData.posture = anchors.posture;
   g.userData.baseY = g.position.y;
   (parent || torso)?.add(g);
   return g;

@@ -350,9 +350,57 @@ export function sanitizeBio(raw, maxLen = 160) {
   return clean;
 }
 
+export function getOAuthRedirectUrl() {
+  if (typeof window === 'undefined' || !window.location) {
+    return 'https://dino-dash-3d-six.vercel.app/';
+  }
+  const { origin, pathname } = window.location;
+  const cleanPath = pathname && pathname !== '/index.html' ? pathname : '/';
+  return `${origin}${cleanPath}`;
+}
+
+export function translateAuthError(rawError, provider = '') {
+  const msg = String(rawError?.message || rawError || '').trim();
+  const lower = msg.toLowerCase();
+  const provLabel = provider === 'google' ? 'Google' : (provider === 'discord' ? 'Discord' : 'OAuth');
+  if (!msg) return 'Erro inesperado na autenticação. Tente novamente.';
+  if (lower.includes('unsupported provider') || lower.includes('provider is not enabled')) {
+    return `O login com ${provLabel} ainda precisa ser ativado no painel do Supabase Auth (veja docs/CONFIGURACAO_OAUTH.md).`;
+  }
+  if (lower.includes('manual linking is disabled') || lower.includes('identity_already_exists')) {
+    return lower.includes('already')
+      ? `Esta conta ${provLabel} já está vinculada a outro perfil.`
+      : 'O vínculo manual de contas precisa estar ativado em Supabase > Auth > Settings > Enable Manual Linking.';
+  }
+  if (lower.includes('invalid login credentials') || lower.includes('invalid_grant')) {
+    return 'E-mail/apelido ou senha inválidos.';
+  }
+  if (lower.includes('email not confirmed')) {
+    return 'Confirme seu e-mail pelo link enviado antes de entrar.';
+  }
+  if (lower.includes('user already registered') || lower.includes('already been registered')) {
+    return 'Este e-mail já está cadastrado. Use a aba Entrar ou Recuperar Senha.';
+  }
+  if (lower.includes('rate limit') || lower.includes('too many requests')) {
+    return 'Muitas tentativas em sequência. Aguarde alguns segundos e tente novamente.';
+  }
+  if (lower.includes('redirect_uri') || lower.includes('redirect url')) {
+    return 'URL de redirecionamento não autorizada no painel do Supabase Auth (adicione localhost e o domínio da Vercel em Redirect URLs).';
+  }
+  if (lower.includes('popup') || lower.includes('access_denied') || lower.includes('cancelled')) {
+    return `Login com ${provLabel} cancelado pelo usuário.`;
+  }
+  if (lower.includes('network') || lower.includes('failed to fetch')) {
+    return 'Sem conexão com o servidor de autenticação. Verifique sua internet.';
+  }
+  return msg;
+}
+
 class AuthProfileSystem {
   constructor() {
     this._cachedUser = null;
+    this._authSub = null;
+    this._lastOAuthStatus = null;
   }
 
   isOnlineConfigured() {
@@ -544,7 +592,7 @@ class AuthProfileSystem {
   async login({ identifier, password }) {
     const idClean = String(identifier ?? '').trim();
     if (!idClean || !password) {
-      return { ok: false, error: 'Informe seu apelido e senha.' };
+      return { ok: false, error: 'Informe seu apelido ou e-mail e senha.' };
     }
 
     const res = await this._invokeNickLogin({
@@ -553,9 +601,31 @@ class AuthProfileSystem {
       password
     });
 
-    if (!res.ok) return res;
-
     const client = getSupabaseClient();
+    if (!res.ok) {
+      // Fallback direto para login por e-mail/senha no Supabase Auth caso o usuário já tenha conta Auth/OAuth com e-mail
+      if (client && idClean.includes('@')) {
+        const emailCheck = validateEmail(idClean);
+        if (emailCheck.ok) {
+          try {
+            const { data, error } = await client.auth.signInWithPassword({
+              email: emailCheck.value,
+              password
+            });
+            if (!error && data?.session) {
+              this._cachedUser = data.user || data.session.user || null;
+              await this.syncProfileFromCloud();
+              return { ok: true, nickname: this.getLocalProfile().nickname };
+            }
+            if (error) return { ok: false, error: translateAuthError(error) };
+          } catch (err) {
+            return { ok: false, error: translateAuthError(err) };
+          }
+        }
+      }
+      return { ok: false, error: translateAuthError(res.error) };
+    }
+
     if (client && res.session?.access_token && res.session?.refresh_token) {
       await client.auth.setSession(res.session);
       await this.getCurrentSession();
@@ -576,53 +646,214 @@ class AuthProfileSystem {
     if (!idClean) {
       return { ok: false, error: 'Informe seu apelido ou e-mail.' };
     }
-    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
-    return await this._invokeNickLogin({
+    const redirectTo = getOAuthRedirectUrl();
+    const res = await this._invokeNickLogin({
       action: 'recover_password',
       identifier: idClean,
       redirectTo
     });
+    if (!res.ok && idClean.includes('@')) {
+      const client = getSupabaseClient();
+      const emailCheck = validateEmail(idClean);
+      if (client && emailCheck.ok) {
+        try {
+          const { error } = await client.auth.resetPasswordForEmail(emailCheck.value, { redirectTo });
+          if (error) return { ok: false, error: translateAuthError(error) };
+          return { ok: true, message: 'Se o e-mail existir, enviamos um link de recuperação de senha.' };
+        } catch (err) {
+          return { ok: false, error: translateAuthError(err) };
+        }
+      }
+    }
+    return res.ok ? res : { ok: false, error: translateAuthError(res.error) };
+  }
+
+  getLinkedIdentities(user = this._cachedUser) {
+    const list = Array.isArray(user?.identities) ? user.identities : [];
+    const providers = Array.from(new Set(list.map((i) => String(i?.provider || '').toLowerCase()).filter(Boolean)));
+    const appProv = String(user?.app_metadata?.provider || '').toLowerCase();
+    if (appProv && !providers.includes(appProv)) providers.push(appProv);
+    return {
+      google: providers.includes('google'),
+      discord: providers.includes('discord'),
+      email: providers.includes('email'),
+      providers
+    };
+  }
+
+  consumeLastOAuthStatus() {
+    const v = this._lastOAuthStatus;
+    this._lastOAuthStatus = null;
+    return v;
+  }
+
+  async initOAuthCallbackListener(onAuthUpdated = null) {
+    const client = getSupabaseClient();
+    if (!client) return null;
+
+    // Captura erros retornados na URL por provedores OAuth (Google/Discord)
+    if (typeof window !== 'undefined' && window.location) {
+      const url = new URL(window.location.href);
+      const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+      const errMsg = url.searchParams.get('error_description')
+        || hashParams.get('error_description')
+        || url.searchParams.get('error')
+        || hashParams.get('error');
+      if (errMsg) {
+        this._lastOAuthStatus = { ok: false, message: translateAuthError(errMsg) };
+        url.searchParams.delete('error');
+        url.searchParams.delete('error_code');
+        url.searchParams.delete('error_description');
+        try { window.history.replaceState({}, document.title, url.pathname + url.search); } catch {}
+      }
+
+      // PKCE code exchange explícito (garante funcionamento em localhost e Vercel)
+      const code = url.searchParams.get('code');
+      if (code && typeof client.auth.exchangeCodeForSession === 'function') {
+        try {
+          const { data, error } = await client.auth.exchangeCodeForSession(code);
+          if (error) {
+            this._lastOAuthStatus = { ok: false, message: translateAuthError(error) };
+          } else if (data?.session?.user) {
+            this._cachedUser = data.session.user;
+            this._lastOAuthStatus = { ok: true, message: 'Conta conectada com sucesso!' };
+            await this._postOAuthSync(data.session.user);
+            onAuthUpdated?.(data.session.user);
+          }
+        } catch (err) {
+          this._lastOAuthStatus = { ok: false, message: translateAuthError(err) };
+        } finally {
+          url.searchParams.delete('code');
+          url.searchParams.delete('state');
+          try { window.history.replaceState({}, document.title, url.pathname + (url.search || '')); } catch {}
+        }
+      }
+    }
+
+    if (!this._authSub && typeof client.auth.onAuthStateChange === 'function') {
+      const { data } = client.auth.onAuthStateChange(async (event, session) => {
+        this._cachedUser = session?.user || null;
+        if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+          await this._postOAuthSync(session.user);
+          onAuthUpdated?.(session.user);
+        } else if (event === 'SIGNED_OUT') {
+          onAuthUpdated?.(null);
+        }
+      });
+      this._authSub = data?.subscription || null;
+    }
+
+    await this.getCurrentSession();
+    return this._cachedUser;
+  }
+
+  async _postOAuthSync(user) {
+    if (!user) return;
+    const synced = await this.syncProfileFromCloud();
+    if (!synced?.profile) {
+      // Primeiro login OAuth: garante apelido divertido válido e migra o progresso local
+      const metaName = String(user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.preferred_username || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 14);
+      const localNick = this.getLocalProfile().nickname;
+      const candidate = validateNickname(localNick).ok
+        ? localNick
+        : (validateNickname(metaName).ok ? metaName : `Dino${user.id.slice(0, 6)}`);
+      if (!Save.data.profile) Save.data.profile = {};
+      Save.data.profile.nickname = candidate;
+      if (!Save.data.network) Save.data.network = {};
+      Save.data.network.nickname = candidate;
+      Save.save();
+      await this.migrateGuestProgressToAccount().catch(() => {});
+    }
   }
 
   async signInWithOAuth(provider) {
     const client = getSupabaseClient();
-    if (!client) return { ok: false, error: 'Supabase não configurado.' };
+    if (!client) return { ok: false, error: 'Serviço de contas online (Supabase) não configurado neste ambiente.' };
     if (!['google', 'discord'].includes(provider)) {
       return { ok: false, error: 'Provedor OAuth não suportado.' };
     }
     try {
-      const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
-      const { data, error } = await client.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo }
-      });
-      if (error) return { ok: false, error: error.message };
-      return { ok: true, url: data?.url };
+      const redirectTo = getOAuthRedirectUrl();
+      const options = {
+        redirectTo,
+        ...(provider === 'google' ? { queryParams: { prompt: 'select_account' } } : {})
+      };
+      const { data, error } = await client.auth.signInWithOAuth({ provider, options });
+      if (error) return { ok: false, error: translateAuthError(error, provider) };
+      if (!data?.url) {
+        return { ok: false, error: translateAuthError('provider is not enabled', provider) };
+      }
+      return { ok: true, url: data.url };
     } catch (err) {
-      return { ok: false, error: err?.message || 'Erro ao iniciar OAuth.' };
+      return { ok: false, error: translateAuthError(err, provider) };
     }
   }
 
   async linkOAuthIdentity(provider) {
     const client = getSupabaseClient();
-    if (!client) return { ok: false, error: 'Supabase não configurado.' };
+    if (!client) return { ok: false, error: 'Serviço de contas online (Supabase) não configurado neste ambiente.' };
     if (!['google', 'discord'].includes(provider)) {
       return { ok: false, error: 'Provedor inválido.' };
     }
+    const user = await this.getCurrentUser();
+    if (!user) {
+      return { ok: false, error: 'Faça login primeiro para vincular Google ou Discord à sua conta.' };
+    }
+    const linked = this.getLinkedIdentities(user);
+    if (linked[provider]) {
+      return { ok: true, alreadyLinked: true, message: `${provider === 'google' ? 'Google' : 'Discord'} já está vinculado a esta conta!` };
+    }
     try {
       if (typeof client.auth.linkIdentity === 'function') {
-        const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+        const redirectTo = getOAuthRedirectUrl();
         const { data, error } = await client.auth.linkIdentity({
           provider,
           options: { redirectTo }
         });
-        if (error) return { ok: false, error: error.message };
+        if (error) return { ok: false, error: translateAuthError(error, provider) };
         return { ok: true, url: data?.url };
       }
       return await this.signInWithOAuth(provider);
     } catch (err) {
-      return { ok: false, error: err?.message || 'Não foi possível vincular conta.' };
+      return { ok: false, error: translateAuthError(err, provider) };
     }
+  }
+
+  exportPersonalDataLGPD() {
+    const pkg = Save.exportSavePackage();
+    const prof = this.getLocalProfile();
+    const stats = this.getStatsSnapshot();
+    const linked = this.getLinkedIdentities(this._cachedUser);
+    const payload = {
+      schema: 'dino-dash-3d-lgpd-export-v1',
+      exportedAt: new Date().toISOString(),
+      legalBasis: 'LGPD Art. 18 (Portabilidade e Acesso aos Dados)',
+      account: this._cachedUser ? {
+        id: this._cachedUser.id,
+        providers: linked.providers,
+        email: this._cachedUser.email && !this._cachedUser.email.endsWith('@player.dinodash.internal')
+          ? this._cachedUser.email
+          : null
+      } : { mode: 'guest_local' },
+      profile: prof,
+      stats,
+      saveData: pkg.data
+    };
+    const json = JSON.stringify(payload, null, 2);
+    if (typeof document !== 'undefined' && typeof Blob !== 'undefined') {
+      const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dino-dash-3d-dados-lgpd-${prof.nickname.toLowerCase()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        a.remove();
+        URL.revokeObjectURL(url);
+      }, 250);
+    }
+    return { ok: true, payload };
   }
 
   async logout(scope = 'local') {
@@ -633,7 +864,7 @@ class AuthProfileSystem {
       this._cachedUser = null;
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: err?.message || 'Erro ao sair.' };
+      return { ok: false, error: translateAuthError(err) };
     }
   }
 

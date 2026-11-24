@@ -4,6 +4,7 @@ import './styles/controller.css';
 import './styles/modes3d.css';
 import { Game } from './game/Game.js';
 import { Save } from './systems/Save.js';
+import { AuthProfile } from './systems/AuthProfile.js';
 import { PerfMonitor } from './systems/PerfMonitor.js';
 import { Telemetry } from './systems/Telemetry.js';
 import { applyDomLanguage } from './i18n/translations.js';
@@ -134,6 +135,14 @@ function showSplashAndBoot() {
   requestAnimationFrame(() => {
     const game = new Game(canvas, uiRoot);
     window.__DINO_DASH_GAME__ = game;
+    AuthProfile.initOAuthCallbackListener((user) => {
+      if (game.state === 'menu') {
+        game.ui?.refreshMainMenuIfIdle?.();
+      }
+      if (user) {
+        game.ui?.hud?.showBanner?.(`☁️ Conta conectada: @${AuthProfile.getLocalProfile().nickname}`, '#34d399', 3.2);
+      }
+    }).catch(() => {});
     Save.hydrateAsync().then((restored) => {
       if (restored && game.state === 'menu') {
         game.rebuildPlayers?.();

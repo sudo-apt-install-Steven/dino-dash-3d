@@ -5,6 +5,7 @@ import { getDinoSpec } from './DinoCatalog.js';
 import { applySkinVariantToColors, getMutationActiveLevel, getMutationComputedProfile } from './DinoCustomization.js';
 import { buildClaudeAccessoryGroup } from '../models/ClaudeVoxelModels.js';
 import { attachSculptedAccessory, buildSculptedAccessoryStandalone, getAccessorySlot } from '../models/VoxelAccessories.js';
+import { computeDinoAnchorPoints } from './DinoAnchors.js';
 import { LIMITED_BODY_SPECS, applyLimitedDinoDetails } from '../models/LimitedDinoModels.js';
 
 const AQUATIC_SPECIES = ['mosasaurus', 'elasmosaurus', 'dunkleosteus', 'liopleurodon', 'plesiosaurus', 'kronosaurus', 'archelon', 'abissal_espectral'];
@@ -794,8 +795,40 @@ export class DinoFactory {
       if (slot) usedSlots.add(slot);
       accList.push(accId);
     }
+    // Sistema de Pontos de Encaixe por espécie e postura (Parte 1.6)
+    const anchors = computeDinoAnchorPoints({
+      bodyId,
+      headId,
+      isQuadruped,
+      isAquatic,
+      isFlying,
+      torsoW,
+      torsoH,
+      torsoD,
+      neckLen,
+      headW,
+      headH,
+      headD,
+      hasFrill: Boolean(headGroup.userData?.hasFrill),
+      frillTopY: headGroup.userData?.frillTopY,
+      frillFrontZ: headGroup.userData?.frillFrontZ
+    });
+    const anchorCtx = {
+      anchors,
+      neckPivot,
+      bodyId,
+      headId,
+      isQuadruped,
+      isAquatic,
+      isFlying,
+      neckLen,
+      headW,
+      headH,
+      headD
+    };
+
     for (const accId of accList) {
-      const sculpted = attachSculptedAccessory(accId, headGroup, torso, torsoW, torsoH, torsoD);
+      const sculpted = attachSculptedAccessory(accId, headGroup, torso, torsoW, torsoH, torsoD, anchorCtx);
       if (!sculpted) {
         DinoFactory._attachAccessory(accId, headGroup, torso, torsoW, torsoH, torsoD);
       }
@@ -811,7 +844,7 @@ export class DinoFactory {
       isFlying
     });
     if (customConfig?.partyCrown && !accList.includes('crown') && !usedSlots.has('head')) {
-      const sculptedCrown = attachSculptedAccessory('crown', headGroup, torso, torsoW, torsoH, torsoD);
+      const sculptedCrown = attachSculptedAccessory('crown', headGroup, torso, torsoW, torsoH, torsoD, anchorCtx);
       if (!sculptedCrown) {
         DinoFactory._attachAccessory('crown', headGroup, torso, torsoW, torsoH, torsoD);
       }
@@ -851,6 +884,8 @@ export class DinoFactory {
       armR,
       extraLegs,
       bodyId,
+      anchors,
+      posture: anchors.posture,
       isQuadruped,
       isAquatic,
       isFlying,

@@ -171,6 +171,12 @@ export class ProfileModal {
     const render = async () => {
       cleanupAvatar();
       currentUser = await AuthProfile.getCurrentUser();
+      const oauthNotice = AuthProfile.consumeLastOAuthStatus?.();
+      if (oauthNotice && !statusMsg) {
+        statusTone = oauthNotice.ok ? '#6ee7b7' : '#fca5a5';
+        statusMsg = oauthNotice.ok ? `✅ ${oauthNotice.message}` : `⚠️ ${oauthNotice.message}`;
+      }
+      const linked = AuthProfile.getLinkedIdentities?.(currentUser) || { google: false, discord: false, email: false, providers: [] };
       const prof = AuthProfile.getLocalProfile();
       const stats = AuthProfile.getStatsSnapshot();
       const favSpec = getDinoSpec(stats.favoriteDino);
@@ -307,10 +313,12 @@ export class ProfileModal {
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
                       <button type="button" class="chunky-btn" id="prof-sync-now" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('rotate', { size: 14 })} Migrar / Sincronizar Progresso Local</button>
-                      <button type="button" class="chunky-btn secondary" id="prof-link-google" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('key', { size: 14 })} Vincular Google</button>
-                      <button type="button" class="chunky-btn secondary" id="prof-link-discord" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('multiplayer', { size: 14 })} Vincular Discord</button>
+                      <button type="button" class="chunky-btn ${linked.google ? '' : 'secondary'}" id="prof-link-google" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('cloud', { size: 14 })} ${linked.google ? 'Google Vinculado ✓' : 'Vincular Google'}</button>
+                      <button type="button" class="chunky-btn ${linked.discord ? '' : 'secondary'}" id="prof-link-discord" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('multiplayer', { size: 14 })} ${linked.discord ? 'Discord Vinculado ✓' : 'Vincular Discord'}</button>
+                      <button type="button" class="chunky-btn secondary" id="prof-export-lgpd" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('save', { size: 14 })} Exportar Dados (LGPD)</button>
                       <button type="button" class="chunky-btn secondary" id="prof-logout-local" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('close', { size: 13 })} Sair</button>
                       <button type="button" class="chunky-btn orange" id="prof-logout-all" style="min-height:44px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('close', { size: 13 })} Sair (Todos Dispositivos)</button>
+                      <button type="button" class="chunky-btn secondary" id="prof-delete-account" style="min-height:44px; border-color:#ef4444; color:#fca5a5; display:inline-flex; align-items:center; gap:5px;">${uiIcon('warning', { size: 14, color: '#fca5a5' })} Excluir Conta</button>
                     </div>
                   </div>
                 ` : `
@@ -318,7 +326,8 @@ export class ProfileModal {
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                       <div class="tabs-row" style="gap:6px;">
                         <button type="button" class="tab-btn ${authSubTab === 'login' ? 'active' : ''}" data-asub="login" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('key', { size: 14 })} Entrar</button>
-                        <button type="button" class="tab-btn ${authSubTab === 'register' ? 'active' : ''}" data-asub="register" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('sparkle', { size: 14 })} Criar Conta (Sem E-mail)</button>
+                        <button type="button" class="tab-btn ${authSubTab === 'register' ? 'active' : ''}" data-asub="register" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('sparkle', { size: 14 })} Criar Conta</button>
+                        <button type="button" class="tab-btn ${authSubTab === 'recover' ? 'active' : ''}" data-asub="recover" style="min-height:42px; display:inline-flex; align-items:center; gap:5px;">${uiIcon('rotate', { size: 14 })} Recuperar Senha</button>
                       </div>
                       <span class="hud-pill" style="font-size:0.72rem; color:#fde68a; border-color:rgba(251,191,36,0.45); display:inline-flex; align-items:center; gap:4px;">${uiIcon('shield', { size: 13, color: '#fde68a' })} Limite de segurança: 1 conta por PC/navegador</span>
                     </div>
@@ -326,14 +335,27 @@ export class ProfileModal {
                     ${authSubTab === 'login' ? `
                       <form id="auth-login-form" style="display:flex; flex-direction:column; gap:8px;">
                         <label style="display:flex; flex-direction:column; gap:3px; font-size:0.78rem; color:#e5d3bc;">
-                          <span>Apelido (Nick)</span>
-                          <input type="text" id="auth-login-id" class="text-input" maxlength="64" autocomplete="username" placeholder="Seu apelido (ex: RexAlfa99)" value="${escapeHtml(AuthProfile.getLocalCreatedAccountNick() || '')}" required />
+                          <span>Apelido (Nick) ou E-mail</span>
+                          <input type="text" id="auth-login-id" class="text-input" maxlength="160" autocomplete="username" placeholder="Seu apelido ou e-mail (ex: RexAlfa99 ou voce@email.com)" value="${escapeHtml(AuthProfile.getLocalCreatedAccountNick() || '')}" required />
                         </label>
                         <label style="display:flex; flex-direction:column; gap:3px; font-size:0.78rem; color:#e5d3bc;">
                           <span>Senha</span>
                           <input type="password" id="auth-login-pw" class="text-input" autocomplete="current-password" placeholder="Sua senha" required />
                         </label>
                         <button type="submit" class="chunky-btn" id="auth-login-submit" style="min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">${uiIcon('key', { size: 15 })} Entrar na Conta</button>
+                      </form>
+                    ` : ''}
+
+                    ${authSubTab === 'recover' ? `
+                      <form id="auth-recover-form" style="display:flex; flex-direction:column; gap:8px;">
+                        <div style="font-size:0.78rem; color:#fde68a; background:rgba(245,158,11,0.12); border:1px solid rgba(251,191,36,0.35); border-radius:10px; padding:8px 10px;">
+                          Informe o <strong>e-mail</strong> (ou apelido vinculado a um e-mail) para receber um link seguro de redefinição de senha.
+                        </div>
+                        <label style="display:flex; flex-direction:column; gap:3px; font-size:0.78rem; color:#e5d3bc;">
+                          <span>E-mail ou Apelido</span>
+                          <input type="text" id="auth-recover-id" class="text-input" maxlength="160" placeholder="voce@email.com ou SeuApelido" required />
+                        </label>
+                        <button type="submit" class="chunky-btn" id="auth-recover-submit" style="min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:6px;">${uiIcon('rotate', { size: 15 })} Enviar Link de Recuperação</button>
                       </form>
                     ` : ''}
 
@@ -359,6 +381,10 @@ export class ProfileModal {
                               <span id="auth-nick-status" style="font-size:0.75rem; font-weight:800; color:#94a3b8;">Digite seu apelido...</span>
                             </div>
                             <input type="text" id="auth-reg-nick" class="text-input" maxlength="16" autocomplete="username" placeholder="Ex: RaptorEstelar" required />
+                          </label>
+                          <label style="display:flex; flex-direction:column; gap:4px; font-size:0.78rem; color:#e5d3bc;">
+                            <span>E-mail (opcional — permite login por e-mail e recuperação de senha)</span>
+                            <input type="email" id="auth-reg-email" class="text-input" maxlength="160" autocomplete="email" placeholder="voce@email.com (opcional)" />
                           </label>
                           <label style="display:flex; flex-direction:column; gap:4px; font-size:0.78rem; color:#e5d3bc;">
                             <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; flex-wrap:wrap;">
@@ -572,14 +598,26 @@ export class ProfileModal {
         if (btn) btn.disabled = true;
         const res = await AuthProfile.register({
           nickname: container.querySelector('#auth-reg-nick')?.value || '',
+          email: container.querySelector('#auth-reg-email')?.value || '',
           password: container.querySelector('#auth-reg-pw')?.value || '',
           confirmPassword: container.querySelector('#auth-reg-pw2')?.value || '',
           acceptTerms: !!container.querySelector('#auth-reg-terms')?.checked,
           isMinorConsent: !!container.querySelector('#auth-reg-minor')?.checked
         });
         statusTone = res.ok ? '#6ee7b7' : '#fca5a5';
-        statusMsg = res.ok ? `✅ ${res.message}` : `⚠️ ${res.error}`;
+        statusMsg = res.ok ? `✅ ${res.message || 'Conta criada com sucesso!'}` : `⚠️ ${res.error}`;
         if (res.ok) onProfileUpdated?.();
+        render();
+      });
+
+      container.querySelector('#auth-recover-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = container.querySelector('#auth-recover-submit');
+        if (btn) btn.disabled = true;
+        const identifier = container.querySelector('#auth-recover-id')?.value || '';
+        const res = await AuthProfile.recoverPassword(identifier);
+        statusTone = res.ok ? '#6ee7b7' : '#fca5a5';
+        statusMsg = res.ok ? `✅ ${res.message || 'Solicitação de recuperação enviada!'}` : `⚠️ ${res.error}`;
         render();
       });
 
@@ -600,11 +638,28 @@ export class ProfileModal {
       });
       container.querySelector('#prof-link-google')?.addEventListener('click', async () => {
         const res = await AuthProfile.linkOAuthIdentity('google');
-        if (!res.ok) { statusTone = '#fca5a5'; statusMsg = `⚠️ ${res.error}`; render(); }
+        if (res.alreadyLinked) { statusTone = '#6ee7b7'; statusMsg = `✅ ${res.message}`; render(); }
+        else if (!res.ok) { statusTone = '#fca5a5'; statusMsg = `⚠️ ${res.error}`; render(); }
       });
       container.querySelector('#prof-link-discord')?.addEventListener('click', async () => {
         const res = await AuthProfile.linkOAuthIdentity('discord');
-        if (!res.ok) { statusTone = '#fca5a5'; statusMsg = `⚠️ ${res.error}`; render(); }
+        if (res.alreadyLinked) { statusTone = '#6ee7b7'; statusMsg = `✅ ${res.message}`; render(); }
+        else if (!res.ok) { statusTone = '#fca5a5'; statusMsg = `⚠️ ${res.error}`; render(); }
+      });
+      container.querySelector('#prof-export-lgpd')?.addEventListener('click', () => {
+        AuthProfile.exportPersonalDataLGPD();
+        statusTone = '#6ee7b7';
+        statusMsg = '✅ Seus dados pessoais e progresso (LGPD Art. 18) foram exportados em JSON!';
+        render();
+      });
+      container.querySelector('#prof-delete-account')?.addEventListener('click', async () => {
+        const confirmed = typeof window === 'undefined' || window.confirm('Tem certeza que deseja EXCLUIR PERMANENTEMENTE sua conta e todos os dados na nuvem e locais (LGPD Art. 18)? Esta ação não pode ser desfeita.');
+        if (!confirmed) return;
+        const res = await AuthProfile.deleteAccountAndCloudData();
+        statusTone = res.ok ? '#ffd447' : '#fca5a5';
+        statusMsg = res.ok ? `✅ Conta e dados removidos (${res.cloudStatus}).` : `⚠️ ${res.error || 'Falha ao excluir conta.'}`;
+        onProfileUpdated?.();
+        render();
       });
       container.querySelector('#prof-logout-local')?.addEventListener('click', async () => {
         await AuthProfile.logout('local');

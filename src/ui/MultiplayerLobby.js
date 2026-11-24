@@ -10,6 +10,7 @@ import { DINO_CATALOG, getDinoSpec } from '../dinos/DinoCatalog.js';
 import { getActivePreset, getEquippedSkinVariant } from '../dinos/DinoCustomization.js';
 import { DinoPreview3D } from './SelectionScreen.js';
 import { BIOMES, getBiomePreviewMeta } from '../world/Biomes.js';
+import { getBiomeThumbnailUrl } from '../world/BiomePreviewRenderer.js';
 import { DIFFICULTY_PRESETS } from '../game/Difficulty.js';
 import { Save } from '../systems/Save.js';
 import { isMobileDevice } from '../systems/DeviceDetector.js';
@@ -518,11 +519,18 @@ export class MultiplayerLobby {
                       </label>
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
-                      <label style="font-size:0.76rem;">Habitat (Mapa):
+                      <label style="font-size:0.76rem; display:flex; flex-direction:column; gap:4px;">Habitat (Mapa):
                         <select class="select-input" id="mp-biome" style="width:100%;">
                           <option value="random_portal" ${hostBiomeId === 'random_portal' ? 'selected' : ''}>Sorteio / Portais</option>
                           ${BIOMES.map((b) => `<option value="${b.id}" ${hostBiomeId === b.id ? 'selected' : ''}>${b.name}</option>`).join('')}
                         </select>
+                        ${(() => {
+                          const selB = hostBiomeId === 'random_portal'
+                            ? { id: 'random_portal', name: 'Sorteio / Portais' }
+                            : (BIOMES.find((b) => b.id === hostBiomeId) || BIOMES[0]);
+                          const thumb = getBiomeThumbnailUrl(selB);
+                          return thumb ? `<img id="mp-biome-thumb" src="${thumb}" alt="Preview ${escapeHtml(selB.name)}" class="biome-thumb-3d" style="width:100%; height:54px; border-radius:8px; object-fit:cover; border:1px solid rgba(255,255,255,0.18);" />` : '';
+                        })()}
                       </label>
                       <label style="font-size:0.76rem;">Regra de Pausa:
                         <select class="select-input" id="mp-pause-policy" style="width:100%;">
@@ -701,12 +709,18 @@ export class MultiplayerLobby {
                         </div>
                       ` : ''}
                     </div>
-                    <div style="margin-top:4px; padding:6px 10px; border-radius:8px; background:rgba(15,23,42,0.5); border:1px solid #f59e0b; font-size:0.76rem; color:#fde047; display:flex; flex-direction:column; gap:4px;">
-                      <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
-                        <span><strong>${modeLabel}</strong> • ${diffLabel} • ${biomeLabel} • ${room.config?.multiHabitats !== false ? 'Multi-Habitat' : 'Habitat Único'}</span>
-                        <span>${room.config?.uniqueDinos ? `${uiIcon('lock', { size: 12 })} Dinos Únicos` : `${uiIcon('rotate', { size: 12 })} Repetidos OK`} • ${room.config?.allowHybrids !== false ? `${uiIcon('dna', { size: 12 })} Híbridos ON` : 'Sem Híbridos'}</span>
+                    <div style="margin-top:4px; padding:6px 10px; border-radius:8px; background:rgba(15,23,42,0.5); border:1px solid #f59e0b; font-size:0.76rem; color:#fde047; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                      ${(() => {
+                        const roomThumb = getBiomeThumbnailUrl(biomeObj || BIOMES[0]);
+                        return roomThumb ? `<img src="${roomThumb}" alt="Preview ${escapeHtml(biomeLabel)}" class="biome-thumb-3d" style="width:76px; height:40px; border-radius:6px; object-fit:cover; border:1px solid rgba(251,191,36,0.45); flex-shrink:0;" />` : '';
+                      })()}
+                      <div style="flex:1; min-width:200px; display:flex; flex-direction:column; gap:4px;">
+                        <div style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+                          <span><strong>${modeLabel}</strong> • ${diffLabel} • ${biomeLabel} • ${room.config?.multiHabitats !== false ? 'Multi-Habitat' : 'Habitat Único'}</span>
+                          <span>${room.config?.uniqueDinos ? `${uiIcon('lock', { size: 12 })} Dinos Únicos` : `${uiIcon('rotate', { size: 12 })} Repetidos OK`} • ${room.config?.allowHybrids !== false ? `${uiIcon('dna', { size: 12 })} Híbridos ON` : 'Sem Híbridos'}</span>
+                        </div>
+                        <div style="font-size:0.72rem; color:#bae6fd;">${uiIcon('scroll', { size: 12 })} ${escapeHtml(formatRoomRulesChips(room))}</div>
                       </div>
-                      <div style="font-size:0.72rem; color:#bae6fd;">${uiIcon('scroll', { size: 12 })} ${escapeHtml(formatRoomRulesChips(room))}</div>
                     </div>
                     ${highPingPeers.length > 0 ? `
                       <div style="margin-top:4px; padding:4px 8px; border-radius:8px; background:rgba(127,29,29,0.55); border:1px solid #f87171; font-size:0.74rem; color:#fecaca;">
@@ -944,6 +958,21 @@ export class MultiplayerLobby {
       });
 
       if (!connected) {
+        const biomeSelEl = container.querySelector('#mp-biome');
+        const biomeThumbEl = container.querySelector('#mp-biome-thumb');
+        if (biomeSelEl && biomeThumbEl) {
+          biomeSelEl.addEventListener('change', () => {
+            hostBiomeId = biomeSelEl.value;
+            const selB = hostBiomeId === 'random_portal'
+              ? { id: 'random_portal', name: 'Sorteio / Portais' }
+              : (BIOMES.find((b) => b.id === hostBiomeId) || BIOMES[0]);
+            const url = getBiomeThumbnailUrl(selB);
+            if (url) {
+              biomeThumbEl.src = url;
+              biomeThumbEl.alt = `Preview ${selB.name}`;
+            }
+          });
+        }
         const captureFormInputs = () => {
           const nickEl = container.querySelector('#mp-nick') || container.querySelector('#mp-join-nick');
           if (nickEl) nickname = String(nickEl.value || '').slice(0, 18);

@@ -2,6 +2,7 @@
 // Cidade Pré-Histórica (Hub), Missões, Conquistas, Passe de Temporada e Recordes.
 import { GAME_MODES, STORY_CHAPTERS } from '../game/Modes.js';
 import { BIOMES, getBiomePreviewMeta } from '../world/Biomes.js';
+import { renderBiomeThumbnailsBatch, getBiomeThumbnailUrl } from '../world/BiomePreviewRenderer.js';
 import { DIFFICULTY_PRESETS } from '../game/Difficulty.js';
 import { EVENT_CATALOG } from '../events/EventManager.js';
 import { DINO_CATALOG } from '../dinos/DinoCatalog.js';
@@ -1060,6 +1061,8 @@ export class Menus {
     const ultraCount = BIOMES.filter((b) => b.tier === 'ultra').length;
     const render = () => {
       const list = BIOMES.filter((b) => b.tier === tab);
+      const portalThumb = getBiomeThumbnailUrl({ id: 'random_portal', name: 'Portais Dinâmicos' });
+      const thumbMap = renderBiomeThumbnailsBatch(list);
       container.innerHTML = `
         <div class="overlay-center">
           <div class="chunky-panel modal-card">
@@ -1072,10 +1075,13 @@ export class Menus {
               <input type="checkbox" id="map-seq" ${sequenceMode ? 'checked' : ''} />
             </div>
             <div class="item-card ${selectedBiome === 'random_portal' ? 'selected' : ''}" style="border-color:#a855f7; background:linear-gradient(135deg, rgba(30,27,75,0.75), rgba(88,28,135,0.45));">
-              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                <div>
-                  <strong style="color:#e9d5ff;">${uiIcon('sparkle', { size: 15, color: '#e9d5ff' })} Modo Aleatório (Portais Dinâmicos)</strong>
-                  <p style="font-size:0.8rem; color:#ddd6fe; margin:2px 0 0;">Sorteia o bioma inicial e abre portais aleatórios a cada ~1.050 pts (Terra, Água, Céu, Futuro &amp; Terra Oca)!</p>
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:220px;">
+                  ${portalThumb ? `<img src="${portalThumb}" alt="Preview 3D Portais Dinâmicos" class="biome-thumb-3d" style="width:96px; height:52px; border-radius:8px; object-fit:cover; border:1px solid rgba(192,132,252,0.55); flex-shrink:0;" />` : ''}
+                  <div>
+                    <strong style="color:#e9d5ff;">${uiIcon('sparkle', { size: 15, color: '#e9d5ff' })} Modo Aleatório (Portais Dinâmicos)</strong>
+                    <p style="font-size:0.8rem; color:#ddd6fe; margin:2px 0 0;">Sorteia o bioma inicial e abre portais aleatórios a cada ~1.050 pts (Terra, Água, Céu, Futuro &amp; Terra Oca)!</p>
+                  </div>
                 </div>
                 <button class="chunky-btn ${selectedBiome === 'random_portal' ? '' : 'secondary'}" data-pick-biome="random_portal">
                   ${selectedBiome === 'random_portal' ? 'Ativo' : 'Ativar Portais'}
@@ -1090,11 +1096,12 @@ export class Menus {
             <div class="cards-grid">
               ${list.map((b) => {
                 const meta = getBiomePreviewMeta(b);
+                const thumbUrl = thumbMap.get(b.id) || '';
                 return `
                   <div class="item-card ${b.id === selectedBiome ? 'selected' : ''}">
-                    <div style="height:36px; border-radius:8px; position:relative; overflow:hidden; border:1px solid ${b.theme?.edgeGlow || 'rgba(255,255,255,0.2)'}; background:linear-gradient(180deg, ${b.theme.sky} 0%, ${b.theme.track} 62%, ${b.theme.river} 100%); display:flex; align-items:center; justify-content:space-between; padding:0 8px;">
-                      <span style="font-size:0.72rem; font-weight:800; background:rgba(9,9,11,0.72); color:#fafaf9; padding:2px 7px; border-radius:999px; display:inline-flex; align-items:center; gap:4px;">${uiIcon('compass', { size: 12 })} ${meta.tag}</span>
-                      <span style="width:12px; height:12px; border-radius:50%; background:${b.theme?.edgeGlow || '#ffd447'}; box-shadow:0 0 8px ${b.theme?.edgeGlow || '#ffd447'};"></span>
+                    <div class="biome-preview-frame" style="height:86px; border-radius:10px; position:relative; overflow:hidden; border:1px solid ${b.theme?.edgeGlow || 'rgba(255,255,255,0.2)'}; background:${b.theme?.sky || '#18181b'};">
+                      ${thumbUrl ? `<img src="${thumbUrl}" alt="Cenário 3D ${escapeHtml(b.name)}" class="biome-thumb-3d" style="width:100%; height:100%; object-fit:cover; display:block;" />` : ''}
+                      <span style="position:absolute; left:7px; bottom:6px; font-size:0.7rem; font-weight:800; background:rgba(9,9,11,0.78); color:#fafaf9; padding:2px 8px; border-radius:999px; border:1px solid rgba(255,255,255,0.16); display:inline-flex; align-items:center; gap:4px; backdrop-filter:blur(4px);">${uiIcon('compass', { size: 11 })} ${meta.tag}</span>
                     </div>
                     <strong>${b.name}</strong>
                     <p style="font-size:0.8rem; color:#d8c2a6; flex:1;">${b.ruleDesc}</p>

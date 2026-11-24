@@ -12,6 +12,12 @@ export function getSupabaseClient() {
   if (!url || !key || url.includes('SEU-PROJETO')) return null;
   try {
     _client = createClient(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce'
+      },
       realtime: { params: { eventsPerSecond: 20 } }
     });
     return _client;
