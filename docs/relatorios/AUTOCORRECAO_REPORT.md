@@ -30,5 +30,11 @@ Alvo: `D:\Dino 3D` (Branch `atualizacao-grande`)
   - Budget de performance rigorosamente respeitado: chunk JS de 699.3 KB <= 1050 KB e CSS de 85.9 KB <= 100 KB.
   - Build de produção gerado em 800ms sem erros.
 
-## 2. Status Final da Atualização
-Todas as 10 Partes do plano estão implementadas, testadas e commitadas com suas respectivas tags canônicas.
+## 2. Rodada Adicional — Revisão Independente de Design, Motion, Ilustração 2D & Animação 3D
+- **Achado 1 (Mapa SVG com emojis simples):** Substituído em `src/modes/TabletopIllustratedMap.js` e `src/rpg/IllustratedMap2D.js` por continente Bezier desenhado à mão, rio sinuoso, relevos cartográficos, glifos vetoriais próprios (zero emojis), rosa dos ventos e *Fog of War* radial.
+- **Achado 2 (Boss bloco quadrado e criatura vermelha primitiva no Mundo Aberto):** Substituídos diretamente em `src/modes/AdventureOpenMode.js` via `src/openworld/OpenWorldSculptedModels.js` (*Ignisaur, Titã de Basalto*, *Dracopelta Escarlate*, *Parasauro Crista-Celeste* e *Filhote Articulado*) com animação procedural a 60 FPS.
+- **Achado 3 (Integração visual ao vivo do Estúdio de Cor, Ícones Gamepad e Arena X1):** Integrados ao vivo em `CustomizationScreen.js` + `DinoFactory.js` (`ColorStudioPicker` com piso anti-invisibilidade `>= 35%` solo / `>= 65%` multiplayer), `SettingsModal.js` (`GamepadVisuals` SVG Xbox/PS/Switch) e `ArenaX1Mode.js` (`DinoWeapons`, gaveta de `Combos` e `Modo Família`), além do Design System `src/styles/design-tokens.css` + `src/ui/MotionEngine.js` e `src/rpg/SceneIllustrator2D.js`.
+- **Validação Pós-Correção:** **101/101 testes automatizados PASS**, `vite build` em `783ms` (0 erros), `test:budget` PASS (`721.5 KB` JS / `91.6 KB` CSS) e Playwright E2E Visual com `0` erros de console/página.
+
+## 3. Status Final da Atualização
+Todas as 10 Partes do plano estão implementadas, integradas visualmente nas telas reais, testadas e commitadas com suas respectivas tags canônicas.
