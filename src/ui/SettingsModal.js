@@ -4,6 +4,7 @@ import { OrientationManager } from '../systems/OrientationManager.js';
 import { Telemetry } from '../systems/Telemetry.js';
 import { applyDomLanguage, normalizeLocale } from '../i18n/translations.js';
 import { escapeHtml } from '../security/Sanitize.js';
+import { renderGamepadButtonSVG } from '../systems/GamepadVisuals.js';
 import {
   attachModalHelp,
   renderGameSwitch,
@@ -133,6 +134,21 @@ export class SettingsModal {
           </div>
 
           <div id="stab-controls" class="hidden">
+            <div class="field-row game-field-row" data-opt-tip-host="Escolhe os ícones dos botões de controle exibidos na tela (Xbox, PlayStation ou Switch).">
+              <span class="game-field-label">Ícones de Botões do Gamepad ${renderHelpBadge('Detecta automaticamente o controle conectado ou fixa o padrão Xbox, PlayStation ou Nintendo Switch.')}</span>
+              ${renderGameStepper('set-gp-icons', [
+                { value: 'auto', label: 'Automático' },
+                { value: 'xbox', label: 'Xbox (A B X Y)' },
+                { value: 'playstation', label: 'PlayStation (✕ ○ □ △)' },
+                { value: 'switch', label: 'Switch (B A Y X)' }
+              ], s.gamepadIcons || 'auto')}
+            </div>
+            <div class="field-row" id="set-gp-preview-row" style="gap:8px; justify-content:flex-start; flex-wrap:wrap;">
+              <span style="font-size:0.76rem; color:#a1a1aa;">Prévia de Botões:</span>
+              <span id="set-gp-preview-badges" style="display:inline-flex; gap:6px; align-items:center;">
+                ${['south', 'east', 'west', 'north', 'lb', 'rb'].map((b) => renderGamepadButtonSVG(b, { family: s.gamepadIcons || 'auto', size: 22 })).join('')}
+              </span>
+            </div>
             <div class="field-row game-field-row" data-opt-tip-host="Escolha entre deslizar o dedo na tela ou usar botões direcionais fixos.">
               <span class="game-field-label">📱 Controles no Celular ${renderHelpBadge('Escolha entre deslizar o dedo na tela ou usar botões direcionais fixos.')}</span>
               ${renderGameStepper('set-touchmode', [
@@ -266,6 +282,13 @@ export class SettingsModal {
       s.mpCameraMode = container.querySelector('#set-mp-cam')?.value || 'shared';
       s.narrator = container.querySelector('#set-narrator').checked;
       s.touchMode = container.querySelector('#set-touchmode')?.value || 'swipe';
+      s.gamepadIcons = container.querySelector('#set-gp-icons')?.value || 'auto';
+      const gpPreview = container.querySelector('#set-gp-preview-badges');
+      if (gpPreview) {
+        gpPreview.innerHTML = ['south', 'east', 'west', 'north', 'lb', 'rb']
+          .map((b) => renderGamepadButtonSVG(b, { family: s.gamepadIcons, size: 22 }))
+          .join('');
+      }
       const lh = !!container.querySelector('#set-lefthanded')?.checked;
       if (!s.mobileHudLayout) s.mobileHudLayout = { scale: 1.0, opacity: 0.92, leftHanded: false, positions: {} };
       s.mobileHudLayout.leftHanded = lh;

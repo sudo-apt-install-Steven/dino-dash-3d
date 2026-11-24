@@ -43,6 +43,7 @@ import { DinoPreview3D } from './SelectionScreen.js';
 import { attachModalHelp } from './Menus.js';
 import { renderEggSvg } from './SvgIcons.js';
 import { uiIcon } from './UiIcons.js';
+import { ColorStudioPicker } from './ColorStudioPicker.js';
 import { normalizeLocale } from '../i18n/translations.js';
 
 const SLOT_ICON_MAP = {
@@ -469,6 +470,17 @@ export class CustomizationScreen {
           }).join('') : `<div class="item-card" style="grid-column:1/-1; text-align:center; color:#d8c2a6;">Nenhuma mutação encontrada.</div>`}
         </div>
       ` : subTab === 'colors' ? `
+        <div class="field-row" style="gap:6px; flex-wrap:wrap;">
+          <span>Canal Ativo do Estúdio:</span>
+          <select id="cust-color-channel" class="select-input">
+            <option value="primary">Cor Primária</option>
+            <option value="secondary">Secundária (Barriga)</option>
+            <option value="eye">Cor dos Olhos</option>
+            <option value="spots">Manchas / Listras</option>
+            <option value="spikes">Espinhos / Chifres</option>
+          </select>
+        </div>
+        <div id="cust-color-studio-host" style="margin-bottom:8px;"></div>
         <div class="field-row"><span>Cor Primária</span><input type="color" id="c-primary" value="${preset.primary}" /></div>
         <div class="field-row"><span>Secundária (Barriga)</span><input type="color" id="c-secondary" value="${preset.secondary}" /></div>
         <div class="field-row"><span>Cor dos Olhos</span><input type="color" id="c-eye" value="${preset.eye}" /></div>
@@ -776,6 +788,30 @@ export class CustomizationScreen {
           });
         });
       } else if (subTab === 'colors') {
+        const studioHost = rightEl.querySelector('#cust-color-studio-host');
+        const chanSel = rightEl.querySelector('#cust-color-channel');
+        let activeChannel = chanSel?.value || 'primary';
+        const mountStudio = () => {
+          if (!studioHost) return;
+          new ColorStudioPicker(studioHost, {
+            initialHex: preset[activeChannel] || '#22c55e',
+            initialAlpha: preset.alpha ?? 1,
+            multiplayer: false,
+            onChange: ({ hex, alpha }) => {
+              preset.useCustomColors = true;
+              preset[activeChannel] = hex;
+              preset.alpha = alpha;
+              const nativeInput = rightEl.querySelector(`#c-${activeChannel}`);
+              if (nativeInput) nativeInput.value = hex;
+              refreshPreview();
+            }
+          });
+        };
+        mountStudio();
+        chanSel?.addEventListener('change', () => {
+          activeChannel = chanSel.value;
+          mountStudio();
+        });
         const bind = (id, key) => {
           const el = rightEl.querySelector(id);
           if (el) el.addEventListener('input', () => { preset.useCustomColors = true; preset[key] = el.value; refreshPreview(); });

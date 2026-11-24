@@ -23,6 +23,8 @@ import { buildArenaProps } from '../models/DungeonProps.js';
 import { buildSculptedArenaPillar } from '../models/SculptedWorldProps.js';
 import { uiIcon } from '../ui/UiIcons.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
+import { DINO_WEAPONS_CATALOG, attachWeaponToDinoModel } from '../arena/DinoWeapons.js';
+import { FIGHTING_COMBO_TABLE, getSpeciesSpecialMeta } from '../arena/FightingAnimator.js';
 import { Save } from '../systems/Save.js';
 
 export const X1_ARENAS = [
@@ -194,12 +196,23 @@ export class ArenaX1Mode extends Mode3DBase {
         tint
       });
       this.group.add(avatar.root);
+      const weaponKeys = Object.keys(DINO_WEAPONS_CATALOG);
+      const chosenWeaponId = slot === 0
+        ? (this.selectedWeaponId || 'iron_claws')
+        : weaponKeys[(slot + this.arenaIdx) % weaponKeys.length];
+      const wSpec = DINO_WEAPONS_CATALOG[chosenWeaponId] || null;
+      if (avatar.model && wSpec) {
+        attachWeaponToDinoModel(avatar.model, chosenWeaponId);
+      }
       const maxHp = 110 + (spec?.stats?.hp || 4) * 14;
-      const atk = 11 + (spec?.stats?.attack || 5) * 1.6;
+      const atk = Math.round((11 + (spec?.stats?.attack || 5) * 1.6) * (wSpec?.damageMult || 1));
       const def = 1 - clamp(((spec?.stats?.defense || 4) - 4) * 0.03, -0.1, 0.22);
       return {
         slot,
         dinoId,
+        weaponId: chosenWeaponId,
+        weaponName: wSpec?.name || 'Garras Naturais',
+        specialMeta: getSpeciesSpecialMeta(dinoId),
         name: spec?.name || dinoId,
         abilityName: spec?.ability || 'Fúria Ancestral',
         avatar,
@@ -274,9 +287,17 @@ export class ArenaX1Mode extends Mode3DBase {
       </div>
 
       <div class="m3d-corner-actions">
+        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="weapon">${uiIcon('claw', { size: 15 })} Arma: ${escapeHtml(p1.weaponName)}</button>
+        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="combos">${uiIcon('scroll', { size: 15 })} Combos</button>
+        <button type="button" class="m3d-btn m3d-btn-ghost" data-act="family">${this.familyMode !== false ? 'Modo Família: ON' : 'Modo Família: OFF'}</button>
         <button type="button" class="m3d-btn m3d-btn-ghost" data-act="arena">${uiIcon('arena', { size: 15 })} Arena</button>
         <button type="button" class="m3d-btn m3d-btn-ghost" data-act="mode">${this.submode === 'local2p' ? `${uiIcon('mecha', { size: 15 })} VS IA` : `${uiIcon('multiplayer', { size: 15 })} 2P Local`}</button>
         <button type="button" class="m3d-btn m3d-btn-danger" data-act="exit">${uiIcon('close', { size: 15 })} Menu</button>
+      </div>
+
+      <div id="m3d-x1-combo-drawer" class="dd-glass-card" style="display:none; position:absolute; right:16px; top:112px; padding:12px 14px; max-width:320px; z-index:8; font-size:0.78rem;">
+        <strong style="color:#fde047; display:block; margin-bottom:6px;">Tabela de Combos &amp; Especial (${escapeHtml(p1.specialMeta?.name || p1.abilityName)})</strong>
+        ${FIGHTING_COMBO_TABLE.map((c) => `<div style="margin-bottom:5px;"><b>${escapeHtml(c.name)}</b> (+${c.bonusDamage} dano): <span style="color:#a5f3fc;">${escapeHtml(c.hint)}</span></div>`).join('')}
       </div>
 
       <div class="m3d-controls-hint">
@@ -300,6 +321,23 @@ export class ArenaX1Mode extends Mode3DBase {
     };
 
     this.listen(el.querySelector('[data-act="exit"]'), 'click', () => this.requestExit({ wins: [...this.wins] }));
+    this.listen(el.querySelector('[data-act="combos"]'), 'click', () => {
+      const drawer = el.querySelector('#m3d-x1-combo-drawer');
+      if (drawer) drawer.style.display = drawer.style.display === 'none' ? 'block' : 'none';
+    });
+    this.listen(el.querySelector('[data-act="family"]'), 'click', (ev) => {
+      this.familyMode = this.familyMode === false;
+      ev.currentTarget.textContent = this.familyMode ? 'Modo Família: ON' : 'Modo Família: OFF';
+      this.toast(this.familyMode ? 'Modo Família ativado (finalizações suaves)' : 'Modo Família desativado');
+    });
+    this.listen(el.querySelector('[data-act="weapon"]'), 'click', (ev) => {
+      const keys = Object.keys(DINO_WEAPONS_CATALOG);
+      const curIdx = Math.max(0, keys.indexOf(this.selectedWeaponId || 'iron_claws'));
+      this.selectedWeaponId = keys[(curIdx + 1) % keys.length];
+      this._spawnFighters();
+      ev.currentTarget.innerHTML = `${uiIcon('claw', { size: 15 })} Arma: ${escapeHtml(this.fighters[0].weaponName)}`;
+      this.toast(`Arma equipada: ${this.fighters[0].weaponName}`);
+    });
     this.listen(el.querySelector('[data-act="arena"]'), 'click', () => {
       this.arenaIdx = (this.arenaIdx + 1) % X1_ARENAS.length;
       this._buildArenaScene();

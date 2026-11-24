@@ -328,6 +328,7 @@ export class UIManager {
         });
         break;
       case 'custom':
+      case 'customize':
         this.activeCleanup = CustomizationScreen.renderInto(this.hud.modalLayer, {
           onClose: back,
           onApplyCustom: () => this.game.rebuildPlayers(),

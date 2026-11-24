@@ -48,6 +48,8 @@ import {
 } from '../models/SculptedWorldProps.js';
 import { uiIcon } from '../ui/UiIcons.js';
 import { getDinoSpec } from '../dinos/DinoCatalog.js';
+import { DinoFactory } from '../dinos/DinoFactory.js';
+import { buildOpenWorldSculptedEntity, animateOpenWorldEntity } from '../openworld/OpenWorldSculptedModels.js';
 import { Save } from '../systems/Save.js';
 
 const CHUNK_SIZE = 28;
@@ -680,17 +682,16 @@ export class AdventureOpenMode extends Mode3DBase {
     for (const spec of REGIONAL_BOSS_SPECS) {
       let model = null;
       try {
-        model = buildDungeonEnemyModel(spec.archetype, spec.theme);
+        const sculptedRoot = buildOpenWorldSculptedEntity('colossal_basalt_rex');
+        sculptedRoot.scale.setScalar(0.76);
+        model = {
+          root: sculptedRoot,
+          hitBoxRadius: 2.0,
+          animate(t) { animateOpenWorldEntity(sculptedRoot, t, { moving: true, attacking: false }); },
+          dispose() { disposeObject3D(sculptedRoot); }
+        };
       } catch {
-        const root = new THREE.Group();
-        const body = new THREE.Mesh(
-          this._shared.geos.box,
-          this._shared.getMat(spec.color, { emissive: spec.color, emissiveIntensity: 0.35 })
-        );
-        body.scale.set(2.2, 2.8, 2.2);
-        body.position.y = 1.4;
-        root.add(body);
-        model = { root, hitBoxRadius: 1.8, animate() {}, dispose() { disposeObject3D(root); } };
+        model = buildDungeonEnemyModel(spec.archetype, spec.theme);
       }
       model.root.scale.setScalar(spec.scale);
       model.root.position.set(spec.x, 0, spec.z);
@@ -885,27 +886,18 @@ export class AdventureOpenMode extends Mode3DBase {
       }
     }
 
-    // Patrulha de dino IA leve em chunks externos
+    // Patrulha de criatura esculpida articulada (substitui primitiva vermelha antiga!)
     if ((cx !== 0 || cz !== 0) && rng() < 0.45) {
       const lx = CHUNK_SIZE * 0.5;
       const lz = CHUNK_SIZE * 0.5;
       if (!this._isNearLandmark(ox + lx, oz + lz, 8)) {
-        const pGroup = new THREE.Group();
-        const body = new THREE.Mesh(geos.box, getMat('#f43f5e', { roughness: 0.55 }));
-        body.scale.set(1.0, 1.0, 1.65);
-        body.position.y = 0.65;
-        const head = new THREE.Mesh(geos.box, getMat('#e11d48', { roughness: 0.5 }));
-        head.scale.set(0.75, 0.65, 0.85);
-        head.position.set(0, 1.15, -0.75);
-        const crest = new THREE.Mesh(geos.box, getMat('#fbbf24', { emissive: '#d97706', emissiveIntensity: 0.6 }));
-        crest.scale.set(0.2, 0.44, 0.34);
-        crest.position.set(0, 1.58, -0.65);
-        pGroup.add(body, head, crest);
+        const entityKind = rng() < 0.55 ? 'crimson_ankylo_prowler' : 'azure_crest_hadrosaur';
+        const pGroup = buildOpenWorldSculptedEntity(entityKind);
         pGroup.position.set(lx, 0, lz);
         g.add(pGroup);
         patrols.push({
           cx: ox + lx, cz: oz + lz, x: ox + lx, z: oz + lz,
-          ox, oz, mesh: pGroup, hp: 48, maxHp: 48, angle: rng() * Math.PI * 2, active: true, atkCd: 0
+          ox, oz, mesh: pGroup, entityKind, hp: 48, maxHp: 48, angle: rng() * Math.PI * 2, active: true, atkCd: 0
         });
       }
     }
@@ -977,17 +969,17 @@ export class AdventureOpenMode extends Mode3DBase {
       ring.scale.setScalar(2.0);
       ring.position.y = 0.05;
 
-      const baby = new THREE.Group();
-      const bBody = new THREE.Mesh(geos.box, getMat('#34d399', { roughness: 0.5 }));
-      bBody.scale.set(0.55, 0.5, 0.85);
-      bBody.position.y = 0.42;
-      const bHead = new THREE.Mesh(geos.box, getMat('#6ee7b7', { roughness: 0.45 }));
-      bHead.scale.set(0.48, 0.46, 0.52);
-      bHead.position.set(0, 0.78, -0.35);
-      const bCrest = new THREE.Mesh(geos.box, getMat('#fbbf24', { emissive: '#f59e0b', emissiveIntensity: 1.3 }));
-      bCrest.scale.set(0.16, 0.24, 0.26);
-      bCrest.position.set(0, 1.14, -0.35);
-      baby.add(bBody, bHead, bCrest);
+      const babyModel = DinoFactory.build('parasaurolophus', {
+        useCustomColors: true,
+        primary: '#34d399',
+        secondary: '#a7f3d0',
+        spots: '#fde047',
+        spikes: '#fbbf24',
+        eye: '#0f172a',
+        pattern: 'spots'
+      }, { allowHybrid: false });
+      const baby = babyModel.root;
+      baby.scale.setScalar(0.54);
 
       g.add(ring, baby);
       this.group.add(g);
@@ -1771,6 +1763,7 @@ export class AdventureOpenMode extends Mode3DBase {
       for (const pat of chunk.patrols) {
         if (!pat.active) continue;
         if (pat.atkCd > 0) pat.atkCd -= dt;
+        animateOpenWorldEntity(pat.mesh, this.elapsed, { moving: true, attacking: pat.atkCd > 0.9 });
         const dist = Math.hypot(pos.x - pat.x, pos.z - pat.z);
         // Patrulhas respeitam a zona segura da fogueira
         if (dist < 10 && !this._inSafeCamp) {

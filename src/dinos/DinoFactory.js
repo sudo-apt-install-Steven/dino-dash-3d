@@ -7,6 +7,7 @@ import { buildClaudeAccessoryGroup } from '../models/ClaudeVoxelModels.js';
 import { attachSculptedAccessory, buildSculptedAccessoryStandalone, getAccessorySlot } from '../models/VoxelAccessories.js';
 import { computeDinoAnchorPoints } from './DinoAnchors.js';
 import { LIMITED_BODY_SPECS, applyLimitedDinoDetails } from '../models/LimitedDinoModels.js';
+import { clampDinoAlpha } from '../ui/ColorStudioPicker.js';
 
 const AQUATIC_SPECIES = ['mosasaurus', 'elasmosaurus', 'dunkleosteus', 'liopleurodon', 'plesiosaurus', 'kronosaurus', 'archelon', 'abissal_espectral'];
 const FLYING_SPECIES = ['quetzalcoatlus', 'pteranodon', 'tapejara', 'dimorphodon', 'hatzegopteryx', 'archaeopteryx', 'microraptor', 'chrono_wyvern', 'dragao_lunar'];
@@ -81,25 +82,31 @@ export class DinoFactory {
             : (isGhost ? new THREE.Color('#ffda6a') : new THREE.Color(0x000000));
     const emissiveIntensity = isSecret ? 0.36 : isShiny ? 0.28 : isMecha ? 0.16 : isNeon ? 0.35 : (isGhost ? 0.25 : 0);
 
+    const customAlpha = customConfig?.alpha !== undefined
+      ? clampDinoAlpha(customConfig.alpha, { multiplayer: Boolean(options?.multiplayer) })
+      : 1;
+    const useTranslucentBody = isGhost || customAlpha < 0.995;
+    const bodyOpacity = isGhost ? 0.84 : customAlpha;
+
     const matPrimary = createMat(colors.primary, {
       emissive: emissiveMain,
       emissiveIntensity,
-      transparent: isGhost,
-      opacity: isGhost ? 0.84 : 1,
+      transparent: useTranslucentBody,
+      opacity: bodyOpacity,
       metalness: isMecha ? 0.78 : isShiny ? 0.58 : (dinoId === 'ghostgold' ? 0.45 : 0.08),
       roughness: isMecha ? 0.26 : isShiny ? 0.22 : 0.65
     });
     const matPrimaryDark = createMat(darkenHex(colors.primary, 0.22), {
       emissive: emissiveMain,
       emissiveIntensity: emissiveIntensity * 0.5,
-      transparent: isGhost,
-      opacity: isGhost ? 0.84 : 1,
+      transparent: useTranslucentBody,
+      opacity: bodyOpacity,
       metalness: isMecha ? 0.82 : isShiny ? 0.5 : 0.08,
       roughness: isMecha ? 0.28 : 0.65
     });
     const matSecondary = createMat(colors.secondary, {
-      transparent: isGhost,
-      opacity: isGhost ? 0.86 : 1,
+      transparent: useTranslucentBody,
+      opacity: isGhost ? 0.86 : bodyOpacity,
       metalness: isMecha ? 0.65 : isShiny ? 0.45 : 0.05,
       roughness: isMecha ? 0.3 : 0.62
     });
