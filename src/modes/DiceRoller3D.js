@@ -3,31 +3,57 @@ import * as THREE from 'three';
 /**
  * Supported polyhedral dice types.
  */
-export const SUPPORTED_DICE = ['d2', 'd3', 'd4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'];
+export const SUPPORTED_DICE = [
+  'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd10', 'd12', 'd14', 'd16', 'd20', 'd24', 'd30', 'd100'
+];
 
-const DICE_SIDES = Object.freeze({
+export const DICE_SIDES = Object.freeze({
   d2: 2,
   d3: 3,
   d4: 4,
+  d5: 5,
   d6: 6,
+  d7: 7,
   d8: 8,
   d10: 10,
   d12: 12,
+  d14: 14,
+  d16: 16,
   d20: 20,
+  d24: 24,
+  d30: 30,
   d100: 100,
+});
+
+export const DICE_MATERIALS = Object.freeze({
+  resina: { id: 'resina', label: 'Resina Polida', roughness: 0.2, metalness: 0.1, clearcoat: 0.8 },
+  osso_dino: { id: 'osso_dino', label: 'Osso de Dinossauro', roughness: 0.65, metalness: 0.05 },
+  pedra_vulcanica: { id: 'pedra_vulcanica', label: 'Pedra Vulcânica', roughness: 0.85, metalness: 0.2, emissive: '#e11d48', emissiveIntensity: 0.2 },
+  ambar: { id: 'ambar', label: 'Âmbar com Inseto', roughness: 0.15, metalness: 0.1, opacity: 0.92 },
+  jade: { id: 'jade', label: 'Jade Ancestral', roughness: 0.3, metalness: 0.15 },
+  madeira_petrificada: { id: 'madeira_petrificada', label: 'Madeira Petrificada', roughness: 0.7, metalness: 0.08 },
+  ouro_jurassico: { id: 'ouro_jurassico', label: 'Ouro Jurássico', roughness: 0.25, metalness: 0.9 },
+  cristal_meteoro: { id: 'cristal_meteoro', label: 'Cristal de Meteoro', roughness: 0.1, metalness: 0.4, emissive: '#818cf8', emissiveIntensity: 0.3 },
+  neon: { id: 'neon', label: 'Néon Pré-Histórico', roughness: 0.18, metalness: 0.3, emissive: '#22d3ee', emissiveIntensity: 0.5 }
 });
 
 const DICE_PALETTE = Object.freeze({
   d2: { bg: '#27200f', bg2: '#5c4312', border: '#fbbf24', text: '#fef3c7', metalness: 0.55, roughness: 0.28 },
   d3: { bg: '#27131a', bg2: '#4c1d2e', border: '#fb7185', text: '#ffe4e6', metalness: 0.25, roughness: 0.35 },
   d4: { bg: '#0c2427', bg2: '#134e4a', border: '#2dd4bf', text: '#ccfbf1', metalness: 0.25, roughness: 0.35 },
+  d5: { bg: '#1c1917', bg2: '#44403c', border: '#f97316', text: '#ffedd5', metalness: 0.3, roughness: 0.3 },
   d6: { bg: '#18181b', bg2: '#27272a', border: '#a1a1aa', text: '#fafafa', metalness: 0.22, roughness: 0.32 },
+  d7: { bg: '#1e1b4b', bg2: '#3730a3', border: '#818cf8', text: '#e0e7ff', metalness: 0.32, roughness: 0.28 },
   d8: { bg: '#0f1c2e', bg2: '#1e3a5f', border: '#38bdf8', text: '#e0f2fe', metalness: 0.28, roughness: 0.32 },
   d10: { bg: '#1f1635', bg2: '#3b2069', border: '#c084fc', text: '#f3e8ff', metalness: 0.3, roughness: 0.3 },
   d10Tens: { bg: '#23170b', bg2: '#4d2c0f', border: '#f59e0b', text: '#fef3c7', metalness: 0.35, roughness: 0.28 },
   d10Units: { bg: '#111827', bg2: '#1e293b', border: '#38bdf8', text: '#f0f9ff', metalness: 0.35, roughness: 0.28 },
   d12: { bg: '#0d2318', bg2: '#14532d', border: '#34d399', text: '#d1fae5', metalness: 0.28, roughness: 0.32 },
+  d14: { bg: '#14532d', bg2: '#166534', border: '#4ade80', text: '#dcfce7', metalness: 0.35, roughness: 0.28 },
+  d16: { bg: '#4c0519', bg2: '#881337', border: '#fb7185', text: '#ffe4e6', metalness: 0.35, roughness: 0.25 },
   d20: { bg: '#13112b', bg2: '#2e1d6b', border: '#818cf8', text: '#eef2ff', metalness: 0.32, roughness: 0.28 },
+  d24: { bg: '#451a03', bg2: '#78350f', border: '#fbbf24', text: '#fef3c7', metalness: 0.45, roughness: 0.25 },
+  d30: { bg: '#3b0764', bg2: '#6b21a8', border: '#c084fc', text: '#f3e8ff', metalness: 0.4, roughness: 0.25 },
   d100: { bg: '#23170b', bg2: '#4d2c0f', border: '#f59e0b', text: '#fef3c7', metalness: 0.35, roughness: 0.28 },
 });
 
@@ -44,12 +70,21 @@ function normalizeDiceType(diceType) {
 function clampCount(count) {
   const n = Math.floor(Number(count));
   if (!Number.isFinite(n) || n < 1) return 1;
-  if (n > 10) return 10;
+  if (n > 20) return 20;
   return n;
 }
 
+export function cryptoRngUnit() {
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const arr = new Uint32Array(1);
+    crypto.getRandomValues(arr);
+    return arr[0] / (0xffffffff + 1);
+  }
+  return Math.random();
+}
+
 function safeRngUnit(rng) {
-  let u = typeof rng === 'function' ? Number(rng()) : Math.random();
+  let u = typeof rng === 'function' ? Number(rng()) : cryptoRngUnit();
   if (!Number.isFinite(u) || u < 0) u = 0;
   if (u >= 1) u = 0.999999999999;
   return u;
@@ -59,6 +94,182 @@ function clampInt(val, min, max) {
   const n = Math.round(Number(val));
   if (!Number.isFinite(n)) return min;
   return Math.min(max, Math.max(min, n));
+}
+
+export const DICE_BAG_PRESETS = Object.freeze([
+  { id: 'ataque', label: '⚔️ Teste de Ataque', formula: '1d20+3', desc: '1d20 + Bônus de Arma/Força' },
+  { id: 'dano_adaga', label: '🗡️ Dano Leve (Adaga/Garra)', formula: '1d4+2', desc: '1d4 + Bônus' },
+  { id: 'dano_espada', label: '⚔️ Dano Médio (Espada/Mordida)', formula: '1d8+3', desc: '1d8 + Bônus' },
+  { id: 'dano_machado', label: '🪓 Dano Pesado (Machado/Cauda)', formula: '1d12+4', desc: '1d12 + Bônus' },
+  { id: 'dano_duas_maos', label: '💥 Dano Brutal (2 Mãos)', formula: '2d6+4', desc: '2d6 + Bônus' },
+  { id: 'salvaguarda', label: '🛡️ Teste de Salvaguarda', formula: '1d20+2', desc: '1d20 + Vigor/Instinto' },
+  { id: 'iniciativa', label: '⚡ Iniciativa', formula: '1d20+2', desc: '1d20 + Agilidade' },
+  { id: 'vantagem', label: '✨ Vantagem (2d20)', formula: '1d20adv', desc: 'Rola 2d20, mantém o maior' },
+  { id: 'desvantagem', label: '⚠️ Desvantagem (2d20)', formula: '1d20dis', desc: 'Rola 2d20, mantém o menor' },
+  { id: 'atributos', label: '🎲 4d6 descartando o menor', formula: '4d6kh3', desc: 'Rola 4d6, mantém os 3 maiores' },
+  { id: 'percentil', label: '💯 Percentil (D100)', formula: '1d100', desc: 'Rolagem D100 (1 a 100)' }
+]);
+
+/**
+ * Parses and evaluates tabletop dice notation (Parte 2).
+ * Supports:
+ * - NdX + M / NdX - M
+ * - NdXkhY (keep highest Y)
+ * - NdXklY (keep lowest Y)
+ * - 1d20adv (advantage)
+ * - 1d20dis (disadvantage)
+ * - NdX! (exploding dice)
+ * - Multi-die sums: '1d20 + 2d6 + 4'
+ */
+export function rollTabletopFormula(formula = '1d20', rng = cryptoRngUnit) {
+  const clean = String(formula).toLowerCase().replace(/\s+/g, '');
+  const tokenRegex = /([+-]?)(?:(\d*)d(\d+|100)(kh\d+|kl\d+|adv|dis|!)?|(\d+))/gi;
+  let match;
+  const diceGroups = [];
+  let flatModifier = 0;
+  let totalSum = 0;
+  let isCrit = false;
+  let isFumble = false;
+
+  while ((match = tokenRegex.exec(clean)) !== null) {
+    const sign = match[1] === '-' ? -1 : 1;
+    if (match[5] !== undefined) {
+      const num = parseInt(match[5], 10) * sign;
+      flatModifier += num;
+      totalSum += num;
+    } else {
+      const countRaw = match[2] ? parseInt(match[2], 10) : 1;
+      let count = Math.min(20, Math.max(1, countRaw));
+      const sides = Math.max(2, parseInt(match[3], 10) || 20);
+      const mod = match[4] || '';
+      const diceType = `d${sides}`;
+
+      let rolls = [];
+      if (mod === 'adv') {
+        const r1 = Math.floor(safeRngUnit(rng) * sides) + 1;
+        const r2 = Math.floor(safeRngUnit(rng) * sides) + 1;
+        rolls = [r1, r2];
+        const kept = [Math.max(r1, r2)];
+        const dropped = [Math.min(r1, r2)];
+        const subTotal = kept[0] * sign;
+        totalSum += subTotal;
+        if (sides === 20 && kept[0] === 20) isCrit = true;
+        if (sides === 20 && kept[0] === 1) isFumble = true;
+        diceGroups.push({ type: diceType, mode: 'adv', rolls, kept, dropped, sum: kept[0] });
+      } else if (mod === 'dis') {
+        const r1 = Math.floor(safeRngUnit(rng) * sides) + 1;
+        const r2 = Math.floor(safeRngUnit(rng) * sides) + 1;
+        rolls = [r1, r2];
+        const kept = [Math.min(r1, r2)];
+        const dropped = [Math.max(r1, r2)];
+        const subTotal = kept[0] * sign;
+        totalSum += subTotal;
+        if (sides === 20 && kept[0] === 20) isCrit = true;
+        if (sides === 20 && kept[0] === 1) isFumble = true;
+        diceGroups.push({ type: diceType, mode: 'dis', rolls, kept, dropped, sum: kept[0] });
+      } else if (mod.startsWith('kh')) {
+        const k = Math.min(count, Math.max(1, parseInt(mod.slice(2), 10) || 1));
+        for (let i = 0; i < count; i++) {
+          rolls.push(Math.floor(safeRngUnit(rng) * sides) + 1);
+        }
+        const sorted = [...rolls].sort((a, b) => b - a);
+        const kept = sorted.slice(0, k);
+        const dropped = sorted.slice(k);
+        const sum = kept.reduce((a, b) => a + b, 0);
+        totalSum += sum * sign;
+        diceGroups.push({ type: diceType, mode: `kh${k}`, rolls, kept, dropped, sum });
+      } else if (mod.startsWith('kl')) {
+        const k = Math.min(count, Math.max(1, parseInt(mod.slice(2), 10) || 1));
+        for (let i = 0; i < count; i++) {
+          rolls.push(Math.floor(safeRngUnit(rng) * sides) + 1);
+        }
+        const sorted = [...rolls].sort((a, b) => a - b);
+        const kept = sorted.slice(0, k);
+        const dropped = sorted.slice(k);
+        const sum = kept.reduce((a, b) => a + b, 0);
+        totalSum += sum * sign;
+        diceGroups.push({ type: diceType, mode: `kl${k}`, rolls, kept, dropped, sum });
+      } else if (mod === '!') {
+        for (let i = 0; i < count; i++) {
+          let r = Math.floor(safeRngUnit(rng) * sides) + 1;
+          rolls.push(r);
+          let depth = 0;
+          while (r === sides && depth < 10) {
+            depth++;
+            r = Math.floor(safeRngUnit(rng) * sides) + 1;
+            rolls.push(r);
+          }
+        }
+        const sum = rolls.reduce((a, b) => a + b, 0);
+        totalSum += sum * sign;
+        diceGroups.push({ type: diceType, mode: 'explode', rolls, kept: rolls, dropped: [], sum });
+      } else {
+        for (let i = 0; i < count; i++) {
+          const r = Math.floor(safeRngUnit(rng) * sides) + 1;
+          rolls.push(r);
+        }
+        const sum = rolls.reduce((a, b) => a + b, 0);
+        totalSum += sum * sign;
+        if (sides === 20 && count === 1 && rolls[0] === 20) isCrit = true;
+        if (sides === 20 && count === 1 && rolls[0] === 1) isFumble = true;
+        diceGroups.push({ type: diceType, mode: 'normal', rolls, kept: rolls, dropped: [], sum });
+      }
+    }
+  }
+
+  return { formula, diceGroups, flatModifier, total: totalSum, isCrit, isFumble };
+}
+
+/**
+ * Exact probability calculator for DC reachability and player preview (Regra 2.1).
+ */
+export function calculateSuccessProbability(diceType = 'd20', diceCount = 1, statBonus = 0, dc = 10, mode = 'normal') {
+  const norm = normalizeDiceType(diceType);
+  const sides = DICE_SIDES[norm] || 20;
+  const count = Math.min(5, Math.max(1, Math.floor(diceCount)));
+  const bonus = Number.isFinite(Number(statBonus)) ? Number(statBonus) : 0;
+  const target = Number.isFinite(Number(dc)) ? Number(dc) : 10;
+
+  if (mode === 'adv' && count === 1) {
+    let success = 0;
+    for (let r1 = 1; r1 <= sides; r1++) {
+      for (let r2 = 1; r2 <= sides; r2++) {
+        if (Math.max(r1, r2) + bonus >= target) success++;
+      }
+    }
+    return success / (sides * sides);
+  }
+
+  if (mode === 'dis' && count === 1) {
+    let success = 0;
+    for (let r1 = 1; r1 <= sides; r1++) {
+      for (let r2 = 1; r2 <= sides; r2++) {
+        if (Math.min(r1, r2) + bonus >= target) success++;
+      }
+    }
+    return success / (sides * sides);
+  }
+
+  if (count === 1) {
+    const needed = target - bonus;
+    if (needed <= 1) return 1.0;
+    if (needed > sides) return 0.0;
+    return (sides - needed + 1) / sides;
+  }
+
+  let successes = 0;
+  const totalPossibilities = Math.pow(sides, count);
+  const recurse = (left, sum) => {
+    if (left === 0) {
+      if (sum + bonus >= target) successes++;
+      return;
+    }
+    for (let s = 1; s <= sides; s++) {
+      recurse(left - 1, sum + s);
+    }
+  };
+  recurse(count, 0);
+  return successes / totalPossibilities;
 }
 
 /**
@@ -659,11 +870,355 @@ function buildD10Geometry(customLabels = null) {
 }
 
 /**
+ * D5 Triangular Prism with numbered end caps:
+ * Faces 0..2: 3 rectangular side faces (values 1, 2, 3)
+ * Face 3: top triangular cap (+Y, value 4)
+ * Face 4: bottom triangular cap (-Y, value 5)
+ */
+function buildD5Geometry() {
+  const radius = 0.95;
+  const halfH = 0.8;
+  const ring = [];
+  for (let i = 0; i < 3; i++) {
+    const angle = (i * Math.PI * 2) / 3 - Math.PI / 2;
+    ring.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
+  }
+
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  const faces = [];
+  const geom = new THREE.BufferGeometry();
+  let cursor = 0;
+
+  for (let i = 0; i < 3; i++) {
+    const [x0, z0] = ring[i];
+    const [x1, z1] = ring[(i + 1) % 3];
+    const p00 = new THREE.Vector3(x0, -halfH, z0);
+    const p10 = new THREE.Vector3(x1, -halfH, z1);
+    const p11 = new THREE.Vector3(x1, halfH, z1);
+    const p01 = new THREE.Vector3(x0, halfH, z0);
+
+    const edge = new THREE.Vector3().subVectors(p10, p00);
+    const up = new THREE.Vector3(0, 1, 0);
+    const mid = new THREE.Vector3().addVectors(p00, p10).multiplyScalar(0.5);
+    let n = new THREE.Vector3().crossVectors(edge, up).normalize();
+    let v00 = p00, v10 = p10, v11 = p11, v01 = p01;
+    if (n.dot(mid) < 0) {
+      n.negate();
+      v00 = p10; v10 = p00; v11 = p01; v01 = p11;
+    }
+    const uAxis = new THREE.Vector3().subVectors(v10, v00).normalize();
+    const vAxis = new THREE.Vector3(0, 1, 0);
+
+    const start = cursor;
+    const tris = [
+      [v00, 0, 0], [v10, 1, 0], [v11, 1, 1],
+      [v00, 0, 0], [v11, 1, 1], [v01, 0, 1]
+    ];
+    for (const [pt, u, v] of tris) {
+      positions.push(pt.x, pt.y, pt.z);
+      normals.push(n.x, n.y, n.z);
+      uvs.push(u, v);
+      cursor++;
+    }
+    geom.addGroup(start, cursor - start, i);
+    faces.push({ index: i, value: i + 1, normal: n, uAxis, vAxis });
+  }
+
+  // Top triangular cap (value 4)
+  const topStart = cursor;
+  const topTris = [
+    [new THREE.Vector3(ring[0][0], halfH, ring[0][1]), 0.5 + ring[0][0] / (2 * radius), 0.5 - ring[0][1] / (2 * radius)],
+    [new THREE.Vector3(ring[2][0], halfH, ring[2][1]), 0.5 + ring[2][0] / (2 * radius), 0.5 - ring[2][1] / (2 * radius)],
+    [new THREE.Vector3(ring[1][0], halfH, ring[1][1]), 0.5 + ring[1][0] / (2 * radius), 0.5 - ring[1][1] / (2 * radius)]
+  ];
+  for (const [pt, u, v] of topTris) {
+    positions.push(pt.x, pt.y, pt.z);
+    normals.push(0, 1, 0);
+    uvs.push(u, v);
+    cursor++;
+  }
+  geom.addGroup(topStart, cursor - topStart, 3);
+  faces.push({ index: 3, value: 4, normal: new THREE.Vector3(0, 1, 0), uAxis: new THREE.Vector3(1, 0, 0), vAxis: new THREE.Vector3(0, 0, -1) });
+
+  // Bottom triangular cap (value 5)
+  const botStart = cursor;
+  const botTris = [
+    [new THREE.Vector3(ring[0][0], -halfH, ring[0][1]), 0.5 + ring[0][0] / (2 * radius), 0.5 + ring[0][1] / (2 * radius)],
+    [new THREE.Vector3(ring[1][0], -halfH, ring[1][1]), 0.5 + ring[1][0] / (2 * radius), 0.5 + ring[1][1] / (2 * radius)],
+    [new THREE.Vector3(ring[2][0], -halfH, ring[2][1]), 0.5 + ring[2][0] / (2 * radius), 0.5 + ring[2][1] / (2 * radius)]
+  ];
+  for (const [pt, u, v] of botTris) {
+    positions.push(pt.x, pt.y, pt.z);
+    normals.push(0, -1, 0);
+    uvs.push(u, v);
+    cursor++;
+  }
+  geom.addGroup(botStart, cursor - botStart, 4);
+  faces.push({ index: 4, value: 5, normal: new THREE.Vector3(0, -1, 0), uAxis: new THREE.Vector3(1, 0, 0), vAxis: new THREE.Vector3(0, 0, 1) });
+
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
+  return { geometry: geom, faces };
+}
+
+/**
+ * D7 Pentagonal Prism with numbered end caps:
+ * Faces 0..4: 5 rectangular side faces (values 1..5)
+ * Face 5: top pentagonal cap (+Y, value 6)
+ * Face 6: bottom pentagonal cap (-Y, value 7)
+ */
+function buildD7Geometry() {
+  const radius = 0.98;
+  const halfH = 0.75;
+  const ring = [];
+  for (let i = 0; i < 5; i++) {
+    const angle = (i * Math.PI * 2) / 5 - Math.PI / 2;
+    ring.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
+  }
+
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  const faces = [];
+  const geom = new THREE.BufferGeometry();
+  let cursor = 0;
+
+  for (let i = 0; i < 5; i++) {
+    const [x0, z0] = ring[i];
+    const [x1, z1] = ring[(i + 1) % 5];
+    const p00 = new THREE.Vector3(x0, -halfH, z0);
+    const p10 = new THREE.Vector3(x1, -halfH, z1);
+    const p11 = new THREE.Vector3(x1, halfH, z1);
+    const p01 = new THREE.Vector3(x0, halfH, z0);
+
+    const edge = new THREE.Vector3().subVectors(p10, p00);
+    const up = new THREE.Vector3(0, 1, 0);
+    const mid = new THREE.Vector3().addVectors(p00, p10).multiplyScalar(0.5);
+    let n = new THREE.Vector3().crossVectors(edge, up).normalize();
+    let v00 = p00, v10 = p10, v11 = p11, v01 = p01;
+    if (n.dot(mid) < 0) {
+      n.negate();
+      v00 = p10; v10 = p00; v11 = p01; v01 = p11;
+    }
+    const uAxis = new THREE.Vector3().subVectors(v10, v00).normalize();
+    const vAxis = new THREE.Vector3(0, 1, 0);
+
+    const start = cursor;
+    const tris = [
+      [v00, 0, 0], [v10, 1, 0], [v11, 1, 1],
+      [v00, 0, 0], [v11, 1, 1], [v01, 0, 1]
+    ];
+    for (const [pt, u, v] of tris) {
+      positions.push(pt.x, pt.y, pt.z);
+      normals.push(n.x, n.y, n.z);
+      uvs.push(u, v);
+      cursor++;
+    }
+    geom.addGroup(start, cursor - start, i);
+    faces.push({ index: i, value: i + 1, normal: n, uAxis, vAxis });
+  }
+
+  // Top cap (value 6)
+  const topStart = cursor;
+  for (let i = 0; i < 5; i++) {
+    const iNext = (i + 1) % 5;
+    const pCenter = new THREE.Vector3(0, halfH, 0);
+    const pA = new THREE.Vector3(ring[iNext][0], halfH, ring[iNext][1]);
+    const pB = new THREE.Vector3(ring[i][0], halfH, ring[i][1]);
+    for (const pt of [pCenter, pA, pB]) {
+      positions.push(pt.x, pt.y, pt.z);
+      normals.push(0, 1, 0);
+      uvs.push(0.5 + pt.x / (2.2 * radius), 0.5 - pt.z / (2.2 * radius));
+      cursor++;
+    }
+  }
+  geom.addGroup(topStart, cursor - topStart, 5);
+  faces.push({ index: 5, value: 6, normal: new THREE.Vector3(0, 1, 0), uAxis: new THREE.Vector3(1, 0, 0), vAxis: new THREE.Vector3(0, 0, -1) });
+
+  // Bottom cap (value 7)
+  const botStart = cursor;
+  for (let i = 0; i < 5; i++) {
+    const iNext = (i + 1) % 5;
+    const pCenter = new THREE.Vector3(0, -halfH, 0);
+    const pA = new THREE.Vector3(ring[i][0], -halfH, ring[i][1]);
+    const pB = new THREE.Vector3(ring[iNext][0], -halfH, ring[iNext][1]);
+    for (const pt of [pCenter, pA, pB]) {
+      positions.push(pt.x, pt.y, pt.z);
+      normals.push(0, -1, 0);
+      uvs.push(0.5 + pt.x / (2.2 * radius), 0.5 + pt.z / (2.2 * radius));
+      cursor++;
+    }
+  }
+  geom.addGroup(botStart, cursor - botStart, 6);
+  faces.push({ index: 6, value: 7, normal: new THREE.Vector3(0, -1, 0), uAxis: new THREE.Vector3(1, 0, 0), vAxis: new THREE.Vector3(0, 0, 1) });
+
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
+  return { geometry: geom, faces };
+}
+
+/**
+ * Procedural Bipyramid builder for D14 (N=7), D16 (N=8) and D30 (N=15):
+ * Produces 2*N triangular faces with outward normals and UVs centered on each facet.
+ */
+function buildBipyramidGeometry(N, radius = 1.05, height = 1.25) {
+  const topApex = new THREE.Vector3(0, height, 0);
+  const botApex = new THREE.Vector3(0, -height, 0);
+  const ring = [];
+  for (let i = 0; i < N; i++) {
+    const angle = (i * Math.PI * 2) / N;
+    ring.push(new THREE.Vector3(Math.cos(angle) * radius, 0, Math.sin(angle) * radius));
+  }
+
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  const faces = [];
+  const geom = new THREE.BufferGeometry();
+  let cursor = 0;
+
+  for (let i = 0; i < N; i++) {
+    const v0 = topApex;
+    const v1 = ring[(i + 1) % N];
+    const v2 = ring[i];
+    const centroid = new THREE.Vector3().add(v0).add(v1).add(v2).multiplyScalar(1 / 3);
+    const e1 = new THREE.Vector3().subVectors(v1, v0);
+    const e2 = new THREE.Vector3().subVectors(v2, v0);
+    const n = new THREE.Vector3().crossVectors(e1, e2).normalize();
+    const prefUp = new THREE.Vector3().subVectors(v0, centroid).normalize();
+    const { uAxis, vAxis, normal } = buildFaceBasis(n, prefUp);
+
+    const start = cursor;
+    for (const pt of [v0, v1, v2]) {
+      positions.push(pt.x, pt.y, pt.z);
+      normals.push(normal.x, normal.y, normal.z);
+      const rel = pt.clone().sub(centroid);
+      uvs.push(0.5 + rel.dot(uAxis) * 0.45 / radius, 0.5 + rel.dot(vAxis) * 0.45 / radius);
+      cursor++;
+    }
+    geom.addGroup(start, cursor - start, i);
+    faces.push({ index: i, value: i + 1, normal, uAxis, vAxis });
+  }
+
+  for (let i = 0; i < N; i++) {
+    const v0 = botApex;
+    const v1 = ring[i];
+    const v2 = ring[(i + 1) % N];
+    const centroid = new THREE.Vector3().add(v0).add(v1).add(v2).multiplyScalar(1 / 3);
+    const e1 = new THREE.Vector3().subVectors(v1, v0);
+    const e2 = new THREE.Vector3().subVectors(v2, v0);
+    const n = new THREE.Vector3().crossVectors(e1, e2).normalize();
+    const prefUp = new THREE.Vector3().subVectors(centroid, v0).normalize();
+    const { uAxis, vAxis, normal } = buildFaceBasis(n, prefUp);
+
+    const faceIdx = N + i;
+    const start = cursor;
+    for (const pt of [v0, v1, v2]) {
+      positions.push(pt.x, pt.y, pt.z);
+      normals.push(normal.x, normal.y, normal.z);
+      const rel = pt.clone().sub(centroid);
+      uvs.push(0.5 + rel.dot(uAxis) * 0.45 / radius, 0.5 + rel.dot(vAxis) * 0.45 / radius);
+      cursor++;
+    }
+    geom.addGroup(start, cursor - start, faceIdx);
+    faces.push({ index: faceIdx, value: faceIdx + 1, normal, uAxis, vAxis });
+  }
+
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
+  return { geometry: geom, faces };
+}
+
+/**
+ * D24 Tetrakis Hexahedron (cube with 6 four-sided pyramids = 24 triangular faces).
+ */
+function buildD24Geometry() {
+  const L = 0.72;
+  const H = 1.15;
+  const C = [
+    new THREE.Vector3(-L, -L, -L),
+    new THREE.Vector3(L, -L, -L),
+    new THREE.Vector3(L, L, -L),
+    new THREE.Vector3(-L, L, -L),
+    new THREE.Vector3(-L, -L, L),
+    new THREE.Vector3(L, -L, L),
+    new THREE.Vector3(L, L, L),
+    new THREE.Vector3(-L, L, L)
+  ];
+  const apexes = [
+    new THREE.Vector3(H, 0, 0),
+    new THREE.Vector3(-H, 0, 0),
+    new THREE.Vector3(0, H, 0),
+    new THREE.Vector3(0, -H, 0),
+    new THREE.Vector3(0, 0, H),
+    new THREE.Vector3(0, 0, -H)
+  ];
+
+  const faceQuads = [
+    [apexes[0], [C[1], C[2], C[6], C[5]]],
+    [apexes[1], [C[4], C[0], C[3], C[7]]],
+    [apexes[2], [C[3], C[2], C[6], C[7]]],
+    [apexes[3], [C[1], C[0], C[4], C[5]]],
+    [apexes[4], [C[5], C[6], C[7], C[4]]],
+    [apexes[5], [C[0], C[3], C[2], C[1]]]
+  ];
+
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  const faces = [];
+  const geom = new THREE.BufferGeometry();
+  let cursor = 0;
+  let faceIdx = 0;
+
+  for (const [apex, quad] of faceQuads) {
+    for (let k = 0; k < 4; k++) {
+      const v0 = apex;
+      const v1 = quad[(k + 1) % 4];
+      const v2 = quad[k];
+      const centroid = new THREE.Vector3().add(v0).add(v1).add(v2).multiplyScalar(1 / 3);
+      const e1 = new THREE.Vector3().subVectors(v1, v0);
+      const e2 = new THREE.Vector3().subVectors(v2, v0);
+      const n = new THREE.Vector3().crossVectors(e1, e2).normalize();
+      const prefUp = new THREE.Vector3().subVectors(v0, centroid).normalize();
+      const { uAxis, vAxis, normal } = buildFaceBasis(n, prefUp);
+
+      const start = cursor;
+      for (const pt of [v0, v1, v2]) {
+        positions.push(pt.x, pt.y, pt.z);
+        normals.push(normal.x, normal.y, normal.z);
+        const rel = pt.clone().sub(centroid);
+        uvs.push(0.5 + rel.dot(uAxis) * 0.55 / H, 0.5 + rel.dot(vAxis) * 0.55 / H);
+        cursor++;
+      }
+      geom.addGroup(start, cursor - start, faceIdx);
+      faces.push({ index: faceIdx, value: faceIdx + 1, normal, uAxis, vAxis });
+      faceIdx++;
+    }
+  }
+
+  geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  geom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+
+  return { geometry: geom, faces };
+}
+
+/**
  * Builds a complete polyhedral die mesh + face lookup table.
  * Returns { mesh, faces, textures, materials, geometry }.
  */
-function createDieMesh(dieKind, paletteKey = null) {
+function createDieMesh(dieKind, paletteKey = null, materialId = null) {
   const palette = DICE_PALETTE[paletteKey || dieKind] || DICE_PALETTE.d20;
+  const matSpec = (materialId && DICE_MATERIALS[materialId]) ? DICE_MATERIALS[materialId] : null;
   let built;
   let shapeHint = 'poly';
 
@@ -679,8 +1234,16 @@ function createDieMesh(dieKind, paletteKey = null) {
     case 'd4':
       built = preparePolyhedronFromNonIndexed(new THREE.TetrahedronGeometry(1.18, 0), 4, 0.9);
       break;
+    case 'd5':
+      built = buildD5Geometry();
+      shapeHint = 'square';
+      break;
     case 'd6':
       built = buildD6Geometry();
+      shapeHint = 'square';
+      break;
+    case 'd7':
+      built = buildD7Geometry();
       shapeHint = 'square';
       break;
     case 'd8':
@@ -708,7 +1271,22 @@ function createDieMesh(dieKind, paletteKey = null) {
     case 'd12':
       built = preparePolyhedronFromNonIndexed(new THREE.DodecahedronGeometry(1.1, 0), 12, 1.0);
       break;
+    case 'd14':
+      built = buildBipyramidGeometry(7, 1.05, 1.25);
+      break;
+    case 'd16':
+      built = buildBipyramidGeometry(8, 1.08, 1.25);
+      break;
     case 'd20':
+      built = preparePolyhedronFromNonIndexed(new THREE.IcosahedronGeometry(1.16, 0), 20, 0.92);
+      break;
+    case 'd24':
+      built = buildD24Geometry();
+      break;
+    case 'd30':
+      built = buildBipyramidGeometry(15, 1.15, 1.2);
+      break;
+    case 'd100':
     default:
       built = preparePolyhedronFromNonIndexed(new THREE.IcosahedronGeometry(1.16, 0), 20, 0.92);
       break;
@@ -725,10 +1303,10 @@ function createDieMesh(dieKind, paletteKey = null) {
     materials.push(
       new THREE.MeshStandardMaterial({
         map: tex,
-        metalness: palette.metalness,
-        roughness: palette.roughness,
-        emissive: new THREE.Color(0x000000),
-        emissiveIntensity: 0,
+        metalness: matSpec ? matSpec.metalness : palette.metalness,
+        roughness: matSpec ? matSpec.roughness : palette.roughness,
+        emissive: matSpec && matSpec.emissive ? new THREE.Color(matSpec.emissive) : new THREE.Color(0x000000),
+        emissiveIntensity: matSpec ? (matSpec.emissiveIntensity || 0) : 0,
       })
     );
   }

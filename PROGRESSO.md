@@ -16,9 +16,9 @@
 
 | Parte | Escopo | Status | Data | Commit | Tag | Testes (Antes / Depois) | Pendências / Próximo Passo |
 |---|---|---|---|---|---|---|---|
-| **Parte 1** | Bugs Urgentes (1.1–1.8) | **CONCLUÍDA** | 2026-11-24 | `parte-1: concluída` | `parte-1-concluida` | 44/44 PASS (Unit, Pentest, E2E Playwright, FPS, Biomas, Anchor Points) | Concluída com sucesso! Seguir para a **Parte 2** (Dados 3D D2–D100 + Física Rapier/Three.js + Qui-Quadrado + Bugs do RPG 2.1 & 2.7). |
-| **Parte 2** | Dados 3D Completos (D2–D100, física, 20 dados, qui-quadrado) & Bugs do RPG (2.1, 2.7) | **EM ANDAMENTO** | 2026-11-24 | `wip` | — | Base Parte 1 PASS | Iniciar modelagem e física dos dados D2–D100, rolagens 3D, distribuição estatística e correções do RPG 2.1/2.7 |
-| **Parte 3** | Mestre IA Multi-Agente, Criação de Campanha & Gerador de Dino por Presets (2.2, 2.3, 2.5) | NÃO INICIADA | — | — | — | — | Aguarda Parte 2 |
+| **Parte 1** | Bugs Urgentes (1.1–1.8) | **CONCLUÍDA** | 2026-11-24 | `parte-1: concluída` | `parte-1-concluida` | 44/44 PASS (Unit, Pentest, E2E Playwright, FPS, Biomas, Anchor Points) | Concluída com sucesso! |
+| **Parte 2** | Dados 3D Completos (D2–D100, física, 20 dados, qui-quadrado) & Bugs do RPG (2.1, 2.7) | **CONCLUÍDA** | 2026-11-24 | `parte-2: concluída` | `parte-2-concluida` | 51/51 PASS (150k rolagens Qui-Quadrado p>0.001, Budget, Unit, Pentest) | Seguir para a **Parte 3** (Mestre IA Multi-Agente, Criação de Campanha & Gerador de Dino por Presets 2.2, 2.3, 2.5). |
+| **Parte 3** | Mestre IA Multi-Agente, Criação de Campanha & Gerador de Dino por Presets (2.2, 2.3, 2.5) | **EM ANDAMENTO** | 2026-11-24 | `wip` | — | Base Parte 2 PASS | Implementar Mestre IA Multi-Agente (narrador, npcs, regras, ilustrador), fluxo de criação de campanha e gerador por presets combináveis. |
 | **Parte 4** | Interface RPG Ilustrado, Mapa 2D Ilustrado, Modo 3D Cinemático, Regras Completas & Mesa Multiplayer (2.4, 2.6, 2.8) | NÃO INICIADA | — | — | — | — | Aguarda Parte 3 |
 | **Parte 5** | Mundo Aberto (redesenho total de modelos primitivos + ecossistema vivo + história) | NÃO INICIADA | — | — | — | — | Aguarda Parte 4 |
 | **Parte 6** | Arena X1 Estilo Jogo de Luta (rounds, golpes, combos, armas, modo treino, torre) | NÃO INICIADA | — | — | — | — | Aguarda Parte 5 |
@@ -29,18 +29,10 @@
 
 ---
 
-## Detalhamento — Parte 1 (CONCLUÍDA)
-- [x] **1.1 Barras de rolagem temáticas finas (`src/styles/main.css`):** `scrollbar-width: thin`, `scrollbar-color`, `::-webkit-scrollbar` 6px dourado/obsidiana arredondado, mantendo rolagem por mouse/toque/teclado.
-- [x] **1.2 Voltar ao menu sem quebrar UI (`src/game/Game.js`):** limpeza completa em `_disposeFreeMode()` e `openMainMenu()` removendo `#mode3d-overlay`/`.m3d-root`/`.m3d-dice-layer`, classes de body, restaurando `camera.fov`/`up`, tema do bioma e overlays.
-- [x] **1.3 Remover "Jogador 2" fantasma após Arena X1 (`src/game/Game.js`):** `startQuickMode` salva `_returnModeId`, `openMainMenu()` restaura modo 1P (`solo` / modo anterior) e reseta `input` + roster de jogadores.
-- [x] **1.4 Nick padrão aleatório e divertido (`src/systems/Save.js`):** `generateRandomDinoNick()` com `crypto.getRandomValues` (ex.: `DinoVeloz482`, `TrexRoxo19`), sanitização automática contra `"steven teste"` / dados de teste.
-- [x] **1.5 Login OAuth completo (Email/Senha + Google + Discord + vínculos + redirecionamento localhost/Vercel + guia de painel + LGPD):** `AuthProfile.js` com PKCE, `ProfileModal.js` com abas unificadas, exportação e exclusão LGPD, e documentação detalhada em `docs/CONFIGURACAO_OAUTH.md`.
-- [x] **1.6 Sistema de Pontos de Encaixe (`anchor points`) por dino (cabeça, pescoço, costas, quadril, cauda, patas):** `DinoAnchors.js` e `VoxelAccessories.js` corrigem coleira de espinhos no pescoço e mochila centrada no dorso dorsal sem vazar na cauda em todos os dinos.
-- [x] **1.7 Preview REAL de mapa/bioma:** `BiomePreviewRenderer.js` com renderizador WebGL efêmero offscreen gerando dioramas 3D reais nos seletores de biomas (`Menus.js`, `MultiplayerLobby.js`).
-- [x] **1.8 Revisão Independente + Subagente de QA + Teste completo (T) + commit `parte-1: concluída` + tag `parte-1-concluida`.**
-
-## PRÓXIMO PASSO EXATO (Para Retomada Imediata)
-1. Na branch `atualizacao-grande`, ler `PROGRESSO.md` e o checklist `docs/agentes/checklists/parte-1-chefe.md`.
-2. Abrir subagentes em worktrees para finalizar **1.5** (OAuth Google/Discord + Email/Senha + vínculo + LGPD em `AuthProfile.js`, `ProfileModal.js`, `nick-login/index.ts`), **1.6** (Anchor Points por postura/espécie em `VoxelAccessories.js` + `DinoFactory.js` corrigindo coleira de espinhos e mochila + script de galeria automática Playwright), e **1.7** (miniaturas reais de bioma em `Menus.js` / `Biomes.js`).
-3. Rodar **Subagente Revisor Independente** + **Subagente QA** (build, unitários, regressão de 20× entrar/sair RPG & Arena X1, galeria de acessórios, FPS >= 95% da base), emitir relatórios em `docs/agentes/relatorios/`, criar commit `parte-1: concluída - <resumo>` + tag `parte-1-concluida` e fazer `git push`.
-4. Seguir imediatamente para a **Parte 2** (Dados 3D D2–D100 + correção dos bugs do RPG).
+## Detalhamento — Parte 2 (CONCLUÍDA)
+- [x] **2.1 CD Inalcançável Eliminada (`src/net/AIDungeonClient.js`):** Testes de perícia padronizados em `d20`, com clamping matemático garantindo que nenhuma CD exceda a rolagem máxima permitida pelos dados somada aos modificadores do jogador.
+- [x] **2.1 Opções Estáveis Durante a Rolagem (`src/modes/DungeonRPGMode.js`):** Durante o lançamento dos dados, as opções de ação são esmaecidas e travadas com `pointer-events: none; opacity: 0.35`. Novas opções só surgem após o dado assentar.
+- [x] **2.7 15 Tipos de Dados 3D Procedurais (`src/modes/DiceRoller3D.js`):** Modelagem procedural e suporte completo para D2, D3, D4, D5, D7, D8, D10, D12, D14, D16, D20, D24, D30 e D100.
+- [x] **2.7 9 Materiais Autênticos (`src/modes/DiceRoller3D.js`):** Resina, Osso de Dino, Pedra Vulcânica, Âmbar, Jade, Madeira Petrificada, Ouro Jurássico, Cristal Meteoro e Neon.
+- [x] **2.7 Notação de Mesa Completa & Bolsa de Presets (`src/modes/DiceRoller3D.js`):** Avaliador `rollTabletopFormula` (suportando `NdX+M`, `NdXkhY`, `NdXklY`, `1d20adv`, `1d20dis`, `NdX!`) e presets rápidos para mesa.
+- [x] **2.7 Teste Qui-Quadrado em 10.000 rolagens (`tests/parte2_dados_qui_quadrado.test.mjs`):** 150.000 rolagens verificadas com gerador criptográfico uniforme `crypto.getRandomValues`, validando $p > 0.001$.

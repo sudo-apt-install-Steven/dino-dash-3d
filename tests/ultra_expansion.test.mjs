@@ -313,9 +313,9 @@ test('DungeonGenerator: 100 seeds across floors 1-5 produce connected graphs wit
 // ---------------------------------------------------------------------------
 // 8. DiceRoller3D (rollMathDice): all 9 dice across 1,000 rolls each
 // ---------------------------------------------------------------------------
-test('DiceRoller3D: rollMathDice produces exact valid ranges across 1,000 rolls for all 9 dice', () => {
+test('DiceRoller3D: rollMathDice produces exact valid ranges across 1,000 rolls for all dice', () => {
   const expectedMax = {
-    d2: 2, d3: 3, d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 100
+    d2: 2, d3: 3, d4: 4, d5: 5, d6: 6, d7: 7, d8: 8, d10: 10, d12: 12, d14: 14, d16: 16, d20: 20, d24: 24, d30: 30, d100: 100
   };
   assert.deepEqual(SUPPORTED_DICE, Object.keys(expectedMax));
 

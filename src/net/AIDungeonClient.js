@@ -1,6 +1,6 @@
 // ===== CORE (shared logic: guardrail, clamp, 6-tier dice classifier, deterministic local DM) =====
-export const DICE_TYPES = ['d2', 'd3', 'd4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'];
-const DICE_SIDES = { d2: 2, d3: 3, d4: 4, d6: 6, d8: 8, d10: 10, d12: 12, d20: 20, d100: 100 };
+export const DICE_TYPES = ['d2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd10', 'd12', 'd14', 'd16', 'd20', 'd24', 'd30', 'd100'];
+const DICE_SIDES = { d2: 2, d3: 3, d4: 4, d5: 5, d6: 6, d7: 7, d8: 8, d10: 10, d12: 12, d14: 14, d16: 16, d20: 20, d24: 24, d30: 30, d100: 100 };
 
 export const ROLL_OUTCOME_TIERS = {
   critical: {
@@ -163,13 +163,13 @@ const SUGGESTIONS = {
 };
 
 const INTENTS = [
-  { id: 'heal', re: /\b(heal|cure|bandage|rest|drink|potion|curar|curo|descansar|descanso|po[cç][aã]o|poci[oó]n|vendar|beber)\b/i, die: 'd6', dc: 8, stat: 1 },
+  { id: 'heal', re: /\b(heal|cure|bandage|rest|drink|potion|curar|curo|descansar|descanso|po[cç][aã]o|poci[oó]n|vendar|beber)\b/i, die: 'd20', dc: 11, stat: 1 },
   { id: 'inspect', re: /\b(inspect|search|investigate|look|examine|trap|disarm|check|inspecionar|investigar|procurar|examinar|armadilha|desarmar|olhar|buscar|trampa|desarmar|revisar|mirar)\b/i, die: 'd20', dc: 12, stat: 1 },
   { id: 'stealth', re: /\b(sneak|stealth|hide|shadow|silent|quietly|ambush|esgueirar|furtiv[oa]?|esconder|sombra|silencio|sorrateir[oa]|emboscada|sigilo|sigiloso|escond[eo]r?me|acechar)\b/i, die: 'd20', dc: 13, stat: 2 },
   { id: 'acrobatic', re: /\b(jump|leap|dodge|climb|roll|flip|dash|vault|swing|pular|saltar|esquivar|escalar|rolar|correr|pulo|salto|esquivo|trepar|rodar)\b/i, die: 'd20', dc: 12, stat: 2 },
-  { id: 'diplomacy', re: /\b(roar|talk|persuade|intimidate|negotiate|convince|bargain|taunt|rugir|rugido|falar|persuadir|intimidar|negociar|convencer|provocar|hablar|persuadir|negociar|convencer)\b/i, die: 'd12', dc: 7, stat: 1 },
-  { id: 'magic', re: /\b(magic|spell|cast|fire|ice|lightning|ability|power|special|magia|feiti[cç]o|lan[cç]ar|fogo|gelo|raio|habilidade|poder|especial|hechizo|conjuro|lanzar|fuego|hielo|rayo)\b/i, die: 'd10', dc: 9, stat: 2 },
-  { id: 'combat', re: /\b(attack|strike|hit|slash|bite|claw|punch|kick|stomp|smash|fight|tail|atacar|ataco|golpear|golpe|morder|mordida|garra|garras|chutar|pisotear|lutar|cauda|rabo|pelear|patada|cola|pisar)\b/i, die: 'd8', dc: 10, stat: 1 }
+  { id: 'diplomacy', re: /\b(roar|talk|persuade|intimidate|negotiate|convince|bargain|taunt|rugir|rugido|falar|persuadir|intimidar|negociar|convencer|provocar|hablar|persuadir|negociar|convencer)\b/i, die: 'd20', dc: 11, stat: 1 },
+  { id: 'magic', re: /\b(magic|spell|cast|fire|ice|lightning|ability|power|special|magia|feiti[cç]o|lan[cç]ar|fogo|gelo|raio|habilidade|poder|especial|hechizo|conjuro|lanzar|fuego|hielo|rayo)\b/i, die: 'd20', dc: 12, stat: 2 },
+  { id: 'combat', re: /\b(attack|strike|hit|slash|bite|claw|punch|kick|stomp|smash|fight|tail|atacar|ataco|golpear|golpe|morder|mordida|garra|garras|chutar|pisotear|lutar|cauda|rabo|pelear|patada|cola|pisar)\b/i, die: 'd20', dc: 11, stat: 2 }
 ];
 
 const IMPOSSIBLE = /\b(fly to the moon|teleport|time travel|resurrect all|destroy the (world|universe)|voar at[eé] a lua|teletransport|viajar no tempo|destruir o (mundo|universo)|volar a la luna|viaje en el tiempo|destruir el (mundo|universo))\b/i;
@@ -275,8 +275,10 @@ export function clampDecisionToContract(decision, ctx) {
   const sides = DICE_SIDES[diceType];
   const diceCount = clampInt(d.diceCount, 1, 3, 1);
   const maxRoll = sides * diceCount;
-  // DC must be reachable-ish for the chosen dice: never above max roll + bonus headroom
-  const dcCeil = Math.max(2, Math.min(95, maxRoll + 2));
+  const statBonus = clampInt(d.statBonus, -2, 6, 0);
+  // Regra 2.1: Nenhuma CD pode ser inalcançável com o dado e modificadores usados.
+  const maxPossible = maxRoll + statBonus;
+  const dcCeil = Math.max(2, Math.min(95, maxPossible));
   const dc = clampInt(d.dc, 2, dcCeil, Math.min(dcCeil, 10));
   const possible = d.possible === true || d.possible === 'true';
   let suggestions = Array.isArray(d.suggestions)

@@ -30,7 +30,13 @@ import {
   buildSculptedInteractable
 } from '../models/SculptedWorldProps.js';
 import { uiIcon } from '../ui/UiIcons.js';
-import { DiceRoller3D, SUPPORTED_DICE } from './DiceRoller3D.js';
+import {
+  DiceRoller3D,
+  SUPPORTED_DICE,
+  calculateSuccessProbability,
+  rollTabletopFormula,
+  DICE_BAG_PRESETS
+} from './DiceRoller3D.js';
 import {
   AIDungeonClient,
   evaluateLocalDungeonAction,
@@ -692,8 +698,11 @@ export class DungeonRPGMode extends Mode3DBase {
 
       <div class="m3d-dice-tray" data-dice-tray style="display:none">
         <div class="m3d-tray-head">
-          <span>${uiIcon('dice', { size: 15, color: '#fbbf24' })} Bandeja Manual de Dados</span>
+          <span>${uiIcon('dice', { size: 15, color: '#fbbf24' })} Bolsa & Bandeja de Dados 3D</span>
           <button type="button" class="m3d-btn m3d-btn-ghost" data-act="close-tray">${uiIcon('close', { size: 14 })}</button>
+        </div>
+        <div class="m3d-tray-presets" style="display:flex;gap:4px;flex-wrap:wrap;padding:4px 6px;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.08)">
+          ${DICE_BAG_PRESETS.map((p) => `<button type="button" class="m3d-btn m3d-btn-ghost" data-roll-formula="${p.formula}" title="${p.desc}">${p.label}</button>`).join('')}
         </div>
         <div class="m3d-tray-grid">
           ${SUPPORTED_DICE.map((d) => `<button type="button" class="m3d-btn m3d-btn-ghost m3d-die-btn" data-roll-die="${d}">${d.toUpperCase()}</button>`).join('')}
@@ -743,6 +752,9 @@ export class DungeonRPGMode extends Mode3DBase {
     for (const btn of el.querySelectorAll('[data-roll-die]')) {
       this.listen(btn, 'click', () => this._rollManualDie(btn.dataset.rollDie));
     }
+    for (const btn of el.querySelectorAll('[data-roll-formula]')) {
+      this.listen(btn, 'click', () => this._rollFormulaAction(btn.dataset.rollFormula));
+    }
 
     this.listen(this._hud.rpgForm, 'submit', (e) => {
       e.preventDefault();
@@ -778,6 +790,22 @@ export class DungeonRPGMode extends Mode3DBase {
         ? await this.diceRoller.roll({ diceType, count: 1, label: `Rolagem Manual ${diceType.toUpperCase()}`, lowSpec: this.lowSpec })
         : { total: 1 + Math.floor(Math.random() * Number(diceType.slice(1) || 20)), diceType };
       this.toast(`🎲 ${diceType.toUpperCase()}: ${res.total}${res.isCrit ? ' (CRÍTICO!)' : res.isFumble ? ' (FALHA CRÍTICA!)' : ''}`, res.isCrit ? 'is-amber' : '');
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  async _rollFormulaAction(formula) {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const res = rollTabletopFormula(formula);
+      const isCrit = res.isCrit;
+      const isFumble = res.isFumble;
+      const rollsStr = res.diceGroups.map((g) => `${g.type.toUpperCase()}[${g.rolls.join(',')}]`).join(' + ');
+      const modStr = res.flatModifier ? (res.flatModifier > 0 ? ` + ${res.flatModifier}` : ` - ${Math.abs(res.flatModifier)}`) : '';
+      this.toast(`🎲 ${formula}: ${rollsStr}${modStr} = ${res.total}${isCrit ? ' (CRÍTICO!)' : isFumble ? ' (FALHA CRÍTICA!)' : ''}`, isCrit ? 'is-amber' : '');
+      this.logLines.push(`🎲 Rolagem de Mesa (${formula}): ${rollsStr}${modStr} = ${res.total}`);
     } finally {
       this.busy = false;
     }
@@ -1396,7 +1424,12 @@ export class DungeonRPGMode extends Mode3DBase {
     this._hud.rpgSend.textContent = 'Mestre avaliando...';
     this._hud.tierBanner.style.display = 'none';
     this.logLines.push(`▶ ${this.player.name}: "${actionText}"`);
-    this._renderPanelState(null);
+
+    // Regra 2.1: As opções ficam fixas durante a rolagem (desabilitadas/esmaecidas), nunca trocam ou desaparecem enquanto o dado gira
+    if (this._hud.rpgSugs) {
+      this._hud.rpgSugs.style.opacity = '0.35';
+      this._hud.rpgSugs.style.pointerEvents = 'none';
+    }
 
     try {
       const ctx = this._buildDMContext(actionText);
@@ -1412,13 +1445,28 @@ export class DungeonRPGMode extends Mode3DBase {
       const diceType = SUPPORTED_DICE.includes(decision.diceType) ? decision.diceType : 'd20';
       const sides = Number(diceType.slice(1)) || 20;
       const diceCount = clamp(Number(decision.diceCount) || 1, 1, 3);
-      const dc = clamp(Number(decision.dc) || 11, 2, 95);
       const baseStatBonus = clamp(Number(decision.statBonus) || 0, -2, 6);
       const weaponBonus = this.equippedWeapon?.bonus || 0;
       const advBonus = this.nextRollAdvantage || 0;
       const totalBonus = clamp(baseStatBonus + advBonus, -2, 10);
+
+      // Regra 2.1: A CD é SEMPRE alcançável para o dado e modificadores usados!
+      const maxPossible = diceCount * sides + totalBonus;
+      const rawDc = clamp(Number(decision.dc) || 11, 2, 95);
+      const dc = possible ? Math.min(rawDc, maxPossible) : Math.max(rawDc, maxPossible + 1);
+
+      const prob = possible
+        ? calculateSuccessProbability(diceType, diceCount, totalBonus, dc, advBonus > 0 ? 'adv' : 'normal')
+        : 0;
+      const probPct = Math.round(prob * 100);
       const neededOnDie = Math.max(1, dc - totalBonus);
-      const verdict = !possible ? 'Impossível' : dc >= 15 ? 'Difícil' : 'Possível';
+      const verdict = !possible
+        ? 'Impossível'
+        : probPct >= 75
+          ? 'Fácil'
+          : probPct >= 45
+            ? 'Possível'
+            : 'Difícil';
 
       const bonusBreakdown = [
         weaponBonus > 0 ? `arma +${weaponBonus}` : null,
@@ -1429,19 +1477,24 @@ export class DungeonRPGMode extends Mode3DBase {
       this._hud.rpgRuling.style.display = '';
       this._hud.rpgRuling.innerHTML = `
         <div class="m3d-ruling-row">
-          <span class="m3d-verdict is-${!possible ? 'blocked' : dc >= 15 ? 'hard' : 'ok'}">${verdict}</span>
+          <span class="m3d-verdict is-${!possible ? 'blocked' : probPct >= 45 ? 'ok' : 'hard'}">${verdict} (${probPct}%)</span>
           <span>Dado: <b>${diceCount}×${diceType.toUpperCase()}</b></span>
           <span>Meta (CD): <b>${dc}</b></span>
           <span>Bônus: <b>${totalBonus >= 0 ? `+${totalBonus}` : totalBonus}</b></span>
+          <span>Chance: <b>${probPct}%</b></span>
         </div>
         ${possible
-          ? `<div class="m3d-ruling-target">🎯 Você precisa tirar <b>${neededOnDie}+</b> no dado (${escapeHtml(bonusBreakdown)})</div>`
+          ? `<div class="m3d-ruling-target">🎯 Você precisa tirar <b>${neededOnDie}+</b> no dado (${escapeHtml(bonusBreakdown)}) · <b>${probPct}% de chance de sucesso</b></div>`
           : `<div class="m3d-ruling-target" style="border-color:rgba(239,68,68,.5);color:#fca5a5">🚫 Ação bloqueada pelas leis da masmorra</div>`}
         <div class="m3d-ruling-narr" style="margin-top:4px">${escapeHtml(decision.narrative || 'O Mestre avalia sua manobra...')}</div>
       `;
 
       if (!possible) {
         this.logLines.push(`🚫 Mestre: ${decision.narrative || 'Ação impossível nesta situação.'}`);
+        if (this._hud.rpgSugs) {
+          this._hud.rpgSugs.style.opacity = '1';
+          this._hud.rpgSugs.style.pointerEvents = 'auto';
+        }
         this._renderPanelState(decision.suggestions);
         return;
       }
@@ -1451,7 +1504,7 @@ export class DungeonRPGMode extends Mode3DBase {
 
       // Rola o dado 3D (ou 2D lowSpec)
       const rollRes = this.diceRoller
-        ? await this.diceRoller.roll({ diceType, count: diceCount, dc, statBonus: totalBonus, label: `${verdict} · CD ${dc}`, lowSpec: this.lowSpec })
+        ? await this.diceRoller.roll({ diceType, count: diceCount, dc, statBonus: totalBonus, label: `${verdict} · CD ${dc} (${probPct}%)`, lowSpec: this.lowSpec })
         : this._fallbackRoll(diceType, diceCount, dc, totalBonus);
 
       const rawRoll = Number(rollRes.total) || 1;
@@ -1469,21 +1522,31 @@ export class DungeonRPGMode extends Mode3DBase {
         </div>
         <div style="text-align:right;font-size:13px;font-weight:800;white-space:nowrap">
           🎲 ${rawRoll}${totalBonus ? (totalBonus > 0 ? `+${totalBonus}` : totalBonus) : ''} = ${finalTotal}<br/>
-          <span style="font-size:11px;color:#a1a1aa">Meta CD ${dc}</span>
+          <span style="font-size:11px;color:#a1a1aa">Meta CD ${dc} (${probPct}%)</span>
         </div>
       `;
 
       this.logLines.push(
-        `🎲 ${diceType.toUpperCase()}: ${rawRoll}${totalBonus ? ` (${totalBonus >= 0 ? `+${totalBonus}` : totalBonus})` : ''} = ${finalTotal} vs CD ${dc} → ${outcome.icon} ${outcome.label}`
+        `🎲 ${diceType.toUpperCase()}: ${rawRoll}${totalBonus ? ` (${totalBonus >= 0 ? `+${totalBonus}` : totalBonus})` : ''} = ${finalTotal} vs CD ${dc} (${probPct}%) → ${outcome.icon} ${outcome.label}`
       );
 
       this._applySixTierOutcome(decision, outcome);
+
+      // Regra 2.1: Agora que a rolagem terminou, as novas opções aparecem e permanecem ativas
+      if (this._hud.rpgSugs) {
+        this._hud.rpgSugs.style.opacity = '1';
+        this._hud.rpgSugs.style.pointerEvents = 'auto';
+      }
       this._renderPanelState(room.npcId ? null : decision.suggestions);
       this._syncStatusHud();
     } finally {
       this.busy = false;
       this._hud.rpgSend.disabled = false;
       this._hud.rpgSend.textContent = 'Enviar ao Mestre';
+      if (this._hud.rpgSugs) {
+        this._hud.rpgSugs.style.opacity = '1';
+        this._hud.rpgSugs.style.pointerEvents = 'auto';
+      }
     }
   }
 
