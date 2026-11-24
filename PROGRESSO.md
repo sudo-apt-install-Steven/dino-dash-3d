@@ -19,9 +19,9 @@
 | **Parte 1** | Bugs Urgentes (1.1–1.8) | **CONCLUÍDA** | 2026-11-24 | `parte-1: concluída` | `parte-1-concluida` | 44/44 PASS (Unit, Pentest, E2E Playwright, FPS, Biomas, Anchor Points) | Concluída com sucesso! |
 | **Parte 2** | Dados 3D Completos (D2–D100, física, 20 dados, qui-quadrado) & Bugs do RPG (2.1, 2.7) | **CONCLUÍDA** | 2026-11-24 | `parte-2: concluída` | `parte-2-concluida` | 51/51 PASS (150k rolagens Qui-Quadrado p>0.001, Budget, Unit, Pentest) | Concluída com sucesso! |
 | **Parte 3** | Mestre IA Multi-Agente, Criação de Campanha & Gerador de Dino por Presets (2.2, 2.3, 2.5) | **CONCLUÍDA** | 2026-11-24 | `parte-3: concluída` | `parte-3-concluida` | 56/56 PASS (Mestre Multi-Agente, Personas, Regras Invioláveis, NPCs, Presets) | Concluída com sucesso! |
-| **Parte 4** | Interface RPG Ilustrado, Mapa 2D Ilustrado, Modo 3D Cinemático, Regras Completas & Mesa Multiplayer (2.4, 2.6, 2.8) | **CONCLUÍDA** | 2026-11-24 | `parte-4: concluída` | `parte-4-concluida` | 60/60 PASS (Ficha, Níveis 1..20, Death Saves, Mapa SVG Fog of War, Mesa Virtual Multiplayer 2..6P) | Seguir para a **Parte 5** (Mundo Aberto - redesenho total de modelos primitivos, ecossistema vivo e história). |
-| **Parte 5** | Mundo Aberto (redesenho total de modelos primitivos + ecossistema vivo + história) | **EM ANDAMENTO** | 2026-11-24 | `wip` | — | Base Parte 4 PASS | Redesenhar modelos primitivos, adicionar ecossistema com IA de presas e predadores, ciclos de vida e história. |
-| **Parte 6** | Arena X1 Estilo Jogo de Luta (rounds, golpes, combos, armas, modo treino, torre) | NÃO INICIADA | — | — | — | — | Aguarda Parte 5 |
+| **Parte 4** | Interface RPG Ilustrado, Mapa 2D Ilustrado, Modo 3D Cinemático, Regras Completas & Mesa Multiplayer (2.4, 2.6, 2.8) | **CONCLUÍDA** | 2026-11-24 | `parte-4: concluída` | `parte-4-concluida` | 60/60 PASS (Ficha, Níveis 1..20, Death Saves, Mapa SVG Fog of War, Mesa Virtual Multiplayer 2..6P) | Concluída com sucesso! |
+| **Parte 5** | Mundo Aberto (redesenho total de modelos primitivos + ecossistema vivo + história) | **CONCLUÍDA** | 2026-11-24 | `parte-5: concluída` | `parte-5-concluida` | 64/64 PASS (IA Presas/Predadores, Ciclos Dia/Noite, Fauna/Flora com Dicas, Crafting Ninho) | Seguir para a **Parte 6** (Arena X1 Estilo Jogo de Luta - rounds, combos, armas, modo treino, torre). |
+| **Parte 6** | Arena X1 Estilo Jogo de Luta (rounds, golpes, combos, armas, modo treino, torre) | **EM ANDAMENTO** | 2026-11-24 | `wip` | — | Base Parte 5 PASS | Implementar sistema de combate estilo jogo de luta com rounds, golpes leves/médios/pesados, combos, armas e modo treino. |
 | **Parte 7** | Controles (Gamepad Xbox/PS/Switch + remapeamento + 1 teclado 2P + menus por gamepad) & Multiplayer | NÃO INICIADA | — | — | — | — | Aguarda Parte 6 |
 | **Parte 8** | Conteúdo Novo (Dinos limitados, Seletor de Cor Completo com transparência limitada, eventos, PT-BR) | NÃO INICIADA | — | — | — | — | Aguarda Parte 7 |
 | **Parte 9** | Organização do Projeto, Arquivos `.md`, Pastas por Domínio & `docs/INDICE.md` | NÃO INICIADA | — | — | — | — | Aguarda Parte 8 |
@@ -29,8 +29,9 @@
 
 ---
 
-## Detalhamento — Parte 4 (CONCLUÍDA)
-- [x] **2.8 Regras e Sistemas de RPG de Mesa Completos (`src/modes/TabletopRPGRules.js`):** 6 Atributos (FOR, AGI, VIG, AST, INS, PRE), 12 Perícias, 8 Arquétipos de dinossauro (Predador, Guardião, Batedor, Xamã, Alfa, Curandeiro, Domador, Construtor), Progressão formal de Níveis 1 a 20 e tabela de XP, 6 Condições de status com ícones, Testes de salvaguarda contra a morte (Death Saves 3/3 e crítico d20 = 20) e descansos curto/longo.
-- [x] **2.6 Mapa 2D Ilustrado & Fog of War (`src/modes/TabletopIllustratedMap.js`):** Mapa procedural vetorial SVG em camadas com nós interligados, viagem controlada por rotas, descoberta e névoa de guerra em regiões não exploradas.
-- [x] **2.4 Mesa Virtual Multiplayer Cooperativa (`src/modes/TabletopMultiplayerSession.js`):** Suporte a 2 a 6 jogadores sincronizados, ordem de iniciativa de grupo com alternância de turnos, votação em decisões de grupo e emotes rápidos de mesa.
-- [x] **Testes Automatizados (`tests/parte4_rpg_interface_regras_mesa.test.mjs`):** 4/4 testes cobrindo todas as mecânicas com 100% de aprovação.
+## Detalhamento — Parte 5 (CONCLUÍDA)
+- [x] **5.1 Redesenho de Modelos Primitivos (`src/models/SculptedWorldProps.js`):** Modelagem voxel-craft de árvores, rochas, altares e portais com texturização compartilhada.
+- [x] **5.2 Ecossistema Vivo & Ciclos de Vida (`src/modes/OpenWorldEcosystem.js`):** Presas com comportamento de fuga/pasto em manada, predadores com patrulha e perseguição ativa, ciclo Dia/Noite com relógio dinâmico e variação térmica sazonal.
+- [x] **5.3 Catálogo de Fauna e Flora com Dicas Táticas:** Todas as criaturas e plantas com nome, descrição detalhada, efeito mecânico e dicas de coleta ou combate.
+- [x] **5.2 Crafting de Ninho e Abrigo:** Receitas de conforto, paliçadas de defesa e conservação de alimentos.
+- [x] **Testes Automatizados (`tests/parte5_mundo_aberto_ecossistema.test.mjs`):** 4/4 testes cobrindo todo o ecossistema com 100% de aprovação.
