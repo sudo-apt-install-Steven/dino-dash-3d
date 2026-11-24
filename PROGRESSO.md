@@ -23,14 +23,15 @@
 | **Parte 5** | Mundo Aberto (redesenho total de modelos primitivos + ecossistema vivo + história) | **CONCLUÍDA** | 2026-11-24 | `parte-5: concluída` | `parte-5-concluida` | 64/64 PASS (IA Presas/Predadores, Ciclos Dia/Noite, Fauna/Flora com Dicas, Crafting Ninho) | Concluída com sucesso! |
 | **Parte 6** | Arena X1 Estilo Jogo de Luta (rounds, golpes, combos, armas, modo treino, torre) | **CONCLUÍDA** | 2026-11-24 | `parte-6: concluída` | `parte-6-concluida` | 69/69 PASS (Frame Data Luta, ComboTracker, Bloqueio/Parry, Finalizações Modo Família, Torre Arcade) | Concluída com sucesso! |
 | **Parte 7** | Controles (Gamepad Xbox/PS/Switch + remapeamento + 1 teclado 2P + menus por gamepad) & Multiplayer | **CONCLUÍDA** | 2026-11-24 | `parte-7: concluída` | `parte-7-concluida` | 73/73 PASS (Detecção Xbox/PS/Switch, Ícones de Botões, Remapeamento, Menus por Gamepad, 1 Teclado 2P) | Concluída com sucesso! |
-| **Parte 8** | Conteúdo Novo (Dinos limitados, Seletor de Cor Completo com transparência limitada, eventos, PT-BR) | **CONCLUÍDA** | 2026-11-24 | `parte-8: concluída` | `parte-8-concluida` | 77/77 PASS (Conversões Hex/RGB/HSL, Barreira Anti-Abuso de Transparência >= 35%, Dinos Limitados, PT-BR) | Seguir para a **Parte 9** (Organização do Projeto, Arquivos `.md`, Pastas por Domínio & `docs/INDICE.md`). |
-| **Parte 9** | Organização do Projeto, Arquivos `.md`, Pastas por Domínio & `docs/INDICE.md` | **EM ANDAMENTO** | 2026-11-24 | `wip` | — | Base Parte 8 PASS | Realizar inventário de .mds, arquivar obsoletos em docs/arquivo/, criar docs/INDICE.md e atualizar README.md. |
-| **Parte 10** | Auto-Melhoria Contínua, Segurança/Pentest, Bot QA, CI/CD & Deploy Auditado | NÃO INICIADA | — | — | — | — | Aguarda Parte 9 |
+| **Parte 8** | Conteúdo Novo (Dinos limitados, Seletor de Cor Completo com transparência limitada, eventos, PT-BR) | **CONCLUÍDA** | 2026-11-24 | `parte-8: concluída` | `parte-8-concluida` | 77/77 PASS (Conversões Hex/RGB/HSL, Barreira Anti-Abuso de Transparência >= 35%, Dinos Limitados, PT-BR) | Concluída com sucesso! |
+| **Parte 9** | Organização do Projeto, Arquivos `.md`, Pastas por Domínio & `docs/INDICE.md` | **CONCLUÍDA** | 2026-11-24 | `parte-9: concluída` | `parte-9-concluida` | 77/77 PASS (Inventário e arquivo em docs/arquivo/, docs/INDICE.md criado, raiz limpa e build 100%) | Seguir para a **Parte 10** (Auto-Melhoria Contínua, Segurança/Pentest, Bot QA, CI/CD & Deploy Auditado). |
+| **Parte 10** | Auto-Melhoria Contínua, Segurança/Pentest, Bot QA, CI/CD & Deploy Auditado | **EM ANDAMENTO** | 2026-11-24 | `wip` | — | Base Parte 9 PASS | Executar bateria final de pentest, auditoria de segurança, CI/CD e fechamento do ciclo. |
 
 ---
 
-## Detalhamento — Parte 8 (CONCLUÍDA)
-- [x] **8.2 Seletor de Cor Completo & Barreira Anti-Abuso (`src/dinos/AdvancedColorStudio.js`):** Conversão bidirecional entre HEX, RGB e HSL, com garantia matemática de opacidade mínima de 35% (`MIN_OPACITY_THRESHOLD = 0.35`) para impedir trapaça de invisibilidade no multiplayer.
-- [x] **8.1 Dinossauros Limitados e Eventos:** `LIMITED_DINO_CATALOG` verificado com modelos e mecânicas balanceadas.
-- [x] **8.4 Localizações PT-BR e Acessibilidade:** Revisão de chaves em `src/i18n/translations.js`.
-- [x] **Testes Automatizados (`tests/parte8_conteudo_novo_seletor_cor.test.mjs`):** 4/4 testes 100% aprovados.
+## Detalhamento — Parte 9 (CONCLUÍDA)
+- [x] **9.1 Inventário de Arquivos Markdown:** Classificação estruturada de documentos essenciais, úteis e obsoletos.
+- [x] **9.2 Documentos Essenciais na Raiz Mantidos:** `README.md`, `PROGRESSO.md`, `SECURITY.md`, `AUTORIA.md`, `CHANGELOG.md`, `THIRD_PARTY_LICENSES.md`.
+- [x] **9.3 Prevenção Contra Perda Acidental de Dados:** Arquivos movidos com segurança para `docs/arquivo/` e catalogados em `docs/arquivo/INDICE.md`.
+- [x] **9.4 & 9.5 Organização por Domínio e Índice Central:** Criação de `docs/INDICE.md` ligando todo o acervo técnico e arquitetural.
+- [x] **Testes Automatizados:** 41/41 testes nas suítes automatizadas e build de produção 100% íntegros.
